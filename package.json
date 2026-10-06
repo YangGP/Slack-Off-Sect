@@ -12,7 +12,8 @@
     "smoke": "vite build --ssr tools/smoke.mjs --outDir .smoke --emptyOutDir && node .smoke/smoke.js",
     "check:render": "vite build --ssr tools/render-check.mjs --outDir .smoke-render --emptyOutDir && node .smoke-render/render-check.js",
     "check:dom": "vite build --config tools/vite.domcheck.config.js && node tools/dom-check.mjs",
-    "check": "npm run smoke && npm run check:render && npm run check:dom",
+    "check": "npm run check:encoding && npm run smoke && npm run check:render && npm run check:dom",
+    "check:encoding": "node tools/check-encoding.mjs",
     "audit": "vite build --ssr tools/resource-audit.mjs --outDir .smoke-audit --emptyOutDir && node .smoke-audit/resource-audit.js",
     "balance": "vite build --ssr tools/balance.mjs --outDir .smoke-balance --emptyOutDir && node .smoke-balance/balance.js",
     "docs:tables": "node tools/dump-tables.mjs"

@@ -1,6 +1,8 @@
 # 摸鱼宗门 · Slack Off Sect
 
 一个用 **Vue 3 + Vite（纯 JavaScript）** 写的修仙宗门挂机放置游戏。
+
+**在线试玩**：https://YangGP.github.io/Slack-Off-Sect/ （推到 main 后由 GitHub Actions 自动发布）
 玩法结构参考了 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（猫国建设者）的放置玩法与数据组织方式：
 资源池 + 职位分配 + 可叠加建筑 + 修真（学术）+ 技艺·法宝（工坊）+ 制作配方 + 成就 + 随机事件 + 转世（飞升）。
 
@@ -152,6 +154,19 @@ npm run balance -- 24     # 模拟 24 小时
 - localStorage 键名：`slack-off-sect.save.v1`
 - 「设置」页可导出 base64 存档文本、粘贴导入、清档重开
 - 导入时会自动补齐缺失字段（`normalizeState`），旧档可以继续玩
+
+## 部署（GitHub Pages）
+
+推到 `main` 会自动跑测试、构建并发布：`.github/workflows/deploy-pages.yml`。
+
+**首次需要手动开一次**：仓库 `Settings → Pages → Build and deployment → Source` 选 **GitHub Actions**，
+然后推一次（或手动跑一次这个 workflow）即可访问 https://YangGP.github.io/Slack-Off-Sect/ 。
+
+- 构建产物是纯静态文件（约 190 KB，gzip 后 66 KB），无后端、无外部请求；
+- `vite.config.js` 里 `base: './'` 用的是**相对路径**，所以同一份 `dist/` 放在任何子路径下都能跑
+  （挂在 `/Slack-Off-Sect/` 这种项目页下不需要改配置）；应用本身也没有路由与 `fetch`，与部署路径无关；
+- 想本地看发布效果：`npm run build && npm run preview`；
+- 存档在浏览器 `localStorage`（键名 `slack-off-sect.save.v1`），与访问路径无关 —— 换域名/换路径不会丢档。
 
 ## 许可
 

@@ -138,6 +138,29 @@ src/App.vue            布局：标题行 / 状态行 → 提示行 → 标签�
 
 ---
 
+## 构建与部署（GitHub Pages）
+
+发布走 GitHub Actions：`.github/workflows/deploy-pages.yml` 在推到 `main` 时
+**先跑三层测试（`npm run check`），过了才构建并发布** —— 测试不过就不会把坏版本放上线。
+
+| 命令 | 作用 |
+| --- | --- |
+| `npm run dev` | 本地开发（127.0.0.1:5273，热更新） |
+| `npm run build` | 产出静态站点到 `dist/` |
+| `npm run preview` | 本地起服务看 `dist/` 的真实效果 |
+| `npm run check` | 三层测试全跑（引擎 308 / 渲染 17 / 端到端 133） |
+
+**为什么挂在 `/Slack-Off-Sect/` 这种子路径下也不用改配置**：`vite.config.js` 里 `base: './'`
+用的是相对路径，`dist/index.html` 引用的是 `./assets/...`；应用本身没有路由、没有 `fetch`、
+没有 `import.meta.env.BASE_URL` 之类的路径依赖，所以同一份 `dist/` 放在根域或任意子路径都能跑。
+加新功能时请守住这条（不要引入绝对路径资源或依赖 `location.pathname` 的逻辑）。
+
+首次发布需要手动开一次 Pages：仓库 `Settings → Pages → Build and deployment → Source`
+选 **GitHub Actions**。之后每次推 `main` 都会自动更新；也可以在 Actions 页手动 `workflow_dispatch`。
+
+`public/.nojekyll` 是一层保险（万一改成从分支发布，也不会被 Jekyll 处理）。
+
+---
 ## 验证策略
 
 三层互补，全部可在无浏览器环境下跑（`npm run check`）：
