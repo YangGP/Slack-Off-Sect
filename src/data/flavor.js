@@ -1,0 +1,37 @@
+/**
+ * 建筑风味文案（悬停提示最下面那行小字）。
+ * 单独放一张表，方便随时换词，不用动建筑数值。
+ */
+export const BUILDING_FLAVOR = {
+  hut: '有个屋顶，就不算露宿。',
+  logHouse: '梁上还能挂两串腊肉。',
+  mansion: '住得讲究，修行也讲究。',
+  caveDwelling: '洞中无岁月。',
+  spiritField: '种的是田，收的是气。',
+  lumberYard: '斧头比道理管用。',
+  mine: '往下挖，总能挖到点什么。',
+  herbGarden: '识得百草，方敢下锅。',
+  spiritVein: '井里打上来的，是雾。',
+  gatheringArray: '风都往山门里灌。',
+  beastGarden: '它们干活，我们摸鱼。',
+  granary: '有粮，心就不慌。',
+  warehouse: '堆到塞不下为止。',
+  depot: '整座山腹都是咱家的。',
+  grotto: '小是小，装得下。',
+  library: '书到用时方恨少。',
+  academy: '长老一开口，弟子就打盹。',
+  observatory: '星星也加班。',
+  meditationPool: '泡一泡，脾气就小了。',
+  trialTower: '爬上去的人不多。',
+  alchemyRoom: '火候差一点，全白干。',
+  forge: '叮叮当当，比打坐热闹。',
+  talismanHall: '一笔画错，重来。',
+  workshop: '手艺人凑一桌。',
+  gate: '门面得撑起来。',
+  incenseCauldron: '青烟终日不散。',
+  ancestorHall: '祖师在上，别偷懒。',
+  mountainArray: '妖兽撞上来，只留白印。',
+  spiritLockArray: '一丝灵气都别想跑。',
+  heavenTower: '爬到最后一级，就看得见飞升。',
+  karmaPool: '前世的账，今生来收。',
+}

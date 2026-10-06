@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+.smoke*
+*.local
+.DS_Store
+.vite
+# 文档工具的临时产物
+.tables.md
+# 杂项
+*.log
+.env*

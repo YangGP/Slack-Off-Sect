@@ -1,0 +1,931 @@
+/* ============================================================
+   摸鱼宗门 · 样式
+   参照猫国建设者的界面观感：
+   白底、细灰线、单一内容边框、文字与数字为主，
+   没有卡片头、圆角、渐变、阴影、斑马纹与进度条。
+   ============================================================ */
+
+:root {
+  --bg: #ffffff;
+  --line: #d5d5d5;
+  --line-2: #b4b4b4;
+  --line-soft: #ececec;
+  --text: #222222;
+  --dim: #767676;
+  --faint: #9a9a9a;
+  --link: #2f6f9f;
+  --accent: #c9741a;
+  --good: #1a7f37;
+  --bad: #b42318;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "Microsoft YaHei", Tahoma, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+button {
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.wrap {
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 10px 16px 48px;
+}
+
+/* ------------------------------ 顶端 ------------------------------ */
+
+.title-line {
+  font-size: 18px;
+  color: var(--text);
+  padding: 2px 0 0;
+}
+
+.title-line .sub {
+  font-size: 14px;
+  color: var(--faint);
+  margin-left: 8px;
+}
+
+.stat-line {
+  color: var(--dim);
+  padding: 3px 0 6px;
+}
+
+.stat-line b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stat-line .sep {
+  color: var(--line);
+  margin: 0 7px;
+}
+
+.status-line {
+  height: 17px;
+  color: var(--accent);
+  font-size: 14px;
+  padding-bottom: 2px;
+}
+
+/* ------------------------------ 顶部通栏（宗门概况） ------------------------------ */
+
+.band {
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 5px 0 7px;
+  margin-bottom: 6px;
+}
+
+.band .row-spread {
+  padding-top: 5px;
+}
+
+/* ------------------------------ 资源栏（左列，单行数字对齐） ------------------------------ */
+
+.res-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.res-table td {
+  padding: 1px 0;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.res-name {
+  color: var(--text);
+  padding-right: 10px !important;
+}
+
+.res-amount {
+  text-align: right;
+  padding-right: 4px !important;
+}
+
+.res-max {
+  color: var(--dim);
+  text-align: right;
+  padding-right: 10px !important;
+}
+
+.res-rate {
+  color: var(--good);
+  text-align: right;
+  padding-right: 8px !important;
+}
+
+.res-rate.neg {
+  color: var(--bad);
+}
+
+.res-rate.zero {
+  color: var(--faint);
+}
+
+.res-bonus {
+  color: var(--good);
+  text-align: right;
+}
+
+/* 悬停购买项时，相关资源行染一层底色；不够的再重一档 */
+.res-table tr.res-hl td {
+  background: #fff9e6;
+}
+
+.res-table tr.res-lack td {
+  background: #fdecea;
+}
+
+.res-table tr.res-lack .res-amount {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+/* ------------------------------ 标签行 / 筛选行 ------------------------------ */
+
+.tabs,
+.filters {
+  padding: 3px 0;
+}
+
+.tabs {
+  margin-bottom: 8px;
+}
+
+.tab,
+.filter {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.tab:hover,
+.filter:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.tab.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.filter.on {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tabs .divider,
+.filters .divider {
+  color: var(--line-2);
+  padding: 0 4px;
+}
+
+.tab .badge {
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 2px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 10px;
+  padding: 3px 0;
+}
+
+.filters .push {
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+/* ------------------------------ 三列布局 ------------------------------ */
+
+.cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.left {
+  flex: 0 0 284px;
+}
+
+.main {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+
+.right {
+  flex: 0 0 300px;
+}
+
+@media (max-width: 1279px) {
+  .right {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 879px) {
+  .left {
+    flex: 1 1 100%;
+  }
+}
+
+/* 中列唯一的一层边框（对应猫国中间那个大框） */
+.panel {
+  border: 1px solid var(--line);
+  padding: 10px 14px 14px;
+}
+
+/* ------------------------------ 分节 ------------------------------ */
+
+.box {
+  margin-bottom: 14px;
+}
+
+.left .box:last-child,
+.right .box:last-child {
+  margin-bottom: 0;
+}
+
+.box-head {
+  color: var(--dim);
+  font-size: 14px;
+  padding-bottom: 3px;
+}
+
+.box-head .hint {
+  color: var(--faint);
+  margin-left: 6px;
+}
+
+.group-head {
+  color: var(--dim);
+  font-size: 14px;
+  margin: 12px 0 4px;
+}
+
+/* ------------------------------ 建筑按钮网格 ------------------------------ */
+
+.build-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+}
+
+.build-item {
+  display: flex;
+  align-items: stretch;
+}
+
+.build-item .tip-trigger {
+  flex: 1 1 auto;
+  display: flex;
+}
+
+.build-btn {
+  flex: 1 1 auto;
+  min-height: 46px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+  text-align: center;
+}
+
+.build-btn:hover {
+  border-color: var(--text);
+}
+
+.build-btn.poor {
+  color: #b9b9b9;
+  border-color: var(--line);
+  cursor: default;
+}
+
+.build-btn.off {
+  color: var(--accent);
+}
+
+.side-btn {
+  min-width: 40px;
+  margin-left: 4px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.side-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.side-btn.danger:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.side-btn.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ------------------------------ 普通表格 / 列表 ------------------------------ */
+
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.grid th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--dim);
+  font-size: 14px;
+  padding: 2px 6px 3px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+table.grid td {
+  padding: 3px 6px 3px 0;
+  vertical-align: middle;
+}
+
+table.grid.bare th,
+table.grid.bare td {
+  border-bottom: none;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.small {
+  font-size: 14px;
+}
+
+.good {
+  color: var(--good);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.warn {
+  color: var(--accent);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.eff {
+  color: var(--dim);
+  font-size: 14px;
+}
+
+.cost {
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost .lack {
+  color: var(--bad);
+}
+
+.cost span + span::before {
+  content: " + ";
+  color: var(--faint);
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  padding: 1px 0;
+}
+
+.kv .k {
+  color: var(--dim);
+}
+
+.kv .v {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------ 按钮 ------------------------------ */
+
+.btn {
+  background: #fff;
+  border: 1px solid var(--line-2);
+  padding: 5px 12px;
+  cursor: pointer;
+  margin-right: 4px;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--text);
+}
+
+.btn:disabled {
+  color: #b9b9b9;
+  border-color: var(--line);
+  cursor: default;
+}
+
+.btn.on,
+.btn.primary {
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.btn.danger:hover:not(:disabled) {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.btn.sq {
+  min-width: 24px;
+  text-align: center;
+}
+
+.btn-row {
+  white-space: nowrap;
+}
+
+input.qty {
+  width: 56px;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  padding: 3px 4px;
+  text-align: center;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+input.qty:focus {
+  outline: none;
+  border-color: var(--text);
+}
+
+label.sw {
+  color: var(--dim);
+  font-size: 14px;
+  margin-right: 12px;
+  white-space: nowrap;
+}
+
+input[type="checkbox"] {
+  vertical-align: -1px;
+  accent-color: var(--link);
+}
+
+.row-spread {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.row-spread .push {
+  margin-left: auto;
+}
+
+/* ------------------------------ 纪事 ------------------------------ */
+
+.log {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.log-line {
+  display: flex;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.log-dot {
+  color: var(--faint);
+  flex: 0 0 auto;
+}
+
+.log-text {
+  color: var(--text);
+}
+
+.log-time {
+  color: var(--faint);
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.log-line.good .log-text {
+  color: var(--good);
+}
+
+.log-line.bad .log-text {
+  color: var(--bad);
+}
+
+.log-line.event .log-text {
+  color: var(--link);
+}
+
+.log-line.realm .log-text {
+  color: var(--accent);
+}
+
+.box-head .link {
+  color: var(--link);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.box-head .link:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------ 历法 ------------------------------ */
+
+.cal-date {
+  color: var(--text);
+  font-size: 15px;
+  padding-bottom: 1px;
+}
+
+.cal-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 14px;
+}
+
+.cal-effect {
+  color: var(--good);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-effect.bad {
+  color: var(--bad);
+}
+
+/* ------------------------------ 天象 ------------------------------ */
+
+.buffs {
+  font-size: 14px;
+  color: var(--dim);
+  padding-bottom: 8px;
+}
+
+.buff {
+  color: var(--good);
+}
+
+.buff.neg {
+  color: var(--bad);
+}
+
+/* ------------------------------ 境界轨迹 ------------------------------ */
+
+.realm-track {
+  color: var(--dim);
+  font-size: 14px;
+  padding: 0 0 6px;
+}
+
+.realm-track .done {
+  color: var(--good);
+}
+
+.realm-track .now {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ------------------------------ 成就 ------------------------------ */
+
+.ach-list {
+  columns: 2 240px;
+  column-gap: 22px;
+}
+
+.ach-item {
+  break-inside: avoid;
+  padding: 1px 0;
+  font-size: 14px;
+  color: var(--faint);
+}
+
+.ach-item.done {
+  color: var(--text);
+}
+
+.ach-item .name {
+  color: var(--dim);
+}
+
+.ach-item.done .name {
+  color: var(--good);
+}
+
+/* ------------------------------ 折叠 ------------------------------ */
+
+details.fold {
+  margin-top: 6px;
+}
+
+details.fold > summary {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 14px;
+  list-style: none;
+}
+
+details.fold > summary:hover {
+  color: var(--text);
+}
+
+details.fold > summary::before {
+  content: "▸ ";
+}
+
+details.fold[open] > summary::before {
+  content: "▾ ";
+}
+
+/* ------------------------------ 悬停提示 ------------------------------ */
+
+.tip-trigger {
+  cursor: help;
+}
+
+.tip {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  padding: 7px 9px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.tip-title {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+}
+
+.tip-title .tip-right {
+  margin-left: auto;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.tip-row .k {
+  color: var(--dim);
+  flex: 1 1 auto;
+}
+
+.tip-row .v {
+  flex: 0 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-src {
+  padding-left: 10px;
+}
+
+/* 「加成倍率」的逐项拆分：每项一行，下面跟一行小字写明是谁贡献的 */
+.bonus-row + .bonus-row {
+  margin-top: 2px;
+}
+
+.bonus-row .bonus-detail {
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 0 0 2px 10px;
+}
+
+.tip-src .tip-row {
+  font-size: 12px;
+}
+
+.tip-src .tip-row .k,
+.tip-src .tip-row .v {
+  color: var(--faint);
+}
+
+.tip-total {
+  border-top: 1px solid var(--line-soft);
+  margin-top: 3px;
+  padding-top: 3px;
+}
+
+.tip-note {
+  color: var(--faint);
+  font-size: 12px;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+/* 建筑提示：描述 / 分节标题 / 风味小字 */
+.tip-desc {
+  color: var(--text);
+  padding-bottom: 2px;
+}
+
+.tip-section {
+  color: var(--dim);
+  font-size: 12px;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 5px;
+  padding-top: 4px;
+}
+
+.tip-flavor {
+  color: var(--faint);
+  font-size: 12px;
+  font-style: italic;
+  text-align: right;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 5px;
+  padding-top: 4px;
+}
+
+/* ------------------------------ 快速炼制 ------------------------------ */
+
+.craft-row {
+  display: block;
+  padding: 3px 0 4px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: default;
+}
+
+.craft-row:last-of-type {
+  border-bottom: none;
+}
+
+.craft-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.craft-row .craft-name {
+  color: var(--text);
+}
+
+.craft-row .have {
+  margin-left: auto;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.craft-row .btn {
+  padding: 1px 8px;
+  font-size: 13px;
+}
+
+/* 「连续中」的按钮用赭金标出来，和天象、弟子前来提示同一档 */
+.craft-row .btn.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.craft-row .sw {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* ------------------------------ 弹窗 ------------------------------ */
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.dialog {
+  width: 420px;
+  max-width: 92vw;
+  background: #fff;
+  border: 1px solid var(--line-2);
+}
+
+.dialog-head {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 16px;
+}
+
+.dialog-body {
+  padding: 10px 12px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.dialog-foot {
+  padding: 8px 12px;
+  text-align: right;
+}
+
+/* ------------------------------ 其它 ------------------------------ */
+
+textarea {
+  width: 100%;
+  min-height: 96px;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.empty {
+  color: var(--faint);
+  font-size: 14px;
+  padding: 4px 0;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+}
+
+::-webkit-scrollbar-track {
+  background: #fff;
+}

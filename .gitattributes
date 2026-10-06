@@ -1,0 +1,13 @@
+# 统一换行符：仓库里一律 LF（Windows 上开发也不会提交出 CRLF）
+* text=auto eol=lf
+
+# 二进制文件不参与换行转换
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# 让 GitHub 的语言统计正确识别
+package-lock.json linguist-generated=true
+docs/TABLES.md linguist-generated=true

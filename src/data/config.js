@@ -1,0 +1,38 @@
+/**
+ * 全局数值配置 —— 所有平衡性常量集中在此，方便调参。
+ * 灵感来自猫国建设者的 tick/资源/价格递增模型，但全部按“修仙宗门”重写。
+ */
+export const CONFIG = {
+  // 主循环每 100ms 跑一次，所有速率都以「每秒」为单位
+  TICK_MS: 100,
+  // 自动存档间隔
+  AUTOSAVE_MS: 20000,
+  // 单次离线收益最多结算多少小时（可被修真提升）
+  OFFLINE_CAP_HOURS: 8,
+  // 每名弟子每秒消耗的灵气
+  DISCIPLE_UPKEEP: 0.25,
+  // 法宝祭炼：每级效果 +30%，花费按 1.7 倍递增
+  // （不设等级上限：指数成本自己封顶 —— 16 件法宝各炼到 10 级，累计需求约全树感悟总价的 57 倍）
+  TREASURE_REFINE_STEP: 0.3,
+  TREASURE_REFINE_RATIO: 1.7,
+  // 手动「吸取天地灵气」：每次点击得到多少灵气（每座聚灵阵再加一点，免得后期点着像挠痒）
+  CLICK_QI_BASE: 1,
+  CLICK_QI_PER_FIELD: 0.5,
+  // 弟子不用招募：有空房就每这么多秒自己来一名（可被《广开山门》缩短）
+  DISCIPLE_ARRIVAL_SECONDS: 15,
+  // 士气（民心）区间：士气/100 直接乘在弟子产出上
+  MORALE_MIN: 15,
+  MORALE_MAX: 200,
+  // 灵气断供时每秒钟掉多少士气，以及恢复时的回升速度
+  MORALE_STARVE_RATE: 6,
+  MORALE_RECOVER_RATE: 2,
+  // 士气过低时弟子流失：每多少秒走一人
+  LEAVE_INTERVAL: 25,
+  // 隐藏成就/随机奇遇的检查间隔（秒）
+  EVENT_MIN_GAP: 150,
+  EVENT_MAX_GAP: 420,
+  // 刷新派生数据的最小间隔（秒），避免每帧全量重算
+  RECOMPUTE_MIN_GAP: 0.25,
+  // 日志上限
+  LOG_LIMIT: 220,
+}

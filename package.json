@@ -1,0 +1,28 @@
+{
+  "name": "slack-off-sect",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Slack Off Sect (摸鱼宗门) —— 一个 Vue3 + Vite 的修仙宗门挂机放置游戏",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "smoke": "vite build --ssr tools/smoke.mjs --outDir .smoke --emptyOutDir && node .smoke/smoke.js",
+    "check:render": "vite build --ssr tools/render-check.mjs --outDir .smoke-render --emptyOutDir && node .smoke-render/render-check.js",
+    "check:dom": "vite build --config tools/vite.domcheck.config.js && node tools/dom-check.mjs",
+    "check": "npm run smoke && npm run check:render && npm run check:dom",
+    "audit": "vite build --ssr tools/resource-audit.mjs --outDir .smoke-audit --emptyOutDir && node .smoke-audit/resource-audit.js",
+    "balance": "vite build --ssr tools/balance.mjs --outDir .smoke-balance --emptyOutDir && node .smoke-balance/balance.js",
+    "docs:tables": "node tools/dump-tables.mjs"
+  },
+  "dependencies": {
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "jsdom": "^30.1.2",
+    "vite": "^8.3.3"
+  }
+}
