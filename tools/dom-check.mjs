@@ -851,6 +851,13 @@ ok('境界面板渲染', html().includes('飞升'))
     const tip = doc.querySelector('.tip')?.textContent.replace(/\s+/g, ' ').trim() || ''
     ok('破境提示沿用宗门排版（价格 / 效果分节）', tip.includes('价格') && tip.includes('效果'), tip.slice(0, 70))
     ok('破境提示里灵石带倒计时', /灵石\s*0 \/ 540（还差 .+）/.test(tip), tip.slice(0, 120))
+    // 口粮随境界上涨（DESIGN §5.4）：破境提示要写明「养人也要涨价」，
+    // 否则玩家会在破境那一刻突然发现灵气净额变负，却不知道是谁涨的
+    ok(
+      '破境提示写明每人口粮会涨',
+      /每人口粮/.test(tip) && /\/秒 → [\d.]+\/秒（↑\d+%）/.test(tip),
+      (tip.match(/每人口粮[^效]*/) || [''])[0].slice(0, 80),
+    )
     realmCostCell.dispatchEvent(new window.MouseEvent('mouseleave'))
     await new Promise((r) => setTimeout(r, 60))
   }

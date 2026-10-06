@@ -29,6 +29,10 @@ function snapshot(t) {
   const res = RESOURCES.filter((r) => !r.noProduction)
     .map((r) => `${r.name} ${Math.round(state.resources[r.id] || 0)}`)
     .join('  ')
+  // 灵气出项占比：§5.4 用它衡量「维护费 / 弟子口粮」是不是还在产生决策压力
+  const qiIn = derived.rates.qi || 0
+  const qiOut = -(derived.expense?.qi || 0)
+  const outPct = qiIn > 0 ? (qiOut / qiIn) * 100 : 0
   console.log(
     `t=${String(Math.round(t / 60)).padStart(4)}分 | ${REALMS[state.realm].name.padEnd(4)} | 弟子 ${String(
       state.disciples.total,
@@ -36,7 +40,7 @@ function snapshot(t) {
       state.stats.buildingsBuilt,
     ).padStart(3)} | 参悟 ${String(Object.keys(state.upgrades).length).padStart(2)} | 士气 ${Math.round(
       derived.morale,
-    )}% | 灵气净 ${derived.netQi.toFixed(2)}/s`,
+    )}% | 每人粮 ${derived.discipleUpkeep.toFixed(3)}/s | 出项占比 ${outPct.toFixed(1)}% | 灵气净 ${derived.netQi.toFixed(2)}/s`,
   )
   console.log(`          ${res}`)
 }

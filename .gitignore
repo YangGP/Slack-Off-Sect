@@ -10,3 +10,5 @@ dist-ssr
 # 杂项
 *.log
 .env*
+# tools 下的临时脚本 / 提交信息草稿（点文件一律不入库）
+tools/.*

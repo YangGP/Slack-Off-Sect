@@ -29,6 +29,8 @@ export function createDerived() {
     prodRaw: {},
     upkeep: 0,
     rawUpkeep: 0,
+    /** 每名弟子每秒的口粮（已含境界倍率，未含减耗） */
+    discipleUpkeep: 0,
     netQi: 0,
     morale: 100,
     moraleBonus: 0,
@@ -584,7 +586,15 @@ export function recompute(state, derived) {
     rates[r.id] = base * globalMult * (1 + (buffRes[r.id] || 0))
   }
 
-  const rawUpkeep = state.disciples.total * CONFIG.DISCIPLE_UPKEEP
+  /**
+   * 弟子口粮：**随境界倍率一起上涨**（DISCIPLE_UPKEEP_REALM_EXP）。
+   *
+   * 产出被 realmMult 放大，口粮若保持常数，一名阵徒的「毛产出 ÷ 口粮」就会从
+   * 凡体的 2.4:1 涨到渡劫期的 48:1 —— 弟子越到后期越接近免费，人口只剩盖房子一道闸门。
+   * 指数取 1 时口粮与境界倍率同倍上涨，这个比值在任何境界都固定在 0.25/0.6 ≈ 42%。
+   */
+  const discipleUpkeep = CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
+  const rawUpkeep = state.disciples.total * discipleUpkeep
   const reduction = rawUpkeep * Math.min(0.85, acc.consumeReduction)
   const upkeep = rawUpkeep - reduction
 
@@ -660,6 +670,7 @@ export function recompute(state, derived) {
   derived.prodRaw = prod
   derived.upkeep = upkeep
   derived.rawUpkeep = rawUpkeep
+  derived.discipleUpkeep = discipleUpkeep
   derived.netQi = net.qi
   derived.morale = morale
   derived.moraleBonus = acc.moraleBonus
@@ -1276,8 +1287,8 @@ export function tick(state, derived, dt, opts = {}) {
   if (runAutoCraft(state, derived, cap)) recompute(state, derived)
 
   // 6) 历法推进：天数累加
-  //    一天 2 秒（照猫国），所以 1 节气只有 30 秒 —— 节气变化**不写纪事**（不然纪事会被历法刷满），
-  //    它只在右栏历法面板/状态行里滚动；只有「入季」和「跨年」值得进纪事。
+  //    一天 3 秒（见 CALENDAR.DAY_SECONDS），所以 1 节气只有 45 秒 —— 节气变化**不写纪事**
+  //    （不然纪事会被历法刷满），它只在右栏历法面板/状态行里滚动；只有「入季」和「跨年」值得进纪事。
   const calBefore = calendarAt(state.totalDays)
   state.totalDays = (state.totalDays || 0) + cap / CALENDAR.DAY_SECONDS
   const cal = calendarAt(state.totalDays)

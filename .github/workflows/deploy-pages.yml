@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ① 质量门：测试不过就不发布（引擎 308 项 / SSR 渲染 17 项 / jsdom 端到端 133 项）
+  # ① 质量门：测试不过就不发布（引擎 311 项 / SSR 渲染 17 项 / jsdom 端到端 134 项）
   test:
     runs-on: ubuntu-latest
     steps:

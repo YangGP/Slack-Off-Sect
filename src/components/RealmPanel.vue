@@ -10,6 +10,17 @@ import HoverTip from './HoverTip.vue'
 
 const next = computed(() => REALMS[state.realm + 1] || null)
 const cost = computed(() => (next.value ? realmCost(state, derived, state.realm + 1) : null))
+
+/** 破境后的口粮倍率：口粮随境界倍率上涨，破境既升产能也升成本（§5.4） */
+const ratio = computed(() => {
+  const now = REALMS[state.realm]?.mult ?? 1
+  const after = next.value?.mult ?? now
+  return now > 0 ? after / now : 1
+})
+/** 当前每名弟子每秒吃多少灵气（含境界倍率与减耗，取实际值） */
+const perPersonUpkeep = computed(() =>
+  state.disciples.total > 0 ? (derived.upkeep || 0) / state.disciples.total : derived.discipleUpkeep || 0,
+)
 const affordable = computed(() => (cost.value ? canAfford(state, cost.value) : false))
 const gain = computed(() => view.ascendGain.value)
 const canAscend = computed(() => view.canAscend.value)
@@ -116,6 +127,16 @@ function ascend() {
                       <div class="tip-row">
                         <span class="k">现在</span>
                         <span class="v">全局产出 ×{{ (REALMS[state.realm]?.mult ?? 1).toFixed(2) }}</span>
+                      </div>
+                      <!-- 口粮随境界倍率上涨（§5.4）：破境是一次「产能升级」，也是一次「养人涨价」，
+                           不写出来玩家会在破境那一刻突然发现灵气净额变负 -->
+                      <div class="tip-row">
+                        <span class="k">每人口粮</span>
+                        <span class="v warn">
+                          {{ perPersonUpkeep.toFixed(3) }}/秒 → {{ (perPersonUpkeep * ratio).toFixed(3) }}/秒（↑{{
+                            ((ratio - 1) * 100).toFixed(0)
+                          }}%）
+                        </span>
                       </div>
                     </div>
                   </template>

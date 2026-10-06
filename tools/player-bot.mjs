@@ -6,6 +6,7 @@
  * 目的是给出一个**稳定可复现**的参照玩家，而不是最优打法。
  */
 import * as E from '../src/game/engine.js'
+import { CONFIG } from '../src/data/config.js'
 import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
@@ -52,7 +53,23 @@ export function createBot(state, derived) {
   function assignJobs() {
     const idle = E.idleDisciples(state)
     if (idle <= 0) return
-    const needFarmers = Math.ceil(derived.upkeep / 0.6) + 1
+    // 派多少农民：按**基准口径**算，也就是「基准口粮 ÷ 阵徒基准产出」——
+    // 把口粮里的境界倍率除掉，只留下与境界无关的那份。
+    //
+    // 为什么不在算式里乘上境界倍率：弟子口粮现在随境界上涨（DISCIPLE_UPKEEP_REALM_EXP），
+    // 如果这里还按 `derived.upkeep / 0.6` 估，需求会被高估 realmMult 倍（渡劫期 20 倍），
+    // 于是弟子全被塞进农田、没人当悟道者，推演直接失真。
+    // 反过来，若按「实际边际产出」估（除以 0.6 × 共用乘区），派的人会随乘区一起缩水，
+    // 参照玩家就随数值改动漂移了 —— 那样两次推演没法比。
+    // 现在的口径两头都不沾：农民占比只跟「口粮 ÷ 产出」的基准值有关，
+    // 与境界/士气/加成无关，所以**同一套策略在改动前后是同一个玩家**。
+    // 实际产出因乘区 ≥ 基准，所以这份人手总是够覆盖账单的（还有富余去买楼）。
+    const realmUpkeepMult = Math.max(
+      1e-9,
+      Math.pow(derived.realmMult || 1, CONFIG.DISCIPLE_UPKEEP_REALM_EXP),
+    )
+    const baseUpkeep = derived.upkeep / realmUpkeepMult
+    const needFarmers = Math.ceil(baseUpkeep / 0.6) + 1
     const farmer = state.disciples.jobs.farmer || 0
     if (farmer < needFarmers) {
       E.setJob(state, derived, 'farmer', Math.min(farmer + idle, needFarmers))

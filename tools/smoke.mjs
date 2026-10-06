@@ -20,7 +20,8 @@ import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
 import { ACHIEVEMENTS } from '../src/data/achievements.js'
 import { EVENTS } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX } from '../src/data/realms.js'
-import { SEASONS } from '../src/data/calendar.js'
+import { SEASONS, CALENDAR } from '../src/data/calendar.js'
+import { CONFIG } from '../src/data/config.js'
 import { exportSave, parseImport } from '../src/game/save.js'
 
 let passed = 0
@@ -275,7 +276,44 @@ section('初始状态：什么都没有（对标猫国开局）')
   E.setJob(state, derived, 'farmer', 1)
   E.recompute(state, derived)
   ok('有阵徒之后灵气产出叠加', derived.rates.qi > 0.36, `实际 ${derived.rates.qi}`)
-  ok('灵气消耗按弟子数算（2 人 × 0.25）', close(derived.upkeep, 0.5, 1e-9))
+  ok(
+    `灵气消耗按弟子数算（2 人 × ${CONFIG.DISCIPLE_UPKEEP}，凡体倍率 1.0）`,
+    close(derived.upkeep, 0.5, 1e-9),
+    `实际 ${derived.upkeep}`,
+  )
+
+  // 口粮随境界倍率一起上涨：同样两名弟子，破境之后养人就贵了
+  // （这条是行为断言：以后谁把 DISCIPLE_UPKEEP_REALM_EXP 改回 0，这里会直接报错）
+  {
+    const before = derived.upkeep
+    const beforeUnit = derived.discipleUpkeep
+    state.realm = 4 // 金丹期 ×2.0
+    E.recompute(state, derived)
+    const mult = REALMS[4].mult
+    ok(
+      `口粮随境界倍率上涨（金丹期 ×${mult}）`,
+      close(derived.upkeep, before * mult, 1e-9),
+      `${before} → ${derived.upkeep}`,
+    )
+    ok(
+      `每人口粮 = ${CONFIG.DISCIPLE_UPKEEP} × 境界倍率`,
+      close(derived.discipleUpkeep, beforeUnit * mult, 1e-9),
+      `实际 ${derived.discipleUpkeep}`,
+    )
+    // 渡劫期（×20）：口粮占「一名阵徒毛产出」的比例不该再往下掉。
+    // 注意要用边际产出（裸 0.6 × 共用乘区），不能拿 rates.qi ÷ 人数 —— 那里面还混着聚灵阵的产出。
+    state.realm = ASCEND_REALM_INDEX
+    E.recompute(state, derived)
+    const factor = derived.prodRaw.qi > 0 ? derived.rates.qi / derived.prodRaw.qi : derived.globalMult
+    const grossPerFarmer = 0.6 * factor
+    ok(
+      '渡劫期口粮仍占阵徒毛产出的 30% 以上（弟子没有随境界变免费）',
+      derived.discipleUpkeep / grossPerFarmer > 0.3,
+      `口粮 ${derived.discipleUpkeep.toFixed(3)} / 毛产出 ${grossPerFarmer.toFixed(3)}`,
+    )
+    state.realm = 0
+    E.recompute(state, derived)
+  }
 }
 
 // ------------------------------------------------------------
@@ -846,24 +884,31 @@ section('历法与节气')
     `${spring.derived.rates.qi}`,
   )
 
-  // 时间推进：一天 2 秒（照猫国）
+  // 时间推进：一天 CALENDAR.DAY_SECONDS 秒。
+  // 时长全部从常量推出来 —— 以前这里把「2 秒一天 / 30 秒一节气」写死了，改历法就会红一片。
+  const DAY = CALENDAR.DAY_SECONDS
+  const TERM_SECONDS = CALENDAR.DAYS_PER_TERM * DAY // 1 节气 = 15 天
   const t = newGame()
-  E.tick(t.state, t.derived, 6, { events: false })
-  ok('6 秒过去 3 天', close(t.state.totalDays, 3, 1e-9), `实际 ${t.state.totalDays}`)
+  E.tick(t.state, t.derived, DAY * 3, { events: false })
+  ok(`${DAY} 秒一天：${DAY * 3} 秒过去 3 天`, close(t.state.totalDays, 3, 1e-9), `实际 ${t.state.totalDays}`)
 
-  // 跨节气：只更新历法面板，不该写纪事（一节气 30 秒，写纪事会把纪事刷满）
+  // 跨节气：只更新历法面板，不该写纪事（一节气只有几十秒，写纪事会把纪事刷满）
   {
     const before = t.state.log.length
     const termBefore = t.derived.calendar.termName
-    E.tick(t.state, t.derived, 30, { events: false })
-    ok('30 秒过去 1 个节气', t.derived.calendar.termName !== termBefore, `${termBefore} → ${t.derived.calendar.termName}`)
+    E.tick(t.state, t.derived, TERM_SECONDS, { events: false })
+    ok(
+      `${TERM_SECONDS} 秒过去 1 个节气`,
+      t.derived.calendar.termName !== termBefore,
+      `${termBefore} → ${t.derived.calendar.termName}`,
+    )
     ok('节气变化不写纪事', t.state.log.length === before, `多了 ${t.state.log.length - before} 条`)
   }
-  // 入季才写纪事（再跑 3 个节气 = 1 季）
+  // 入季才写纪事（一季 6 个节气，上面已经过掉 1 个，再跑 5 个）
   {
     const before = t.state.log.length
     const seasonBefore = t.derived.calendar.seasonName
-    for (let i = 0; i < 5; i++) E.tick(t.state, t.derived, 30, { events: false })
+    for (let i = 0; i < 5; i++) E.tick(t.state, t.derived, TERM_SECONDS, { events: false })
     ok('入季会写纪事', t.state.log.length > before && t.state.log.some((l) => l.text.includes('入')), `${t.state.log.length - before} 条`)
     ok('跨季后季节真的换了', t.derived.calendar.seasonName !== seasonBefore, `${seasonBefore} → ${t.derived.calendar.seasonName}`)
   }

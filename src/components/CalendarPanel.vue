@@ -1,11 +1,11 @@
 <script setup>
 /**
  * 历法：第几年、哪一季、哪个节气、第几天，以及本季对产出的影响。
- * 时间换算见 src/data/calendar.js（1 天 = 6 秒，1 节气 = 15 天，1 季 = 6 节气）。
+ * 时间换算见 src/data/calendar.js（1 天 = CALENDAR.DAY_SECONDS 秒，1 节气 = 15 天，1 季 = 6 节气）。
  */
 import { computed } from 'vue'
 import { state, derived } from '@/game/store'
-import { TERMS } from '@/data/calendar'
+import { TERMS, CALENDAR, DAYS_PER_SEASON } from '@/data/calendar'
 import { fmtTime } from '@/game/format'
 import { RESOURCE_MAP } from '@/data/resources'
 
@@ -26,12 +26,18 @@ const nextTerm = computed(() => {
   if (!c) return ''
   return TERMS[(c.termIndex + 1) % TERMS.length]
 })
+
+/** 换算提示从常量推出来，避免改了 DAY_SECONDS 之后这里写死的数字又过期 */
+const timeHint = computed(() => {
+  const minutes = (DAYS_PER_SEASON * CALENDAR.DAY_SECONDS) / 60
+  return `1 天 = ${CALENDAR.DAY_SECONDS} 秒，1 季 = ${Number(minutes.toFixed(2))} 分钟`
+})
 </script>
 
 <template>
   <div class="box" v-if="cal">
     <div class="box-head">
-      历法<span class="hint">1 天 = 6 秒，1 季 = 9 分钟</span>
+      历法<span class="hint">{{ timeHint }}</span>
     </div>
     <div class="cal-date">
       第 {{ cal.year }} 年 · {{ cal.seasonName }} · 第 {{ cal.day }} 天
