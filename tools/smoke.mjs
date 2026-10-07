@@ -28,7 +28,7 @@ import {
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
-import { EVENTS } from '../src/data/events.js'
+import { EVENTS, EVENT_MAP } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '../src/data/realms.js'
 import { SEASONS, CALENDAR } from '../src/data/calendar.js'
 import { CONFIG } from '../src/data/config.js'
@@ -2362,6 +2362,151 @@ section('第二种驱动：阴阳分灵 → 湮灭 → 灵能')
     const off = d.expense?.qi || 0
     ok('停用分灵阵后灵气开销归零', off > on && Math.abs(off) < Math.abs(on), on + ' → ' + off)
   }
+}
+
+// ------------------------------------------------------------
+section('事件三分类：自然环境 / 突发 / 选择')
+// ------------------------------------------------------------
+{
+  const byType = (ty) => EVENTS.filter((e) => e.type === ty)
+  ok('三类事件都有内容', byType('nature').length > 0 && byType('sudden').length > 0 && byType('choice').length > 0,
+    '环境 ' + byType('nature').length + ' / 突发 ' + byType('sudden').length + ' / 选择 ' + byType('choice').length)
+  ok('每个事件都标了类别', EVENTS.every((e) => ['nature', 'sudden', 'choice'].includes(e.type)),
+    EVENTS.filter((e) => !e.type).map((e) => e.id).join(',') || '全部有')
+
+  // 自然环境类：靠临时增益/减益，主要影响产出，且有正有负
+  const nature = byType('nature')
+  ok('自然环境类都是临时增益/减益（影响产出）',
+    nature.every((e) => e.buff && typeof e.buff.mult === 'number'),
+    nature.filter((e) => !e.buff).map((e) => e.id).join(',') || '全部有')
+  ok('自然环境类有正有负', nature.some((e) => e.buff.mult > 0) && nature.some((e) => e.buff.mult < 0))
+
+  // 突发事件类：立刻结算，收获与损失都要有
+  const sudden = byType('sudden')
+  ok('突发事件类都是立刻结算（收获或损失）',
+    sudden.every((e) => e.lootRate || e.disaster || e.recruit),
+    sudden.filter((e) => !e.lootRate && !e.disaster && !e.recruit).map((e) => e.id).join(',') || '全部有')
+  ok('突发事件类里"发现资源""顿悟""丢失物资"三种都在',
+    sudden.some((e) => e.lootRate) && sudden.some((e) => e.lootRate?.insight) && sudden.some((e) => e.disaster))
+
+  // 选择类：每个选项都要有收获、也有代价
+  const choice = byType('choice')
+  ok('选择类每个事件都有两个以上选项', choice.every((e) => (e.options || []).length >= 2),
+    choice.filter((e) => (e.options || []).length < 2).map((e) => e.id).join(',') || '全部有')
+
+  // 收益 > 代价：平铺代价可直接比"资源当量"，百分比代价只要求确实有收获
+  // 资源当量：按**后期实际丰度**定 —— 感悟与灵石到那时是海量（各自二十多万），
+  // 整枚的精料与进阶品才是真贵的东西；弟子按 300 计（中期一名弟子的价值）。
+  const WEIGHT = {
+    qi: 0.005, wood: 0.01, faith: 0.02, stone: 0.02, ore: 0.1, herb: 0.1,
+    plank: 4, insight: 0.02, pill: 1, talisman: 1, artifact: 2,
+    spiritTalisman: 8, spiritArtifact: 15, nineTurnPill: 15, spiritTreasure: 60,
+  }
+  const RECRUIT_WORTH = 300
+  const worth = (obj) => Object.entries(obj || {}).reduce((s, [r, v]) => s + (WEIGHT[r] || 1) * v, 0)
+  const gainWorth = (eff) => worth(eff.floor) + (eff.recruit || 0) * RECRUIT_WORTH
+  const problems = []
+  for (const e of choice) {
+    for (const o of e.options) {
+      const eff = o.effect || {}
+      const hasGain = !!(eff.lootRate || eff.recruit)
+      // 代价可以是比例（costShare，随资源缩放）、绝对值（cost）或按比例掠夺（disaster）
+      const hasCost = !!(eff.cost || eff.costShare || eff.disaster)
+      if (!hasGain) problems.push(e.id + '/' + o.label + '：没有收获')
+      if (!hasCost) problems.push(e.id + '/' + o.label + '：没有代价')
+      // 绝对值代价仍按当量比较；比例代价由下面三条结构规则守（30% 上限 + 按产出发放）
+      if (eff.cost && gainWorth(eff) < worth(eff.cost)) {
+        problems.push(e.id + '/' + o.label + '：保底收益 ' + gainWorth(eff).toFixed(0) + ' < 平铺代价 ' + worth(eff.cost).toFixed(0))
+      }
+    }
+  }
+  ok('选择类：每个选项都有收获也有代价，且收益不小于代价', problems.length === 0, problems.slice(0, 3).join('；') || '全部合规')
+
+  // 挂钩当前境界与资源（三条结构规则）
+  {
+    const flatCost = []
+    const noRate = []
+    const tooHeavy = []
+    for (const e of EVENTS) {
+      if (e.type !== 'choice') continue
+      for (const o of e.options) {
+        const eff = o.effect || {}
+        if (eff.cost) flatCost.push(e.id + '/' + o.label)
+        // 收获必须是"当前产出的多少秒" —— 产出随境界与建筑缩放，奖励因此水涨船高
+        if (!eff.lootRate) noRate.push(e.id + '/' + o.label)
+        // 代价是存量比例，且不该一次拿走三成以上
+        for (const [res, share] of Object.entries(eff.costShare || {})) {
+          if (share > 0.3) tooHeavy.push(e.id + '/' + o.label + ' ' + res + ' ' + share)
+        }
+      }
+    }
+    ok('选择类的代价都是比例形式（不用绝对值，避免后期变免费）', flatCost.length === 0, flatCost.join('、') || '全部比例')
+    ok('选择类的收获都按"当前产出的多少秒"发放（随境界与资源缩放）', noRate.length === 0, noRate.join('、') || '全部按产出')
+    ok('选择类的比例代价不超过存量的 30%', tooHeavy.length === 0, tooHeavy.join('、') || '全部在 30% 以内')
+
+    // 高境界的选择要"更贵"：代价比例（costShare 与 disaster 中值）随 minRealm 抬升
+    const costLevel = (e) => {
+      const vals = []
+      for (const o of e.options) {
+        const eff = o.effect || {}
+        for (const v of Object.values(eff.costShare || {})) vals.push(v)
+        if (eff.disaster?.lossPercent) {
+          vals.push((eff.disaster.lossPercent[0] + eff.disaster.lossPercent[1]) / 2)
+        }
+      }
+      return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0
+    }
+    const pick = (lo, hi) =>
+      EVENTS.filter((e) => e.type === 'choice' && (e.minRealm || 0) >= lo && (e.minRealm || 0) <= hi)
+    const avgLevel = (list) =>
+      list.reduce((s, e) => s + costLevel(e), 0) / Math.max(list.length, 1)
+    const lowTier = pick(0, 6)
+    const highTier = pick(7, 10)
+    ok(
+      '高境界的选择更贵（代价比例平均更高）',
+      highTier.length >= 4 && avgLevel(highTier) > avgLevel(lowTier),
+      '低境界 ' + (avgLevel(lowTier) * 100).toFixed(0) + '% vs 高境界 ' + (avgLevel(highTier) * 100).toFixed(0) + '%',
+    )
+    ok('高境界（≥7）的选择至少四条', highTier.length >= 4, String(highTier.length))
+
+    // 行为验证：同一事件在不同产出下给的东西不同
+    const gainAt = (rate) => {
+      const { state: s, derived: d } = newGame()
+      d.rates = { ...d.rates, artifact: rate }
+      s.pendingChoice = { id: 'ancientCave', at: 0 }
+      const before = s.resources.artifact || 0
+      E.resolveChoice(s, d, 0)
+      return (s.resources.artifact || 0) - before
+    }
+    const low = gainAt(0.01)
+    const high = gainAt(1)
+    ok('同一事件在高产出的存档里给得更多（与资源挂钩）', high > low, low + ' → ' + high)
+  }
+}
+
+// ------------------------------------------------------------
+section('选择类的结算流程')
+// ------------------------------------------------------------
+{
+  const { state, derived } = newGame()
+  const ev = EVENT_MAP.ancientCave
+  E.fireEvent(state, derived, ev)
+  ok('选择类触发后进入待决，不立即生效', !!state.pendingChoice && state.pendingChoice.id === ev.id,
+    JSON.stringify(state.pendingChoice))
+
+  let sawChoice = false
+  for (let i = 0; i < 300; i++) {
+    const fired = E.fireEvent(state, derived)
+    if (fired && fired.type === 'choice') sawChoice = true
+  }
+  ok('待决期间不会再抽到选择类', !sawChoice)
+
+  const before = { ...state.resources }
+  E.resolveChoice(state, derived, 0)
+  ok('结算后清空待决', !state.pendingChoice)
+  ok('结算应用了所选选项的效果', Object.entries(state.resources).some(([k, v]) => v > (before[k] || 0)))
+  ok('结算记了一笔（stats.choicesMade）', state.stats.choicesMade === 1, String(state.stats.choicesMade))
+  ok('待决为空时结算不报错', E.resolveChoice(state, derived, 0) === null)
 }
 
 // ------------------------------------------------------------

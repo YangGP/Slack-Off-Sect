@@ -56,6 +56,8 @@ export function createInitialState() {
     dao: 0,
     moralePenalty: 0,
     buffs: [],
+  /** 未决的选择类事件（{ id, at }），为空表示没有待决 */
+  pendingChoice: null,
 
     log: [],
     logSeq: 0,
@@ -66,6 +68,8 @@ export function createInitialState() {
       totalInsight: 0,
       totalFaith: 0,
       lifeInsight: 0,
+      /** 做过几次选择（选择类事件） */
+      choicesMade: 0,
       crafted: {},
       craftCount: 0,
       buildingsBuilt: 0,
@@ -135,6 +139,7 @@ export function normalizeState(state) {
   const now = Date.now()
   merged.buffs = merged.buffs.filter((b) => (b.until || 0) > now)
   return merged
+  if (state.pendingChoice && !state.pendingChoice.id) state.pendingChoice = null
 }
 
 /**
@@ -180,6 +185,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   if (kind === 'ascension') state.dao = (state.dao || 0) + 1
   state.moralePenalty = 0
   state.buffs = []
+  state.pendingChoice = null
   state.stats.lifeInsight = 0
   if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
   else state.stats.ascensions += 1

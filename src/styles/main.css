@@ -972,3 +972,21 @@ textarea {
   border-bottom: 1px solid var(--line-soft);
   color: var(--text);
 }
+
+/* 纪事里的未决选择：平铺、无卡片 */
+.choice {
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 6px;
+}
+.choice-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.choice-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+}

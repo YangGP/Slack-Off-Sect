@@ -7,7 +7,7 @@ import { TECHNIQUES } from '@/data/techniques'
 import { CRAFTS, CRAFT_MAP, craftTime } from '@/data/crafts'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
-import { EVENTS } from '@/data/events'
+import { EVENTS, EVENT_MAP } from '@/data/events'
 import { CALENDAR, TERMS, SEASONS, DAYS_PER_SEASON, DAYS_PER_YEAR } from '@/data/calendar'
 
 const EPS = 1e-9
@@ -1178,7 +1178,10 @@ export function reincarnationGain(state, derived) {
 // ============================================================
 
 function pickEvent(state) {
-  const pool = EVENTS.filter((e) => (e.minRealm || 0) <= state.realm)
+  // 有未决选择时不再抽到"选择类"，避免玩家回来面对一堆积压的选择
+  const pool = EVENTS.filter(
+    (e) => (e.minRealm || 0) <= state.realm && !(e.type === 'choice' && state.pendingChoice),
+  )
   if (!pool.length) return null
   const total = pool.reduce((s, e) => s + e.weight, 0)
   let roll = Math.random() * total
@@ -1189,11 +1192,45 @@ function pickEvent(state) {
   return pool[pool.length - 1]
 }
 
-export function fireEvent(state, derived, ev = null) {
-  const event = ev || pickEvent(state)
-  if (!event) return null
-  state.stats.eventsSeen = (state.stats.eventsSeen || 0) + 1
+/**
+ * 结算一份"事件效果声明"。三种事件与"选择的其中一个选项"共用这一处，
+ * 所以选项里的 lootRate / disaster / buff 与普通事件是同一套机制。
+ */
+function applyEventEffects(state, derived, spec, text, kind) {
+  if (spec.cost) {
+    // 绝对值代价：只在"低境界、库里也没多少"时才用（会随境界稀释，慎用）
+    const parts = []
+    for (const res in spec.cost) {
+      const have = state.resources[res] || 0
+      const pay = Math.min(have, spec.cost[res])
+      state.resources[res] = have - pay
+      if (pay > 0) parts.push(`${RESOURCE_MAP[res].name} -${Math.round(pay)}`)
+    }
+    if (parts.length && text) text = `${text}（${parts.join('，')}）`
+  }
+  if (spec.costShare) {
+    /**
+     * 比例代价：扣当前存量的百分之几。
+     * 这是"惩罚与当前境界 / 资源挂钩"的正解 —— 前期库里只有几十枚丹药时扣几枚，
+     * 后期有几千枚时扣的就按比例放大，代价始终有分量。
+     * 整枚计数的资源照旧向下取整，不扣出半枚。
+     */
+    const parts = []
+    for (const res in spec.costShare) {
+      const have = state.resources[res] || 0
+      const raw = have * spec.costShare[res]
+      const pay = RESOURCE_MAP[res]?.integer ? Math.floor(raw + 1e-9) : raw
+      if (pay <= 0) continue
+      state.resources[res] = have - pay
+      parts.push(`${RESOURCE_MAP[res].name} -${Math.round(pay)}`)
+    }
+    if (parts.length && text) text = `${text}（${parts.join('，')}）`
+  }
+  return applyEventBody(state, derived, spec, text, kind)
+}
 
+/** 原有的事件主体（buff / lootRate / disaster / 其余） */
+function applyEventBody(state, derived, event, text, kind) {
   if (event.buff) {
     const b = event.buff
     const until = Date.now() + (b.duration || 60) * 1000
@@ -1215,8 +1252,8 @@ export function fireEvent(state, derived, ev = null) {
       const real = addResource(state, res, gain)
       if (real > 0) parts.push(`${RESOURCE_MAP[res].name} +${Math.round(real)}`)
     }
-    if (parts.length) pushLog(state, `${event.text}（${parts.join('，')}）`, event.kind)
-    else pushLog(state, event.text, event.kind)
+    if (parts.length) pushLog(state, `${text}（${parts.join('，')}）`, kind)
+    else pushLog(state, text, kind)
   } else if (event.disaster) {
     const lossPct = event.disaster.lossPercent
     const pct = lossPct[0] + Math.random() * (lossPct[1] - lossPct[0])
@@ -1239,11 +1276,11 @@ export function fireEvent(state, derived, ev = null) {
     const suffix = parts.length ? `（${parts.join('，')}）` : '（库中空空，妖兽愤而离去）'
     pushLog(
       state,
-      `${event.text}${suffix}${guard > 0 ? `【大阵挡下 ${Math.round(guard * 100)}%】` : ''}`,
-      event.kind,
+      `${text}${suffix}${guard > 0 ? `【大阵挡下 ${Math.round(guard * 100)}%】` : ''}`,
+      kind,
     )
   } else {
-    pushLog(state, event.text, event.kind)
+    pushLog(state, text, kind)
   }
 
   if (event.recruit) {
@@ -1259,6 +1296,48 @@ export function fireEvent(state, derived, ev = null) {
   state.nextEventAt =
     Date.now() +
     (CONFIG.EVENT_MIN_GAP + Math.random() * (CONFIG.EVENT_MAX_GAP - CONFIG.EVENT_MIN_GAP)) * 1000
+  return event
+}
+
+/**
+ * 触发一个事件。
+ * - 自然环境类 / 突发事件类：立刻结算（applyEventEffects）
+ * - 选择类：挂成"待决"（state.pendingChoice），等玩家在纪事面板里挑一个，再 resolveChoice
+ */
+export function fireEvent(state, derived, ev = null) {
+  const event = ev || pickEvent(state)
+  if (!event) return null
+  state.stats.eventsSeen = (state.stats.eventsSeen || 0) + 1
+
+  if (event.type === 'choice') {
+    state.pendingChoice = { id: event.id, at: Date.now() }
+    pushLog(state, `${event.text}【待你决断】`, 'event')
+    return event
+  }
+
+  applyEventEffects(state, derived, event, event.text, event.kind)
+  return event
+}
+
+/**
+ * 结算一个未决选择（index 为选项下标）：应用所选选项的效果、清空待决、记一笔。
+ * 选项的 effect 就是一份小事件声明，与普通事件共用同一套机制。
+ */
+export function resolveChoice(state, derived, index) {
+  const pending = state.pendingChoice
+  if (!pending) return null
+  const event = EVENT_MAP[pending.id]
+  const opt = event?.options?.[index]
+  if (!event || !opt) return null
+  state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
+  state.pendingChoice = null
+  applyEventEffects(
+    state,
+    derived,
+    opt.effect || {},
+    `${event.name}·${opt.label}：${opt.desc}`,
+    'event',
+  )
   return event
 }
 

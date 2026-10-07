@@ -148,29 +148,40 @@ emit('| --- | --- | --- |')
 for (const a of ACHIEVEMENTS) emit(`| ${a.name} | \`${a.id}\` | ${a.desc} |`)
 
 emit('\n## A.10 随机事件\n')
-emit('| 事件 | id | 类型 | 权重 | 境界要求 | 效果 |')
-emit('| --- | --- | --- | --- | --- | --- |')
-for (const e of EVENTS) {
-  const eff = []
+emit('三类：**自然环境**（限时影响全局产出）/ **突发**（立刻结算）/ **选择**（二选一，收益与代价并列）。')
+emit('收益一律按"当前产出的多少秒"发放，代价一律按当前存量的百分比 —— 两者都随境界与资源缩放。\n')
+emit('| 类别 | 事件 | id | 色调 | 权重 | 境界 | 收益 | 代价 |')
+emit('| --- | --- | --- | --- | --- | --- | --- | --- |')
+{
+  const TYPE_NAME = { nature: '环境', sudden: '突发', choice: '选择' }
   const pct = (v) => `${Math.round(v * 10000) / 100}%`
-  if (e.buff) {
-    eff.push(
-      `buff ${e.buff.name || e.name} ${e.buff.mult > 0 ? '+' : ''}${pct(e.buff.mult)} ${e.buff.duration}s${
-        e.buff.target ? '（仅' + res(e.buff.target) + '）' : ''
-      }`,
-    )
+  const realmOf = (e) => (e.minRealm ? REALMS[e.minRealm].name : '—')
+  const gains = (spec) => {
+    const out = []
+    if (spec.lootRate) out.push(Object.entries(spec.lootRate).map(([k, v]) => `${res(k)} ×${v}s`).join('、'))
+    if (spec.floor) out.push('保底 ' + Object.entries(spec.floor).map(([k, v]) => `${res(k)} ${v}`).join('、'))
+    if (spec.recruit) out.push(`弟子 +${spec.recruit}`)
+    if (spec.buff) out.push(`限时 ${spec.buff.mult > 0 ? '+' : ''}${pct(spec.buff.mult)} ${spec.buff.duration}s${spec.buff.target ? '（仅' + res(spec.buff.target) + '）' : ''}`)
+    return out.join('；') || '—'
   }
-  if (e.lootRate) eff.push('按产出发放 ' + Object.entries(e.lootRate).map(([k, v]) => `${res(k)} ×${v}s`).join(' '))
-  if (e.floor) eff.push('保底 ' + Object.entries(e.floor).map(([k, v]) => `${res(k)} ${v}`).join(' '))
-  if (e.disaster) {
-    eff.push(
-      `掠夺 ${e.disaster.resources.map(res).join('/')} ${pct(e.disaster.lossPercent[0])}~${pct(
-        e.disaster.lossPercent[1],
-      )}`,
-    )
+  const costs = (spec) => {
+    const out = []
+    if (spec.costShare) out.push(Object.entries(spec.costShare).map(([k, v]) => `${res(k)} −${pct(v)}`).join('、'))
+    if (spec.cost) out.push(Object.entries(spec.cost).map(([k, v]) => `${res(k)} −${v}`).join('、'))
+    if (spec.disaster) out.push(`掠夺 ${spec.disaster.resources.map(res).join('/')} ${pct(spec.disaster.lossPercent[0])}~${pct(spec.disaster.lossPercent[1])}`)
+    return out.join('；') || '—'
   }
-  if (e.recruit) eff.push(`弟子 +${e.recruit}`)
-  emit(`| ${e.name} | \`${e.id}\` | ${e.kind} | ${e.weight} | ${e.minRealm ? REALMS[e.minRealm].name : '—'} | ${eff.join('；')} |`)
+  for (const e of EVENTS) {
+    const type = TYPE_NAME[e.type] || e.type || '—'
+    if (e.type === 'choice') {
+      emit(`| ${type} | **${e.name}** | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | 二选一（见下 ${e.options.length} 行） | — |`)
+      for (const o of e.options) {
+        emit(`| ${type} ▸ | ${o.label} | \`${e.id}\` | — | — | — | ${gains(o.effect || {})} | ${costs(o.effect || {})} |`)
+      }
+    } else {
+      emit(`| ${type} | ${e.name} | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | ${gains(e)} | ${costs(e)} |`)
+    }
+  }
 }
 
 flush(process.argv[2] || 'docs/TABLES.md')

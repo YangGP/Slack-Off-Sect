@@ -16,7 +16,7 @@
 > | [docs/BALANCE.md](docs/BALANCE.md) | 历次平衡改动的账本：每次「问题 → 改法 → 改前/改后实测」 |
 > | [docs/RESEARCH.md](docs/RESEARCH.md) | 修真线研究：把「修真」做成关于世界本源的科学（五段主线 + 三个新机制） |
 > | [docs/ROADMAP.md](docs/ROADMAP.md) | 可选的下一步：手感校准旋钮、道果内容层、境界三阶段、试手感观察清单 |
-> | [docs/TABLES.md](docs/TABLES.md) | 全量数据表（资源 / 职位 / 建筑 / 修真 / 技艺 / 法宝 / 配方 / 境界 / 成就 / 事件），由 `npm run docs:tables` 生成 |
+> | [docs/TABLES.md](docs/TABLES.md) | 全量数据表（资源 / 职位 / 建筑 / 修真 / 技艺 / 法宝 / 配方 / 境界 / 事件 / 成就 / 事件），由 `npm run docs:tables` 生成 |
 >
 > 界面风格参照猫国建设者：白底、细灰线、全页只有一层内容边框；左栏一行一资源的数字表，
 > 中栏是筛选行 + 建筑按钮网格，右栏是纯列表纪事。没有卡片、圆角、渐变、进度条和弹窗气泡。
@@ -103,7 +103,7 @@ slack-off-sect/
 │   ├── components/             # 19 个展示组件（左资源栏 + 收支 tooltip、左栏炼制块、修真页、技艺·法宝页、历法、累计…）
 │   └── styles/main.css         # 白底浅色 + 平面文字表格风格（无圆角/渐变）
 └── tools/
-    ├── smoke.mjs               # 引擎冒烟测试（396 项断言）
+    ├── smoke.mjs               # 引擎冒烟测试（405 项断言）
     ├── render-check.mjs        # 用 SSR 把每个面板真实渲染一遍，抓模板错误
     ├── dom-check.mjs           # 用 jsdom 加载客户端 bundle，真挂载 + 真跑主循环 + 模拟点击
     ├── dom-entry.js            # dom-check 的客户端入口
