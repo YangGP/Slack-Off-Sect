@@ -154,8 +154,7 @@ export const BUILDINGS = [
     priceRatio: 1.6,
     desc: '青石铺地、灵纹引气，住二十名弟子也不觉拥挤。',
     effects: { maxDisciples: 20, storageAll: 400, morale: 4 },
-    needs: { building: { id: 'logHouse', count: 5 } },
-    needs: { upgrades: ['buildingCode'] },
+    needs: { building: { id: 'logHouse', count: 5 }, upgrades: ['buildingCode'] },
   },
   {
     id: 'caveDwelling',
@@ -206,8 +205,7 @@ export const BUILDINGS = [
     priceRatio: 1.25,
     desc: '整座山腹都掏空了，堆到天荒地老也放得下。',
     effects: { storageAll: 2000 },
-    needs: { building: { id: 'warehouse', count: 5 } },
-    needs: { upgrades: ['earthEssence'] },
+    needs: { building: { id: 'warehouse', count: 5 }, upgrades: ['earthEssence'] },
   },
   {
     id: 'grotto',
@@ -358,8 +356,7 @@ export const BUILDINGS = [
     effects: { ratio: { faith: 0.3 }, morale: 3, storage: { faith: 120 } },
     upkeep: { wood: 0.12 }, // 鼎里得一直添香柴
 
-    needs: { building: { id: 'gate', count: 2 } },
-    needs: { upgrades: ['incenseStudy'] },
+    needs: { building: { id: 'gate', count: 2 }, upgrades: ['incenseStudy'] },
   },
   {
     id: 'ancestorHall',
@@ -424,7 +421,7 @@ export const BUILDINGS = [
     // 阵要一直烧灵气：拆开一个灵气分子，才得到一对正负灵子
     // 造价必须落在玩家"实际能达到的仓储上限"之内：早先写 25 万灵石，
     // 而参照玩家在渡劫期的灵石上限只有约 22.8 万 —— 于是这两座永远盖不出来（推演曲线一字不差）。
-    cost: { stone: 150000, insight: 60000, artifact: 60 },
+    cost: { stone: 40000, insight: 20000, artifact: 30 },
     priceRatio: 1.5,
     desc: '阵法把灵气分子拆成正负两半 —— 拆得越久，越像在跟天地借火。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
@@ -436,12 +433,12 @@ export const BUILDINGS = [
     name: '湮灭炉',
     glyph: '湮',
     group: 'wonder',
-    cost: { wood: 120000, stone: 180000, artifact: 60 },
+    cost: { wood: 50000, stone: 60000, artifact: 30 },
     priceRatio: 1.6,
     desc: '正负灵子在炉心相遇，归于虚无，只留下滚烫的灵能。',
     effects: { prod: { qiEnergy: 0.06 } },
     upkeep: { yangParticle: 0.02, yinParticle: 0.02 }, // 成对吃掉正负灵子
-    needs: { upgrades: ['annihilationArt'], realm: 10 },
+    needs: { upgrades: ['annihilationArt'], realm: 9 },
   },
   {
     id: 'karmaPool',

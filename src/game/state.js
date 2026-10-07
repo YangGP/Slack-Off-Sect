@@ -55,6 +55,8 @@ export function createInitialState() {
     karma: 0,
     dao: 0,
     moralePenalty: 0,
+    starvationTimer: 0,
+    leaveTimer: 0,
     buffs: [],
   /** 未决的选择类事件（{ id, at }），为空表示没有待决 */
   pendingChoice: null,
@@ -89,6 +91,8 @@ export function createInitialState() {
       autosave: true,
       autoCraftOn: true,
       offlineProgress: true,
+      craftReservePercent: 20,
+      autoCraftPriority: 'condenseStone',
     },
 
     ui: {
@@ -184,6 +188,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
   if (kind === 'ascension') state.dao = (state.dao || 0) + 1
   state.moralePenalty = 0
+  state.starvationTimer = 0
+  state.leaveTimer = 0
   state.buffs = []
   state.pendingChoice = null
   state.stats.lifeInsight = 0

@@ -275,7 +275,7 @@ export const actions = {
   /** 「自动制作」的每配方开关（需要先参悟《心有灵犀》，总开关在设置页） */
   toggleAutoCraft(id) {
     const on = E.toggleAutoCraft(state, derived, id)
-    if (on === false && !derived.autoCraftUnlocked) toast('尚未参悟《心有灵犀》', 'bad')
+    if (on === false && !derived.autoCraftUnlocked) toast('需参悟《心有灵犀》或取得首颗道果', 'bad')
   },
   breakthrough() {
     const ok = E.breakthrough(state, derived)
@@ -311,7 +311,7 @@ export const actions = {
     E.recompute(state, derived)
     E.pushLog(state, `自【${name}】飞升，携仙缘 ${gain} 点转世重修`, 'realm')
     saveNow()
-    toast(`飞升成功，获得仙缘 ${gain}`, 'good')
+    toast(`飞升成功，获得仙缘 ${gain} 与 1 颗道果，道果统筹已开启`, 'good')
     return true
   },
   /** 调试/彩蛋：立刻触发一次奇遇 */

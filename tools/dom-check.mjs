@@ -898,6 +898,13 @@ ok('境界面板渲染', html().includes('飞升'))
   ascBtn().click()
   await new Promise((r) => setTimeout(r, 80))
   ok('点击飞升后道果 +1', state.dao === 1, String(state.dao))
+  ok('飞升后自动炼制立即解锁', derived.daoAutomation && derived.autoCraftUnlocked)
+  ok('炼制栏显示统筹控制', text().includes('道果统筹') && doc.querySelectorAll('.left select').length === 2)
+  const controls = doc.querySelectorAll('.left select')
+  controls[0].value = '30'
+  controls[0].dispatchEvent(new window.Event('change', { bubbles: true }))
+  ok('材料保留设置通过界面保存', state.settings.craftReservePercent === 30)
+  ok('重修后配方自动开关可用', !doc.querySelector('.left .craft-row input[type="checkbox"]').disabled)
   window.confirm = savedConfirm2
   // 后面的存档用例要用到一间茅屋，这里补回来
   state.buildings.hut = { count: 1, on: true }

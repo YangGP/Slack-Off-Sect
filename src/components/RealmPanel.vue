@@ -37,7 +37,7 @@ function resName(id) {
 
 function ascend() {
   const ok = window.confirm(
-    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gain.value} 点仙缘与 1 颗道果（都是永久的）。确定吗？`,
+    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gain.value} 点仙缘与 1 颗道果（都是永久的）。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
   )
   if (ok) actions.ascend()
 }
@@ -272,6 +272,9 @@ function reincarnate() {
 
       <div class="box-sub">
         飞升<span class="hint">渡劫期 · 终极目标；转世是常见路线，但不是必需</span>
+      </div>
+      <div class="small" :class="state.dao > 0 ? 'good' : 'dim'">
+        首颗道果解锁「道果统筹」：重修时即可自动炼制，可指定优先配方并保留材料。
       </div>
       <div class="tip-row">
         <span class="k">境界</span>

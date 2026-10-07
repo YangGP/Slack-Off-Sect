@@ -61,6 +61,20 @@ function resName(id) {
       炼制<span class="hint">制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
     </div>
     <div class="box-body">
+      <div v-if="derived.daoAutomation" class="small">
+        <div class="good">道果统筹 · 重修时即可自动炼制</div>
+        <label>材料保留
+          <select :value="state.settings.craftReservePercent" @change="actions.setSetting('craftReservePercent', Number($event.target.value))">
+            <option v-for="n in [0, 10, 20, 30, 50]" :key="n" :value="n">{{ n }}% 仓储</option>
+          </select>
+        </label>
+        <div class="dim">保留比例按每种材料的仓储上限计算，仅约束自动炼制。</div>
+        <label>优先
+          <select :value="state.settings.autoCraftPriority" @change="actions.setSetting('autoCraftPriority', $event.target.value)">
+            <option v-for="row in rows" :key="row.meta.id" :value="row.meta.id">{{ row.meta.name }}</option>
+          </select>
+        </label>
+      </div>
       <div v-if="!rows.length" class="empty">还没有可用配方。</div>
 
       <HoverTip
@@ -74,9 +88,10 @@ function resName(id) {
       >
         <div class="craft-line">
           <span class="craft-name">{{ row.meta.name }}</span>
-          <span v-if="row.autoStatus.on" class="small good">
+          <span v-if="row.autoStatus.on && row.autoStatus.ready" class="small good">
             自动中 · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
           </span>
+          <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
           <span class="have">{{ resName(row.meta.out) }} {{ fmtStock(row.have) }}</span>
           <span v-if="derived.craftBonus > 0" class="small good">+{{ fmtPercent(row.progress) }}</span>
         </div>
@@ -163,8 +178,8 @@ function resName(id) {
             <div class="tip-flavor">
               {{
                 derived.autoCraftUnlocked
-                  ? '勾上「自动」后一份一份常驻做下去，材料或仓储不够就先歇着，够了接着做；挂着游戏时也照做（总开关在设置页）。'
-                  : '参悟《心有灵犀》后才能勾选自动制作。'
+                  ? '勾上「自动」后一份一份常驻做下去，材料、仓储或保留量不允许时先歇着；挂着游戏时也照做（总开关在设置页）。'
+                  : '参悟《心有灵犀》或取得首颗道果后才能勾选自动制作。'
               }}
             </div>
           </div>

@@ -46,11 +46,21 @@ function snapshot(t) {
 }
 
 console.log(`模拟 ${HOURS} 小时，每 ${DECISION_EVERY} 秒决策一次\n`)
+let previousRealm = state.realm
+let sawEnergy = false
 for (let t = 1; t <= TOTAL; t++) {
-  E.tick(state, derived, 1, { events: true })
+  E.tick(state, derived, 1, { events: false })
   if (t % DECISION_EVERY === 0) bot.act()
   if (t % 300 === 0) E.recompute(state, derived)
   if (checkpoints.has(t)) snapshot(t)
+  if (state.realm !== previousRealm) {
+    console.log(`里程碑 ${(t / 3600).toFixed(2)}h：${REALMS[state.realm].name}`)
+    previousRealm = state.realm
+  }
+  if (!sawEnergy && state.resources.qiEnergy > 0) {
+    console.log(`里程碑 ${(t / 3600).toFixed(2)}h：首次灵能（${REALMS[state.realm].name}）`)
+    sawEnergy = true
+  }
 }
 console.log('\n最终状态：')
 snapshot(TOTAL)

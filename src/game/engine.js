@@ -63,6 +63,8 @@ export function createDerived() {
     breakthroughDiscount: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     autoCraftUnlocked: false,
+    daoAutomation: false,
+    buildingSupply: {},
     unlockedBuildings: [],
     unlockedJobs: [],
     availableUpgrades: [],
@@ -329,7 +331,7 @@ export function nextArrivalIn(state, derived) {
 export function timeToAfford(state, derived, resId, need, depth = 0) {
   const have = state.resources[resId] || 0
   if (have >= need) return 0
-  const rate = resId === 'qi' ? derived.netQi : derived.rates[resId] || 0
+  const rate = derived.net?.[resId] ?? derived.rates[resId] ?? 0
   if (rate > 0) return (need - have) / rate
   if (depth >= 2) return Infinity // 防「配方互相喂」导致的死循环
   const recipe = CRAFTS.find((c) => c.out === resId && isCraftUnlocked(state, c) && !c.cost[resId])
@@ -430,7 +432,7 @@ function applyEffects(ef, mult, targets, src) {
  * 重算所有派生数据：仓储上限、每秒产出、士气、解锁列表、价格折扣等。
  * 任何会改变数值的操作之后都应该调用一次。
  */
-export function recompute(state, derived) {
+function recomputeRaw(state, derived, supply) {
   // 资源历史最高水位：建筑「渐进露出」用它判定，所以每次重算都刷新一遍
   trackPeak(state)
   const max = {}
@@ -471,7 +473,7 @@ export function recompute(state, derived) {
   for (const meta of BUILDINGS) {
     const e = state.buildings[meta.id]
     if (!e || !e.count) continue
-    const on = e.on ? e.count : 0
+    const on = e.on ? e.count * (supply[meta.id] ?? 1) : 0
     const ef = meta.effects
     if (!ef) continue
     // 与数量无关的效果（缩放用 count），先把 storage 类用 count 单独处理。
@@ -729,7 +731,8 @@ export function recompute(state, derived) {
   derived.arrivalBonus = acc.arrivalBonus
   derived.breakthroughDiscount = acc.breakthroughDiscount
   derived.offlineHours = acc.offlineHours
-  derived.autoCraftUnlocked = acc.autoCraftUnlocked
+  derived.daoAutomation = (state.dao || 0) >= 1
+  derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
   derived.ratio = ratio
   derived.jobRatio = jobRatio
 
@@ -740,6 +743,39 @@ export function recompute(state, derived) {
     (u) => !state.upgrades[u.id] && isUpgradeUnlocked(state, u),
   ).map((u) => u.id)
   derived.availableCrafts = CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => c.id)
+  return derived
+}
+
+/** Supply is shared proportionally; disciple food is reserved before building upkeep.
+ * Start at full capacity and only reduce it, so a missing input cannot fund its own output.
+ * Storage and housing remain available even when production is starved.
+ */
+export function recompute(state, derived, seconds = 1) {
+  const dt = Math.max(0.001, seconds)
+  const supply = {}
+  const consumers = BUILDINGS.filter((b) => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
+  for (const b of consumers) supply[b.id] = 1
+  recomputeRaw(state, derived, supply)
+  for (let pass = 0; pass < 40; pass++) {
+    const shares = {}
+    for (const res in derived.maintenance) {
+      const demand = derived.maintenance[res]
+      const available = Math.max(0, (state.resources[res] || 0) / dt + (derived.rates[res] || 0) - (res === 'qi' ? derived.upkeep : 0))
+      shares[res] = demand > 0 ? Math.min(1, available / demand) : 1
+    }
+    let changed = false
+    for (const b of consumers) {
+      const factor = Math.min(...Object.keys(b.upkeep).map((res) => shares[res] ?? 1))
+      if (factor < 1 - 1e-10 && supply[b.id] > 0) {
+        supply[b.id] *= factor
+        if (supply[b.id] < 1e-10) supply[b.id] = 0
+        changed = true
+      }
+    }
+    if (!changed) break
+    recomputeRaw(state, derived, supply)
+  }
+  derived.buildingSupply = supply
   return derived
 }
 
@@ -963,6 +999,8 @@ export function autoCraftStatus(state, derived, recipeId) {
   if (!recipe) return out
   if (out.on) out.wait = Math.max(0, step - ((timer && timer.t) || 0))
   out.canMake = maxCraftable(state, derived, recipeId)
+  out.ready = out.canMake > 0 && canAutoCraft(state, derived, recipe)
+  out.reason = out.canMake <= 0 ? '等待材料或仓储' : '保留材料 · 暂停'
   return out
 }
 
@@ -974,14 +1012,19 @@ export function autoCraftStatus(state, derived, recipeId) {
 export function runAutoCraft(state, derived, dt) {
   if (!state.craftTimers) state.craftTimers = {}
   let made = false
-  for (const recipe of CRAFTS) {
+  const recipes = [...CRAFTS]
+  if (derived.daoAutomation) {
+    const priority = state.settings.autoCraftPriority
+    recipes.sort((a, b) => Number(b.id === priority) - Number(a.id === priority))
+  }
+  for (const recipe of recipes) {
     if (!isAutoCrafting(state, derived, recipe.id)) continue
     const step = craftTime(recipe)
     const timer = state.craftTimers[recipe.id] || { t: 0, made: 0 }
     timer.t = (timer.t || 0) + dt
     while (timer.t >= step) {
       const full = (state.resources[recipe.out] || 0) >= derived.max[recipe.out] - EPS
-      if (!canAfford(state, recipe.cost) || full) {
+      if (!canAutoCraft(state, derived, recipe) || full) {
         // 材料/仓储不够：最多攒一份，材料一恢复就接着做，但不会攒成一波爆发
         timer.t = Math.min(timer.t, step)
         break
@@ -994,6 +1037,15 @@ export function runAutoCraft(state, derived, dt) {
     state.craftTimers[recipe.id] = timer
   }
   return made
+}
+
+export function canAutoCraft(state, derived, recipe) {
+  if (!canAfford(state, recipe.cost)) return false
+  if (!derived.daoAutomation) return true
+  const reserve = clamp(Number(state.settings.craftReservePercent) || 0, 0, 90) / 100
+  return Object.entries(recipe.cost).every(([res, cost]) =>
+    (state.resources[res] || 0) - cost >= (derived.max[res] || 0) * reserve - EPS,
+  )
 }
 
 /**
@@ -1368,7 +1420,6 @@ export function checkAchievements(state, derived) {
 }
 
 let achievementTimer = 0
-let leaveTimer = 0
 
 /**
  * 推进游戏时间。
@@ -1377,8 +1428,19 @@ let leaveTimer = 0
  */
 export function tick(state, derived, dt, opts = {}) {
   if (dt <= 0) return
+  // Long ticks use the same supply budgets and food checks as offline simulation.
+  if (dt > 1) {
+    let left = dt
+    while (left > 1e-9) {
+      const step = Math.min(1, left)
+      tick(state, derived, step, opts)
+      left -= step
+    }
+    return
+  }
   const { offline = false, events = true } = opts
   const cap = dt > 60 ? 60 : dt
+  recompute(state, derived, cap)
 
   // 1) 资源结算（灵气先算净产出）
   for (const r of RESOURCES) {
@@ -1426,20 +1488,24 @@ export function tick(state, derived, dt, opts = {}) {
     )
   }
 
-  // 3) 士气过低会走人
-  if (derived.morale < 45 && state.disciples.total > 0) {
-    leaveTimer += cap
-    if (leaveTimer >= CONFIG.LEAVE_INTERVAL) {
-      leaveTimer = 0
+  // 3) 长期断粮独立于舒适度；旧存档缺失计时器时从零开始。
+  state.starvationTimer = starving ? (state.starvationTimer || 0) + cap : 0
+  if ((state.starvationTimer >= CONFIG.LEAVE_INTERVAL || derived.morale < 45) && state.disciples.total > 0) {
+    state.leaveTimer = (state.leaveTimer || 0) + cap
+    if (state.starvationTimer >= CONFIG.LEAVE_INTERVAL || state.leaveTimer >= CONFIG.LEAVE_INTERVAL) {
+      state.leaveTimer = 0
+      state.starvationTimer = 0
       const jobs = state.disciples.jobs
-      const jobId = JOBS.map((j) => j.id).find((id) => (jobs[id] || 0) > 0)
+      const jobId = idleDisciples(state) > 0 ? null :
+        [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
+          .find((job) => (jobs[job.id] || 0) > 0)?.id
       if (jobId) jobs[jobId] -= 1
       state.disciples.total -= 1
-      pushLog(state, `士气低落，一名弟子收拾行囊下山了。`, 'bad')
+      pushLog(state, `${starving ? '灵气长期断供' : '士气低落'}，一名弟子收拾行囊下山了。`, 'bad')
       recompute(state, derived)
     }
   } else {
-    leaveTimer = 0
+    state.leaveTimer = 0
   }
 
   // 4) 增益到期
@@ -1470,7 +1536,8 @@ export function tick(state, derived, dt, opts = {}) {
   }
 
   // 7) 弟子自动前来（有空房就来人，不用手动招募）
-  recruitArrivals(state, derived, cap, { silent: offline })
+  if (!starving) recruitArrivals(state, derived, cap, { silent: offline })
+  else state.arrivalTimer = 0
 
   // 8) 成就
   achievementTimer += cap
@@ -1486,6 +1553,7 @@ export function tick(state, derived, dt, opts = {}) {
   if (events && !offline && now >= (state.nextEventAt || 0)) {
     fireEvent(state, derived)
   }
+  recompute(state, derived)
 }
 
 /** 把季节影响写成人话（纪事里用） */

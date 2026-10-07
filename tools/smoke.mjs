@@ -857,7 +857,7 @@ section('还差多久买得起')
     s3.buildings.talismanHall = { count: 1, on: true }
     s3.buildings.forge = { count: 1, on: true }
     s3.buildings.herbGarden = { count: 4, on: true }
-    s3.buildings.lumberYard = { count: 2, on: true }
+    s3.buildings.lumberYard = { count: 30, on: true } // 先覆盖三座工坊维护，再积累制作材料
     s3.buildings.mine = { count: 3, on: true }
     s3.resources.qi = 5000
     E.recompute(s3, d3)
@@ -2094,6 +2094,7 @@ section('百工坊：提前到手 + 制作加成')
   // 加成随启用数量叠加（用增量比较：craftBonus 另有技艺来源，别写死绝对值）
   const bonusWith = (count) => {
     const { state: s, derived: d } = newGame()
+    s.resources.wood = 100
     s.upgrades.alchemyArt = true
     s.buildings.alchemyRoom = { count: 1, on: true }
     if (count > 0) s.buildings.workshop = { count, on: true }
@@ -2111,6 +2112,7 @@ section('百工坊：提前到手 + 制作加成')
   // 同一配方，有工坊时产出更多（凝气成石：qi → stone，craftBonus 直接乘在产量上，不取整）
   const run = (withWorkshop) => {
     const { state: s2, derived: d2 } = newGame()
+    s2.resources.wood = 100
     s2.upgrades.earthArt = true
     s2.upgrades.alchemyArt = true
     s2.buildings.warehouse = { count: 2, on: true }
@@ -2306,6 +2308,7 @@ section('第二种驱动：阴阳分灵 → 湮灭 → 灵能')
     const { state: s, derived: d } = newGame()
     s.upgrades.annihilationArt = true
     s.buildings.annihilationFurnace = { count: 1, on: true }
+    s.buildings.grotto = { count: 1, on: true } // 足够容纳整段稳态测量所需的粒子
     s.resources.yangParticle = 1e6 // 粒子管够，隔离掉分灵阵的变量
     s.resources.yinParticle = 1e6
     s.resources.qi = 1e6
@@ -2355,6 +2358,7 @@ section('第二种驱动：阴阳分灵 → 湮灭 → 灵能')
     const { state: s, derived: d } = newGame()
     s.upgrades.yinyangSplit = true
     s.buildings.splitArray = { count: 2, on: true }
+    s.resources.qi = 100
     E.recompute(s, d)
     const on = d.expense?.qi || 0
     s.buildings.splitArray = { count: 2, on: false }
@@ -2510,6 +2514,88 @@ section('选择类的结算流程')
 }
 
 // ------------------------------------------------------------
+section('缺料、长期断粮与首颗道果')
+{
+  const { state: s, derived: d } = newGame()
+  s.buildings.annihilationFurnace = { count: 1, on: true }
+  E.recompute(s, d)
+  E.tick(s, d, 1, { events: false })
+  ok('没有粒子就没有灵能产出', s.resources.qiEnergy === 0 && d.rates.qiEnergy === 0)
+  s.resources.yangParticle = 1
+  s.resources.yinParticle = 0.005
+  E.recompute(s, d)
+  ok('供应按最缺的材料缩放', close(d.buildingSupply.annihilationFurnace, 0.25))
+  const fullRate = BUILDING_MAP.annihilationFurnace.effects.prod.qiEnergy * d.globalMult
+  E.tick(s, d, 1, { events: false })
+  ok('部分供应的产出与实际支付一致', close(s.resources.qiEnergy, fullRate * 0.25 * (1 - CONFIG.QI_ENERGY_DECAY)))
+  ok('多材料生产不会透支任一种输入', close(s.resources.yangParticle, 0.995) && close(s.resources.yinParticle, 0))
+  s.resources.yinParticle = 1
+  E.recompute(s, d)
+  ok('补料后自动恢复，不改变启用开关', d.buildingSupply.annihilationFurnace === 1 && s.buildings.annihilationFurnace.on)
+
+  const shared = newGame()
+  shared.state.resources.wood = 0.375
+  shared.state.buildings.alchemyRoom = { count: 1, on: true }
+  shared.state.buildings.forge = { count: 1, on: true }
+  E.recompute(shared.state, shared.derived)
+  ok('多座设施按需求比例共享短缺材料', close(shared.derived.buildingSupply.alchemyRoom, 0.5) && close(shared.derived.buildingSupply.forge, 0.5))
+  E.tick(shared.state, shared.derived, 1, { events: false })
+  ok('共享供料不重复花费库存', close(shared.state.resources.wood, 0))
+  ok('材料没有净收入时不虚报购买倒计时', E.timeToAfford(shared.state, shared.derived, 'wood', 10) === Infinity)
+
+  const hungry = newGame()
+  hungry.state.buildings.meditationPool = { count: 20, on: true }
+  hungry.state.disciples.total = 4
+  hungry.state.disciples.jobs.farmer = 1
+  hungry.state.disciples.jobs.woodcutter = 3
+  // 冬季，即使士气200%，一名阵徒产出0.96仍小于四人口粮1。
+  hungry.state.totalDays = 280
+  E.recompute(hungry.state, hungry.derived)
+  E.simulateOffline(hungry.state, hungry.derived, CONFIG.LEAVE_INTERVAL)
+  ok('高士气也不能免疫长期断粮，离线同样生效', hungry.derived.morale > 100 && hungry.state.disciples.total === 3)
+  ok('流失优先保留供粮职位', hungry.state.disciples.jobs.farmer === 1 && hungry.state.disciples.jobs.woodcutter === 2)
+
+  const automation = newGame()
+  const a = automation.state
+  const ad = automation.derived
+  resetForAscension(a, 20)
+  E.recompute(a, ad)
+  ok('首颗道果永久解锁自动炼制，无需重新研究', ad.daoAutomation && ad.autoCraftUnlocked && !a.upgrades.intuition)
+  a.resources.qi = 140
+  a.autoCraft.condenseStone = true
+  E.runAutoCraft(a, ad, 1)
+  ok('自动炼制保留材料底线', a.resources.qi === 140 && a.resources.stone === 0)
+  ok('自动状态说明保留材料导致的暂停', E.autoCraftStatus(a, ad, 'condenseStone').reason.includes('保留材料'))
+  E.craft(a, ad, 'condenseStone')
+  ok('手动制作允许玩家动用保留材料', a.resources.qi === 95 && a.resources.stone === 1)
+  a.settings.craftReservePercent = 0
+  a.settings.autoCraftPriority = 'refinePill'
+  a.buildings.alchemyRoom = { count: 1, on: true }
+  a.resources.wood = 100
+  a.resources.qi = 60
+  a.resources.herb = 25
+  a.autoCraft.refinePill = true
+  E.recompute(a, ad)
+  E.runAutoCraft(a, ad, 2)
+  ok('优先配方先获得竞争材料', a.resources.pill > 0 && a.resources.stone === 1)
+  const restored = parseImport(exportSave(a))
+  ok('统筹设置可随存档保存', restored.settings.autoCraftPriority === 'refinePill' && restored.settings.craftReservePercent === 0)
+  resetForReincarnation(a, 5)
+  E.recompute(a, ad)
+  ok('转世保留道果统筹与偏好', ad.daoAutomation && a.settings.autoCraftPriority === 'refinePill')
+  const old = normalizeState({ resources: {} })
+  ok('旧存档补齐供粮计时与统筹设置', old.starvationTimer === 0 && old.settings.craftReservePercent === 20)
+  const blockedArrivals = newGame()
+  blockedArrivals.state.buildings.hut = { count: 3, on: true }
+  blockedArrivals.state.disciples.total = 2
+  E.simulateOffline(blockedArrivals.state, blockedArrivals.derived, 20)
+  ok('断粮时停止接收新弟子，避免流失与招收相互抵消', blockedArrivals.state.disciples.total === 2)
+  ok('精舍保留居所与研究两项前置', BUILDING_MAP.mansion.needs.building.id === 'logHouse' && BUILDING_MAP.mansion.needs.upgrades.includes('buildingCode'))
+  ok('石殿保留仓储与研究两项前置', BUILDING_MAP.depot.needs.building.id === 'warehouse' && BUILDING_MAP.depot.needs.upgrades.includes('earthEssence'))
+  ok('香火鼎保留山门与研究两项前置', BUILDING_MAP.incenseCauldron.needs.building.id === 'gate' && BUILDING_MAP.incenseCauldron.needs.upgrades.includes('incenseStudy'))
+  ok('湮灭研究与建筑在渡劫前开放', UPGRADE_MAP.annihilationArt.needs.realm === 9 && BUILDING_MAP.annihilationFurnace.needs.realm === 9)
+}
+
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {
   console.log('失败清单：')

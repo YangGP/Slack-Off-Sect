@@ -20,7 +20,9 @@ const props = defineProps({
 
 const entry = computed(() => state.buildings[props.meta.id] || { count: 0, on: true })
 const count = computed(() => entry.value.count || 0)
-const active = computed(() => (entry.value.on === false ? 0 : count.value))
+const enabled = computed(() => (entry.value.on === false ? 0 : count.value))
+const supply = computed(() => derived.buildingSupply?.[props.meta.id] ?? 1)
+const active = computed(() => enabled.value * supply.value)
 // 建筑始终一次一座（批量选择只留给炼制页）
 const price = computed(() => buildingCost(state, props.meta.id, 1))
 const affordable = computed(() => canAfford(state, price.value))
@@ -35,13 +37,13 @@ const effectRows = computed(() => {
   const unit = describeEffects(props.meta.effects)
   const total =
     count.value > 0
-      ? describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value))
+      ? describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value, !!props.meta.upkeep))
       : []
   return unit.map((u, i) => ({
     key: `${u.label}-${i}`,
     label: u.label,
     value: u.value,
-    total: total[i]?.value || '',
+    total: total.find((row) => row.label === u.label)?.value || (count.value > 0 ? '0' : ''),
     tone: u.tone,
   }))
 })
@@ -54,7 +56,7 @@ const upkeepRows = computed(() =>
     key: res,
     label: RESOURCE_MAP[res]?.name || res,
     unit: fmtRate(-v),
-    total: active.value > 0 ? fmtRate(-v * active.value) : '',
+    total: enabled.value > 0 ? fmtRate(-v * active.value) : '',
   })),
 )
 
@@ -94,6 +96,7 @@ onBeforeUnmount(clearHighlight)
         @click="actions.buy(meta.id, 1)"
       >
         {{ meta.name }}<template v-if="count"> ({{ count }})</template>
+        <span v-if="enabled > 0 && supply < 0.999" class="small warn"> · 缺料</span>
       </button>
       <template #tip>
         <div class="tip-body">
@@ -128,7 +131,11 @@ onBeforeUnmount(clearHighlight)
             <span class="v">{{ needsText }}</span>
           </div>
           <template v-if="meta.upkeep">
-            <div class="tip-section">维护<template v-if="active > 0">（{{ active }} 座启用）</template></div>
+            <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
+            <div v-if="enabled > 0" class="tip-row">
+              <span class="k">供应</span>
+              <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ Math.round(supply * 100) }}% · 按供应比例发挥效果</span>
+            </div>
             <!-- 维护费同样一种资源一行 -->
             <div v-for="row in upkeepRows" :key="row.key" class="tip-row">
               <span class="k">{{ row.label }} 消耗</span>
@@ -138,7 +145,7 @@ onBeforeUnmount(clearHighlight)
                 >
               </span>
             </div>
-            <div v-if="active === 0" class="tip-row">
+            <div v-if="enabled === 0" class="tip-row">
               <span class="k">当前</span>
               <span class="v warn">已停用，暂不计维护费</span>
             </div>

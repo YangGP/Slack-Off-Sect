@@ -21,6 +21,7 @@ import {
   timeToAfford,
 } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
+import { costLabel } from '@/game/pricing'
 import { fmt, fmtCost, fmtStock, fmtTime } from '@/game/format'
 import BuildingButton from './BuildingButton.vue'
 import HoverTip from './HoverTip.vue'

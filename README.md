@@ -141,6 +141,7 @@ npm run check         # 三个都跑
 
 ```bash
 npm run balance -- 24     # 模拟 24 小时
+npm run balance:visits -- 24 # 比较持续操作、每15分钟、每小时、每天三次上线
 ```
 
 ## 想改数值？

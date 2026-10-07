@@ -16,10 +16,10 @@ function resName(id) {
  * 按“已建成数量 count / 启用数量 active”把建筑效果折算成当前总贡献。
  * 与 engine.recompute 的口径保持一致：仓储类看 count，产出类看 active。
  */
-export function scaleEffectsForTotal(ef, count, active) {
+export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
   if (!ef) return null
   const out = {}
-  const byCount = ['storage', 'storageAll', 'maxDisciples', 'morale', 'disasterGuard', 'ascendBonus']
+  const byCount = upkeep ? ['storage', 'storageAll', 'maxDisciples'] : ['storage', 'storageAll', 'maxDisciples', 'morale', 'disasterGuard', 'ascendBonus']
   const byActive = [
     'prod',
     'ratio',
@@ -31,6 +31,7 @@ export function scaleEffectsForTotal(ef, count, active) {
     'breakthroughDiscount',
     'offlineHours',
     'karmaRatio',
+    ...(upkeep ? ['morale', 'disasterGuard', 'ascendBonus'] : []),
   ]
   for (const key in ef) {
     const value = ef[key]
