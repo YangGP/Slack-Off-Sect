@@ -2596,6 +2596,61 @@ section('缺料、长期断粮与首颗道果')
   ok('湮灭研究与建筑在渡劫前开放', UPGRADE_MAP.annihilationArt.needs.realm === 9 && BUILDING_MAP.annihilationFurnace.needs.realm === 9)
 }
 
+section('金丹工艺：阵基与库存目标')
+{
+  const { state: s, derived: d } = newGame()
+  s.upgrades.woodworking = true
+  s.upgrades.talismanArt = true
+  s.buildings.talismanHall = { count: 1, on: true }
+  s.resources.plank = 4
+  s.resources.talisman = 4
+  s.resources.ore = 40
+  s.realm = 3
+  E.recompute(s, d)
+  ok('金丹前不能组装阵基', !E.isCraftUnlocked(s, CRAFT_MAP.assembleArrayBase) && E.craft(s, d, 'assembleArrayBase') === 0)
+  ok('金丹前普通存档不能设置库存目标', !E.setCraftTarget(s, d, 'condenseStone', 3))
+  s.realm = 4
+  E.recompute(s, d)
+  const made = E.craft(s, d, 'assembleArrayBase', { times: 2 })
+  ok('阵基消耗木板、符箓与玄铁，整件产出', made === 2 && s.resources.arrayBase === 2 && s.resources.plank === 0 && s.resources.talisman === 0 && s.resources.ore === 0)
+  s.upgrades.preachArt = true
+  s.resources.stone = 120
+  ok('第一座讲经堂可以用基础阵基仓储启动', E.buyBuilding(s, d, 'academy', 1) === 1 && s.resources.arrayBase === 0)
+  ok('阵基具有至少三处可重复建造用途', BUILDINGS.filter(b => b.cost.arrayBase > 0).length >= 3)
+  ok('讲经堂、静心池在金丹开放并保留建筑前置', UPGRADE_MAP.preachArt.needs.realm === 4 && !!UPGRADE_MAP.preachArt.needs.building && UPGRADE_MAP.calmMind.needs.realm === 4 && !!UPGRADE_MAP.calmMind.needs.building)
+
+  s.upgrades.intuition = true
+  s.resources.qi = 450
+  s.resources.stone = 0
+  s.autoCraft.condenseStone = true
+  E.recompute(s, d)
+  ok('可以设置成品库存目标', E.setCraftTarget(s, d, 'condenseStone', 3))
+  E.runAutoCraft(s, d, 5)
+  ok('达到目标后不继续消耗原料', s.resources.stone === 3 && s.resources.qi === 315)
+  ok('状态明确显示目标暂停', E.autoCraftStatus(s, d, 'condenseStone').reason === '目标已达 · 暂停')
+  s.resources.stone -= 2
+  E.runAutoCraft(s, d, 1)
+  ok('使用成品后自动补回库存目标', s.resources.stone === 3 && s.resources.qi === 225)
+  E.craft(s, d, 'condenseStone')
+  ok('手动制作可以超过自动目标', s.resources.stone === 4)
+  ok('非法目标不覆盖已有设置', !E.setCraftTarget(s, d, 'condenseStone', -1) && !E.setCraftTarget(s, d, 'condenseStone', Infinity) && E.craftTarget(s, d, 'condenseStone') === 3)
+  E.setCraftTarget(s, d, 'condenseStone', 0)
+  E.runAutoCraft(s, d, 0.5)
+  ok('目标为零表示不限', s.resources.stone > 4)
+  E.setCraftTarget(s, d, 'condenseStone', 8)
+  s.resources.stone = 0
+  s.resources.qi = 450
+  E.simulateOffline(s, d, 20)
+  ok('离线自动炼制也遵守目标', s.resources.stone === 8)
+  const restored = parseImport(exportSave(s))
+  ok('目标数量与阵基资源能导出导入', restored.craftTargets.condenseStone === 8 && 'arrayBase' in restored.resources)
+  const old = normalizeState({ resources: { wood: 5 }, realm: 4 })
+  ok('旧存档补零阵基与空目标，原资源不变', old.resources.arrayBase === 0 && old.resources.wood === 5 && Object.keys(old.craftTargets).length === 0)
+  resetForReincarnation(s, 5)
+  E.recompute(s, d)
+  ok('转世清空本世库存目标与阵基', Object.keys(s.craftTargets).length === 0 && s.resources.arrayBase === 0)
+}
+
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {
   console.log('失败清单：')

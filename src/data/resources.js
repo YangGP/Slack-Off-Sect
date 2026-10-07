@@ -30,6 +30,15 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'arrayBase',
+    name: '阵基',
+    glyph: '基',
+    color: '#c9a87c',
+    baseMax: 50,
+    integer: true,
+    desc: '木板搭骨、符箓刻纹、玄铁固结。金丹期宗门设施共用的阵法构件。',
+  },
+  {
     id: 'steel',
     name: '玄钢',
     glyph: '钢',

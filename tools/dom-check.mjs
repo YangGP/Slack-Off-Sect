@@ -905,6 +905,14 @@ ok('境界面板渲染', html().includes('飞升'))
   controls[0].dispatchEvent(new window.Event('change', { bubbles: true }))
   ok('材料保留设置通过界面保存', state.settings.craftReservePercent === 30)
   ok('重修后配方自动开关可用', !doc.querySelector('.left .craft-row input[type="checkbox"]').disabled)
+  const targetInput = doc.querySelector('[aria-label="凝气成石库存目标"]')
+  ok('道果重修后可设置配方库存目标', !!targetInput)
+  targetInput.value = '3'
+  targetInput.dispatchEvent(new window.Event('change', { bubbles: true }))
+  ok('输入库存目标更新并保存', state.craftTargets.condenseStone === 3 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).craftTargets.condenseStone === 3)
+  targetInput.value = '-1'
+  targetInput.dispatchEvent(new window.Event('change', { bubbles: true }))
+  ok('非法目标输入恢复原值', targetInput.value === '3' && state.craftTargets.condenseStone === 3)
   window.confirm = savedConfirm2
   // 后面的存档用例要用到一间茅屋，这里补回来
   state.buildings.hut = { count: 1, on: true }

@@ -134,8 +134,7 @@ export const CULTIVATION = [
     desc: '把玄之又玄的道理，讲成弟子听得懂的人话。解锁讲经堂。',
     effectDesc: '因此长老可以登坛讲经，感悟的来源不再只有藏书。',
     effects: { unlockBuildings: ['academy'] },
-    needs: { building: { id: 'library', count: 3 } },
-    needs: { realm: 5 },
+    needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt', 'woodworking'], realm: 4 },
   },
 
   {
@@ -146,8 +145,7 @@ export const CULTIVATION = [
     desc: '心静则灵气自聚。解锁静心池。',
     effectDesc: '因此弟子坐得住：静心池让心神与仓储都稳下来。',
     effects: { unlockBuildings: ['meditationPool'] },
-    needs: { building: { id: 'herbGarden', count: 3 } },
-    needs: { realm: 5 },
+    needs: { building: { id: 'herbGarden', count: 3 }, upgrades: ['talismanArt', 'woodworking'], realm: 4 },
   },
 
   {

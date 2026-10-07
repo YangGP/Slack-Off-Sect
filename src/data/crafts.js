@@ -59,6 +59,16 @@ export const CRAFTS = [
     needs: { building: { id: 'forge', count: 1 } },
   },
   {
+    id: 'assembleArrayBase',
+    name: '组装阵基',
+    out: 'arrayBase',
+    amount: 1,
+    cost: { plank: 2, talisman: 2, ore: 20 },
+    time: 4,
+    desc: '两方木板搭骨，两张符箓定纹，玄铁铆合成一座阵基。用于讲经堂、静心池与护山大阵。',
+    needs: { realm: 4, upgrades: ['woodworking', 'talismanArt'], building: { id: 'talismanHall', count: 1 } },
+  },
+  {
     id: 'refineSteel',
     name: '淬玄成钢',
     out: 'steel',

@@ -155,6 +155,24 @@ export function createBot(state, derived) {
   }
 
   function act() {
+    // 金丹后按近期建筑/研究/破境需求设置加工库存目标，避免把原料无限加工。
+    // 这是新目标控件允许玩家执行的策略，手动与自动制作使用同一目标。
+    if (derived.craftTargetsUnlocked) {
+      const demand = { ...(E.realmCost(state, derived, state.realm + 1) || {}) }
+      for (const id of derived.availableUpgrades) {
+        for (const [res, amount] of Object.entries(E.UPGRADE_MAP[id].cost)) demand[res] = Math.max(demand[res] || 0, amount)
+      }
+      for (const id of derived.unlockedBuildings) {
+        for (const [res, amount] of Object.entries(E.buildingCost(state, id, 1))) demand[res] = Math.max(demand[res] || 0, amount)
+      }
+      for (const c of CRAFTS) {
+        if (!['plank', 'pill', 'talisman', 'artifact', 'arrayBase'].includes(c.out)) continue
+        // 阵基的下料也是短期需求；普通成品还预留进阶配方的一份料。
+        let inputDemand = 0
+        for (const recipe of CRAFTS) if (derived.availableCrafts.includes(recipe.id)) inputDemand = Math.max(inputDemand, recipe.cost[c.out] || 0)
+        E.setCraftTarget(state, derived, c.id, Math.ceil(Math.max(20, demand[c.out] || 0, inputDemand) * 1.25))
+      }
+    }
     // —— 财政：灵气要见底时，把吃灵气的建筑停掉；缓过来再开 ——
     // （维护费让「停用」变成一个真选择，勤快玩家当然会看账）
     if (E.countOf(state, 'hut') > 0) {
@@ -222,6 +240,8 @@ export function createBot(state, derived) {
     // 制作（灵石留一点灵气余量，别把阵徒的口粮也花掉）
     for (const c of CRAFTS) {
       if (!derived.availableCrafts.includes(c.id)) continue
+      const target = E.craftTarget(state, derived, c.id)
+      if (target > 0 && (state.resources[c.out] || 0) >= target) continue
       if (c.id === 'condenseStone' && state.resources.qi < STONE_QI_FLOOR) continue
       const adv = ADVANCED_CRAFTS[c.id]
       if (adv) {
@@ -236,7 +256,10 @@ export function createBot(state, derived) {
         if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 1 })
         continue
       }
-      if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 10 })
+      if (E.canAfford(state, c.cost)) {
+        const needed = target > 0 ? Math.ceil((target - (state.resources[c.out] || 0)) / (c.amount * (1 + derived.craftBonus))) : 10
+        E.craft(state, derived, c.id, { times: Math.min(10, needed) })
+      }
     }
 
     // 参悟《心有灵犀》之后，把配方都挂上「自动」——

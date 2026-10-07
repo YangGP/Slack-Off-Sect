@@ -57,6 +57,7 @@ src/App.vue            布局：标题行 / 状态行 → 提示行 → 标签�
 | `autoCraftUnlocked` | 是否解锁自动制作 |
 | `buildingSupply` | 带维护费设施的实际运行比例（0~1），与出项及倍率明细保持一致 |
 | `daoAutomation` | 首颗道果开放统筹，允许优先配方与材料保留 |
+| `craftTargetsUnlocked` | 金丹或首颗道果开放成品库存目标；达到暂停，消费后补货 |
 | `unlockedBuildings` / `unlockedJobs` / `availableUpgrades` / `availableCrafts` | 解锁与可操作列表 |
 
 ### 14.3 组件清单
@@ -172,9 +173,9 @@ src/App.vue            布局：标题行 / 状态行 → 提示行 → 标签�
 
 | 层 | 文件 | 断言数 |
 | --- | --- | --- |
-| 引擎层 | `tools/smoke.mjs` | **439** |
+| 引擎层 | `tools/smoke.mjs` | **456** |
 | 渲染层 | `tools/render-check.mjs`（Vue SSR 把 7 个标签页 + 离线弹窗在「什么都有」的存档下渲染一遍，抓「模板访问未定义变量」类警告） | 17 |
-| 端到端层 | `tools/dom-check.mjs`（jsdom + 客户端 bundle：真挂载、主循环真跑、模拟建造/派活/参悟/制作/切页/存读档、校验界面结构与提示内容） | 154 |
+| 端到端层 | `tools/dom-check.mjs`（jsdom + 客户端 bundle：真挂载、主循环真跑、模拟建造/派活/参悟/制作/切页/存读档、校验界面结构与提示内容） | 157 |
 
 引擎层覆盖的范围（每条规则都要有对应断言，改动前先看这里）：
 

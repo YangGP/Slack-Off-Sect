@@ -64,6 +64,7 @@ export function createDerived() {
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     autoCraftUnlocked: false,
     daoAutomation: false,
+    craftTargetsUnlocked: false,
     buildingSupply: {},
     unlockedBuildings: [],
     unlockedJobs: [],
@@ -732,6 +733,7 @@ function recomputeRaw(state, derived, supply) {
   derived.breakthroughDiscount = acc.breakthroughDiscount
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = (state.dao || 0) >= 1
+  derived.craftTargetsUnlocked = state.realm >= 4 || derived.daoAutomation
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
   derived.ratio = ratio
   derived.jobRatio = jobRatio
@@ -974,6 +976,7 @@ export function isAutoCrafting(state, derived, recipeId) {
     derived.autoCraftUnlocked &&
     state.settings.autoCraftOn &&
     state.autoCraft[recipeId]
+    && isCraftUnlocked(state, CRAFT_MAP[recipeId])
   )
 }
 
@@ -1000,7 +1003,9 @@ export function autoCraftStatus(state, derived, recipeId) {
   if (out.on) out.wait = Math.max(0, step - ((timer && timer.t) || 0))
   out.canMake = maxCraftable(state, derived, recipeId)
   out.ready = out.canMake > 0 && canAutoCraft(state, derived, recipe)
-  out.reason = out.canMake <= 0 ? '等待材料或仓储' : '保留材料 · 暂停'
+  out.target = craftTarget(state, derived, recipeId)
+  out.reason = out.target > 0 && (state.resources[recipe.out] || 0) >= out.target
+    ? '目标已达 · 暂停' : out.canMake <= 0 ? '等待材料或仓储' : '保留材料 · 暂停'
   return out
 }
 
@@ -1040,12 +1045,31 @@ export function runAutoCraft(state, derived, dt) {
 }
 
 export function canAutoCraft(state, derived, recipe) {
+  if (!isCraftUnlocked(state, recipe)) return false
+  const target = craftTarget(state, derived, recipe.id)
+  if (target > 0 && (state.resources[recipe.out] || 0) >= target) return false
   if (!canAfford(state, recipe.cost)) return false
   if (!derived.daoAutomation) return true
   const reserve = clamp(Number(state.settings.craftReservePercent) || 0, 0, 90) / 100
   return Object.entries(recipe.cost).every(([res, cost]) =>
     (state.resources[res] || 0) - cost >= (derived.max[res] || 0) * reserve - EPS,
   )
+}
+
+/** 目标是成品库存；0 表示不限，消费成品后自动补回。 */
+export function craftTarget(state, derived, recipeId) {
+  if (!derived.craftTargetsUnlocked) return 0
+  const value = Number(state.craftTargets?.[recipeId])
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
+}
+
+export function setCraftTarget(state, derived, recipeId, value) {
+  if (!derived.craftTargetsUnlocked || !CRAFT_MAP[recipeId]) return false
+  const target = Number(value)
+  if (!Number.isFinite(target) || target < 0) return false
+  state.craftTargets ||= {}
+  state.craftTargets[recipeId] = Math.floor(target)
+  return true
 }
 
 /**

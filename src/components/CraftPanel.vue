@@ -53,6 +53,11 @@ const locked = computed(() =>
 function resName(id) {
   return RESOURCE_MAP[id]?.name || id
 }
+
+function updateTarget(id, event) {
+  actions.setCraftTarget(id, event.target.value)
+  event.target.value = String(autoCraftStatus(state, derived, id).target)
+}
 </script>
 
 <template>
@@ -76,6 +81,7 @@ function resName(id) {
         </label>
       </div>
       <div v-if="!rows.length" class="empty">还没有可用配方。</div>
+      <div v-if="derived.craftTargetsUnlocked" class="small dim">库存达到目标后暂停，使用成品后自动补回；0 表示不限。</div>
 
       <HoverTip
         v-for="row in rows"
@@ -121,6 +127,10 @@ function resName(id) {
             />
             自动
           </label>
+          <label v-if="derived.craftTargetsUnlocked" class="small">目标
+            <input class="qty" type="number" min="0" step="1" :value="row.autoStatus.target"
+              :aria-label="`${row.meta.name}库存目标`" @change="updateTarget(row.meta.id, $event)" />
+          </label>
         </div>
 
         <template #tip>
@@ -163,6 +173,9 @@ function resName(id) {
             </div>
 
             <div class="tip-section">自动制作</div>
+            <div v-if="derived.craftTargetsUnlocked" class="tip-row">
+              <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}（一份制作的加成可能超过目标）</span>
+            </div>
             <div class="tip-row">
               <span class="k">节奏</span>
               <span class="v">每 {{ row.autoStatus.step }} 秒 1 份</span>

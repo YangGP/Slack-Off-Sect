@@ -277,6 +277,12 @@ export const actions = {
     const on = E.toggleAutoCraft(state, derived, id)
     if (on === false && !derived.autoCraftUnlocked) toast('需参悟《心有灵犀》或取得首颗道果', 'bad')
   },
+  setCraftTarget(id, value) {
+    if (E.setCraftTarget(state, derived, id, value)) {
+      E.recompute(state, derived)
+      saveNow()
+    }
+  },
   breakthrough() {
     const ok = E.breakthrough(state, derived)
     if (ok) toast(`突破成功：${REALMS[state.realm].name}`, 'good')

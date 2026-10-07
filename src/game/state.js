@@ -50,6 +50,7 @@ export function createInitialState() {
     achievements: {},
     craftProgress: {},
     autoCraft: {},
+    craftTargets: {},
 
     realm: 0,
     karma: 0,
@@ -131,6 +132,7 @@ export function normalizeState(state) {
   merged.achievements = state.achievements || {}
   merged.craftProgress = state.craftProgress || {}
   merged.autoCraft = state.autoCraft || {}
+  merged.craftTargets = { ...fresh.craftTargets, ...(state.craftTargets || {}) }
   merged.craftTimers = state.craftTimers || state.craftQueue || {}
   merged.treasureLevels = state.treasureLevels || {}
   merged.buffs = Array.isArray(state.buffs) ? state.buffs : []
@@ -183,6 +185,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.craftProgress = {}
   state.craftTimers = {}
   state.autoCraft = {}
+  state.craftTargets = {}
   state.realm = 0
   state.karma = state.karma + karmaGain
   // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
