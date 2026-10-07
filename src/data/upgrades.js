@@ -169,7 +169,8 @@ export const CULTIVATION = [
     desc: '丹炉火候、符纸厚薄，不必盯着也知道。解锁自动制作。',
     effectDesc: '因此配方可以自动连做，双手从重复劳动里解放。',
     effects: { autoCraft: true },
-    needs: { building: { id: 'workshop', count: 1 } },
+    // 自动制作不该被某一座建筑卡住：器械齐了、手上有一批丹药，就能标准化流程
+    needs: { upgrades: ['woodworking'] },
   },
 
   {
@@ -346,7 +347,7 @@ export const CULTIVATION = [
     id: 'towerPlan',
     name: '塔院图',
     glyph: '塔',
-    cost: {insight:60000, stone:80000, artifact:30, plank:60},
+    cost: { insight: 60000, stone: 80000, artifact: 30, plank: 60, steel: 15 },
     desc: '塔不怕高，怕的是接不住天风。图样定下九重院墙，塔才立得稳。',
     effectDesc: '因此动得了通天塔的工：塔尖直插云海，看得见飞升的路。',
     effects: { unlockBuildings: ['heavenTower'] },
@@ -357,7 +358,16 @@ export const CULTIVATION = [
     id: 'karmaConcord',
     name: '因果参同契',
     glyph: '契',
-    cost: {insight:200000, talisman:200, pill:300, faith:20000},
+    // 进阶品让"最后一步"有了自己的门槛：九转丹与灵符只有后期才炼得出来
+    cost: {
+      insight: 200000,
+      talisman: 200,
+      pill: 300,
+      faith: 20000,
+      nineTurnPill: 40,
+      spiritTalisman: 25,
+      spiritTreasure: 2,
+    },
     desc: '把历世的因果摊开对照，才知道哪些是债、哪些是缘。',
     effectDesc: '因此开得出因果池，也看得清下一次飞升能带走多少仙缘。',
     effects: { unlockBuildings: ['karmaPool'] },
@@ -412,7 +422,7 @@ export const CULTIVATION = [
     id: 'greatVehicleSeal',
     name: '大乘心印',
     glyph: '乘',
-    cost: { insight: 40000, artifact: 60, talisman: 120, plank: 40 },
+    cost: { insight: 40000, artifact: 60, talisman: 120, plank: 40, spiritTreasure: 1 },
     desc: '把前四境的心法合为一印，才有资格谈大乘。',
     effectDesc: '因此参悟得出《大乘心经》—— 全局产出再上一阶。',
     effects: { unlockBuildings: [] },

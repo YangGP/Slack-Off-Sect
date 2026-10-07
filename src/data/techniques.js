@@ -75,10 +75,12 @@ export const TECHNIQUES = [
     id: 'woodworking',
     name: '木作器械',
     glyph: '作',
-    cost: { insight: 120, plank: 20, stone: 200 },
-    desc: '刨、凿、墨斗、圆规置办齐了，一根原木能出更多好板。制作产出 +5%。',
+    cost: { insight: 120, wood: 400, stone: 200 },
+    desc: '刨、凿、墨斗、圆规置办齐了 —— 从此能解板。制作产出 +5%，并开启《刨木成板》。',
     effects: { craftBonus: 0.05 },
-    needs: { building: { id: 'workshop', count: 1 } },
+    // 它是木料链的第二环：伐木场出原木 → 器械解板 → 木板才是百工坊的料。
+    // 所以它**不能**要百工坊，也不能要木板（否则与"百工坊用木板下料"闭环）。
+    needs: { building: { id: 'lumberYard', count: 2 } },
   },
   {
     id: 'waterworkshop',

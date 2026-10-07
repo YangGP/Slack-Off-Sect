@@ -45,10 +45,28 @@ export const BUILDINGS = [
     name: '玄铁矿',
     glyph: '矿',
     group: 'produce',
-    cost: { wood: 450, qi: 500 },
+    // 实物建筑吃材料：木料做支架、石头砌井口（灵气是气脉的东西，不该拿来砌矿）。
+    // 石头的量要小：这个阶段石料比灵气稀缺得多（灵气 500 只值 30 秒产出，石料 150 要挖好几分钟），
+    // 写大了会把前期卡住 —— 这里要的是"要用料"的语义，不是真加价。
+    cost: { wood: 450, stone: 20 },
     priceRatio: 1.15,
     desc: '顺着灵脉往下挖，便能挖到泛着寒光的玄铁。',
     effects: { prod: { ore: 0.05 } },
+    needs: { upgrades: ['prospectStudy'] },
+  },
+  {
+    id: 'spiritQuarry',
+    name: '灵石矿',
+    glyph: '灵',
+    group: 'produce',
+    // 与玄铁矿同在"寻脉"这一条线上：石料砌井口、木料搭支架（实物建筑不吃灵气）
+    cost: { wood: 700, stone: 60, ore: 80 },
+    // 叠加重税：灵石是全局硬通货（研究 / 建筑 / 破境都吃它），
+    // 天然来源必须是"细水长流"，不能变成替代整条"以气凝石"的瓶颈。
+    // 实测教训：0.12/秒 × 可无限叠，24 小时就能冲到渡劫期（原本 72 小时）。
+    priceRatio: 1.55,
+    desc: '顺着灵脉再往深处走，岩层里嵌着天然灵石 —— 凿下来就能用，不必再以气凝石。',
+    effects: { prod: { stone: 0.03 } },
     needs: { upgrades: ['prospectStudy'] },
   },
   {
@@ -56,7 +74,8 @@ export const BUILDINGS = [
     name: '药圃',
     glyph: '圃',
     group: 'produce',
-    cost: { wood: 380, qi: 400 },
+    // 同理：药圃是地里的活，用木料与石头，不用灵气（同样只取象征性的石料）
+    cost: { wood: 400, stone: 20 },
     priceRatio: 1.15,
     desc: '按四时节气轮种，灵草自会一茬茬地长。',
     effects: { prod: { herb: 0.04 } },
@@ -195,7 +214,8 @@ export const BUILDINGS = [
     name: '洞天',
     glyph: '天',
     group: 'store',
-    cost: { stone: 8000, plank: 20, insight: 4000, artifact: 10 },
+    // 洞天以玄钢为骨：撑开一方小世界，梁架全用钢（可反复盖）
+    cost: { stone: 8000, plank: 20, insight: 4000, artifact: 10, steel: 20 },
     priceRatio: 1.35,
     desc: '一方小世界，装多少东西都不显挤，还自带静心之效。',
     effects: { storageAll: 12000, morale: 5 },
@@ -303,12 +323,16 @@ export const BUILDINGS = [
     name: '百工坊',
     glyph: '工',
     group: 'craft',
-    cost: { wood: 1500, stone: 600, ore: 600 },
+    cost: { plank: 6, stone: 400, ore: 400 },
     priceRatio: 1.3,
-    desc: '炼丹、炼器、画符、木作的弟子在此互通有无。工坊越大，同样的料出手成色越高。',
-    effects: { craftBonus: 0.1, ratioAll: 0.02, storage: { plank: 300 } },
+    desc: '炼丹、炼器、画符、木作的弟子在此互通有无。梁柱、案台、炉架全用板材 —— 同样的料，出手成色更高：每座制作产出 +15%（可叠加）。少了它只是慢，不会缺货。',
+    // 它**只是加成建筑**：不锁任何配方或条目（数据里没有一条 needs 指向它），
+    // 效果也只留与制作有关的：制作产出 +15%/座、木板上限 +300/座。
+    // 「按启用数量叠加」—— 停用一座就少一份加成，所以它值得一个 停/启 的取舍。
+    effects: { craftBonus: 0.15, storage: { plank: 300 } },
     upkeep: { wood: 0.8 }, // 百工齐开，木料像流水
-    needs: { buildings: [{ id: 'forge', count: 1 }, { id: 'alchemyRoom', count: 1 }] },
+    // 只要有第一座工坊（炼丹房）就能开张 —— 不必等炼器坊，木板与自动制作因此提前到手
+    needs: { buildings: [{ id: 'alchemyRoom', count: 1 }] },
   },
 
   // ============ 香火 ============
@@ -355,7 +379,8 @@ export const BUILDINGS = [
     name: '护山大阵',
     glyph: '护',
     group: 'array',
-    cost: { stone: 5000, insight: 3000, ore: 2000 },
+    // 护山大阵压着山门气脉，每一角都要镇符（可反复盖）
+    cost: { stone: 5000, insight: 3000, ore: 2000, spiritTalisman: 8 },
     priceRatio: 1.45,
     desc: '阵纹沿山脊铺开，妖兽撞上来只会留下几道白印。',
     effects: { disasterGuard: 0.08, morale: 2 },
@@ -381,7 +406,9 @@ export const BUILDINGS = [
     name: '通天塔',
     glyph: '通',
     group: 'wonder',
-    cost: { stone: 80000, plank: 60, ore: 20000, artifact: 50, insight: 50000 },
+    // 塔身越高越吃风：每一重都要贴镇风灵符（可反复盖 → 灵符的持续去处）
+    // 塔是玄钢与灵符最大的去处：一重塔身一段钢、一重飞檐一道符（可反复盖）
+    cost: { stone: 80000, plank: 60, ore: 20000, artifact: 50, insight: 50000, steel: 80, spiritTalisman: 40 },
     priceRatio: 1.6,
     desc: '塔尖直插云海。站在塔顶的人，看得见飞升的路。',
     effects: { ratioAll: 0.15, storageAll: 20000 },
@@ -394,7 +421,9 @@ export const BUILDINGS = [
     name: '因果池',
     glyph: '因',
     group: 'wonder',
-    cost: { stone: 200000, insight: 150000, pill: 200, talisman: 200 },
+    // 池里要投九转丹镇住因果（同上：可反复盖）
+    // 池口封符、池底投丹（都可反复盖）
+    cost: { stone: 200000, insight: 150000, pill: 200, talisman: 200, spiritArtifact: 10, spiritTreasure: 2, nineTurnPill: 5, spiritTalisman: 15 },
     priceRatio: 1.7,
     desc: '池中养着一缕前世因果，飞升时能多带走几分。',
     effects: { ratioAll: 0.25, ascendBonus: 0.25 },

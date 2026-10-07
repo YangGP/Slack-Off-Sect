@@ -30,6 +30,15 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'steel',
+    name: '玄钢',
+    glyph: '钢',
+    color: '#b8c4d0',
+    baseMax: 50,
+    desc: '玄铁反复折叠锻打，杂质尽去 —— 一剑之锋，从此有了骨。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
     id: 'stone',
     name: '灵石',
     glyph: '石',
@@ -55,12 +64,30 @@ export const RESOURCES = [
     desc: '药圃所产，炼丹必需。',
   },
   {
+    id: 'immortalHerb',
+    name: '仙草',
+    glyph: '仙',
+    color: '#a8e6a1',
+    baseMax: 50,
+    desc: '以灵泉浇灌百年，草叶上凝着露似的灵光。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
     id: 'pill',
     name: '丹药',
     glyph: '丹',
     color: '#ffb46b',
     baseMax: 50,
     desc: '服之安神定气，助弟子破境。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'nineTurnPill',
+    name: '九转丹',
+    glyph: '丹',
+    color: '#ffb347',
+    baseMax: 50,
+    desc: '九转九炼，一炉只出数枚，是压箱底的救命物。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
@@ -73,12 +100,40 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'spiritTalisman',
+    name: '灵符',
+    glyph: '灵',
+    color: '#ffe9b0',
+    baseMax: 50,
+    desc: '香火为墨、朱砂为骨，一符既成，可镇一山之妖。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
     id: 'artifact',
     name: '法器',
     glyph: '器',
     color: '#d7a6ff',
     baseMax: 50,
     desc: '御剑飞行的门面，也是宗门的战力。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'spiritArtifact',
+    name: '灵器',
+    glyph: '灵',
+    color: '#c9a6ff',
+    baseMax: 50,
+    desc: '以玄钢为骨、法器为魂，器物开始有了自己的灵性。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'spiritTreasure',
+    name: '灵宝',
+    glyph: '宝',
+    color: '#ffd6f5',
+    baseMax: 50,
+    // 它不是"某种材料炼上去"，而是三条进阶支线**合起来**才成的一件东西
+    desc: '灵器为骨、九转丹为髓、灵符为纹 —— 三样缺一，都只是半件宝物。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {

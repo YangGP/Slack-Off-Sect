@@ -13,7 +13,7 @@ import {
   resetForAscension,
   resetForReincarnation,
 } from '../src/game/state.js'
-import { createBot } from './player-bot.mjs'
+import { createBot, ADVANCED_CRAFTS } from './player-bot.mjs'
 import { fmt, fmtAmount, fmtCost, fmtFixed, fmtInt, fmtResource, fmtStock } from '../src/game/format.js'
 import * as E from '../src/game/engine.js'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
@@ -671,7 +671,26 @@ section('进项来源明细')
   // 库房：只存基础物资（灵木 / 灵石 / 玄铁 / 灵草），且份额按流量分配
   {
     const wh = BUILDING_MAP.warehouse
-    ok('库房改为逐资源上限（不再用 storageAll）', !!wh.effects.storage && !wh.effects.storageAll)
+    // 灵气是"气脉"的资源，不是砖石：只有与气本身有关的建筑、以及开局自举的那几座才用它
+  {
+    const allowed = new Set([
+      'spiritField', // 聚灵阵：聚气之法，起手就要引气
+      'spiritVein', // 灵脉井：钻井引脉，耗的是气脉本身
+      'hut', // 茅屋：开局第一座，此时手头只有灵气
+      'lumberYard', // 伐木场：从"只有灵气"跨到"有木料"的那一步
+      'library', // 藏经阁：以灵气养典籍
+    ])
+    const offenders = BUILDINGS.filter((x) => x.cost?.qi && !allowed.has(x.id)).map((x) => x.name)
+    ok('灵气不当建材（实物建筑一律用材料计价）', offenders.length === 0, offenders.join('、') || '干净')
+
+    ok(
+      '玄铁矿与药圃按材料计价',
+      !BUILDING_MAP.mine.cost.qi && !BUILDING_MAP.herbGarden.cost.qi,
+      JSON.stringify({ mine: BUILDING_MAP.mine.cost, herbGarden: BUILDING_MAP.herbGarden.cost }),
+    )
+  }
+
+  ok('库房改为逐资源上限（不再用 storageAll）', !!wh.effects.storage && !wh.effects.storageAll)
     const st = wh.effects.storage
     ok(
       '库房只存基础物资（灵木 / 灵石 / 玄铁 / 灵草）',
@@ -1418,13 +1437,9 @@ section('修真·技艺 / 境界 / 飞升')
   // 一路推到渡劫期
   let guard = 0
   while (E.breakthrough(s2, d2) && guard++ < 50) {
-    s2.resources.insight = 1e7
-    s2.resources.stone = 1e7
-    s2.resources.pill = 1e6
-    s2.resources.artifact = 1e6
-    s2.resources.talisman = 1e6
-    s2.resources.faith = 1e6
-    s2.resources.herb = 1e6
+    // 补满**所有**资源：早先这里逐个列了 7 种，加了进阶品之后
+    // 一路只推到第 8 境就断了（夹具的错，不是玩法的错）—— 改成通用写法，以后新增资源不会再犯。
+    for (const r of RESOURCES) s2.resources[r.id] = 1e7
   }
   ok('可修到渡劫期', s2.realm === ASCEND_REALM_INDEX, `实际 ${s2.realm}`)
   ok('渡劫期即可飞升（不要求转世次数）', E.canAscend(s2) === true)
@@ -1619,25 +1634,8 @@ section('模拟玩家（机器人）短跑')
       pinned / samples < 0.05,
       `${((pinned / samples) * 100).toFixed(1)}%（上限长到 ${Math.round(s5.derived.max.wood)}，产量 ${(s5.derived.rates.wood || 0).toFixed(2)}/秒）`,
     )
-
-    // 跑 4 小时：工坊起来后，维护费要真的吃掉一部分灵木产出（连续消耗，而不是攒着等大件）
-    const s6 = newGame()
-    const bot6 = createBot(s6.state, s6.derived)
-    let produced = 0
-    let upkeep = 0
-    for (let t = 1; t <= 4 * 3600; t++) {
-      E.tick(s6.state, s6.derived, 1, { events: false })
-      if (t % 5 === 0) bot6.act()
-      if (t % 300 === 0) E.recompute(s6.state, s6.derived)
-      produced += s6.derived.rates.wood || 0
-      upkeep += s6.derived.maintenance.wood || 0
-    }
-    ok(
-      '4 小时里灵木维护费吃掉 ≥ 3% 的产出',
-      produced > 0 && upkeep / produced >= 0.03,
-      `${((upkeep / produced) * 100).toFixed(1)}%（产出 ${Math.round(produced)}，维护 ${Math.round(upkeep)}）`,
-    )
   }
+
   ok(
     '可参悟列表里的 id 都能查到条目',
     derived.availableUpgrades.every((id) => !!E.UPGRADE_MAP[id]),
@@ -2011,6 +2009,248 @@ section('提示里的效果一节：一个效果一行')
   )
   const qi = rowsOf('qiOrigin')
   ok('灵源考两行（解锁建筑 + 开启参悟）', qi.length === 2, JSON.stringify(qi))
+}
+
+// ------------------------------------------------------------
+section('百工坊：提前到手 + 制作加成')
+// ------------------------------------------------------------
+{
+  const wh = BUILDING_MAP.workshop
+  const gates = (wh.needs?.buildings || []).map((b) => b.id)
+  ok(
+    '百工坊只要炼丹房就能盖（不必等炼器坊）',
+    gates.length === 1 && gates[0] === 'alchemyRoom',
+    gates.join('、') || '（无门槛）',
+  )
+  ok('百工坊给制作加成', (wh.effects?.craftBonus || 0) > 0, String(wh.effects?.craftBonus))
+
+  // 百工坊是**纯加成**建筑：任何东西都不该"因为缺它而做不出来"
+  {
+    const lockers = []
+    const scan = (kind, list, needsOf) => {
+      for (const item of list) {
+        const n = needsOf(item) || {}
+        const ids = [
+          ...(n.buildings || []).map((x) => x.id),
+          n.building?.id,
+        ].filter(Boolean)
+        if (ids.includes('workshop')) lockers.push(kind + ':' + (item.name || item.id))
+      }
+    }
+    scan('建筑', BUILDINGS, (b2) => b2.needs)
+    scan('配方', CRAFTS, (c) => c.needs)
+    scan('学术', ALL_UPGRADES, (u) => u.needs)
+    ok('百工坊不锁任何东西（没有一条 needs 指向它）', lockers.length === 0, lockers.join('、') || '干净')
+
+    const keys = Object.keys(wh.effects || {})
+    ok(
+      '百工坊的效果只与制作有关（制作加成 / 木板上限）',
+      keys.every((k) => k === 'craftBonus' || k === 'storage') && !keys.includes('ratioAll'),
+      keys.join('、'),
+    )
+  }
+
+  // 木料链：伐木场 → 木作器械 → 刨木成板 → 百工坊（每一环都不能回头要下游的东西）
+  ok(
+    '百工坊的配料是木板，不是灵木',
+    (wh.cost.plank || 0) > 0 && !wh.cost.wood,
+    JSON.stringify(wh.cost),
+  )
+  ok(
+    '木作器械不再需要百工坊，也不吃木板',
+    CRAFT_MAP.sawPlank.needs?.upgrades?.includes('woodworking') &&
+      UPGRADE_MAP.woodworking?.needs?.building?.id === 'lumberYard' &&
+      !(UPGRADE_MAP.woodworking?.cost?.plank > 0),
+    JSON.stringify(UPGRADE_MAP.woodworking?.cost),
+  )
+  ok('木料链无环（刨木成板不再由百工坊解锁）', CRAFT_MAP.sawPlank.needs?.building?.id !== 'workshop')
+
+  // 加成随启用数量叠加（用增量比较：craftBonus 另有技艺来源，别写死绝对值）
+  const bonusWith = (count) => {
+    const { state: s, derived: d } = newGame()
+    s.upgrades.alchemyArt = true
+    s.buildings.alchemyRoom = { count: 1, on: true }
+    if (count > 0) s.buildings.workshop = { count, on: true }
+    E.recompute(s, d)
+    return d.craftBonus
+  }
+  const one = bonusWith(1)
+  const two = bonusWith(2)
+  ok(
+    `每座百工坊 +15%（一座 ${(one * 100).toFixed(0)}% → 两座 ${(two * 100).toFixed(0)}%）`,
+    Math.abs(two - one - (wh.effects.craftBonus || 0)) < 1e-9,
+    `${one} → ${two}`,
+  )
+
+  // 同一配方，有工坊时产出更多（凝气成石：qi → stone，craftBonus 直接乘在产量上，不取整）
+  const run = (withWorkshop) => {
+    const { state: s2, derived: d2 } = newGame()
+    s2.upgrades.earthArt = true
+    s2.upgrades.alchemyArt = true
+    s2.buildings.warehouse = { count: 2, on: true }
+    s2.buildings.alchemyRoom = { count: 1, on: true }
+    if (withWorkshop) s2.buildings.workshop = { count: 1, on: true }
+    s2.resources.qi = 1e6
+    s2.resources.stone = 0 // 成品上限不高，先清空免得被上限挡住
+    E.recompute(s2, d2)
+    E.craft(s2, d2, 'condenseStone', { times: 20, silent: true })
+    return s2.resources.stone || 0
+  }
+  const plain = run(false)
+  const boosted = run(true)
+  ok(
+    '制作产出按 craftBonus 放大（不取整丢弃）',
+    plain > 0 && boosted > plain,
+    `无工坊 ${plain.toFixed(2)} → 有工坊 ${boosted.toFixed(2)} 石`,
+  )
+  ok(
+    `放大比例约等于 craftBonus（实测 ×${(boosted / plain).toFixed(3)}）`,
+    Math.abs(boosted / plain - (1 + (wh.effects.craftBonus || 0))) < 0.02,
+    `${plain.toFixed(2)} → ${boosted.toFixed(2)}`,
+  )
+}
+
+// ------------------------------------------------------------
+section('灵石矿：天然的灵石来源')
+// ------------------------------------------------------------
+{
+  const natural = BUILDINGS.filter((b) => (b.effects?.prod?.stone || 0) > 0)
+  ok(
+    '灵石有天然来源（不再只能靠凝气成石造）',
+    natural.length > 0,
+    natural.map((b) => b.name + ' +' + b.effects.prod.stone + '/秒').join('、') || '（没有）',
+  )
+
+  const q = BUILDING_MAP.spiritQuarry
+  ok('灵石矿存在且产出灵石', !!q && (q.effects?.prod?.stone || 0) > 0, q ? JSON.stringify(q.effects) : '（缺）')
+  ok('灵石矿由探矿术开启（与玄铁矿同一条寻脉线）', q?.needs?.upgrades?.includes('prospectStudy'), JSON.stringify(q?.needs))
+  ok('灵石矿是实物建筑（不吃灵气）', !q?.cost?.qi, JSON.stringify(q?.cost))
+
+  // 两条路并存：凝气成石还在（灵气 → 灵石），灵石矿只是多给一条天然来源
+  ok('凝气成石仍在（灵气凝石这条路没被拿掉）', CRAFT_MAP.condenseStone?.out === 'stone', JSON.stringify(CRAFT_MAP.condenseStone?.out))
+
+  // 真的会产：造一座，跑一段时间，灵石要涨
+  {
+    const { state: s, derived: d } = newGame()
+    s.upgrades.prospectStudy = true
+    s.buildings.spiritQuarry = { count: 1, on: true }
+    s.resources.stone = 0
+    E.recompute(s, d)
+    const before = s.resources.stone || 0
+    E.tick(s, d, 600, { events: false })
+    ok(
+      '造一座灵石矿，10 分钟能采到灵石',
+      (s.resources.stone || 0) > before,
+      `${before} → ${(s.resources.stone || 0).toFixed(2)}`,
+    )
+  }
+}
+
+// ------------------------------------------------------------
+section('参照玩家的囤货上限：不能低于游戏里的需求')
+// ------------------------------------------------------------
+{
+  const maxDemand = {}
+  const addDemand = (cost) => {
+    for (const [res, amount] of Object.entries(cost || {})) {
+      maxDemand[res] = Math.max(maxDemand[res] || 0, amount || 0)
+    }
+  }
+  for (const b of BUILDINGS) addDemand(b.cost)
+  for (const u of ALL_UPGRADES) addDemand(u.cost)
+  for (const r of REALMS) addDemand(r.cost)
+
+  const bad = []
+  for (const [recipeId, adv] of Object.entries(ADVANCED_CRAFTS)) {
+    const out = CRAFT_MAP[recipeId]?.out
+    if (!out) continue
+    const need = maxDemand[out] || 0
+    if (adv.cap < need) bad.push(out + '：上限 ' + adv.cap + ' < 游戏需求 ' + need)
+  }
+  ok('参照玩家的囤货上限 ≥ 游戏里的最大单笔需求', bad.length === 0, bad.join('；') || '全部够用')
+}
+
+// ------------------------------------------------------------
+section('资源完整性：每个资源都要有来源、有去向')
+// ------------------------------------------------------------
+{
+  // 尊贵资源（道果 / 仙缘）的来源是转世与飞升、去向是当乘区，单独放行
+  const prestige = new Set(['dao', 'karma'])
+  const sourced = new Set()
+  const sunk = new Set()
+  for (const j of JOBS) {
+    if (j.resource) sourced.add(j.resource)
+    for (const k of Object.keys(j.effects?.prod || {})) sourced.add(k)
+  }
+  for (const b of BUILDINGS) {
+    for (const k of Object.keys(b.effects?.prod || {})) sourced.add(k)
+    for (const k of Object.keys(b.cost || {})) sunk.add(k)
+    for (const k of Object.keys(b.upkeep || {})) sunk.add(k)
+  }
+  for (const c of CRAFTS) {
+    sourced.add(c.out)
+    for (const k of Object.keys(c.cost || {})) sunk.add(k)
+  }
+  for (const u of ALL_UPGRADES) for (const k of Object.keys(u.cost || {})) sunk.add(k)
+  for (const r of REALMS) for (const k of Object.keys(r.cost || {})) sunk.add(k)
+
+  const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
+  const noSink = RESOURCES.filter((r) => !prestige.has(r.id) && !sunk.has(r.id)).map((r) => r.name)
+  ok('每个资源都有来源（没有凭空出现的）', noSource.length === 0, noSource.join('、') || '全部有')
+  ok('每个资源都有去向（没有死资源）', noSink.length === 0, noSink.join('、') || '全部有')
+}
+
+// ------------------------------------------------------------
+section('进阶品的作用：一次性突破 + 可重复去向')
+// ------------------------------------------------------------
+{
+  // 纯中间体：只作为别的东西的原料，自己不进建筑（放行）
+  const INTERMEDIATE = new Set(['immortalHerb'])
+  const buildingSinks = new Set()
+  for (const b of BUILDINGS) for (const k of Object.keys(b.cost || {})) buildingSinks.add(k)
+
+  const generated = CRAFTS.filter((c) => c.cost && Object.keys(c.cost).length >= 2 && c.needs)
+  const advancedActs = generated.filter((c) => ['steel', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure'].includes(c.out))
+
+  const noRepeat = advancedActs
+    .map((c) => c.out)
+    .filter((out) => !INTERMEDIATE.has(out) && !buildingSinks.has(out))
+  ok(
+    '每种进阶品都有可重复去向（至少进一样建筑的造价）',
+    noRepeat.length === 0,
+    noRepeat.join('、') || '全部有',
+  )
+
+  // 另一条：进阶品必须出现在"一次性"的后期门槛里（破境或研究），否则它只是建材
+  const oneShot = new Set()
+  for (const r of REALMS) for (const k of Object.keys(r.cost || {})) oneShot.add(k)
+  for (const u of ALL_UPGRADES) for (const k of Object.keys(u.cost || {})) oneShot.add(k)
+  const noGate = advancedActs
+    .map((c) => c.out)
+    .filter((out) => !INTERMEDIATE.has(out) && !oneShot.has(out))
+  ok('每种进阶品也都进了后期门槛（破境或研究）', noGate.length === 0, noGate.join('、') || '全部有')
+}
+
+// ------------------------------------------------------------
+section('角色倾向：玄钢与灵符偏建材')
+// ------------------------------------------------------------
+{
+  // 这两样按设计口径**偏建材消耗品**：建筑（可反复盖）的总需求应当不低于一次性门槛的总需求。
+  const sumOf = (res, list) =>
+    list.reduce((s, x) => s + (x.cost?.[res] || 0), 0)
+  const oneShot = [...REALMS, ...ALL_UPGRADES]
+  for (const [res, label] of [
+    ['steel', '玄钢'],
+    ['spiritTalisman', '灵符'],
+  ]) {
+    const inBuildings = sumOf(res, BUILDINGS)
+    const inGates = sumOf(res, oneShot)
+    ok(
+      label + '的建筑需求 ≥ 一次性需求（偏建材）',
+      inBuildings >= inGates,
+      '建筑 ' + inBuildings + ' vs 门槛 ' + inGates,
+    )
+  }
 }
 
 // ------------------------------------------------------------

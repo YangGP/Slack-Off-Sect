@@ -56,7 +56,16 @@ export const REALMS = [
     name: '大乘期',
     mult: 12,
     desc: '此界修行之极，再往前便是天。',
-    cost: { insight: 80000, stone: 54000, pill: 400, artifact: 110, talisman: 240, faith: 9000 },
+    cost: {
+      insight: 80000,
+      stone: 54000,
+      pill: 400,
+      artifact: 110,
+      talisman: 240,
+      faith: 9000,
+      steel: 10,
+      spiritTalisman: 10,
+    },
   },
   {
     name: '渡劫期',
@@ -69,6 +78,9 @@ export const REALMS = [
       artifact: 180,
       talisman: 400,
       faith: 25000,
+      steel: 30,
+      nineTurnPill: 30,
+      spiritArtifact: 20,
     },
   },
 ]

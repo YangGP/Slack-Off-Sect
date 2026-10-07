@@ -20,6 +20,9 @@ export const PRIORITY = [
   'granary',
   'logHouse',
   'mine',
+  // 天然灵石来源：与玄铁矿同一条寻脉线，排在旁边（参照玩家必须知道它，
+  // 否则新建筑永远不出现在推演里 —— 实测加进去之前，10 小时曲线一字不差）
+  'spiritQuarry',
   'herbGarden',
   'warehouse',
   'gate',
@@ -45,6 +48,30 @@ export const PRIORITY = [
   'heavenTower',
   'karmaPool',
 ]
+
+/**
+ * 进阶配方（把基础材料炼上去）的"按需"阈值。
+ *
+ * 它们吃的是硬通货（玄钢一次要 20 玄铁 + 30 灵石），所以不能见着就做 ——
+ * 早先参照玩家对**所有**可用配方一律 `times: 10`，加了进阶品之后
+ * 24 小时从合体期直接掉到筑基期（灵石与玄铁被抽干）。
+ * 这里模拟玩家会做的事：基础材料留够才炼，成品也囤到够用就停。
+ */
+export const ADVANCED_CRAFTS = {
+  // 上限必须**高于游戏里的最大单笔需求**，否则参照玩家会卡在自己设的门槛上：
+  // 早先玄钢上限 40、而渡劫期破境要 120，推演就永远停在 大乘期（96 小时都不动）。
+  // 这条约束现在由冒烟断言守着（见「参照玩家的囤货上限」一节）。
+  refineSteel: { base: 'ore', floor: 300, cap: 200 },
+  growImmortalHerb: { base: 'herb', floor: 400, cap: 200 },
+  refineNineTurnPill: { base: 'pill', floor: 60, cap: 80 },
+  drawSpiritTalisman: { base: 'talisman', floor: 120, cap: 120 },
+  forgeSpiritArtifact: { base: 'artifact', floor: 60, cap: 80 },
+  // 组合型进阶：三种料都要留够才动手（floors 支持多料，base/floor 是单料的简写）
+  forgeSpiritTreasure: {
+    floors: { spiritArtifact: 40, nineTurnPill: 20, spiritTalisman: 30 },
+    cap: 40,
+  },
+}
 
 /** 凝石时至少留多少灵气（模拟玩家不会把灵气抽干） */
 export const STONE_QI_FLOOR = 400
@@ -193,6 +220,19 @@ export function createBot(state, derived) {
     for (const c of CRAFTS) {
       if (!derived.availableCrafts.includes(c.id)) continue
       if (c.id === 'condenseStone' && state.resources.qi < STONE_QI_FLOOR) continue
+      const adv = ADVANCED_CRAFTS[c.id]
+      if (adv) {
+        // 进阶品按需炼：料要留够（单料 base/floor，多料 floors），成品囤够就停（一次一份）
+        const floors = adv.floors || { [adv.base]: adv.floor }
+        let enough = true
+        for (const [res, need] of Object.entries(floors)) {
+          if ((state.resources[res] || 0) < need) enough = false
+        }
+        if (!enough) continue
+        if ((state.resources[c.out] || 0) >= adv.cap) continue
+        if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 1 })
+        continue
+      }
       if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 10 })
     }
 
@@ -201,6 +241,8 @@ export function createBot(state, derived) {
     if (derived.autoCraftUnlocked) {
       state.settings.autoCraftOn = true
       for (const c of CRAFTS) {
+        // 进阶配方不挂自动：它们吃硬通货，挂上就等于一直在抽血
+        if (ADVANCED_CRAFTS[c.id]) continue
         if (derived.availableCrafts.includes(c.id)) state.autoCraft[c.id] = true
       }
     }
