@@ -71,7 +71,9 @@ export const BUILDINGS = [
     priceRatio: 1.35,
     desc: '在灵脉上打一口井，整个宗门的呼吸都顺畅了。',
     effects: { ratio: { qi: 0.1, wood: 0.05 } },
-    needs: { building: { id: 'spiritField', count: 10 } },
+    // 先懂「灵气从哪来」，才谈得上打井引脉（修真 · 灵源考）
+    // 先懂「灵气从哪来」，才谈得上打井引脉（修真 · 灵源考）
+    needs: { upgrades: ['qiOrigin'], building: { id: 'spiritField', count: 6 } },
   },
   {
     id: 'gatheringArray',
@@ -84,7 +86,8 @@ export const BUILDINGS = [
     effects: { ratioAll: 0.03, prod: { qi: 0.5 } },
     upkeep: { qi: 1.2 }, // 大阵自己在引气，也在漏气
 
-    needs: { building: { id: 'library', count: 1 } },
+    // 先学会「观气」，才画得出大阵（修真 · 观气法）
+    needs: { upgrades: ['qiGazing'] },
   },
   {
     id: 'beastGarden',
@@ -133,6 +136,7 @@ export const BUILDINGS = [
     desc: '青石铺地、灵纹引气，住二十名弟子也不觉拥挤。',
     effects: { maxDisciples: 20, storageAll: 400, morale: 4 },
     needs: { building: { id: 'logHouse', count: 5 } },
+    needs: { upgrades: ['buildingCode'] },
   },
   {
     id: 'caveDwelling',
@@ -184,6 +188,7 @@ export const BUILDINGS = [
     desc: '整座山腹都掏空了，堆到天荒地老也放得下。',
     effects: { storageAll: 2000 },
     needs: { building: { id: 'warehouse', count: 5 } },
+    needs: { upgrades: ['earthEssence'] },
   },
   {
     id: 'grotto',
@@ -253,7 +258,7 @@ export const BUILDINGS = [
     effects: { ratioAll: 0.05, morale: 3 },
     upkeep: { ore: 0.6 }, // 试炼要修机关、耗玄铁
 
-    needs: { realm: 4 },
+    needs: { realm: 4, upgrades: ['trialArt'] },
   },
 
   // ============ 炼造 ============
@@ -330,6 +335,7 @@ export const BUILDINGS = [
     upkeep: { wood: 0.12 }, // 鼎里得一直添香柴
 
     needs: { building: { id: 'gate', count: 2 } },
+    needs: { upgrades: ['incenseStudy'] },
   },
   {
     id: 'ancestorHall',
@@ -381,7 +387,7 @@ export const BUILDINGS = [
     effects: { ratioAll: 0.15, storageAll: 20000 },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
 
-    needs: { realm: 6 },
+    needs: { realm: 6, upgrades: ['towerPlan'] },
   },
   {
     id: 'karmaPool',
@@ -394,7 +400,7 @@ export const BUILDINGS = [
     effects: { ratioAll: 0.25, ascendBonus: 0.25 },
     upkeep: { insight: 4 }, // 养一缕因果要耗感悟
 
-    needs: { realm: 8 },
+    needs: { realm: 8, upgrades: ['karmaConcord'] },
   },
 ]
 

@@ -225,7 +225,7 @@ export const TECHNIQUES = [
     cost: { insight: 9000, artifact: 60, talisman: 60, pill: 60, faith: 6000 },
     desc: '读懂了这一卷，山下山上再无分别。全局产出 +12%。',
     effects: { ratioAll: 0.12 },
-    needs: { realm: 8 },
+    needs: { realm: 8, upgrades: ['greatVehicleSeal'] },
   },
 
   // ============================================================
@@ -317,7 +317,7 @@ export const TECHNIQUES = [
     desc: '符箓一道的镇山之作，妖兽见了绕道走。天灾损失 −8%。',
     kind: 'treasure',
     effects: { disasterGuard: 0.08 },
-    needs: { upgrades: ['talismanArt'] },
+    needs: { upgrades: ['talismanArt'], upgrades: ['talismanLore'] },
   },
   {
     id: 'jadeSlip',
@@ -372,7 +372,7 @@ export const TECHNIQUES = [
     desc: '阵法初解的实物：一块刻满纹路的石盘，埋在阵眼上。天灾损失 −5%。',
     effects: { disasterGuard: 0.05 },
     kind: 'treasure',
-    needs: { upgrades: ['arrayBasics'] },
+    needs: { upgrades: ['arrayBasics'], upgrades: ['artifactLore'] },
   },
   {
     id: 'vowCauldron',

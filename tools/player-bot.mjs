@@ -171,7 +171,17 @@ export function createBot(state, derived) {
     const ups = derived.availableUpgrades
       .map((id) => ALL_UPGRADES.find((u) => u.id === id))
       .filter(Boolean)
-      .sort((a, b) => waitOf(a) - waitOf(b))
+      // 并列时不能退化成「数组顺序」—— 否则改一次数据顺序，推演结果就跟着变
+    // （实测：只把修真表按五段重排，12 小时弟子就从 42 变成 70）。
+    // 所以并列时用「总花费 → id」做稳定的第二、第三关键字，让参照玩家与数据顺序无关。
+    .sort((a, b) => {
+      const d = waitOf(a) - waitOf(b)
+      if (Math.abs(d) > 1e-9) return d
+      const cost = (u) => Object.values(u.cost || {}).reduce((s, v) => s + v, 0)
+      const dc = cost(a) - cost(b)
+      if (Math.abs(dc) > 1e-9) return dc
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    })
     if (ups.length) {
       const u = ups[0]
       if (E.canAfford(state, u.cost)) E.research(state, derived, u.id)

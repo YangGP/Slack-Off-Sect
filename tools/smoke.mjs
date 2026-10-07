@@ -19,7 +19,12 @@ import * as E from '../src/game/engine.js'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
-import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../src/data/upgrades.js'
+import {
+  CULTIVATION,
+  ALL_UPGRADES,
+  UPGRADE_MAP,
+  CULTIVATION_STAGE_OF,
+} from '../src/data/upgrades.js'
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
 import { ACHIEVEMENTS } from '../src/data/achievements.js'
@@ -28,6 +33,14 @@ import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '../src/data
 import { SEASONS, CALENDAR } from '../src/data/calendar.js'
 import { CONFIG } from '../src/data/config.js'
 import { exportSave, parseImport } from '../src/game/save.js'
+import {
+  unlockText,
+  unlockGroups,
+  unlockMismatches,
+  effectLine,
+  effectRows,
+} from '../src/game/unlockText.js'
+import { describeEffects } from '../src/game/effectsText.js'
 
 let passed = 0
 let failed = 0
@@ -150,7 +163,9 @@ section('数据完整性')
   )
   ok(
     '但感悟被压到修真层的一半以下（主要成本让给材料）',
-    skillInsight / cultInsight <= 0.5 && skillInsight / cultInsight >= 0.1,
+    // 修真树按 RESEARCH.md 铺满时间线之后，它的感悟总量自然会远超技艺层，
+    // 所以这里只守「技艺层的感悟不许超过修真层的一半」这条设计规则，不再守下限。
+    skillInsight / cultInsight <= 0.5 && skillInsight / cultInsight > 0,
     `技艺 ${skillInsight} vs 修真 ${cultInsight}（${((skillInsight / cultInsight) * 100).toFixed(0)}%）`,
   )
   const resOf = (t) => Object.keys(t.cost).filter((r) => r !== 'insight')
@@ -1868,6 +1883,115 @@ section('道果与仙缘软上限（第 3 步）')
   E.recompute(s4, d4)
   const high = d4.karmaMult
   ok('仙缘加成随点数上涨但被压住（500 点 < 线性外推）', high < 1 + 500 * CONFIG.KARMA_BONUS_PER_POINT && high > low, low.toFixed(2) + ' → ' + high.toFixed(2))
+}
+
+// ------------------------------------------------------------
+section('修真线第一阶段：先懂原理才能盖')
+// ------------------------------------------------------------
+{
+  const qi = UPGRADE_MAP.qiOrigin
+  ok(
+    '灵源考不再是空效果（解锁灵脉井）',
+    (qi.effects.unlockBuildings || []).includes('spiritVein'),
+    JSON.stringify(qi.effects),
+  )
+  ok(
+    '灵脉井的门槛从「盖够 10 座聚灵阵」改成研究放行',
+    (BUILDING_MAP.spiritVein.needs.upgrades || []).includes('qiOrigin'),
+    JSON.stringify(BUILDING_MAP.spiritVein.needs),
+  )
+  const gazing = UPGRADE_MAP.qiGazing
+  ok('新增观气法（解锁聚灵大阵）', !!gazing && (gazing.effects.unlockBuildings || []).includes('gatheringArray'))
+  ok(
+    '聚灵大阵的门槛从「有藏经阁」改成研究放行',
+    (BUILDING_MAP.gatheringArray.needs.upgrades || []).includes('qiGazing'),
+    JSON.stringify(BUILDING_MAP.gatheringArray.needs),
+  )
+
+  // 顺序：数据顺序就是界面顺序（见 CultivationPanel），所以五段主线要体现在数组里
+  const ids = CULTIVATION.map((u) => u.id)
+  const unstaged = ids.filter((id) => !CULTIVATION_STAGE_OF[id])
+  ok('每个修真节点都归入五段主线之一', unstaged.length === 0, unstaged.join(','))
+  ok(
+    '第一段是「气从哪来」（灵源考 + 观气法同段且在最前）',
+    ids[0] === 'qiOrigin' &&
+      CULTIVATION_STAGE_OF.qiGazing?.index === CULTIVATION_STAGE_OF.qiOrigin?.index &&
+      CULTIVATION_STAGE_OF.qiOrigin?.index === 0,
+    ids.slice(0, 4).join(','),
+  )
+  ok('修真节点数量（A 项铺满时间线后应不少于 28）', CULTIVATION.length >= 28, String(CULTIVATION.length))
+
+  // 不变量：修真层不该有「什么都不做」的装饰性节点
+  const decorative = CULTIVATION.filter((u) => Object.keys(u.effects || {}).length === 0).map((u) => u.name)
+  ok('没有空效果的装饰性节点', decorative.length === 0, decorative.join('、'))
+}
+
+// ------------------------------------------------------------
+section('解锁清单（B 项）：修真节点必须真的开出东西')
+// ------------------------------------------------------------
+{
+  const mismatches = unlockMismatches()
+  ok('节点的「解锁声明」与建筑的「门槛」一致', mismatches.length === 0, mismatches.slice(0, 3).join('；'))
+
+  const empty = CULTIVATION.filter((u) => {
+    const g = unlockGroups(u.id)
+    const hasRule = Object.keys(u.effects || {}).some((k) => k !== 'unlockBuildings')
+    return g.buildings.length === 0 && g.upgrades.length === 0 && g.crafts.length === 0 && !hasRule
+  }).map((u) => u.name)
+  ok('每个修真节点至少开出一样东西（建筑 / 配方 / 参悟 / 规则）', empty.length === 0, empty.join('、'))
+
+  const t1 = unlockText('qiOrigin')
+  ok('灵源考的解锁清单里有灵脉井', t1.includes('灵脉井'), t1)
+  const t2 = unlockText('qiGazing')
+  ok('观气法的解锁清单里有聚灵大阵', t2.includes('聚灵大阵'), t2)
+  const t3 = unlockText('alchemyArt')
+  ok('炼丹术的清单里有炼丹房与采药制丹', t3.includes('炼丹房') && t3.includes('采药制丹'), t3)
+}
+
+// ------------------------------------------------------------
+section('修真页的效果文本：同一件事只说一遍')
+// ------------------------------------------------------------
+{
+  const lines = CULTIVATION.map((u) => ({ name: u.name, text: effectLine(u, describeEffects) }))
+  // 2026 实测的那次异常：describeEffects、unlockText、手写 note 三处都渲染，
+  // 于是"解锁建筑 灵脉井；解锁建筑：灵脉井；…；解锁建筑：灵脉井"。
+  const dup = lines.filter((l) => (l.text.match(/解锁建筑/g) || []).length > 1).map((l) => l.name)
+  ok('效果文本里「解锁建筑」至多出现一次', dup.length === 0, dup.join('、') || '全部正常')
+
+  const spaced = lines.filter((l) => /解锁建筑[^：]/.test(l.text)).map((l) => l.name)
+  ok('解锁建筑一律写成「解锁建筑：X」（不带旧的空格写法）', spaced.length === 0, spaced.join('、') || '全部正常')
+
+  const multi = lines.find((l) => l.name === '洞天福地')
+  ok('多个建筑之间用顿号', !!multi && multi.text.includes('洞府、洞天'), multi ? multi.text : '（找不到洞天福地）')
+
+  const qi = lines.find((l) => l.name === '灵源考')
+  ok('灵源考的效果文本形如「解锁建筑：灵脉井；开启参悟：…」', !!qi && /^解锁建筑：灵脉井；开启参悟：/.test(qi.text), qi ? qi.text : '')
+}
+
+// ------------------------------------------------------------
+section('提示里的效果一节：一个效果一行')
+// ------------------------------------------------------------
+{
+  const rowsOf = (id) => effectRows(UPGRADE_MAP[id], describeEffects)
+  const alchemy = rowsOf('alchemyArt')
+  ok(
+    '炼丹术的效果是三条（解锁建筑 / 开放配方 / 开启参悟）',
+    alchemy.length === 3,
+    alchemy.map((r) => r.label + '=' + r.value).join(' ｜ '),
+  )
+  ok(
+    '每一行都有标签与值，且值里不再用分号串多件事',
+    alchemy.every((r) => !!r.label && !!r.value && !r.value.includes('；')),
+    JSON.stringify(alchemy),
+  )
+  const bt = rowsOf('breakthroughArt')
+  ok(
+    '纯规则型节点也有行（破境花费）',
+    bt.length === 1 && bt[0].label === '破境花费',
+    JSON.stringify(bt),
+  )
+  const qi = rowsOf('qiOrigin')
+  ok('灵源考两行（解锁建筑 + 开启参悟）', qi.length === 2, JSON.stringify(qi))
 }
 
 // ------------------------------------------------------------

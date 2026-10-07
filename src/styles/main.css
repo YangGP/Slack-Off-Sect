@@ -929,3 +929,38 @@ textarea {
 ::-webkit-scrollbar-track {
   background: #fff;
 }
+
+/* 修真表的段标题行：五段主线（见 docs/RESEARCH.md） */
+.grid tbody tr.stage-row td {
+  padding-top: 12px;
+  padding-bottom: 2px;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.grid tbody tr.stage-row:first-child td {
+  border-top: none;
+  padding-top: 2px;
+}
+
+/* 参悟表：操作列右对齐 */
+.grid th.right,
+.grid td.right {
+  text-align: right;
+}
+
+/* 参悟表：极轻的行悬停 —— 提示挂在「花费」上，悬停反馈帮玩家找到它 */
+.grid tbody tr:hover td {
+  background: #fbfbfb;
+}
+.grid tbody tr.stage-row:hover td {
+  background: transparent;
+}
+
+/* 花费项之间的分隔符：以前多项挤在一起（「感悟 40灵木 120」） */
+.cost-line > span + span::before {
+  content: '·';
+  margin: 0 5px;
+  color: var(--faint);
+}

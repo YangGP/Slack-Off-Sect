@@ -9,10 +9,11 @@ import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { canAfford, refineCost, treasureLevel, treasureMult } from '@/game/engine'
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
+import { effectRows } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
 import { costLabel, enough as enoughOf } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
-import { CULTIVATION } from '@/data/upgrades'
+import { CULTIVATION, CULTIVATION_STAGE_OF } from '@/data/upgrades'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 
@@ -37,22 +38,47 @@ const researchedIds = computed(() =>
   props.kind === 'technique' ? view.researchedSkills.value : view.researchedCultivation.value,
 )
 
+/**
+ * 「效果」列的文本。
+ *
+ * 注意分工：**解锁信息只由 unlockText 表达**（它会把「节点声明」与「建筑门槛」两侧合起来，
+ * 而且多个建筑之间有顿号），数值与规则效果才交给 describeEffects。
+ * 以前两边都渲染、再加上手写的 note，同一件事会说三遍（例如"解锁建筑 灵脉井；解锁建筑：灵脉井；…"）。
+ */
+/**
+ * 悬停**整行**都要出提示：把事件转给这一行里的提示触发器（`.tip-trigger`）。
+ *
+ * 为什么不直接把 HoverTip 包住整行：HoverTip 渲染的是一个 `<span>` 外壳，
+ * 而 `<tr>` 里只能放 `<td>` —— 包起来会破坏表格结构。转发事件既保住结构，
+ * 又让玩家在行内任意位置（名称、等级、花费）悬停都能看到同一条提示。
+ */
+function rowEnter(ev, meta) {
+  if (meta?.cost) highlightCost(meta.cost)
+  ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseenter'))
+}
+function rowLeave(ev) {
+  clearHighlight()
+  ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseleave'))
+}
+
+/** 修真节点所属的五段主线（技艺 / 法宝没有段，返回 null） */
+const stageOf = (id) => CULTIVATION_STAGE_OF[id] || null
+
+/** 这一段的第一行（用来插段标题行） */
+function isStageStart(list, i) {
+  if (!list[i]?.stage) return false
+  return i === 0 || list[i - 1]?.stage?.key !== list[i].stage.key
+}
+
 const available = computed(() =>
   availableIds.value
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
+    // 修真页按五段主线排序（同一段内保持数据顺序），界面因此能分组显示
+    .sort((a, b) => (stageOf(a.id)?.index ?? 99) - (stageOf(b.id)?.index ?? 99))
     .map((u) => ({
       meta: u,
-      eff:
-        [
-          describeEffects(u.effects)
-            .map((t) => t.text)
-            .join('，'),
-          // 纯解锁型的修真节点（本身没有数值效果）用 note 说明它开出了什么
-          u.note || '',
-        ]
-          .filter(Boolean)
-          .join('；'),
+      stage: stageOf(u.id),
       affordable: canAfford(state, u.cost),
     })),
 )
@@ -112,6 +138,7 @@ function kindName(meta) {
   <div class="box">
     <div class="box-head">
       {{ title }}<span class="hint">{{ hint }}　已参悟 {{ researched.length }} / {{ list.length }}</span>
+      <span class="hint faint">　悬停「花费」查看效果</span>
     </div>
     <div class="box-body">
       <div v-if="filters.length" class="filters">
@@ -139,8 +166,8 @@ function kindName(meta) {
           <tr
             v-for="item in forged"
             :key="item.meta.id"
-            @mouseenter="highlightCost(item.cost)"
-            @mouseleave="clearHighlight()"
+            @mouseenter="rowEnter($event, item)"
+            @mouseleave="rowLeave($event)"
           >
             <td class="nowrap">{{ item.meta.name }} <span class="small dim">法宝</span></td>
             <td class="num nowrap">
@@ -194,7 +221,7 @@ function kindName(meta) {
                 祭炼
               </button>
             </td>
-          </tr>
+            </tr>
         </tbody>
       </table>
 
@@ -203,17 +230,17 @@ function kindName(meta) {
           <tr>
             <th>名称</th>
             <th>花费</th>
-            <th>效果</th>
-            <th>操作</th>
+            <th class="right">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="item in available"
-            :key="item.meta.id"
-            @mouseenter="highlightCost(item.meta.cost)"
-            @mouseleave="clearHighlight()"
-          >
+          <template v-for="(item, i) in available" :key="item.meta.id">
+            <tr v-if="isStageStart(available, i)" class="stage-row">
+              <td colspan="4">
+                {{ item.stage.label }}<span class="small dim">　{{ item.stage.hint }}</span>
+              </td>
+            </tr>
+            <tr @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
             <td class="nowrap">
               {{ item.meta.name }}
               <span v-if="item.meta.kind === 'treasure'" class="small dim">法宝</span>
@@ -247,25 +274,35 @@ function kindName(meta) {
                     </div>
 
                     <div class="tip-section">效果</div>
-                    <div class="tip-row">
-                      <span class="k">{{ item.meta.kind === 'treasure' ? '炼成后' : '参悟后' }}</span>
-                      <span class="v good">{{ item.eff }}</span>
+                    <!-- 一个效果一行：数值 / 规则效果各自成行，解锁清单按类成行 -->
+                    <div v-for="(row, ri) in effectRows(item.meta, describeEffects)" :key="ri" class="tip-row">
+                      <span class="k">{{ row.label }}</span>
+                      <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
+                    </div>
+                    <div v-if="item.meta.effectDesc" class="tip-row">
+                      <span class="k">因此</span>
+                      <!-- effectDesc 本身就以「因此」开头，这里去掉前缀，免得标签与正文重复 -->
+                      <span class="v">{{ item.meta.effectDesc.replace(/^因此[：:]?\s*/, '') }}</span>
+                    </div>
+                    <div v-if="item.stage" class="tip-row">
+                      <span class="k">所属</span>
+                      <span class="v dim">{{ item.stage.label }}　{{ item.stage.hint }}</span>
                     </div>
                     <div v-if="describeNeeds(item.meta.needs).length" class="tip-row">
-                      <span class="k">解锁</span>
+                      <span class="k">条件</span>
                       <span class="v">{{ describeNeeds(item.meta.needs).join('，') }}</span>
                     </div>
                   </div>
                 </template>
               </HoverTip>
             </td>
-            <td class="eff">{{ item.eff }}</td>
-            <td>
+            <td class="right">
               <button class="btn primary" :disabled="!item.affordable" @click="actions.research(item.meta.id)">
                 {{ item.meta.kind === 'treasure' ? '炼成' : '参悟' }}
               </button>
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
       <div v-else class="empty">暂时没有可参悟的条目 —— 换个条件，或者先去攒感悟。</div>
@@ -274,7 +311,7 @@ function kindName(meta) {
         <summary>条件未达成（{{ locked.length }} 条，达成后才会显现）</summary>
         <table class="grid">
           <tbody>
-            <tr v-for="item in locked" :key="item.meta.id" :title="item.meta.desc">
+            <tr v-for="item in locked" :key="item.meta.id">
               <td class="nowrap dim">{{ item.meta.name }}</td>
               <td class="small dim">{{ item.needs }}</td>
             </tr>
@@ -285,7 +322,9 @@ function kindName(meta) {
       <details class="fold" v-if="researched.length">
         <summary>已参悟（{{ researched.length }} 条）</summary>
         <div class="small" style="padding-top: 4px">
-          <span v-for="u in researched" :key="u.id" class="good">{{ u.name }}　</span>
+          <span v-for="(u, i) in researched" :key="u.id" class="good"
+            >{{ i ? '、' : '' }}{{ u.name }}</span
+          >
         </div>
       </details>
     </div>

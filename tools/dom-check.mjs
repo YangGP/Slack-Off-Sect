@@ -608,7 +608,9 @@ ok('修真页不列技艺·法宝层的东西', !html().includes('引气诀') &&
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 80))
   const rows = [...doc.querySelectorAll('.box-body > table.grid tbody tr')]
-  const cells = rows.map((tr) => ({
+  // 修真表会插入「段标题行」（五段主线，见 RESEARCH.md），数据行要跳过它们
+const dataRows = rows.filter((tr) => !tr.classList.contains('stage-row'))
+const cells = dataRows.map((tr) => ({
     name: tr.cells[0]?.textContent.trim() || '',
     cost: tr.cells[1]?.textContent.replace(/\s+/g, ' ').trim() || '',
     tr,
@@ -619,9 +621,20 @@ ok('修真页不列技艺·法宝层的东西', !html().includes('引气诀') &&
     cells.slice(0, 3).map((c) => `${c.name}:${c.cost}`).join(' ｜ '),
   )
   ok('需求值仍然按资源逐项写出', /^感悟\s*\d+/.test(cells[0]?.cost || ''), cells[0]?.cost || '')
-  const target = rows.find((tr) => tr.querySelector('.cost .lack')) || rows[0]
+  const target = dataRows.find((tr) => tr.querySelector('.cost .lack')) || dataRows[0]
   const trigger = target?.querySelector('.cost .tip-trigger')
   ok('花费单元格是 tooltip 触发器', !!trigger)
+  // 悬停整行（不只是花费格）都该弹出同一条提示：行的 mouseenter 会把事件转发给触发器
+  target?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise((r) => setTimeout(r, 340))
+  ok(
+    '悬停整行也弹出提示',
+    !!doc.querySelector('.tip'),
+    (doc.querySelector('.tip')?.textContent || '（没有提示）').replace(/\s+/g, ' ').slice(0, 40),
+  )
+  target?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  await new Promise((r) => setTimeout(r, 100))
+  ok('离开整行后提示收起', !doc.querySelector('.tip'))
   if (trigger) {
     trigger.dispatchEvent(new window.MouseEvent('mouseenter'))
     await new Promise((r) => setTimeout(r, 340))
