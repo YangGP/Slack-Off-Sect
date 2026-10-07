@@ -2,7 +2,14 @@
  * 成就。达成后永久生效（飞升也不清空），每条成就默认提供 +2% 全局产出。
  * check(state) 返回 true 即达成，engine 每帧检查一次。
  */
-export const ACHIEVEMENT_REWARD = 0.02
+/**
+ * 每条成就的全局产出加成。
+ *
+ * **2026 暂定为 0**：成就的奖励要重新设计（改成"给规则 / 给解锁"而不是单纯加数字），
+ * 在那之前先不提供全局加成 —— 所以这里留成旋钮而不是删掉逻辑，
+ * 重新设计时改这一个数就能恢复（引擎与界面都会跟着走）。
+ */
+export const ACHIEVEMENT_REWARD = 0
 
 export const ACHIEVEMENTS = [
   {

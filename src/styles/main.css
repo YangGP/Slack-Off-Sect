@@ -964,3 +964,11 @@ textarea {
   margin: 0 5px;
   color: var(--faint);
 }
+
+/* 面板里的小节标题（境界页的「转世」「飞升」两段） */
+.box-sub {
+  margin-top: 14px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text);
+}

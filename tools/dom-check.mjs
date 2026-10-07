@@ -838,6 +838,20 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
 state.ui.tab = 'realm'
 await new Promise((r) => setTimeout(r, 50))
 ok('境界面板渲染', html().includes('飞升'))
+// 境界页：里程碑写进标题、转世与飞升分成两段、门槛未达成时不报可得数字
+{
+  state.realm = 4
+  state.ui.tab = 'realm'
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 60))
+  ok('境界页标出转世与飞升的门槛', html().includes('化神期起可转世') && html().includes('渡劫期起可飞升'))
+  ok('转世与飞升分成两段', html().includes('转世与飞升'))
+  ok(
+    '门槛未达成时不报「可得」数字（免得误导）',
+    html().includes('待修到 化神期 结算') && html().includes('待修到 渡劫期 结算'),
+    html().includes('待修到') ? '有占位文案' : '（没找到占位）',
+  )
+}
 // 转世：化神期起可做，点击后与飞升一样清空（连修真/技艺·法宝都不保留）
 {
   const savedConfirm = window.confirm
@@ -876,13 +890,9 @@ ok('境界面板渲染', html().includes('飞升'))
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 60))
   ok('境界页显示道果行', html().includes('道果'))
-  ok('转世不足时提示飞升还需先转世', html().includes('飞升还需先转世'))
+  ok('界面写明转世不是飞升的必需条件', html().includes('转世是常见路线，但不是必需'))
   const ascBtn = () => [...doc.querySelectorAll('.panel .btn')].find((b) => b.textContent.includes('飞升'))
-  ok('转世不足时飞升按钮禁用', ascBtn() && ascBtn().disabled === true)
-  state.stats.reincarnations = 3
-  engine.recompute(state, derived)
-  await new Promise((r) => setTimeout(r, 60))
-  ok('补满转世次数后飞升按钮可用', ascBtn() && ascBtn().disabled === false)
+  ok('渡劫期即可飞升（一次都没转世也行）', ascBtn() && ascBtn().disabled === false)
   const savedConfirm2 = window.confirm
   window.confirm = () => true
   ascBtn().click()

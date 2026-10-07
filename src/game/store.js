@@ -408,7 +408,6 @@ export const view = {
   ascendGain: computed(() => E.ascensionGain(state, derived)),
   canAscend: computed(() => E.canAscend(state)),
   reincarnateGain: computed(() => E.reincarnationGain(state, derived)),
-  reincarnationsNeeded: computed(() => E.reincarnationsNeeded(state)),
   canReincarnate: computed(() => E.canReincarnate(state)),
   progressToReincarnate: computed(() =>
     Math.min(1, state.realm / Math.max(1, REINCARNATE_REALM_INDEX)),

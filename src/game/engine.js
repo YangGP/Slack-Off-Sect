@@ -536,10 +536,10 @@ export function recompute(state, derived) {
     }
   }
 
-  // 成就：每条 +2% 全局
+  // 成就：加成倍率见 ACHIEVEMENT_REWARD（当前为 0，奖励待重新设计）
   const achCount = Object.keys(state.achievements).length
   acc.ratioAll += achCount * ACHIEVEMENT_REWARD
-  if (achCount > 0) {
+  if (achCount > 0 && ACHIEVEMENT_REWARD > 0) {
     bonus.ratioAll.push({
       kind: 'achievement',
       id: 'achievements',
@@ -1107,22 +1107,25 @@ export function breakthrough(state, derived) {
   return true
 }
 
+/** 本世**存下**的感悟（走 addResource，会被仓储上限截断；仙缘公式用的是它） */
+export function lifeInsightOf(state) {
+  return Math.max(0, state.stats?.lifeInsight || 0)
+}
+
 /**
- * 飞升的两个条件：**渡劫期** + **已经转世过若干次**（CONFIG.ASCEND_MIN_REINCARNATIONS）。
- * 加后半条是为了把飞升"定高"：玩家必须先玩转世循环，而不是一局直冲到底。
+ * 飞升的唯一条件：**渡劫期**。
+ *
+ * 转世不是门槛 —— 它是达成飞升的**正常游玩途径**：每一世带着仙缘重来、
+ * 跑得更快，几世之后冲渡劫期最省力。但愿意一世硬磨到底的玩家，
+ * 同样可以飞升（见 CONFIG.ASCEND_TURNS_REFERENCE 与 docs/DESIGN.md §8.2）。
  */
 export function canAscend(state) {
-  return state.realm >= ASCEND_REALM_INDEX && reincarnationsDone(state) >= CONFIG.ASCEND_MIN_REINCARNATIONS
+  return state.realm >= ASCEND_REALM_INDEX
 }
 
 /** 已经转世过几次 */
 export function reincarnationsDone(state) {
   return Math.max(0, state.stats?.reincarnations || 0)
-}
-
-/** 距离飞升还差几次转世（已够则 0） */
-export function reincarnationsNeeded(state) {
-  return Math.max(0, CONFIG.ASCEND_MIN_REINCARNATIONS - reincarnationsDone(state))
 }
 
 /** 转世的门槛：化神期（比飞升早得多） */

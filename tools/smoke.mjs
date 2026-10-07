@@ -27,7 +27,7 @@ import {
 } from '../src/data/upgrades.js'
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
-import { ACHIEVEMENTS } from '../src/data/achievements.js'
+import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '../src/data/realms.js'
 import { SEASONS, CALENDAR } from '../src/data/calendar.js'
@@ -735,11 +735,19 @@ section('进项来源明细')
       ),
       `${(1 + ratioSum) * (1 + allSum) * (1 + (derived.seasonRatio.qi || 0)) * b.globalMult} vs ${derived.sourceFactor.qi}`,
     )
-    ok('拆分里能追到具体条目（引气诀 / 聚灵大阵 / 成就）', (() => {
+    ok('拆分里能追到具体条目（引气诀 / 聚灵大阵）', (() => {
       const labels = [...(b.ratio.qi || []), ...b.ratioAll].map((x) => x.id)
-      return labels.includes('qiArt') && labels.includes('gatheringArray') && labels.includes('achievements')
+      return labels.includes('qiArt') && labels.includes('gatheringArray')
     })(), [...(b.ratio.qi || []), ...b.ratioAll].map((x) => x.id).join(','))
-    ok('成就条目带条数', b.ratioAll.some((x) => x.id === 'achievements' && x.count === 1))
+    // 成就奖励清零后，加成拆解里不该再出现一条 0% 的「成就」明细
+    ok(
+      ACHIEVEMENT_REWARD > 0
+        ? '成就条目带条数'
+        : '成就奖励为 0 时，拆解里不列出成就明细',
+      ACHIEVEMENT_REWARD > 0
+        ? b.ratioAll.some((x) => x.id === 'achievements' && x.count === 1)
+        : !b.ratioAll.some((x) => x.id === 'achievements'),
+    )
   }
 
   // 停用带维护费的建筑后，它的产出与维护费一起从账上消失
@@ -1337,7 +1345,11 @@ section('成就')
   E.buyBuilding(state, derived, 'hut', 1)
   E.checkAchievements(state, derived)
   ok('达成「立锥之地」', state.achievements.firstHut === true)
-  ok('成就提供全局加成', derived.ratioAll >= 0.02)
+  ok(
+    '成就暂不提供全局加成（奖励待重新设计，ACHIEVEMENT_REWARD = 0）',
+    derived.ratioAll < 0.02 || ACHIEVEMENT_REWARD === 0,
+    `ratioAll ${derived.ratioAll.toFixed(4)} / 奖励 ${ACHIEVEMENT_REWARD}`,
+  )
 
   const ratioBefore = derived.ratioAll
   const rateBefore = derived.rates.qi
@@ -1345,7 +1357,11 @@ section('成就')
   ok('一次购买多座', E.countOf(state, 'hut') === 10, `实际 ${E.countOf(state, 'hut')}`)
   E.checkAchievements(state, derived)
   ok('达成「茅屋十间」', state.achievements.hutTen === true)
-  ok('多条成就叠加提升加成', derived.ratioAll > ratioBefore, `${derived.ratioAll} vs ${ratioBefore}`)
+  ok(
+    '达成更多成就也不改变全局倍率（加成已清零）',
+    ACHIEVEMENT_REWARD > 0 ? derived.ratioAll > ratioBefore : derived.ratioAll === ratioBefore,
+    `${derived.ratioAll} vs ${ratioBefore}`,
+  )
   ok(
     '加成立刻反映到产出速率（先有产出源才看得出）',
     (() => {
@@ -1411,9 +1427,12 @@ section('修真·技艺 / 境界 / 飞升')
     s2.resources.herb = 1e6
   }
   ok('可修到渡劫期', s2.realm === ASCEND_REALM_INDEX, `实际 ${s2.realm}`)
-  ok('渡劫期但转世不足时还不能飞升', E.canAscend(s2) === false, '还需转世 ' + E.reincarnationsNeeded(s2) + ' 次')
-  s2.stats.reincarnations = CONFIG.ASCEND_MIN_REINCARNATIONS
-  ok('转世满 ' + CONFIG.ASCEND_MIN_REINCARNATIONS + ' 次即可飞升', E.canAscend(s2) === true)
+  ok('渡劫期即可飞升（不要求转世次数）', E.canAscend(s2) === true)
+  s2.stats.reincarnations = 0
+  ok('一次都没转世也能飞升（转世只是常见路线）', E.canAscend(s2) === true)
+  s2.realm = ASCEND_REALM_INDEX - 1
+  ok('境界不到渡劫期则不能飞升', E.canAscend(s2) === false)
+  s2.realm = ASCEND_REALM_INDEX
 
   s2.stats.lifeInsight = 2e6
   const gain = E.ascensionGain(s2, d2)
@@ -1843,7 +1862,7 @@ section('道果与仙缘软上限（第 3 步）')
 {
   const { state, derived } = newGame()
   state.realm = ASCEND_REALM_INDEX
-  state.stats.reincarnations = CONFIG.ASCEND_MIN_REINCARNATIONS
+  state.stats.reincarnations = 0 // 转世不是门槛：一次都没转世也能飞升
   state.stats.lifeInsight = 2e6
   E.recompute(state, derived)
   const before = { dao: state.dao || 0, mult: derived.daoMult, gain: E.ascensionGain(state, derived) }
