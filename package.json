@@ -17,6 +17,7 @@
     "audit": "vite build --ssr tools/resource-audit.mjs --outDir .smoke-audit --emptyOutDir && node .smoke-audit/resource-audit.js",
     "audit:materials": "vite build --ssr tools/material-audit.mjs --outDir .smoke-mat --emptyOutDir && node .smoke-mat/material-audit.js",
     "balance": "vite build --ssr tools/balance.mjs --outDir .smoke-balance --emptyOutDir && node .smoke-balance/balance.js",
+    "balance:events": "vite build --ssr tools/event-balance.mjs --outDir .smoke-event-balance --emptyOutDir && node .smoke-event-balance/event-balance.js",
     "balance:visits": "vite build --ssr tools/playstyles.mjs --outDir .smoke-visits --emptyOutDir && node .smoke-visits/playstyles.js",
     "docs:tables": "node tools/dump-tables.mjs",
     "early": "vite build --ssr tools/early-audit.mjs --outDir .early --emptyOutDir && node .early/early-audit.js"

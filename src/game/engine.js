@@ -1272,36 +1272,78 @@ function pickEvent(state) {
  * 结算一份"事件效果声明"。三种事件与"选择的其中一个选项"共用这一处，
  * 所以选项里的 lootRate / disaster / buff 与普通事件是同一套机制。
  */
+/** 工艺品按原料供给与配方节拍估算产能，不依赖是否勾选自动。 */
+export function eventResourceRate(state, derived, res, path = new Set()) {
+  const direct = Math.max(0, derived.rates[res] || 0)
+  if (path.has(res)) return direct
+  const recipe = CRAFTS.find(c => c.out === res && isCraftUnlocked(state, c))
+  if (!recipe) return direct
+  const next = new Set(path).add(res)
+  let batches = 1 / craftTime(recipe)
+  for (const [input, amount] of Object.entries(recipe.cost)) {
+    batches = Math.min(batches, eventResourceRate(state, derived, input, next) / amount)
+  }
+  return Math.max(direct, batches * recipe.amount * (1 + derived.craftBonus))
+}
+
+export function eventOutcome(state, derived, spec, disasterPercent = spec.disaster?.lossPercent?.[0] || 0) {
+  const rows = []
+  const required = {}
+  for (const [res, cost] of Object.entries(spec.tradeCost || {})) {
+    const amount = Math.max(cost.floor, eventResourceRate(state, derived, res) * cost.seconds)
+    const bounded = Math.min(amount, Math.max(cost.floor, (derived.max[res] || 0) * 0.1))
+    required[res] = RESOURCE_MAP[res]?.integer ? Math.ceil(bounded - 1e-9) : bounded
+  }
+  const affordable = Object.entries(required).every(([res, amount]) => (state.resources[res] || 0) >= amount)
+  const resources = new Set([
+    ...Object.keys(spec.cost || {}), ...Object.keys(spec.costShare || {}), ...Object.keys(required),
+    ...(spec.disaster?.resources || []), ...Object.keys(spec.lootRate || {}),
+  ])
+  for (const res of resources) {
+    const integer = RESOURCE_MAP[res]?.integer
+    const whole = (amount) => integer ? Math.floor(amount + 1e-9) : amount
+    const have = state.resources[res] || 0
+    const fixed = Math.min(have, whole((spec.cost?.[res] || 0) + (required[res] || 0)))
+    const share = whole((have - fixed) * (spec.costShare?.[res] || 0))
+    const remaining = have - fixed - share
+    const disaster = spec.disaster?.resources.includes(res)
+      ? whole(remaining * disasterPercent * (1 - (derived.disasterGuard || 0))) : 0
+    const lost = fixed + share + disaster
+    const offered = spec.lootRate?.[res] != null
+      ? whole(Math.max(spec.floor?.[res] || 0, eventResourceRate(state, derived, res) * spec.lootRate[res])) : 0
+    const room = Math.max(0, (state.__max?.[res] ?? Infinity) - (have - lost))
+    const gained = Math.min(offered, whole(room))
+    rows.push({ res, lost, gained, overflow: offered - gained })
+  }
+  const recruits = Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
+  return { rows, recruits, required, affordable }
+}
+
+function settleEventOutcome(state, derived, spec, text, kind) {
+  const range = spec.disaster?.lossPercent || [0, 0]
+  const pct = range[0] + Math.random() * (range[1] - range[0])
+  const outcome = eventOutcome(state, derived, spec, pct)
+  const parts = []
+  for (const row of outcome.rows) {
+    state.resources[row.res] = (state.resources[row.res] || 0) - row.lost
+    if (row.lost > 0) parts.push(`${RESOURCE_MAP[row.res].name} -${Math.round(row.lost)}`)
+    const gained = addResource(state, row.res, row.gained)
+    if (gained > 0) parts.push(`${RESOURCE_MAP[row.res].name} +${Math.round(gained)}`)
+    if (row.overflow > 0) parts.push(`${RESOURCE_MAP[row.res].name} ${Math.round(row.overflow)} 装不下`)
+  }
+  if (spec.disaster) {
+    state.stats.disasters += 1
+    if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
+  }
+  if (outcome.recruits > 0) {
+    state.disciples.total += outcome.recruits
+    state.stats.recruits += outcome.recruits
+    parts.push(`弟子 +${outcome.recruits}`)
+  } else if (spec.recruit) parts.push('居所已满，无法收徒')
+  pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind)
+}
+
 function applyEventEffects(state, derived, spec, text, kind) {
-  if (spec.cost) {
-    // 绝对值代价：只在"低境界、库里也没多少"时才用（会随境界稀释，慎用）
-    const parts = []
-    for (const res in spec.cost) {
-      const have = state.resources[res] || 0
-      const pay = Math.min(have, spec.cost[res])
-      state.resources[res] = have - pay
-      if (pay > 0) parts.push(`${RESOURCE_MAP[res].name} -${Math.round(pay)}`)
-    }
-    if (parts.length && text) text = `${text}（${parts.join('，')}）`
-  }
-  if (spec.costShare) {
-    /**
-     * 比例代价：扣当前存量的百分之几。
-     * 这是"惩罚与当前境界 / 资源挂钩"的正解 —— 前期库里只有几十枚丹药时扣几枚，
-     * 后期有几千枚时扣的就按比例放大，代价始终有分量。
-     * 整枚计数的资源照旧向下取整，不扣出半枚。
-     */
-    const parts = []
-    for (const res in spec.costShare) {
-      const have = state.resources[res] || 0
-      const raw = have * spec.costShare[res]
-      const pay = RESOURCE_MAP[res]?.integer ? Math.floor(raw + 1e-9) : raw
-      if (pay <= 0) continue
-      state.resources[res] = have - pay
-      parts.push(`${RESOURCE_MAP[res].name} -${Math.round(pay)}`)
-    }
-    if (parts.length && text) text = `${text}（${parts.join('，')}）`
-  }
   return applyEventBody(state, derived, spec, text, kind)
 }
 
@@ -1319,59 +1361,8 @@ function applyEventBody(state, derived, event, text, kind) {
     }
   }
 
-  if (event.lootRate) {
-    const parts = []
-    for (const res in event.lootRate) {
-      const floor = (event.floor && event.floor[res]) || 0
-      const rate = derived.rates[res] || 0
-      const gain = Math.max(floor, rate * event.lootRate[res])
-      const real = addResource(state, res, gain)
-      if (real > 0) parts.push(`${RESOURCE_MAP[res].name} +${Math.round(real)}`)
-    }
-    if (parts.length) pushLog(state, `${text}（${parts.join('，')}）`, kind)
-    else pushLog(state, text, kind)
-  } else if (event.disaster) {
-    const lossPct = event.disaster.lossPercent
-    const pct = lossPct[0] + Math.random() * (lossPct[1] - lossPct[0])
-    const guard = derived.disasterGuard || 0
-    const parts = []
-    let total = 0
-    for (const res of event.disaster.resources) {
-      const have = state.resources[res] || 0
-      // 整枚计数的资源（灵石/丹药/符箓/法器）按整数扣，别扣出「半枚」
-      const lost = RESOURCE_MAP[res]?.integer
-        ? Math.floor(have * pct * (1 - guard) + 1e-9)
-        : have * pct * (1 - guard)
-      if (lost > (RESOURCE_MAP[res]?.integer ? 0 : 0.5)) {
-        state.resources[res] = have - lost
-        total += lost
-        parts.push(`${RESOURCE_MAP[res].name} -${Math.round(lost)}`)
-      }
-    }
-    state.stats.disasters += 1
-    const suffix = parts.length ? `（${parts.join('，')}）` : '（库中空空，妖兽愤而离去）'
-    pushLog(
-      state,
-      `${text}${suffix}${guard > 0 ? `【大阵挡下 ${Math.round(guard * 100)}%】` : ''}`,
-      kind,
-    )
-  } else {
-    pushLog(state, text, kind)
-  }
+  settleEventOutcome(state, derived, event, text, kind)
 
-  if (event.recruit) {
-    const room = derived.maxDisciples - state.disciples.total
-    if (room > 0) {
-      const n = Math.min(room, event.recruit)
-      state.disciples.total += n
-      state.stats.recruits += n
-      pushLog(state, `弟子 +${n}`, 'good')
-    }
-  }
-
-  state.nextEventAt =
-    Date.now() +
-    (CONFIG.EVENT_MIN_GAP + Math.random() * (CONFIG.EVENT_MAX_GAP - CONFIG.EVENT_MIN_GAP)) * 1000
   return event
 }
 
@@ -1383,6 +1374,10 @@ function applyEventBody(state, derived, event, text, kind) {
 export function fireEvent(state, derived, ev = null) {
   const event = ev || pickEvent(state)
   if (!event) return null
+  if (event.type === 'choice' && state.pendingChoice) return null
+  if (event.type !== 'choice' && !eventOutcome(state, derived, event).affordable) return null
+  state.nextEventAt = Date.now() +
+    (CONFIG.EVENT_MIN_GAP + Math.random() * (CONFIG.EVENT_MAX_GAP - CONFIG.EVENT_MIN_GAP)) * 1000
   state.stats.eventsSeen = (state.stats.eventsSeen || 0) + 1
 
   if (event.type === 'choice') {
@@ -1405,6 +1400,7 @@ export function resolveChoice(state, derived, index) {
   const event = EVENT_MAP[pending.id]
   const opt = event?.options?.[index]
   if (!event || !opt) return null
+  if (!eventOutcome(state, derived, opt.effect || {}).affordable) return null
   state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
   state.pendingChoice = null
   applyEventEffects(

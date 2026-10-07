@@ -237,9 +237,13 @@ section('数据完整性')
 
   let badEvent = null
   for (const e of EVENTS) {
-    if (e.lootRate) for (const k in e.lootRate) if (!resIds.has(k)) badEvent = e.id
-    if (e.disaster) for (const k of e.disaster.resources) if (!resIds.has(k)) badEvent = e.id
-    if (e.buff && e.buff.target && !resIds.has(e.buff.target)) badEvent = e.id
+    for (const spec of [e, ...(e.options || []).map(o => o.effect || {})]) {
+      for (const field of ['lootRate', 'floor', 'cost', 'costShare', 'tradeCost']) {
+        for (const k of Object.keys(spec[field] || {})) if (!resIds.has(k)) badEvent = `${e.id}.${k}`
+      }
+      if (spec.disaster) for (const k of spec.disaster.resources) if (!resIds.has(k)) badEvent = e.id
+      if (spec.buff?.target && !resIds.has(spec.buff.target)) badEvent = e.id
+    }
   }
   ok('事件引用的资源都已定义', !badEvent, badEvent || '')
 
@@ -2413,9 +2417,10 @@ section('事件三分类：自然环境 / 突发 / 选择')
   for (const e of choice) {
     for (const o of e.options) {
       const eff = o.effect || {}
+      if (eff.decline) continue
       const hasGain = !!(eff.lootRate || eff.recruit)
       // 代价可以是比例（costShare，随资源缩放）、绝对值（cost）或按比例掠夺（disaster）
-      const hasCost = !!(eff.cost || eff.costShare || eff.disaster)
+      const hasCost = !!(eff.cost || eff.costShare || eff.tradeCost || eff.disaster)
       if (!hasGain) problems.push(e.id + '/' + o.label + '：没有收获')
       if (!hasCost) problems.push(e.id + '/' + o.label + '：没有代价')
       // 绝对值代价仍按当量比较；比例代价由下面三条结构规则守（30% 上限 + 按产出发放）
@@ -2424,7 +2429,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
       }
     }
   }
-  ok('选择类：每个选项都有收获也有代价，且收益不小于代价', problems.length === 0, problems.slice(0, 3).join('；') || '全部合规')
+  ok('选择类：参与选项都有收获与代价', problems.length === 0, problems.slice(0, 3).join('；') || '全部合规')
 
   // 挂钩当前境界与资源（三条结构规则）
   {
@@ -2435,6 +2440,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
       if (e.type !== 'choice') continue
       for (const o of e.options) {
         const eff = o.effect || {}
+        if (eff.decline) continue
         if (eff.cost) flatCost.push(e.id + '/' + o.label)
         // 收获必须是"当前产出的多少秒" —— 产出随境界与建筑缩放，奖励因此水涨船高
         if (!eff.lootRate) noRate.push(e.id + '/' + o.label)
@@ -2444,7 +2450,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
         }
       }
     }
-    ok('选择类的代价都是比例形式（不用绝对值，避免后期变免费）', flatCost.length === 0, flatCost.join('、') || '全部比例')
+    ok('选择类使用产能交易或比例风险，避免固定价格随进度稀释', flatCost.length === 0, flatCost.join('、') || '全部动态')
     ok('选择类的收获都按"当前产出的多少秒"发放（随境界与资源缩放）', noRate.length === 0, noRate.join('、') || '全部按产出')
     ok('选择类的比例代价不超过存量的 30%', tooHeavy.length === 0, tooHeavy.join('、') || '全部在 30% 以内')
 
@@ -2454,6 +2460,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
       for (const o of e.options) {
         const eff = o.effect || {}
         for (const v of Object.values(eff.costShare || {})) vals.push(v)
+        for (const cost of Object.values(eff.tradeCost || {})) vals.push(cost.seconds / 600)
         if (eff.disaster?.lossPercent) {
           vals.push((eff.disaster.lossPercent[0] + eff.disaster.lossPercent[1]) / 2)
         }
@@ -2467,7 +2474,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
     const lowTier = pick(0, 6)
     const highTier = pick(7, 10)
     ok(
-      '高境界的选择更贵（代价比例平均更高）',
+      '高境界的选择更贵（交易时长与风险水平平均更高）',
       highTier.length >= 4 && avgLevel(highTier) > avgLevel(lowTier),
       '低境界 ' + (avgLevel(lowTier) * 100).toFixed(0) + '% vs 高境界 ' + (avgLevel(highTier) * 100).toFixed(0) + '%',
     )
@@ -2489,11 +2496,77 @@ section('事件三分类：自然环境 / 突发 / 选择')
 }
 
 // ------------------------------------------------------------
+section('事件工艺奖励与交易')
+{
+  const { state: s, derived: d } = newGame()
+  s.realm = 4
+  s.upgrades.woodworking = true
+  s.upgrades.talismanArt = true
+  s.buildings.forge = { count: 1, on: true }
+  s.buildings.talismanHall = { count: 1, on: true }
+  E.recompute(s, d)
+  d.rates = { ...d.rates, wood: 350, qi: 500, ore: 100, stone: 30 }
+  const rate = E.eventResourceRate(s, d, 'arrayBase')
+  ok('组合工艺奖励可沿木板符箓追溯产能', rate > 0 && rate <= (1 + d.craftBonus) / 4)
+  const low = E.eventOutcome(s, d, { lootRate: { artifact: 30 }, floor: { artifact: 1 } }).rows[0].gained
+  d.craftBonus += 1
+  const high = E.eventOutcome(s, d, { lootRate: { artifact: 30 }, floor: { artifact: 1 } }).rows[0].gained
+  ok('工艺品奖励随制作加成成长', high > low)
+  d.rates.wood = 0
+  ok('工艺产能受上游短板约束', E.eventResourceRate(s, d, 'arrayBase') === 0)
+  s.buildings.forge.count = 0
+  ok('未解锁配方不虚构加工产能', E.eventResourceRate(s, d, 'artifact') === 0)
+
+  const trade = EVENT_MAP.caravan.options[0].effect
+  d.rates.herb = 1
+  s.resources.herb = 0
+  const empty = E.eventOutcome(s, d, trade)
+  s.resources.herb = d.max.herb
+  const stocked = E.eventOutcome(s, d, trade)
+  ok('交易价格不随囤货增加', empty.required.herb === stocked.required.herb)
+  ok('空库存无法领取交易奖励', !empty.affordable && stocked.affordable)
+  d.rates.herb = 100000
+  const capped = E.eventOutcome(s, d, trade)
+  ok('交易价格有仓储比例上限', capped.required.herb <= Math.max(40, d.max.herb * 0.1))
+  d.disasterGuard = 0.9
+  ok('护山减损不抵扣交易用料', E.eventOutcome(s, d, trade).required.herb === capped.required.herb)
+  s.resources.herb = 0
+  s.pendingChoice = { id: 'caravan', at: 0 }
+  const before = JSON.stringify(s.resources)
+  ok('引擎拒绝材料不足的选择并保留待决', E.resolveChoice(s, d, 0) === null && s.pendingChoice?.id === 'caravan')
+  ok('失败交易不扣料、不发奖', JSON.stringify(s.resources) === before)
+  const skip = EVENT_MAP.caravan.options.findIndex(o => o.effect.decline)
+  E.resolveChoice(s, d, skip)
+  ok('不介入可退出且不改变资源', !s.pendingChoice && JSON.stringify(s.resources) === before)
+  s.resources.herb = d.max.herb
+  s.pendingChoice = { id: 'caravan', at: 0 }
+  const expected = E.eventOutcome(s, d, trade)
+  const stocks = { ...s.resources }
+  E.resolveChoice(s, d, 0)
+  ok('付费交易的预览和实际结算相符', expected.rows.every(row => close(s.resources[row.res], (stocks[row.res] || 0) - row.lost + row.gained)))
+  ok('所有选择都有无代价退出选项', EVENTS.filter(e => e.type === 'choice').every(e => e.options.some(o => o.effect.decline)))
+  ok('阵基接入至少三条现有事件', EVENTS.filter(e => e.lootRate?.arrayBase || e.options?.some(o => o.effect.lootRate?.arrayBase)).length >= 3)
+  ok('交易最低用料和产能时长有效', EVENTS.every(e => (e.options || []).every(o => Object.values(o.effect.tradeCost || {}).every(c => c.floor > 0 && c.seconds > 0))))
+}
+
 section('选择类的结算流程')
 // ------------------------------------------------------------
 {
   const { state, derived } = newGame()
   const ev = EVENT_MAP.ancientCave
+  state.resources.wood = 100
+  state.nextEventAt = Date.now() - 1000
+  E.fireEvent(state, derived, ev)
+  ok('选择触发时立即重排计时，避免下个 tick 连发', state.nextEventAt > Date.now())
+  const plannedAt = state.nextEventAt
+  ok('显式触发也不会覆盖未决选择', E.fireEvent(state, derived, EVENT_MAP.stoneStele) === null && state.pendingChoice.id === ev.id)
+  const preview = E.eventOutcome(state, derived, ev.options[0].effect)
+  ok('选择预览包含实际损失', preview.rows.find(r => r.res === 'wood').lost === 12)
+  E.resolveChoice(state, derived, 0)
+  ok('收益与灾损同时结算，不再吞掉损失', state.resources.wood === 88 && state.resources.artifact === 2)
+  ok('结算选择不推迟下一次自然事件', state.nextEventAt === plannedAt)
+  ok('预览与结算的收益一致', preview.rows.every(r => state.resources[r.res] === ({ wood: 100 }[r.res] || 0) - r.lost + r.gained))
+  state.stats.choicesMade = 0
   E.fireEvent(state, derived, ev)
   ok('选择类触发后进入待决，不立即生效', !!state.pendingChoice && state.pendingChoice.id === ev.id,
     JSON.stringify(state.pendingChoice))
@@ -2511,6 +2584,23 @@ section('选择类的结算流程')
   ok('结算应用了所选选项的效果', Object.entries(state.resources).some(([k, v]) => v > (before[k] || 0)))
   ok('结算记了一笔（stats.choicesMade）', state.stats.choicesMade === 1, String(state.stats.choicesMade))
   ok('待决为空时结算不报错', E.resolveChoice(state, derived, 0) === null)
+}
+
+{
+  const { state, derived } = newGame()
+  state.resources.herb = derived.max.herb - 10
+  const herbBefore = state.resources.herb
+  const spec = { costShare: { herb: 0.1 }, disaster: { resources: ['herb'], lossPercent: [0.1, 0.1] }, lootRate: { herb: 100 }, floor: { herb: 100 } }
+  const result = E.eventOutcome(state, derived, spec).rows[0]
+  E.fireEvent(state, derived, { id: 'testMixed', type: 'sudden', text: '混合结算', kind: 'event', ...spec })
+  ok('同资源先付代价再收奖励，预览与结算一致', close(state.resources.herb, herbBefore - result.lost + result.gained))
+  ok('仓储截断在预览中显示', result.overflow > 0 && state.resources.herb === derived.max.herb)
+  state.resources.wood = 100
+  derived.disasterGuard = 0.5
+  const guarded = E.eventOutcome(state, derived, EVENT_MAP.ancientCave.options[0].effect)
+  ok('预览包含护山减损', guarded.rows.find(r => r.res === 'wood').lost === 6)
+  state.disciples.total = derived.maxDisciples
+  ok('满员时预览不会许诺收徒', E.eventOutcome(state, derived, { recruit: 1 }).recruits === 0)
 }
 
 // ------------------------------------------------------------

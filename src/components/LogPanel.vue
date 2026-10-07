@@ -1,13 +1,32 @@
 <script setup>
 import { computed } from 'vue'
-import { state, actions } from '@/game/store'
-import { fmtClock } from '@/game/format'
+import { state, derived, actions } from '@/game/store'
+import { fmtClock, fmtAmount } from '@/game/format'
+import { EVENT_MAP } from '@/data/events'
+import { RESOURCE_MAP } from '@/data/resources'
+import { eventOutcome } from '@/game/engine'
 
 const log = state.log
 const pending = computed(() => {
   const p = state.pendingChoice
   return p ? EVENT_MAP[p.id] : null
 })
+function preview(effect) {
+  if (effect?.decline) return '不消耗物资，不领取奖励'
+  const { rows, recruits, required, affordable } = eventOutcome(state, derived, effect || {})
+  if (!affordable) return '材料不足：' + Object.entries(required)
+    .filter(([res, amount]) => (state.resources[res] || 0) < amount)
+    .map(([res, amount]) => `${RESOURCE_MAP[res].name} 需${fmtAmount(amount)}`).join('，')
+  const parts = []
+  for (const row of rows) {
+    const name = RESOURCE_MAP[row.res]?.name || row.res
+    if (row.lost > 0) parts.push(`${name} −${fmtAmount(row.lost)}`)
+    if (row.gained > 0) parts.push(`${name} +${fmtAmount(row.gained)}`)
+    if (row.overflow > 0) parts.push(`${name} ${fmtAmount(row.overflow)} 装不下`)
+  }
+  if (effect?.recruit) parts.push(recruits ? `弟子 +${recruits}` : '居所已满，无法收徒')
+  return parts.join('，') || '当前无物资变化'
+}
 </script>
 
 <template>
@@ -17,7 +36,7 @@ const pending = computed(() => {
       <button class="link" style="margin-left: 8px" @click="actions.clearLog()">清空纪事</button>
       <span class="hint">共 {{ log.length }} 条</span>
     </div>
-    <!-- 未决的选择类事件：选一个，另一个的代价也要接受（收益 > 代价） -->
+    <!-- 选择只结算所选项；材料不足时可暂不介入。 -->
     <div v-if="pending" class="choice">
       <div class="choice-head">
         <span class="good">抉择</span>
@@ -25,8 +44,9 @@ const pending = computed(() => {
       </div>
       <div class="small dim" style="padding: 2px 0 4px">{{ pending.text }}</div>
       <div v-for="(opt, i) in pending.options" :key="opt.label" class="choice-row">
-        <button class="btn primary" @click="actions.resolveChoice(i)">{{ opt.label }}</button>
+        <button class="btn primary" :disabled="!eventOutcome(state, derived, opt.effect || {}).affordable" @click="actions.resolveChoice(i)">{{ opt.label }}</button>
         <span class="small dim">{{ opt.desc }}</span>
+        <div class="small choice-preview">{{ preview(opt.effect) }}</div>
       </div>
     </div>
 

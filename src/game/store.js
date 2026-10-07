@@ -321,6 +321,13 @@ export const actions = {
     return true
   },
   /** 调试/彩蛋：立刻触发一次奇遇 */
+  resolveChoice(index) {
+    const event = E.resolveChoice(state, derived, index)
+    if (!event) return false
+    afterAction('', '')
+    saveNow()
+    return true
+  },
   triggerEvent() {
     E.fireEvent(state, derived)
     afterAction('', '')

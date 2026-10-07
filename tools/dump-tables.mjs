@@ -164,8 +164,10 @@ emit('| --- | --- | --- | --- | --- | --- | --- | --- |')
     if (spec.buff) out.push(`限时 ${spec.buff.mult > 0 ? '+' : ''}${pct(spec.buff.mult)} ${spec.buff.duration}s${spec.buff.target ? '（仅' + res(spec.buff.target) + '）' : ''}`)
     return out.join('；') || '—'
   }
-  const costs = (spec) => {
-    const out = []
+    const costs = (spec) => {
+      const out = []
+      if (spec.decline) return '不介入，无收益与代价'
+      if (spec.tradeCost) out.push(Object.entries(spec.tradeCost).map(([k, v]) => `${res(k)} ${v.seconds}s产能（最低${v.floor}，至多仓储10%或最低值）`).join('、'))
     if (spec.costShare) out.push(Object.entries(spec.costShare).map(([k, v]) => `${res(k)} −${pct(v)}`).join('、'))
     if (spec.cost) out.push(Object.entries(spec.cost).map(([k, v]) => `${res(k)} −${v}`).join('、'))
     if (spec.disaster) out.push(`掠夺 ${spec.disaster.resources.map(res).join('/')} ${pct(spec.disaster.lossPercent[0])}~${pct(spec.disaster.lossPercent[1])}`)

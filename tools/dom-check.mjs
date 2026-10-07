@@ -977,6 +977,28 @@ const raw = JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1'))
 ok('存档结构完整', !!(raw.resources && raw.disciples && raw.stats && raw.buildings))
 
 // ---------- 6. 报错检查 ----------
+console.log('\n== 事件选择 ==')
+state.resources.wood = 100
+engine.recompute(state, derived)
+engine.fireEvent(state, derived, { id: 'ancientCave', type: 'choice', text: '发现古洞' })
+await new Promise((r) => setTimeout(r, 50))
+ok('未决选择正常渲染', !!window.document.querySelector('.choice'))
+ok('选择展示实际代价', window.document.querySelector('.choice-preview')?.textContent.includes('灵木 −12'))
+window.document.querySelector('.choice-row button')?.click()
+await new Promise((r) => setTimeout(r, 50))
+ok('点击选择清除待决并扣除代价', !state.pendingChoice && state.resources.wood === 88)
+ok('选择结算立即保存', JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).pendingChoice === null)
+ok('选择结算后按钮消失', !window.document.querySelector('.choice'))
+state.resources.herb = 0
+engine.fireEvent(state, derived, { id: 'caravan', type: 'choice', text: '商队到访' })
+await new Promise((r) => setTimeout(r, 50))
+ok('不足用料的交易选项禁用且说明所需材料', window.document.querySelector('.choice-row button')?.disabled && window.document.querySelector('.choice-preview')?.textContent.includes('材料不足'))
+const decline = [...window.document.querySelectorAll('.choice-row button')].find(b => b.textContent === '暂不介入')
+ok('材料不足时仍可不介入', !!decline && !decline.disabled)
+decline?.click()
+await new Promise((r) => setTimeout(r, 50))
+ok('不介入按钮可正常结束事件', !state.pendingChoice && !window.document.querySelector('.choice'))
+
 console.warn = origWarn
 console.error = origError
 

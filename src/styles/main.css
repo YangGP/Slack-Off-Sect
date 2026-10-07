@@ -986,7 +986,11 @@ textarea {
 }
 .choice-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: baseline;
   padding: 3px 0;
+}
+.choice-preview {
+  flex-basis: 100%;
 }

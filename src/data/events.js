@@ -4,13 +4,14 @@
  * **三类**（`type` 字段）：
  *   nature  自然环境类 —— 主要影响**全局产出**，有正有负，持续一段时间（`buff`）
  *   sudden  突发事件类 —— 立刻结算：发现遗迹资源 / 顿悟得感悟 / 丢失物资（`lootRate` / `disaster` / `recruit`）
- *   choice  选择类     —— 停下来让玩家选一个：**有所得，也要接受另一面的代价**（收益 > 代价）
+ *   choice  选择类     —— 权衡收益与代价，或暂不介入
  *
  * `kind` 保留作"色调"（good / bad），界面据此上色；`type` 决定机制。
  *
  * 事件只做"声明"，效果由 engine 解释执行：
  *   buff      临时增益（全局或指定资源），可叠加，取总和
- *   lootRate  按"当前每秒产出的多少秒"发放资源，同时给出保底值
+ *   lootRate  按生产/加工产能的秒数发放资源，同时给出保底值
+ *   tradeCost 按产能秒数定价，设最低用料与仓储10%上限；必须足额支付
  *   disaster  按比例掠夺资源，受 disasterGuard 减免，并记入 stats.disasters
  *   recruit   白捡一名弟子（不超过上限）
  *
@@ -148,9 +149,9 @@ export const EVENTS = [
     weight: 5,
     kind: 'good',
     minRealm: 4,
-    text: '山腹塌了一角，露出前朝洞府的残门 —— 里面还留着几件东西。',
-    lootRate: { artifact: 30, talisman: 60, stone: 200 },
-    floor: { artifact: 2, talisman: 4, stone: 60 },
+    text: '山腹塌了一角，露出前朝洞府的残门 —— 里面还留着几件器物和一座阵基。',
+    lootRate: { artifact: 30, talisman: 60, stone: 200, arrayBase: 12 },
+    floor: { artifact: 2, talisman: 4, stone: 60, arrayBase: 1 },
   },
   {
     id: 'scrapScroll',
@@ -248,7 +249,7 @@ export const EVENTS = [
       {
         label: '封洞不启',
         desc: '稳妥收场：只在洞口外围采得灵草；为安抚人心，耗去一些香火。',
-        effect: { lootRate: { herb: 260 }, floor: { herb: 260 }, costShare: { faith: 0.15 } },
+        effect: { lootRate: { herb: 260 }, floor: { herb: 260 }, tradeCost: { faith: { seconds: 90, floor: 10 } } },
       },
     ],
   },
@@ -263,13 +264,13 @@ export const EVENTS = [
     options: [
       {
         label: '收为客卿',
-        desc: '白得一位好手（弟子 +1）；但客卿嘴刁，要耗一批丹药。',
-        effect: { recruit: 1, lootRate: { insight: 200 }, floor: { insight: 80 }, costShare: { pill: 0.15 } },
+        desc: '得一位好手（弟子 +1）与感悟；但客卿嘴刁，要备一批丹药。',
+        effect: { recruit: 1, lootRate: { insight: 200 }, floor: { insight: 80 }, tradeCost: { pill: { seconds: 90, floor: 2 } } },
       },
       {
         label: '婉言谢过',
         desc: '不留人，只求他讲一段见闻：得感悟；临别赠灵石作路费。',
-        effect: { lootRate: { insight: 400 }, floor: { insight: 400 }, costShare: { stone: 0.08 } },
+        effect: { lootRate: { insight: 400 }, floor: { insight: 400 }, tradeCost: { stone: { seconds: 48, floor: 5 } } },
       },
     ],
   },
@@ -317,13 +318,13 @@ export const EVENTS = [
         effect: {
           lootRate: { insight: 1200 },
           floor: { insight: 400 },
-          disaster: { resources: ['talisman'], lossPercent: [0.2, 0.2] },
+          tradeCost: { talisman: { seconds: 120, floor: 2 } },
         },
       },
       {
         label: '拓印存录',
-        desc: '把碑文拓下藏进经阁：得符箓与木板；但拓印要耗感悟。',
-        effect: { lootRate: { talisman: 20, plank: 6 }, floor: { talisman: 6, plank: 3 }, costShare: { insight: 0.06 } },
+        desc: '把碑文拓下藏进经阁：得符箓、木板与阵基；但拓印要耗感悟。',
+        effect: { lootRate: { talisman: 20, plank: 6, arrayBase: 8 }, floor: { talisman: 6, plank: 3, arrayBase: 1 }, tradeCost: { insight: { seconds: 36, floor: 10 } } },
       },
     ],
   },
@@ -339,7 +340,7 @@ export const EVENTS = [
       {
         label: '带回医治',
         desc: '幼兽康复后替宗门采药：灵草 +大；但疗伤耗去一批丹药。',
-        effect: { lootRate: { herb: 500 }, floor: { herb: 500 }, costShare: { pill: 0.2 } },
+        effect: { lootRate: { herb: 500 }, floor: { herb: 500 }, tradeCost: { pill: { seconds: 120, floor: 2 } } },
       },
       {
         label: '放归山林',
@@ -363,11 +364,11 @@ export const EVENTS = [
     options: [
       {
         label: '以药换铁',
-        desc: '换得玄铁与灵石；但灵草被换走一大半。',
+        desc: '用一批灵草换得玄铁、灵石与阵基，交易按当前产能定价。',
         effect: {
-          lootRate: { ore: 400, stone: 300 },
-          floor: { ore: 100, stone: 80 },
-          disaster: { resources: ['herb'], lossPercent: [0.15, 0.15] },
+          lootRate: { ore: 120, stone: 90, arrayBase: 8 },
+          floor: { ore: 100, stone: 30, arrayBase: 1 },
+          tradeCost: { herb: { seconds: 90, floor: 40 } },
         },
       },
       {
@@ -417,7 +418,7 @@ export const EVENTS = [
         effect: {
           lootRate: { insight: 3000, artifact: 120 },
           floor: { insight: 1500, artifact: 20 },
-          costShare: { pill: 0.25, faith: 0.15 },
+          tradeCost: { pill: { seconds: 150, floor: 2 }, faith: { seconds: 90, floor: 10 } },
         },
       },
       {
@@ -446,7 +447,7 @@ export const EVENTS = [
         effect: {
           lootRate: { qi: 4000, stone: 1500 },
           floor: { qi: 8000, stone: 400 },
-          costShare: { wood: 0.25, herb: 0.25 },
+          tradeCost: { wood: { seconds: 150, floor: 40 }, herb: { seconds: 150, floor: 40 } },
         },
       },
       {
@@ -475,7 +476,7 @@ export const EVENTS = [
         effect: {
           lootRate: { spiritArtifact: 12, steel: 400 },
           floor: { spiritArtifact: 3, steel: 80 },
-          costShare: { artifact: 0.3, talisman: 0.2 },
+          tradeCost: { artifact: { seconds: 180, floor: 2 }, talisman: { seconds: 120, floor: 2 } },
         },
       },
       {
@@ -484,7 +485,7 @@ export const EVENTS = [
         effect: {
           lootRate: { insight: 6000, talisman: 200 },
           floor: { insight: 3000, talisman: 30 },
-          costShare: { pill: 0.2 },
+          tradeCost: { pill: { seconds: 120, floor: 2 } },
         },
       },
     ],
@@ -504,7 +505,7 @@ export const EVENTS = [
         effect: {
           lootRate: { nineTurnPill: 20, immortalHerb: 300 },
           floor: { nineTurnPill: 4, immortalHerb: 80 },
-          costShare: { pill: 0.25, herb: 0.2 },
+          tradeCost: { pill: { seconds: 150, floor: 2 }, herb: { seconds: 120, floor: 40 } },
         },
       },
       {
@@ -529,11 +530,11 @@ export const EVENTS = [
     options: [
       {
         label: '接下这一局',
-        desc: '赢得灵宝与一炉湮灭灵能（灵能会逸散，转瞬即逝）；但押上的灵器与九转丹若输了就没了。',
+        desc: '以灵器和九转丹换一局斗法，得灵宝与一炉湮灭灵能（灵能会逸散）；押上的材料会消耗。',
         effect: {
           lootRate: { spiritTreasure: 4, qiEnergy: 300 },
           floor: { spiritTreasure: 1, qiEnergy: 60 },
-          costShare: { spiritArtifact: 0.3, nineTurnPill: 0.3 },
+          tradeCost: { spiritArtifact: { seconds: 180, floor: 1 }, nineTurnPill: { seconds: 180, floor: 1 } },
         },
       },
       {
@@ -542,7 +543,7 @@ export const EVENTS = [
         effect: {
           lootRate: { insight: 12000 },
           floor: { insight: 6000 },
-          costShare: { spiritTalisman: 0.2 },
+          tradeCost: { spiritTalisman: { seconds: 120, floor: 1 } },
         },
       },
     ],
@@ -562,7 +563,7 @@ export const EVENTS = [
         effect: {
           lootRate: { insight: 20000, faith: 6000 },
           floor: { insight: 10000, faith: 2000 },
-          costShare: { stone: 0.3, spiritTalisman: 0.25 },
+          tradeCost: { stone: { seconds: 180, floor: 5 }, spiritTalisman: { seconds: 150, floor: 1 } },
         },
       },
       {
@@ -571,13 +572,20 @@ export const EVENTS = [
         effect: {
           lootRate: { artifact: 300, spiritArtifact: 20 },
           floor: { artifact: 60, spiritArtifact: 5 },
-          costShare: { pill: 0.3, herb: 0.25 },
+          tradeCost: { pill: { seconds: 180, floor: 2 }, herb: { seconds: 150, floor: 40 } },
         },
       },
     ],
   },
 
-]
+].map(event => event.type === 'choice' ? {
+  ...event,
+  options: [...event.options, {
+    label: '暂不介入',
+    desc: '照常经营宗门，放过这次机会。',
+    effect: { decline: true },
+  }],
+} : event)
 
 export const EVENT_MAP = Object.fromEntries(EVENTS.map((e) => [e.id, e]))
 
@@ -588,4 +596,3 @@ export const EVENT_TYPES = [
   { id: 'choice', name: '选择', hint: '选一个：有所得，也要接受另一面的代价' },
 
 ]
-
