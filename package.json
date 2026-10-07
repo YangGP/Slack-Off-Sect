@@ -16,7 +16,8 @@
     "check:encoding": "node tools/check-encoding.mjs",
     "audit": "vite build --ssr tools/resource-audit.mjs --outDir .smoke-audit --emptyOutDir && node .smoke-audit/resource-audit.js",
     "balance": "vite build --ssr tools/balance.mjs --outDir .smoke-balance --emptyOutDir && node .smoke-balance/balance.js",
-    "docs:tables": "node tools/dump-tables.mjs"
+    "docs:tables": "node tools/dump-tables.mjs",
+    "early": "vite build --ssr tools/early-audit.mjs --outDir .early --emptyOutDir && node .early/early-audit.js"
   },
   "dependencies": {
     "vue": "^3.5.43"

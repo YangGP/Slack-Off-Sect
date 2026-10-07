@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { REALMS, ASCEND_REALM_INDEX } from '@/data/realms'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { realmCost, canAfford } from '@/game/engine'
 import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
 import { costLabel, enough as enoughOf } from '@/game/pricing'
@@ -24,6 +24,8 @@ const perPersonUpkeep = computed(() =>
 const affordable = computed(() => (cost.value ? canAfford(state, cost.value) : false))
 const gain = computed(() => view.ascendGain.value)
 const canAscend = computed(() => view.canAscend.value)
+const reincarnateGain = computed(() => view.reincarnateGain.value)
+const canReincarnate = computed(() => view.canReincarnate.value)
 
 function resName(id) {
   return RESOURCE_MAP[id]?.name || id
@@ -34,6 +36,17 @@ function ascend() {
     `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gain.value} 点仙缘（永久的全局加成）。确定吗？`,
   )
   if (ok) actions.ascend()
+}
+
+/**
+ * 转世：化神期起可做，清空范围与飞升**完全一样**（连修真/技艺·法宝也不保留），
+ * 只结算仙缘 —— 门槛低所以到手少（化神期约 22 点，渡劫期飞升约 197 点）。
+ */
+function reincarnate() {
+  const ok = window.confirm(
+    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGain.value} 点仙缘。\n如果继续修到渡劫期再飞升，同一套公式能拿到更多（当前可飞升时约 ${gain.value} 点）。确定转世吗？`,
+  )
+  if (ok) actions.reincarnate()
 }
 </script>
 
@@ -166,9 +179,22 @@ function ascend() {
             <td class="dim nowrap">本次可得仙缘</td>
             <td class="num good">{{ gain }} 点</td>
             <td class="dim nowrap">飞升后仙缘加成</td>
-            <td class="num">×{{ (1 + (state.karma + gain) * 0.02).toFixed(2) }}（每点 +2%）</td>
+            <td class="num">每点 +2%，超出 150 点后递减（上限 +200%）</td>
             <td class="dim nowrap">已飞升</td>
             <td class="num">{{ state.stats.ascensions }} 次</td>
+          </tr>
+          <tr>
+            <td class="dim nowrap">道果</td>
+            <td class="num">{{ fmtInt(state.dao || 0) }} 颗（×{{ derived.daoMult.toFixed(2) }}）</td>
+            <td class="dim nowrap">已转世</td>
+            <td class="num">
+              {{ state.stats.reincarnations }} 次
+              <span v-if="view.reincarnationsNeeded.value > 0" class="dim">
+                （飞升还需 {{ view.reincarnationsNeeded.value }} 次）
+              </span>
+            </td>
+            <td class="dim nowrap">仙缘软上限</td>
+            <td class="num dim">最多 +200%（超出递减）</td>
           </tr>
         </tbody>
       </table>
@@ -178,10 +204,32 @@ function ascend() {
         保留：成就（每条 +2% 全局）、仙缘、累计统计与宗门纪事。
       </div>
 
+      <div class="dim" style="margin-top: 10px">
+        转世<span class="hint">化神期起可做：清空范围与飞升相同，只结算仙缘</span>
+      </div>
+      <div class="tip-row" style="margin: 4px 0 8px">
+        <span class="k">转世可得仙缘</span>
+        <span class="v">{{ reincarnateGain }}</span>
+        <span class="k" style="margin-left: 14px">转世门槛</span>
+        <span class="v" :class="canReincarnate ? 'good' : 'dim'">
+          {{ canReincarnate ? '已达成' : REALMS[REINCARNATE_REALM_INDEX].name }}
+        </span>
+      </div>
+      <button class="btn" :disabled="!canReincarnate" @click="reincarnate">
+        转世（获得仙缘 {{ reincarnateGain }}）
+      </button>
+      <div v-if="!canReincarnate" class="dim" style="margin-top: 6px">
+        还需修到「{{ REALMS[REINCARNATE_REALM_INDEX].name }}」才能转世。
+      </div>
+
       <button class="btn danger" :disabled="!canAscend" @click="ascend">
         飞升（获得仙缘 {{ gain }}）
       </button>
-      <span v-if="!canAscend" class="small dim">
+      <span v-if="!canAscend && view.reincarnationsNeeded.value > 0" class="small dim">
+        飞升还需先转世 {{ view.reincarnationsNeeded.value }} 次（当前已转世
+        {{ state.stats.reincarnations }} 次）。
+      </span>
+      <span v-else-if="!canAscend" class="small dim">
         还需修到「{{ REALMS[ASCEND_REALM_INDEX].name }}」才能飞升。
       </span>
     </div>

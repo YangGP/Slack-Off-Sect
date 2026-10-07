@@ -6,7 +6,7 @@ import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { TECHNIQUES } from '@/data/techniques'
 import { CRAFTS, CRAFT_MAP, craftTime } from '@/data/crafts'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '@/data/achievements'
-import { REALMS, ASCEND_REALM_INDEX } from '@/data/realms'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { EVENTS } from '@/data/events'
 import { CALENDAR, TERMS, SEASONS, DAYS_PER_SEASON, DAYS_PER_YEAR } from '@/data/calendar'
 
@@ -17,6 +17,21 @@ export function clamp(v, min, max) {
 }
 
 /** 派生数据的初始结构（不存档，每帧重算） */
+/**
+ * 软上限（通用 idler 形状）：前 75% 原样给，剩下的渐近到 limit 但永远不到。
+ *   softCap(x, L)：x ≤ 0.75L 时返回 x；否则 0.75L + 0.25L·(1 − 0.25L/(x − 0.5L))
+ * 例：L = 2 时，x = 2 → 1.60，x = 10 → 1.94，x = ∞ → 2.00。
+ */
+export function softCap(x, limit) {
+  const free = 0.75 * limit
+  const abs = Math.abs(x)
+  if (abs <= free) return x
+  const over = abs - free
+  const delta = 0.25 * limit
+  const capped = free + (1 - delta / (over + delta)) * delta
+  return x < 0 ? -capped : capped
+}
+
 export function createDerived() {
   return {
     max: {},
@@ -38,6 +53,8 @@ export function createDerived() {
     globalMult: 1,
     realmMult: 1,
     karmaMult: 1,
+    /** 道果带来的全局产出倍率（飞升层） */
+    daoMult: 1,
     craftBonus: 0,
     disasterGuard: 0,
     ascendBonus: 0,
@@ -565,8 +582,16 @@ export function recompute(state, derived) {
   }
 
   const realmMult = REALMS[state.realm]?.mult ?? 1
-  const karmaMult = 1 + state.karma * (0.02 + acc.karmaRatio)
-  const globalMult = realmMult * karmaMult * moraleMult * (1 + buffAll)
+  /**
+   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
+   * 这是通用 idler 的 soft cap 形状：early 不打折、late 不膨胀。
+   */
+  const karmaRaw = Math.max(0, state.karma || 0) * CONFIG.KARMA_BONUS_PER_POINT
+  const karmaBonus = softCap(karmaRaw, CONFIG.KARMA_BONUS_CAP)
+  const karmaMult = 1 + karmaBonus + acc.karmaRatio
+  /** 道果（飞升层）：每颗 +5% 全局产出，不设上限 —— 因为拿到它的成本极高（一次飞升约 90 小时） */
+  const daoMult = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_PRODUCTION_BONUS
+  const globalMult = realmMult * karmaMult * moraleMult * daoMult * (1 + buffAll)
 
   // 历法：季节直接乘进对应资源的产出（与建筑 / 修真的 ratio 同一层）
   const calendar = calendarAt(state.totalDays)
@@ -677,6 +702,7 @@ export function recompute(state, derived) {
   derived.maxDisciples = Math.floor(acc.maxDisciples)
   derived.globalMult = globalMult
   derived.realmMult = realmMult
+  derived.daoMult = daoMult
   derived.karmaMult = karmaMult
   derived.ratioAll = acc.ratioAll
   derived.craftBonus = acc.craftBonus
@@ -1081,16 +1107,50 @@ export function breakthrough(state, derived) {
   return true
 }
 
+/**
+ * 飞升的两个条件：**渡劫期** + **已经转世过若干次**（CONFIG.ASCEND_MIN_REINCARNATIONS）。
+ * 加后半条是为了把飞升"定高"：玩家必须先玩转世循环，而不是一局直冲到底。
+ */
 export function canAscend(state) {
-  return state.realm >= ASCEND_REALM_INDEX
+  return state.realm >= ASCEND_REALM_INDEX && reincarnationsDone(state) >= CONFIG.ASCEND_MIN_REINCARNATIONS
 }
 
-export function ascensionGain(state, derived) {
+/** 已经转世过几次 */
+export function reincarnationsDone(state) {
+  return Math.max(0, state.stats?.reincarnations || 0)
+}
+
+/** 距离飞升还差几次转世（已够则 0） */
+export function reincarnationsNeeded(state) {
+  return Math.max(0, CONFIG.ASCEND_MIN_REINCARNATIONS - reincarnationsDone(state))
+}
+
+/** 转世的门槛：化神期（比飞升早得多） */
+export function canReincarnate(state) {
+  return state.realm >= REINCARNATE_REALM_INDEX
+}
+
+/**
+ * 仙缘结算公式（转世与飞升共用）：
+ *   sqrt(本世累计感悟 ÷ 2000) × (1 + 境界 × 0.3) × (1 + 飞升加成)
+ * 于是「越晚结算越值钱」是自动的：化神期约 22 点、渡劫期约 197 点。
+ */
+function settleKarma(state, derived, allowed) {
   const insight = Math.max(0, state.stats.lifeInsight || 0)
   const base = Math.sqrt(insight / 2000)
   const realmFactor = 1 + state.realm * 0.3
-  const gain = base * realmFactor * (1 + derived.ascendBonus)
-  return Math.max(canAscend(state) ? 1 : 0, Math.floor(gain))
+  const daoBonus = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_KARMA_GAIN_BONUS
+  const gain = base * realmFactor * (1 + derived.ascendBonus) * daoBonus
+  return Math.max(allowed ? 1 : 0, Math.floor(gain))
+}
+
+export function ascensionGain(state, derived) {
+  return settleKarma(state, derived, canAscend(state))
+}
+
+/** 转世能拿多少仙缘（同一公式，门槛更低所以到手更少） */
+export function reincarnationGain(state, derived) {
+  return settleKarma(state, derived, canReincarnate(state))
 }
 
 // ============================================================

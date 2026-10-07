@@ -7,7 +7,12 @@
  *   node .smoke/smoke.mjs
  * 或者（无沙箱限制时）直接用 npm run smoke
  */
-import { createInitialState, normalizeState, resetForAscension } from '../src/game/state.js'
+import {
+  createInitialState,
+  normalizeState,
+  resetForAscension,
+  resetForReincarnation,
+} from '../src/game/state.js'
 import { createBot } from './player-bot.mjs'
 import { fmt, fmtAmount, fmtCost, fmtFixed, fmtInt, fmtResource, fmtStock } from '../src/game/format.js'
 import * as E from '../src/game/engine.js'
@@ -19,7 +24,7 @@ import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
 import { ACHIEVEMENTS } from '../src/data/achievements.js'
 import { EVENTS } from '../src/data/events.js'
-import { REALMS, ASCEND_REALM_INDEX } from '../src/data/realms.js'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '../src/data/realms.js'
 import { SEASONS, CALENDAR } from '../src/data/calendar.js'
 import { CONFIG } from '../src/data/config.js'
 import { exportSave, parseImport } from '../src/game/save.js'
@@ -249,24 +254,26 @@ section('初始状态：什么都没有（对标猫国开局）')
   ok('开局士气 100', derived.morale === 100)
 
   // 点一下「吸取天地灵气」
-  ok('没有聚灵阵时每次点击 +1 灵气', close(E.clickGain(state, derived), 1, 1e-9))
+  // 前期按猫国力度收紧后：一次点击 +2.5，第一座聚灵阵 25 → 正好 10 下（猫国是 10 猫薄荷一座猫薄荷田）
+  ok('没有聚灵阵时每次点击 +2.5 灵气', close(E.clickGain(state, derived), 2.5, 1e-9))
   E.drawQi(state, derived)
-  ok('吸取一次得到 1 灵气', close(state.resources.qi, 1, 1e-9))
+  ok('吸取一次得到 2.5 灵气', close(state.resources.qi, 2.5, 1e-9))
   ok('点击次数记在统计里', state.stats.clicks === 1)
-  ok('点 12 下攒得出第一座聚灵阵', close(E.BUILDING_MAP.spiritField.cost.qi, 12, 1e-9))
+  ok('点 10 下攒得出第一座聚灵阵（25 ÷ 2.5）', close(E.BUILDING_MAP.spiritField.cost.qi, 25, 1e-9))
 
   // 聚灵阵是第一座建筑，也是第一个产出源
-  state.resources.qi = 12
+  state.resources.qi = 25
   E.trackPeak(state)
   ok('灵气够了就能建聚灵阵', E.buyBuilding(state, derived, 'spiritField', 1) === 1)
   ok('聚灵阵产出灵气（春季 +20% 后 0.36/s）', close(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
-  ok('有聚灵阵后点击收益提高到 1.5', close(E.clickGain(state, derived), 1.5, 1e-9))
+  ok('有聚灵阵后点击收益提高到 3.0', close(E.clickGain(state, derived), 3, 1e-9))
 
-  // 茅屋：第一间房子花「炼出来的资源」（灵石），对标猫国小屋花木材
+  // 茅屋：第一间房子花「吸来的灵气 + 炼出来的灵石」，并且要先有一座聚灵阵（对标猫国小屋）
   const hut = E.BUILDING_MAP.hut
   ok('茅屋要灵气 + 灵石', (hut.cost.qi || 0) > 0 && (hut.cost.stone || 0) > 0, JSON.stringify(hut.cost))
-  state.resources.qi = 40
-  state.resources.stone = 1
+  ok('茅屋要一座聚灵阵（第 1 分钟只有聚灵阵可选）', !!hut.needs?.building, JSON.stringify(hut.needs))
+  state.resources.qi = 80
+  state.resources.stone = 4
   E.trackPeak(state)
   ok('材料齐了能建茅屋', E.buyBuilding(state, derived, 'hut', 1) === 1)
   ok('茅屋把弟子上限抬到 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
@@ -323,16 +330,17 @@ section('渐进露出（对标猫国的 unlockRatio）')
   const { state, derived } = newGame()
   // 猫国也是这个逻辑：猫薄荷田要 10 猫薄荷，攒到 3（30%）才出现在列表里
   ok('开局 0 灵气时，连聚灵阵都还没露面', !E.isBuildingUnlocked(state, 'spiritField'))
-  state.resources.qi = 4 // 聚灵阵要 12 → 门槛 3.6
+  state.resources.qi = 8 // 聚灵阵要 25 → 门槛 7.5
   E.trackPeak(state)
   ok('攒到成本的 30% 时聚灵阵出现', E.isBuildingUnlocked(state, 'spiritField'))
 
-  // 茅屋没有硬条件，只看水位：要灵气 40（门槛 12）+ 灵石 1（门槛 0.3）
+  // 茅屋：硬条件是「聚灵阵 ≥1」；水位条件是灵气 80（门槛 24）+ 灵石 4（门槛 1.2）
+  state.buildings.spiritField = { count: 1, on: true }
   state.resources.qi = 30
   E.trackPeak(state)
-  ok('只满足一半花费时仍不露面', !E.isBuildingUnlocked(state, 'hut'))
-  state.peak.stone = 0.3
-  ok('两种花费的水位都到 30% 才露面', E.isBuildingUnlocked(state, 'hut'))
+  ok('硬条件满足、水位只到一半时仍不露面', !E.isBuildingUnlocked(state, 'hut'))
+  state.peak.stone = 1.2
+  ok('硬条件 + 两种花费的水位都到 30% 才露面', E.isBuildingUnlocked(state, 'hut'))
 
   // 花光资源也不会缩回去（用历史峰值判定，避免列表跳动）
   state.resources.qi = 0
@@ -342,11 +350,28 @@ section('渐进露出（对标猫国的 unlockRatio）')
 }
 
 // ------------------------------------------------------------
-section('整枚计数的资源不出现小数（灵石/丹药/符箓/法器）')
+// 配方的「自举」检查：解锁建筑不能要这条配方的产出，否则第一份永远做不出来
+// （木板那次就是这么卡死的：木板配方要百工坊，而百工坊造价里又有木板）
+{
+  const bad = []
+  for (const c of CRAFTS) {
+    const gate = c.needs?.building && BUILDING_MAP[c.needs.building.id]
+    if (!gate) continue
+    const res = Object.keys(gate.cost).filter((r) => r === c.out)
+    if (res.length) bad.push(`${c.name}（要 ${gate.name}，而 ${gate.name} 又要 ${c.out}）`)
+  }
+  ok('配方的解锁建筑不能要它自己的产出（自举检查）', bad.length === 0, bad.join('；'))
+}
+
+section('整枚计数的资源不出现小数（灵石/丹药/符箓/法器/木板）')
 // ------------------------------------------------------------
 {
   const ints = E.RESOURCES.filter((r) => r.integer).map((r) => r.id)
-  ok('数据里标了整枚计数的资源', ints.length === 4, ints.join(','))
+  ok(
+    '数据里标了整枚计数的资源（灵石/丹药/符箓/法器/木板）',
+    ints.includes('stone') && ints.includes('pill') && ints.includes('talisman') && ints.includes('artifact') && ints.includes('plank'),
+    ints.join(','),
+  )
   ok(
     '正好是灵石 / 丹药 / 符箓 / 法器',
     ['stone', 'pill', 'talisman', 'artifact'].every((id) => ints.includes(id)),
@@ -453,6 +478,7 @@ section('建造 / 拆除 / 停用')
 // ------------------------------------------------------------
 {
   const { state, derived } = newGame()
+  state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
   state.resources.qi = 1000
   state.resources.stone = 100
   E.trackPeak(state)
@@ -460,14 +486,14 @@ section('建造 / 拆除 / 停用')
   const before = { qi: state.resources.qi, stone: state.resources.stone }
   const built = E.buyBuilding(state, derived, 'hut', 1)
   ok('建成 1 座茅屋', built === 1 && E.countOf(state, 'hut') === 1)
-  ok('扣除灵气 40', close(before.qi - state.resources.qi, 40, 1e-6))
-  ok('扣除灵石 1（第一间屋子花「炼出来的资源」）', close(before.stone - state.resources.stone, 1, 1e-6))
+  ok('扣除灵气 80', close(before.qi - state.resources.qi, 80, 1e-6))
+  ok('扣除灵石 4（第一间屋子花「炼出来的资源」）', close(before.stone - state.resources.stone, 4, 1e-6))
   ok('弟子上限 0 → 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
   ok('仓储上限提升（灵气 +60）', derived.max.qi === 560, `实际 ${derived.max.qi}`)
   ok('建造计数已记录', state.stats.buildingsBuilt === 1)
 
   const second = E.buildingCost(state, 'hut', 1)
-  ok('第二座更贵（价格递增）', second.qi > 40, `实际 ${second.qi}`)
+  ok('第二座更贵（价格递增）', second.qi > 80, `实际 ${second.qi}`)
 
   const affordable = E.maxAffordable(state, 'hut')
   ok('maxAffordable 返回合理数量', affordable >= 1 && affordable < 200, `实际 ${affordable}`)
@@ -651,6 +677,7 @@ section('进项来源明细')
     // 生效检查：建 1 座库房，基础物资的上限按表抬高，其它资源一律不动
     const { state: s4, derived: d4 } = newGame()
     s4.buildings.lumberYard = { count: 3, on: true }
+    s4.upgrades.earthArt = true // 库房现在挂在「土木术」后面
     E.recompute(s4, d4)
     const before = { ...d4.max }
     s4.resources.wood = 5000
@@ -815,6 +842,9 @@ section('弟子自动前来')
 
   state.resources.qi = 2000
   state.resources.stone = 100
+  state.resources.qi = 2000
+  state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
+  state.buildings.granary = { count: 20, on: true } // 抬灵气上限，才买得起一次九座
   E.buyBuilding(state, derived, 'hut', 1) // 上限 2
   const interval = E.arrivalInterval(derived)
   ok('间隔取配置值', close(interval, 15, 1e-9), `实际 ${interval}`)
@@ -1286,7 +1316,9 @@ section('成就')
   const { state, derived } = newGame()
   state.resources.qi = 50000
   state.resources.wood = 50000
-  state.resources.stone = 500
+  state.resources.stone = 5000 // 九座茅屋的灵石合计 600+，给足
+  state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
+  state.buildings.granary = { count: 20, on: true } // 抬灵气上限，一次九座才买得起
   E.buyBuilding(state, derived, 'hut', 1)
   E.checkAchievements(state, derived)
   ok('达成「立锥之地」', state.achievements.firstHut === true)
@@ -1322,6 +1354,7 @@ section('修真·技艺 / 境界 / 飞升')
   state.resources.wood = 5000
   state.resources.stone = 500
   state.resources.herb = 500
+  state.buildings.spiritField = { count: 3, on: true } // 藏经阁现在要三座聚灵阵，且不要灵草
   E.buyBuilding(state, derived, 'hut', 1)
   E.buyBuilding(state, derived, 'library', 1)
   ok('建成藏经阁后出现技艺', derived.availableUpgrades.includes('qiArt'))
@@ -1332,9 +1365,10 @@ section('修真·技艺 / 境界 / 飞升')
   // 引气诀 +10% 要作用在产出源上才看得出来：先补一座聚灵阵
   state.resources.qi = 100
   E.buyBuilding(state, derived, 'spiritField', 1)
+  const fields = E.countOf(state, 'spiritField')
   ok(
-    '灵气产出加成生效（聚灵阵 0.3 × 引气诀 1.1 × 春季 1.2）',
-    close(derived.rates.qi, 0.3 * 1.1 * 1.2, 1e-6),
+    `灵气产出加成生效（聚灵阵 ${fields} × 0.3 × 引气诀 1.1 × 春季 1.2）`,
+    close(derived.rates.qi, fields * 0.3 * 1.1 * 1.2, 1e-6),
     `实际 ${derived.rates.qi}`,
   )
 
@@ -1362,7 +1396,9 @@ section('修真·技艺 / 境界 / 飞升')
     s2.resources.herb = 1e6
   }
   ok('可修到渡劫期', s2.realm === ASCEND_REALM_INDEX, `实际 ${s2.realm}`)
-  ok('可飞升', E.canAscend(s2) === true)
+  ok('渡劫期但转世不足时还不能飞升', E.canAscend(s2) === false, '还需转世 ' + E.reincarnationsNeeded(s2) + ' 次')
+  s2.stats.reincarnations = CONFIG.ASCEND_MIN_REINCARNATIONS
+  ok('转世满 ' + CONFIG.ASCEND_MIN_REINCARNATIONS + ' 次即可飞升', E.canAscend(s2) === true)
 
   s2.stats.lifeInsight = 2e6
   const gain = E.ascensionGain(s2, d2)
@@ -1489,8 +1525,9 @@ section('模拟玩家（机器人）短跑')
   const producedAt = { ore: null, herb: null }
   const prevRes = { ...state.resources }
   try {
-    // 跑 1 小时：足够铺出藏经阁并参悟出第一批技艺（感悟产出调低后需要更久）
-    for (let t = 1; t <= 3600; t++) {
+    // 跑 2 小时：前期按猫国力度收紧后，药圃/玄铁矿要先研究出「灵植术/探矿术」，
+    // 第一座吃料的建筑（炼丹房/炼器坊）也随之后移，所以观察窗放到 2 小时
+    for (let t = 1; t <= 7200; t++) {
       E.tick(state, derived, 1, { events: false })
       if (t % 5 === 0) bot.act()
       if (t % 60 === 0) E.recompute(state, derived)
@@ -1510,8 +1547,8 @@ section('模拟玩家（机器人）短跑')
     ['herb', '灵草'],
   ]) {
     ok(
-      `1 小时内${name}就被用上了（产出到消耗不超过 20 分钟）`,
-      firstSpend[id] !== null && firstSpend[id] - (producedAt[id] || 0) <= 20 * 60,
+      `${name}产出后 90 分钟内被用上`,
+      firstSpend[id] !== null && firstSpend[id] - (producedAt[id] || 0) <= 90 * 60,
       producedAt[id] === null
         ? '整局没有产出'
         : `产出 ${Math.round(producedAt[id] / 60)} 分 → 花掉 ${firstSpend[id] === null ? '（没花掉）' : Math.round(firstSpend[id] / 60) + ' 分'}`,
@@ -1592,8 +1629,8 @@ section('长时挂机稳定性')
   state.resources.ore = 5000
   state.resources.pill = 500
   state.resources.artifact = 500
+  E.buyBuilding(state, derived, 'spiritField', 5) // 先有聚灵阵，茅屋与藏经阁才立得住
   E.buyBuilding(state, derived, 'hut', 5)
-  E.buyBuilding(state, derived, 'spiritField', 5)
   E.buyBuilding(state, derived, 'library', 2)
   E.recruitArrivals(state, derived, 200) // 等弟子自己来
   E.setJob(state, derived, 'farmer', 6)
@@ -1612,6 +1649,225 @@ section('长时挂机稳定性')
   ok('感悟有积累', state.resources.insight > 0, `实际 ${state.resources.insight}`)
   ok('士气体面（未长期断粮）', derived.morale >= 60, `实际 ${derived.morale}`)
   ok('弟子未流失', state.disciples.total > 0)
+}
+
+// ------------------------------------------------------------
+section('前期节奏（对标猫国：第 1 分钟只给一座，其余靠研究放行）')
+// ------------------------------------------------------------
+{
+  const noNeeds = BUILDINGS.filter((b) => !b.needs).map((b) => b.id)
+  ok('开局只有一座建筑没有前置条件', noNeeds.length === 1 && noNeeds[0] === 'spiritField', noNeeds.join(','))
+  const gated = ['herbGarden', 'mine', 'warehouse', 'gate']
+  ok(
+    '药圃 / 玄铁矿 / 库房 / 山门 都挂在研究节点后',
+    gated.every((id) => (BUILDING_MAP[id].needs?.upgrades || []).length > 0),
+    gated.map((id) => BUILDING_MAP[id].name).join('、'),
+  )
+  ok(
+    '藏经阁不花灵草（否则「藏经阁 → 药圃 → 灵草 → 藏经阁」自锁）',
+    !(BUILDING_MAP.library.cost.herb > 0),
+    JSON.stringify(BUILDING_MAP.library.cost),
+  )
+
+  // 自举闭包：从基础仓储出发，反复把「当前买得起的建筑」的仓储加成加进来，
+  // 看是否所有建筑最终都能买得起第一座 —— 抓「灵木上限 200 却要 300」这类硬死锁。
+  {
+    const caps = {}
+    for (const r of RESOURCES) caps[r.id] = r.baseMax || 0
+    const reachable = new Set()
+    // 允许「同一种建筑反复盖」（玩家会用便宜的仓储建筑把上限堆上去）
+    for (let round = 0; round < 64; round++) {
+      for (const b of BUILDINGS) {
+        if (!Object.entries(b.cost).every(([r, v]) => v <= caps[r] + 1e-9)) continue
+        reachable.add(b.id)
+        for (const [r, v] of Object.entries(b.effects?.storage || {})) caps[r] = (caps[r] || 0) + v
+        const all = b.effects?.storageAll || 0
+        if (all) for (const key of Object.keys(caps)) caps[key] += all
+      }
+    }
+    const unreachable = BUILDINGS.filter((b) => !reachable.has(b.id)).map((b) => b.id)
+    ok('自举闭包：所有建筑都能在可达的仓储上限内买下第一座', unreachable.length === 0, unreachable.join(','))
+  }
+
+  // 行为：前 10 分钟只该认出少数几种建筑，且 2 小时里不能卡死
+  {
+    const st = createInitialState()
+    const dv = E.createDerived()
+    E.recompute(st, dv)
+    const b = createBot(st, dv)
+    let typesAt10 = 0
+    let typesAt60 = 0
+    let builtAt60 = 0
+    let builtAt110 = 0
+    for (let x = 1; x <= 2 * 3600; x++) {
+      E.tick(st, dv, 1, { events: true })
+      if (x % 5 === 0) b.act()
+      if (x % 60 === 0) {
+        E.recompute(st, dv)
+        const types = BUILDINGS.filter((bd) => (st.buildings[bd.id]?.count || 0) > 0).length
+        if (x === 600) typesAt10 = types
+        if (x === 3600) {
+          typesAt60 = types
+          builtAt60 = st.stats.buildingsBuilt
+        }
+        if (x === 6600) builtAt110 = st.stats.buildingsBuilt
+      }
+    }
+    ok('前 10 分钟建成的建筑类型 ≤ 6 种', typesAt10 <= 6, typesAt10 + ' 种')
+    ok('前 1 小时建成的建筑类型 ≤ 9 种', typesAt60 <= 9, typesAt60 + ' 种')
+    ok('第 1~2 小时仍在推进（没有硬死锁）', builtAt110 > builtAt60, builtAt60 + ' → ' + builtAt110)
+  }
+}
+
+// ------------------------------------------------------------
+section('仓储定点（终局上限不能被自己的涨价率锁死）')
+// ------------------------------------------------------------
+{
+  // 模型：只盖仓储、不看具体产出，但假设「攒满 → 买一座 → 再攒满」无限重复。
+  // 于是每一种仓储建筑能盖多少，只由「它的涨价率 vs 它给的上限」决定 —— 这就是定点。
+  // 每一档破境的造价都必须落在定点之内，否则那一档永远买不起。
+  //（2026 实测：库房第 40 座要 200×1.18^39 ≈ 12.6 万灵木，而它只给 +360 灵木上限
+  //  → 造价指数涨、上限线性涨 → 39 座处卡死，渡劫期永远够不着。石殿/洞天/通天塔因此加了仓储。）
+  const caps = {}
+  for (const r of RESOURCES) caps[r.id] = r.baseMax || 0
+  const storageBuildings = BUILDINGS.filter((b) => b.effects?.storageAll || b.effects?.storage)
+  const holdings = new Map()
+  const countOf = (id) => holdings.get(id) || 0
+  /** 第 n 座（从 0 数）的造价 */
+  const priceAt = (b, n) => {
+    const out = {}
+    const ratio = b.priceRatio || 1
+    for (const [r, v] of Object.entries(b.cost)) out[r] = v * Math.pow(ratio, n)
+    return out
+  }
+  for (let round = 0; round < 500; round++) {
+    let bought = false
+    for (const b of storageBuildings) {
+      for (let k = 0; k < 500; k++) {
+        const price = priceAt(b, countOf(b.id))
+        // 「已经攒满」：只有造价超过上限时才真的买不起
+        if (!Object.entries(price).every(([r, v]) => v <= caps[r] + 1e-9)) break
+        holdings.set(b.id, countOf(b.id) + 1)
+        for (const [r, v] of Object.entries(b.effects?.storage || {})) caps[r] = (caps[r] || 0) + v
+        const all = b.effects?.storageAll || 0
+        if (all) for (const key of Object.keys(caps)) caps[key] += all
+        bought = true
+      }
+    }
+    if (!bought) break
+  }
+  const first = storageBuildings.map((b) => b.name + '×' + countOf(b.id)).filter((s) => !s.endsWith('×0'))
+  ok('仓储定点推得动', first.length > 0, first.join(' '))
+  const bad = []
+  for (let i = 1; i < REALMS.length; i++) {
+    const cost = REALMS[i].cost
+    if (!cost) continue
+    for (const [r, v] of Object.entries(cost)) {
+      if ((caps[r] || 0) < v) bad.push(REALMS[i].name + ' 要 ' + r + ' ' + v + '，定点只有 ' + Math.round(caps[r] || 0))
+    }
+  }
+  ok('每一档破境都在仓储定点之内', bad.length === 0, bad.slice(0, 2).join('；'))
+}
+
+// ------------------------------------------------------------
+section('转世（化神期起，清空范围与飞升相同）')
+// ------------------------------------------------------------
+{
+  const { state, derived } = newGame()
+  state.realm = REINCARNATE_REALM_INDEX - 1
+  E.recompute(state, derived)
+  ok('元婴期还不能转世', !E.canReincarnate(state), REALMS[state.realm].name)
+
+  state.realm = REINCARNATE_REALM_INDEX
+  E.recompute(state, derived)
+  ok(
+    '化神期即可转世（且此时还不能飞升）',
+    E.canReincarnate(state) && !E.canAscend(state),
+    REALMS[state.realm].name + ' / 飞升需 ' + REALMS[ASCEND_REALM_INDEX].name,
+  )
+
+  // 同一条公式：越晚结算越值钱
+  state.stats.lifeInsight = 40000
+  E.recompute(state, derived)
+  const atShen = E.reincarnationGain(state, derived)
+  state.realm = ASCEND_REALM_INDEX
+  E.recompute(state, derived)
+  const atDujie = E.ascensionGain(state, derived)
+  ok('化神期转世能结算仙缘', atShen > 0, String(atShen))
+  ok('渡劫期飞升拿得更多（同一公式，门槛更高）', atDujie > atShen, atShen + ' → ' + atDujie)
+  ok('两者用同一条公式（境界因子 1+境界×0.3）', close(atDujie / atShen, (1 + ASCEND_REALM_INDEX * 0.3) / (1 + REINCARNATE_REALM_INDEX * 0.3), 0.02), (atDujie / atShen).toFixed(3))
+
+  // 清空范围：与飞升完全一样（连修真 / 技艺·法宝 都不保留）
+  const st = createInitialState()
+  const dv = E.createDerived()
+  E.recompute(st, dv)
+  st.buildings.hut = { count: 3, on: true }
+  st.upgrades.qiOrigin = true
+  st.upgrades.qiArt = true
+  st.treasureLevels.spiritPearl = 3
+  st.resources.qi = 1234
+  st.disciples.total = 5
+  st.realm = REINCARNATE_REALM_INDEX
+  st.karma = 10
+  st.achievements.firstHut = true
+  const gain = 22
+  resetForReincarnation(st, gain)
+  E.recompute(st, dv)
+  ok('转世后境界回凡体', st.realm === 0, String(st.realm))
+  ok('转世后修真 / 技艺·法宝清空（与飞升一致）', Object.keys(st.upgrades).length === 0, Object.keys(st.upgrades).join(','))
+  ok('转世后法宝等级清空', Object.keys(st.treasureLevels).length === 0)
+  ok('转世后建筑 / 弟子 / 资源清空', Object.keys(st.buildings).length === 0 && st.disciples.total === 0 && (st.resources.qi || 0) === 0)
+  ok('转世结算仙缘', st.karma === 10 + gain, String(st.karma))
+  ok('转世计数与飞升计数分开', st.stats.reincarnations === 1 && (st.stats.ascensions || 0) === 0, '转世 ' + st.stats.reincarnations + ' / 飞升 ' + (st.stats.ascensions || 0))
+  ok('成就与统计保留', st.achievements.firstHut === true)
+}
+
+// ------------------------------------------------------------
+section('道果与仙缘软上限（第 3 步）')
+// ------------------------------------------------------------
+{
+  const { state, derived } = newGame()
+  state.realm = ASCEND_REALM_INDEX
+  state.stats.reincarnations = CONFIG.ASCEND_MIN_REINCARNATIONS
+  state.stats.lifeInsight = 2e6
+  E.recompute(state, derived)
+  const before = { dao: state.dao || 0, mult: derived.daoMult, gain: E.ascensionGain(state, derived) }
+  ok('飞升前没有道果', before.dao === 0, String(before.dao))
+
+  // 模拟一次飞升的结算（只跑重置函数，不动其它）
+  resetForAscension(state, 0)
+  E.recompute(state, derived)
+  ok('飞升结一颗道果', (state.dao || 0) === 1, String(state.dao))
+  ok('道果提升全局产出（+5%/颗）', close(derived.daoMult, 1.05, 1e-9), '×' + derived.daoMult.toFixed(3))
+
+  // 道果反哺下层：同一份「本世感悟」，有 1 颗道果时仙缘多 10%
+  const probe = (dao) => {
+    const s3 = createInitialState()
+    const d3 = E.createDerived()
+    s3.realm = REINCARNATE_REALM_INDEX
+    s3.stats.lifeInsight = 40000
+    s3.dao = dao
+    E.recompute(s3, d3)
+    return E.reincarnationGain(s3, d3)
+  }
+  const g0 = probe(0)
+  const g1 = probe(1)
+  ok('道果让转世拿到的仙缘更多（+10%/颗）', g1 > g0, g0 + ' → ' + g1)
+
+  // 仙缘软上限：前 75% 不打折，之后渐近到 +200%
+  ok('软上限：小数值不打折', close(E.softCap(1, 2), 1, 1e-9), String(E.softCap(1, 2)))
+  ok('软上限：超过 75% 后打折但仍在涨', E.softCap(1.8, 2) > 1.5 && E.softCap(1.8, 2) < 2, E.softCap(1.8, 2).toFixed(3))
+  ok('软上限：永远到不了上限', E.softCap(1000, 2) < 2 && E.softCap(1000, 2) > 1.99, E.softCap(1000, 2).toFixed(4))
+
+  const s4 = createInitialState()
+  const d4 = E.createDerived()
+  s4.karma = 50
+  E.recompute(s4, d4)
+  const low = d4.karmaMult
+  s4.karma = 500
+  E.recompute(s4, d4)
+  const high = d4.karmaMult
+  ok('仙缘加成随点数上涨但被压住（500 点 < 线性外推）', high < 1 + 500 * CONFIG.KARMA_BONUS_PER_POINT && high > low, low.toFixed(2) + ' → ' + high.toFixed(2))
 }
 
 // ------------------------------------------------------------

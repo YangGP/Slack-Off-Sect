@@ -239,7 +239,7 @@ ok('有筛选行（全部 / 可建造 / 已建成 …）', doc.querySelectorAll(
     tipTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
     await new Promise((r) => setTimeout(r, 60))
 
-    // 建筑悬停提示里的「价格」也要整数（第 4 座茅屋：灵气 148.955 → 149、灵石 3.72 → 4）
+    // 建筑悬停提示里的「价格」也要整数（第 4 座茅屋：灵气 297.91 → 298、灵石 14.9 → 15）
     const hutItem = [...doc.querySelectorAll('.panel .build-item')].find((el) =>
       el.querySelector('.build-btn')?.textContent.includes('茅屋'),
     )
@@ -249,7 +249,7 @@ ok('有筛选行（全部 / 可建造 / 已建成 …）', doc.querySelectorAll(
     const priceSection = priceTip.slice(priceTip.indexOf('价格'), priceTip.indexOf('效果'))
     ok(
       '建筑提示的价格里没有小数点（需求向上取整）',
-      priceSection.length > 0 && /灵气\s*149(?!\.)/.test(priceSection) && !/\d\.\d/.test(priceSection),
+      priceSection.length > 0 && /灵气\s*298(?!\.)/.test(priceSection) && !/\d\.\d/.test(priceSection),
       priceSection.slice(0, 60),
     )
     hutItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))
@@ -567,6 +567,7 @@ ok('界面上没有「招收弟子」按钮', !text().includes('招收弟子'))
 state.resources.qi = 5000
 state.resources.wood = 5000
 state.resources.herb = 500
+state.buildings.spiritField = { count: 3, on: true } // 藏经阁现在要三座聚灵阵
 actions.buy('library', 1)
 state.resources.insight = 500
 engine.recompute(state, derived)
@@ -824,6 +825,63 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
 state.ui.tab = 'realm'
 await new Promise((r) => setTimeout(r, 50))
 ok('境界面板渲染', html().includes('飞升'))
+// 转世：化神期起可做，点击后与飞升一样清空（连修真/技艺·法宝都不保留）
+{
+  const savedConfirm = window.confirm
+  window.confirm = () => true
+  state.realm = 5
+  state.ui.tab = 'realm'
+  await new Promise((r) => setTimeout(r, 60))
+  const btn = () => [...doc.querySelectorAll('.panel .btn')].find((b) => b.textContent.includes('转世'))
+  ok('境界页有转世按钮', !!btn())
+  ok('未到化神期时转世按钮禁用', btn()?.disabled === true)
+
+  // 造一个「有修真/技艺/法宝、有建筑」的化神期存档，点转世
+  state.realm = 6
+  state.upgrades.qiOrigin = true
+  state.upgrades.qiArt = true
+  state.treasureLevels.spiritPearl = 2
+  state.buildings.hut = { count: 4, on: true }
+  state.resources.qi = 999
+  state.karma = 7
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 60))
+  ok('化神期时转世按钮可用', btn()?.disabled === false)
+  btn()?.click()
+  await new Promise((r) => setTimeout(r, 80))
+  ok('点击转世后境界回凡体', state.realm === 0, String(state.realm))
+  ok('点击转世后修真 / 技艺·法宝清空', Object.keys(state.upgrades).length === 0 && Object.keys(state.treasureLevels).length === 0)
+  ok('点击转世后建筑与资源清空', Object.keys(state.buildings).length === 0 && (state.resources.qi || 0) === 0)
+  ok('点击转世后仙缘增加', state.karma > 7, String(state.karma))
+  window.confirm = savedConfirm
+  // 道果：飞升才给；转世次数不足时界面要说明「飞升还需先转世」
+  state.realm = 10
+  state.dao = 0
+  state.stats.reincarnations = 0
+  state.stats.lifeInsight = 2e6
+  state.ui.tab = 'realm'
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 60))
+  ok('境界页显示道果行', html().includes('道果'))
+  ok('转世不足时提示飞升还需先转世', html().includes('飞升还需先转世'))
+  const ascBtn = () => [...doc.querySelectorAll('.panel .btn')].find((b) => b.textContent.includes('飞升'))
+  ok('转世不足时飞升按钮禁用', ascBtn() && ascBtn().disabled === true)
+  state.stats.reincarnations = 3
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 60))
+  ok('补满转世次数后飞升按钮可用', ascBtn() && ascBtn().disabled === false)
+  const savedConfirm2 = window.confirm
+  window.confirm = () => true
+  ascBtn().click()
+  await new Promise((r) => setTimeout(r, 80))
+  ok('点击飞升后道果 +1', state.dao === 1, String(state.dao))
+  window.confirm = savedConfirm2
+  // 后面的存档用例要用到一间茅屋，这里补回来
+  state.buildings.hut = { count: 1, on: true }
+  state.resources.qi = 100
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 40))
+}
 
 // 灵石缺口也要有计时器：它没有产出，但能靠凝气成石现印（见 engine.timeToAfford）
 {

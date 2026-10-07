@@ -53,6 +53,7 @@ export function createInitialState() {
 
     realm: 0,
     karma: 0,
+    dao: 0,
     moralePenalty: 0,
     buffs: [],
 
@@ -72,6 +73,7 @@ export function createInitialState() {
       disasters: 0,
       playTime: 0,
       ascensions: 0,
+      reincarnations: 0,
       bestRealm: 0,
       offlineGains: 0,
       eventsSeen: 0,
@@ -112,6 +114,10 @@ export function normalizeState(state) {
     ...(state.disciples || {}),
     jobs: { ...fresh.disciples.jobs, ...((state.disciples && state.disciples.jobs) || {}) },
   }
+  // 老档补「飞升层」与「转世计数」
+  merged.dao = state.dao || 0
+  merged.stats = merged.stats || {}
+  merged.stats.reincarnations = merged.stats.reincarnations || 0
   merged.buildings = state.buildings || {}
   merged.upgrades = state.upgrades || {}
   merged.achievements = state.achievements || {}
@@ -137,7 +143,23 @@ export function normalizeState(state) {
  * 有意不给「资源礼包」——开局仓储上限只有灵气 500 / 灵木 200，
  * 发再多资源也会被上限吃掉；飞升的收益体现在永久倍率（仙缘）与保留的成就上。
  */
+/** 转世：与飞升清空的东西完全一样，只记在转世计数上 */
+export function resetForReincarnation(state, karmaGain) {
+  return resetForRebirth(state, karmaGain, 'reincarnation')
+}
+
+/** 飞升：清空一切（含修真 / 技艺·法宝），记在 ascensions 上 */
 export function resetForAscension(state, karmaGain) {
+  return resetForRebirth(state, karmaGain, 'ascension')
+}
+
+/**
+ * 转世重修（飞升与转世共用的重置）：
+ * 清空 资源 / 弟子 / 建筑 / 修真 / 技艺·法宝 / 境界 / 制作进度；
+ * 保留 成就 / 统计 / 仙缘（karma）。
+ * 区别只有两处：门槛（化神期 vs 渡劫期）与统计里记哪一个计数。
+ */
+export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   const fresh = createInitialState()
 
   state.resources = { ...fresh.resources }
@@ -154,10 +176,13 @@ export function resetForAscension(state, karmaGain) {
   state.autoCraft = {}
   state.realm = 0
   state.karma = state.karma + karmaGain
+  // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
+  if (kind === 'ascension') state.dao = (state.dao || 0) + 1
   state.moralePenalty = 0
   state.buffs = []
   state.stats.lifeInsight = 0
-  state.stats.ascensions += 1
+  if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
+  else state.stats.ascensions += 1
   state.nextEventAt = Date.now() + 90000
   state.lastTickAt = Date.now()
   return state

@@ -25,12 +25,26 @@ export const CONFIG = {
    * 调小（如 0.5）＝温和版；调大（如 1.5）＝后期养人更贵。
    */
   DISCIPLE_UPKEEP_REALM_EXP: 1,
+  /** 每点仙缘的全局产出加成（转世/飞升带走的永久加成） */
+  KARMA_BONUS_PER_POINT: 0.02,
+  /**
+   * 仙缘加成的**软上限**（对标猫国领导力）：前 75% 不打折，剩下的渐近到上限 ——
+   * 也就是最多 +200%（这里 limit = 2）。取软上限而不是硬上限，是为了让「多刷几轮」
+   * 永远还有一点点收益，但不会线性膨胀把后期压平。见 docs/DESIGN.md §8.4。
+   */
+  KARMA_BONUS_CAP: 2,
+  /** 每颗道果的全局产出加成（道果是飞升才给的更高一层货币） */
+  DAO_PRODUCTION_BONUS: 0.05,
+  /** 每颗道果对「转世/飞升时能拿多少仙缘」的加成 —— 上层反哺下层 */
+  DAO_KARMA_GAIN_BONUS: 0.1,
+  /** 飞升前至少要转世几次（把飞升定高，逼玩家先玩转世循环） */
+  ASCEND_MIN_REINCARNATIONS: 3,
   // 法宝祭炼：每级效果 +30%，花费按 1.7 倍递增
   // （不设等级上限：指数成本自己封顶 —— 16 件法宝各炼到 10 级，累计需求约全树感悟总价的 57 倍）
   TREASURE_REFINE_STEP: 0.3,
   TREASURE_REFINE_RATIO: 1.7,
   // 手动「吸取天地灵气」：每次点击得到多少灵气（每座聚灵阵再加一点，免得后期点着像挠痒）
-  CLICK_QI_BASE: 1,
+  CLICK_QI_BASE: 2.5,
   CLICK_QI_PER_FIELD: 0.5,
   // 弟子不用招募：有空房就每这么多秒自己来一名（可被《广开山门》缩短）
   DISCIPLE_ARRIVAL_SECONDS: 15,

@@ -28,6 +28,16 @@ export const CRAFTS = [
     needs: { building: { id: 'alchemyRoom', count: 1 } },
   },
   {
+    id: 'sawPlank',
+    name: '刨木成板',
+    out: 'plank',
+    amount: 1,
+    cost: { wood: 175 },
+    time: 1.5,
+    desc: '百工坊的匠人把灵木解成板材、刨平上蜡。一百七十五根原木才出一方好板 —— 殿宇梁柱全指着它。',
+    needs: { building: { id: 'workshop', count: 1 } },
+  },
+  {
     id: 'drawTalisman',
     name: '朱砂符箓',
     out: 'talisman',

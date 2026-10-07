@@ -73,6 +73,15 @@ export const REALMS = [
   },
 ]
 
+/**
+ * 可「转世」的最低境界下标（化神期）。
+ *
+ * 参考猫国的分层：重置（领导力）是早期就能做、可反复做的一层，
+ * 更高的飞升（道果）才是终极目标。所以门槛放在化神期 ——
+ * 参照玩家约 16 小时到，正好是「一天一轮」的节奏（见 docs/EARLY-GAME.md）。
+ */
+export const REINCARNATE_REALM_INDEX = 6
+
 /** 可飞升的最低境界下标（渡劫期） */
 export const ASCEND_REALM_INDEX = REALMS.length - 1
 

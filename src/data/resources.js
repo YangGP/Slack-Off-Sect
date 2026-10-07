@@ -21,6 +21,15 @@ export const RESOURCES = [
     desc: '后山灵木，可作屋梁、符纸与阵材。',
   },
   {
+    id: 'plank',
+    name: '木板',
+    glyph: '板',
+    color: '#c9a87c',
+    baseMax: 50,
+    desc: '灵木刨出的精料。原木只配搭棚，正经殿宇的梁柱斗拱都要它。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
     id: 'stone',
     name: '灵石',
     glyph: '石',
@@ -87,6 +96,16 @@ export const RESOURCES = [
     color: '#ff9fb0',
     baseMax: 100,
     desc: '山下香客的念力，可安稳人心、招徕门徒。',
+  },
+  {
+    id: 'dao',
+    name: '道果',
+    glyph: '果',
+    color: '#c9a0ff',
+    baseMax: Infinity,
+    hidden: true,
+    noProduction: true,
+    desc: '飞升时结下的道果。每颗永久提升全局产出，并让下次转世的仙缘更多。',
   },
   {
     id: 'karma',

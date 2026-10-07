@@ -6,13 +6,15 @@
 玩法结构参考了 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（猫国建设者）的放置玩法与数据组织方式：
 资源池 + 职位分配 + 可叠加建筑 + 修真（学术）+ 技艺·法宝（工坊）+ 制作配方 + 成就 + 随机事件 + 转世（飞升）。
 
-> **文档分四份**（按你关心的东西挑一份看）：
+> **文档分六份**（按你关心的东西挑一份看）：
 >
 > | 文件 | 内容 |
 > | --- | --- |
 > | [docs/DESIGN.md](docs/DESIGN.md) | 游戏设计与规则：资源 / 建筑 / 弟子 / 两层学术线 / 制作 / 境界 / 全部公式 / 存档格式 / 平衡目标与实测 |
 > | [docs/ENGINEERING.md](docs/ENGINEERING.md) | 工程约定：前端分层与视觉约定、三层验证策略、扩展指南（加资源 / 建筑 / 条目 / 效果字段 / 调平衡） |
+> | [docs/EARLY-GAME.md](docs/EARLY-GAME.md) | 前期与猫国的实测对照、改造方案与结果（第 1 分钟只给一座建筑的理由） |
 > | [docs/BALANCE.md](docs/BALANCE.md) | 历次平衡改动的账本：每次「问题 → 改法 → 改前/改后实测」 |
+> | [docs/ROADMAP.md](docs/ROADMAP.md) | 可选的下一步：手感校准旋钮、道果内容层、境界三阶段、试手感观察清单 |
 > | [docs/TABLES.md](docs/TABLES.md) | 全量数据表（资源 / 职位 / 建筑 / 修真 / 技艺 / 法宝 / 配方 / 境界 / 成就 / 事件），由 `npm run docs:tables` 生成 |
 >
 > 界面风格参照猫国建设者：白底、细灰线、全页只有一层内容边框；左栏一行一资源的数字表，
@@ -100,7 +102,7 @@ slack-off-sect/
 │   ├── components/             # 19 个展示组件（左资源栏 + 收支 tooltip、左栏炼制块、修真页、技艺·法宝页、历法、累计…）
 │   └── styles/main.css         # 白底浅色 + 平面文字表格风格（无圆角/渐变）
 └── tools/
-    ├── smoke.mjs               # 引擎冒烟测试（311 项断言）
+    ├── smoke.mjs               # 引擎冒烟测试（343 项断言）
     ├── render-check.mjs        # 用 SSR 把每个面板真实渲染一遍，抓模板错误
     ├── dom-check.mjs           # 用 jsdom 加载客户端 bundle，真挂载 + 真跑主循环 + 模拟点击
     ├── dom-entry.js            # dom-check 的客户端入口

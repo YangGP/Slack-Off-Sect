@@ -6,8 +6,8 @@ import { BUILDINGS } from '@/data/buildings'
 import { CULTIVATION, ALL_UPGRADES } from '@/data/upgrades'
 import { TECHNIQUES } from '@/data/techniques'
 import { ACHIEVEMENTS } from '@/data/achievements'
-import { REALMS, ASCEND_REALM_INDEX } from '@/data/realms'
-import { createInitialState, normalizeState, resetForAscension } from './state'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
+import { createInitialState, normalizeState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
 import {
   saveToStorage,
@@ -281,6 +281,25 @@ export const actions = {
     const ok = E.breakthrough(state, derived)
     if (ok) toast(`突破成功：${REALMS[state.realm].name}`, 'good')
   },
+  /**
+   * 转世重修：化神期起可做，清空的东西与飞升完全一样（资源 / 弟子 / 建筑 /
+   * 修真 / 技艺·法宝 / 境界），只结算仙缘。门槛低 → 到手少（化神期约 22 点）。
+   * 与飞升的分工见 docs/DESIGN.md「转世与飞升」。
+   */
+  reincarnate() {
+    if (!E.canReincarnate(state)) {
+      toast('尚未到化神期，无法转世', 'bad')
+      return false
+    }
+    const gain = E.reincarnationGain(state, derived)
+    const name = REALMS[state.realm].name
+    resetForReincarnation(state, gain)
+    E.recompute(state, derived)
+    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${gain} 点再入红尘`, 'realm')
+    saveNow()
+    toast(`转世成功，获得仙缘 ${gain}`, 'good')
+    return true
+  },
   ascend() {
     if (!E.canAscend(state)) {
       toast('尚未到渡劫期，无法飞升', 'bad')
@@ -388,6 +407,12 @@ export const view = {
   realmName: computed(() => REALMS[state.realm]?.name || '凡体'),
   ascendGain: computed(() => E.ascensionGain(state, derived)),
   canAscend: computed(() => E.canAscend(state)),
+  reincarnateGain: computed(() => E.reincarnationGain(state, derived)),
+  reincarnationsNeeded: computed(() => E.reincarnationsNeeded(state)),
+  canReincarnate: computed(() => E.canReincarnate(state)),
+  progressToReincarnate: computed(() =>
+    Math.min(1, state.realm / Math.max(1, REINCARNATE_REALM_INDEX)),
+  ),
   progressToAscend: computed(() =>
     Math.min(1, state.realm / Math.max(1, ASCEND_REALM_INDEX)),
   ),
