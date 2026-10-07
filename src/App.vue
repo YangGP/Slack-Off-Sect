@@ -39,7 +39,10 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
 
 <template>
   <div class="wrap">
-    <div class="title-line">摸鱼宗门<span class="sub">Slack Off Sect</span></div>
+    <div class="title-line">
+      摸鱼宗门<span class="sub">Slack Off Sect</span>
+      <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
+    </div>
 
     <div class="stat-line">
       境界 <b>{{ view.realmName.value }}</b>

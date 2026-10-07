@@ -67,6 +67,15 @@ button {
   color: var(--faint);
   margin-left: 8px;
 }
+.title-line .github-link {
+  margin-left: 16px;
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--dim);
+}
+.title-line .github-link:hover {
+  color: var(--text);
+}
 
 .stat-line {
   color: var(--dim);
