@@ -137,6 +137,31 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'yangParticle',
+    name: '正灵子',
+    glyph: '阳',
+    color: '#ffd0a8',
+    baseMax: 50,
+    desc: '把灵气分子拆开，得其一端正灵子 —— 轻而外扬。',
+    // 刻意不设 integer：粒子是"物理量"，本来就该连续
+  },
+  {
+    id: 'yinParticle',
+    name: '负灵子',
+    glyph: '阴',
+    color: '#a8c8ff',
+    baseMax: 50,
+    desc: '拆分灵气分子得到的另一端，沉而内敛。与正灵子相遇便会湮灭。',
+  },
+  {
+    id: 'qiEnergy',
+    name: '灵能',
+    glyph: '能',
+    color: '#fff2a8',
+    baseMax: 1000,
+    desc: '正负灵子湮灭时释放的能量。极不稳定，会自己逸散 —— 所以只能靠持续湮灭维持。',
+  },
+  {
     id: 'insight',
     name: '感悟',
     glyph: '悟',

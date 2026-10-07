@@ -1799,6 +1799,32 @@ section('仓储定点（终局上限不能被自己的涨价率锁死）')
     }
   }
   ok('每一档破境都在仓储定点之内', bad.length === 0, bad.slice(0, 2).join('；'))
+
+  // 同一把尺子量**建筑**与**学术花费**。
+  //
+  // 注意这把尺子的**适用边界**（2026 实测过）：
+  // 模型只买仓储、不花别的钱，所以它给出的是"**理论上限**"，比参照玩家实际堆到的高。
+  //   ✓ 它能抓：造价超过理论定点 —— 也就是"即使把仓储堆到极限也买不起"，
+  //            最初那次库房死锁（造价指数涨、上限线性涨）就是这一类；
+  //   ✗ 它抓不住：造价落在理论定点内、但超过**玩家实际愿意堆到的上限**。
+  //            两次真实翻车正属此类（分灵阵 25 万 vs 玩家上限 22.8 万；
+  //            《湮灭法》30 万感悟 vs 上限 26.8 万）—— 我把分灵阵改回 25 万验证过，
+  //            这条断言不会报红。那一类只能靠**推演**发现，见 ROADMAP §J 的待办。
+  const overCap = []
+  const check = (label, cost) => {
+    for (const [r, v] of Object.entries(cost || {})) {
+      if ((caps[r] || 0) + 1e-9 < v) {
+        overCap.push(label + ' 要 ' + (RESOURCES.find((x) => x.id === r)?.name || r) + ' ' + v + '，定点只有 ' + Math.round(caps[r] || 0))
+      }
+    }
+  }
+  for (const b2 of BUILDINGS) check('建筑：' + b2.name, b2.cost)
+  for (const u of ALL_UPGRADES) check('学术：' + u.name, u.cost)
+  ok(
+    '建筑与学术花费也都在仓储定点之内',
+    overCap.length === 0,
+    overCap.slice(0, 3).join('；') || '全部在定点内',
+  )
 }
 
 // ------------------------------------------------------------
@@ -2176,6 +2202,8 @@ section('资源完整性：每个资源都要有来源、有去向')
 {
   // 尊贵资源（道果 / 仙缘）的来源是转世与飞升、去向是当乘区，单独放行
   const prestige = new Set(['dao', 'karma'])
+  // 逸散也算"去向"：灵能是被自身衰减消耗掉的，不写进任何造价
+  const decaying = new Set(['qiEnergy'])
   const sourced = new Set()
   const sunk = new Set()
   for (const j of JOBS) {
@@ -2195,7 +2223,9 @@ section('资源完整性：每个资源都要有来源、有去向')
   for (const r of REALMS) for (const k of Object.keys(r.cost || {})) sunk.add(k)
 
   const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
-  const noSink = RESOURCES.filter((r) => !prestige.has(r.id) && !sunk.has(r.id)).map((r) => r.name)
+  const noSink = RESOURCES.filter(
+    (r) => !prestige.has(r.id) && !decaying.has(r.id) && !sunk.has(r.id),
+  ).map((r) => r.name)
   ok('每个资源都有来源（没有凭空出现的）', noSource.length === 0, noSource.join('、') || '全部有')
   ok('每个资源都有去向（没有死资源）', noSink.length === 0, noSink.join('、') || '全部有')
 }
@@ -2250,6 +2280,87 @@ section('角色倾向：玄钢与灵符偏建材')
       inBuildings >= inGates,
       '建筑 ' + inBuildings + ' vs 门槛 ' + inGates,
     )
+  }
+}
+
+// ------------------------------------------------------------
+section('第二种驱动：阴阳分灵 → 湮灭 → 灵能')
+// ------------------------------------------------------------
+{
+  // 灵能会逸散：无产出时应当衰减到 0
+  {
+    const { state: s, derived: d } = newGame()
+    s.resources.qiEnergy = 100
+    E.recompute(s, d)
+    // 注意：tick 内部把单步上限压到 60 秒，所以"6 小时"要自己循环推进
+    for (let i = 0; i < 6 * 60; i++) E.tick(s, d, 60, { events: false })
+    ok(
+      '灵能会逸散（无产出时衰减到接近 0）',
+      (s.resources.qiEnergy || 0) < 0.01,
+      '6 小时后剩 ' + (s.resources.qiEnergy || 0).toFixed(6),
+    )
+  }
+
+  // 稳态 ≈ 产出 ÷ 逸散率：一台湮灭炉 0.06/秒、逸散 0.005/秒 → 12 灵能
+  {
+    const { state: s, derived: d } = newGame()
+    s.upgrades.annihilationArt = true
+    s.buildings.annihilationFurnace = { count: 1, on: true }
+    s.resources.yangParticle = 1e6 // 粒子管够，隔离掉分灵阵的变量
+    s.resources.yinParticle = 1e6
+    s.resources.qi = 1e6
+    E.recompute(s, d)
+    for (let i = 0; i < 4000; i++) {
+      E.tick(s, d, 1, { events: false })
+      if (i % 300 === 0) E.recompute(s, d)
+    }
+    const steady = s.resources.qiEnergy || 0
+    const expect = (d.rates.qiEnergy || 0) / CONFIG.QI_ENERGY_DECAY
+    ok(
+      '灵能有稳态（≈ 产出 ÷ 逸散率）',
+      Math.abs(steady - expect) / Math.max(expect, 1e-9) < 0.1,
+      '实测 ' + steady.toFixed(2) + '，预期 ' + expect.toFixed(2),
+    )
+  }
+
+  // 只加成基础物资：灵木吃、感悟不吃
+  {
+    const build = (energy) => {
+      const { state: s, derived: d } = newGame()
+      s.upgrades.prospectStudy = true
+      s.buildings.lumberYard = { count: 10, on: true }
+      s.buildings.library = { count: 2, on: true }
+      s.resources.qiEnergy = energy
+      E.recompute(s, d)
+      return { wood: d.rates.wood || 0, insight: d.rates.insight || 0 }
+    }
+    const before = build(0)
+    const after = build(250) // 250 灵能 → 满额 +500%
+    ok(
+      '灵能大幅提高基础物资产出',
+      after.wood > before.wood * 3,
+      '灵木 ' + before.wood.toFixed(3) + '/秒 → ' + after.wood.toFixed(3) + '/秒',
+    )
+    ok(
+      '灵能不加成感悟（只作用于基础物资）',
+      Math.abs(after.insight - before.insight) < 1e-9,
+      '感悟 ' + before.insight.toFixed(4) + ' → ' + after.insight.toFixed(4),
+    )
+  }
+
+  // 分灵阵烧灵气：它是本作最大的灵气去处，且停用即停费
+  {
+    const wh = BUILDING_MAP.splitArray
+    ok('阴阳分灵阵以灵气为维护费', (wh.upkeep?.qi || 0) > 0, JSON.stringify(wh.upkeep))
+    const { state: s, derived: d } = newGame()
+    s.upgrades.yinyangSplit = true
+    s.buildings.splitArray = { count: 2, on: true }
+    E.recompute(s, d)
+    const on = d.expense?.qi || 0
+    s.buildings.splitArray = { count: 2, on: false }
+    E.recompute(s, d)
+    const off = d.expense?.qi || 0
+    ok('停用分灵阵后灵气开销归零', off > on && Math.abs(off) < Math.abs(on), on + ' → ' + off)
   }
 }
 

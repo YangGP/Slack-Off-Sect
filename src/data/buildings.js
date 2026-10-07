@@ -417,6 +417,33 @@ export const BUILDINGS = [
     needs: { realm: 6, upgrades: ['towerPlan'] },
   },
   {
+    id: 'splitArray',
+    name: '阴阳分灵阵',
+    glyph: '阴',
+    group: 'wonder',
+    // 阵要一直烧灵气：拆开一个灵气分子，才得到一对正负灵子
+    // 造价必须落在玩家"实际能达到的仓储上限"之内：早先写 25 万灵石，
+    // 而参照玩家在渡劫期的灵石上限只有约 22.8 万 —— 于是这两座永远盖不出来（推演曲线一字不差）。
+    cost: { stone: 150000, insight: 60000, artifact: 60 },
+    priceRatio: 1.5,
+    desc: '阵法把灵气分子拆成正负两半 —— 拆得越久，越像在跟天地借火。',
+    effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
+    upkeep: { qi: 8 }, // 拆分子是要耗气的：这是本作最大的灵气去处
+    needs: { upgrades: ['yinyangSplit'], realm: 9 },
+  },
+  {
+    id: 'annihilationFurnace',
+    name: '湮灭炉',
+    glyph: '湮',
+    group: 'wonder',
+    cost: { wood: 120000, stone: 180000, artifact: 60 },
+    priceRatio: 1.6,
+    desc: '正负灵子在炉心相遇，归于虚无，只留下滚烫的灵能。',
+    effects: { prod: { qiEnergy: 0.06 } },
+    upkeep: { yangParticle: 0.02, yinParticle: 0.02 }, // 成对吃掉正负灵子
+    needs: { upgrades: ['annihilationArt'], realm: 10 },
+  },
+  {
     id: 'karmaPool',
     name: '因果池',
     glyph: '因',

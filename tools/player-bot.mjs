@@ -47,6 +47,9 @@ export const PRIORITY = [
   'spiritLockArray',
   'heavenTower',
   'karmaPool',
+  // 第二种驱动：分灵阵烧灵气换粒子，湮灭炉把粒子换成灵能（灵能会逸散，所以要持续产）
+  'splitArray',
+  'annihilationFurnace',
 ]
 
 /**

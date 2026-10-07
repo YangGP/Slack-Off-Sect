@@ -597,6 +597,23 @@ export function recompute(state, derived) {
   const calendar = calendarAt(state.totalDays)
   const seasonRatio = calendar.seasonRatio
 
+  /**
+   * 第二种驱动：灵能（会逸散）→ **基础物资**产出倍率。
+   * 只作用于 CONFIG.QI_ENERGY_BASIC（灵木/灵石/玄铁/灵草/木板）：
+   * 丹药以上的成品、感悟、香火都不吃 —— 否则后期会变成"一条倍率通吃"。
+   */
+  const energyStock = Math.max(0, state.resources.qiEnergy || 0)
+  const energyBonus =
+    energyStock > 0 ? softCap(energyStock * CONFIG.QI_ENERGY_RATIO, CONFIG.QI_ENERGY_CAP) : 0
+  if (energyBonus > 0) {
+    for (const res of CONFIG.QI_ENERGY_BASIC) {
+      ratio[res] = (ratio[res] || 0) + energyBonus
+      if (!bonus.ratio[res]) bonus.ratio[res] = []
+      bonus.ratio[res].push({ kind: 'energy', id: 'qiEnergy', label: '灵能', value: energyBonus })
+    }
+  }
+  derived.energyBonus = energyBonus
+
   const rates = {}
   for (const r of RESOURCES) {
     if (r.noProduction) {
@@ -1305,6 +1322,13 @@ export function tick(state, derived, dt, opts = {}) {
       state.stats.lifeInsight = (state.stats.lifeInsight || 0) + gained
     }
     if (r.id === 'faith' && gained > 0) state.stats.totalFaith += gained
+  }
+
+  // 1.5) 灵能逸散：湮灭能不稳定，每秒衰减 QI_ENERGY_DECAY。
+  // 于是存量有稳态 —— 稳态 ≈ 产出 ÷ 逸散率（一台湮灭炉 0.06/秒 → 12 灵能）。
+  if ((state.resources.qiEnergy || 0) > 0) {
+    const left = state.resources.qiEnergy * Math.pow(1 - CONFIG.QI_ENERGY_DECAY, cap)
+    state.resources.qiEnergy = left < 1e-9 ? 0 : left
   }
 
   // 2) 士气：灵气断供则下滑，供应正常则回升

@@ -103,7 +103,7 @@ slack-off-sect/
 │   ├── components/             # 19 个展示组件（左资源栏 + 收支 tooltip、左栏炼制块、修真页、技艺·法宝页、历法、累计…）
 │   └── styles/main.css         # 白底浅色 + 平面文字表格风格（无圆角/渐变）
 └── tools/
-    ├── smoke.mjs               # 引擎冒烟测试（389 项断言）
+    ├── smoke.mjs               # 引擎冒烟测试（396 项断言）
     ├── render-check.mjs        # 用 SSR 把每个面板真实渲染一遍，抓模板错误
     ├── dom-check.mjs           # 用 jsdom 加载客户端 bundle，真挂载 + 真跑主循环 + 模拟点击
     ├── dom-entry.js            # dom-check 的客户端入口

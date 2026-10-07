@@ -44,6 +44,9 @@ const ids = RESOURCES.map((r) => r.id)
  * 尊贵资源：来源是转世 / 飞升，去向是"作为乘区"而不是花掉，
  * 所以不该被当作"无来源 / 无去向"报出来。
  */
+/** 靠自身衰减消耗的资源（灵能会逸散），不算"没有去向" */
+const DECAYING = new Set(['qiEnergy'])
+
 const PRESTIGE = {
   dao: { source: '飞升时结下（每次 +1 颗）', sink: '作为全局乘区（每颗 +5% 产出、+10% 转世/飞升仙缘）' },
   karma: { source: '转世与飞升结算', sink: '作为全局乘区（每点 +2% 产出，软上限 +200%）' },
@@ -135,7 +138,9 @@ for (const r of RESOURCES) {
   for (const [kind, list] of Object.entries(snk)) console.log(`    [${kind}] ` + list.join('，'))
   const prestige = PRESTIGE[id]
   if (srcCount === 0 && !prestige) problems.push(`${r.name}：没有任何来源`)
-  if (snkCount === 0 && !prestige) problems.push(`${r.name}：没有任何去向（死资源）`)
+  if (snkCount === 0 && !prestige && !DECAYING.has(id)) {
+    problems.push(`${r.name}：没有任何去向（死资源）`)
+  }
   console.log('')
 }
 
@@ -181,7 +186,9 @@ console.log('规则检查：')
     '  ' + (multi.length ? '✗' : '✓') + ' 精料（木板/丹药/符箓/法器）各只有一条来路（配方）' + (multi.length ? '：' + multi.map(nameOf).join('、') : ''),
   )
 
-  const noSink = RESOURCES.filter((r) => !PRESTIGE[r.id] && !(sinks[r.id] && Object.keys(sinks[r.id]).length))
+  const noSink = RESOURCES.filter(
+    (r) => !PRESTIGE[r.id] && !DECAYING.has(r.id) && !(sinks[r.id] && Object.keys(sinks[r.id]).length),
+  )
   console.log('  ' + (noSink.length ? '✗' : '✓') + ' 没有"只进不出"的资源' + (noSink.length ? '：' + noSink.map((r) => r.name).join('、') : ''))
 
   const noSrc = RESOURCES.filter((r) => !PRESTIGE[r.id] && !(sources[r.id] && Object.keys(sources[r.id]).length))

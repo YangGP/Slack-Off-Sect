@@ -429,6 +429,30 @@ export const CULTIVATION = [
     note: '开启参悟：大乘心经',
     needs: { upgrades: ['mindSeal'], realm: 9 },
   },
+  {
+    id: 'yinyangSplit',
+    name: '阴阳分灵',
+    glyph: '阴',
+    cost: { insight: 120000, stone: 80000, spiritArtifact: 6 },
+    desc: '气不是最小的东西：灵气由正负两种灵子合成，拆开它们，才看得见里面的火。',
+    effectDesc: '因此布得起阴阳分灵阵 —— 把灵气拆成正灵子与负灵子。',
+    effects: { unlockBuildings: ['splitArray'] },
+    note: '解锁建筑：阴阳分灵阵',
+    needs: { upgrades: ['arrayMastery'], realm: 9 },
+  },
+  {
+    id: 'annihilationArt',
+    name: '湮灭法',
+    glyph: '湮',
+    // 研究花费同样要落在可达上限内：早先写 30 万感悟，而参照玩家的感悟上限约 26.8 万，
+    // 于是《湮灭法》永远参悟不了 —— 分灵阵盖了、粒子堆着、灵能始终为 0。
+    cost: { insight: 180000, nineTurnPill: 20, spiritTalisman: 20 },
+    desc: '正负相遇则归于虚无，虚无里翻出的能量，比一整座灵脉井还烈。',
+    effectDesc: '因此铸得起湮灭炉 —— 让正负灵子在炉心相消，取那份能量。',
+    effects: { unlockBuildings: ['annihilationFurnace'] },
+    note: '解锁建筑：湮灭炉',
+    needs: { upgrades: ['yinyangSplit'], realm: 10 },
+  },
 ]
 
 /** 两层合起来的完整列表：产出计算、解锁判定、文案都要用它 */
@@ -478,7 +502,7 @@ export const CULTIVATION_STAGES = [
     key: 'law',
     label: 'Ⅴ 法则',
     hint: '星象、阵法、因果',
-    ids: ['astrologyArt', 'arrayBasics', 'arrayMastery', 'karmaSense', 'towerPlan', 'karmaConcord', 'greatVehicleSeal'],
+    ids: ['astrologyArt', 'arrayBasics', 'arrayMastery', 'karmaSense', 'towerPlan', 'karmaConcord', 'greatVehicleSeal', 'yinyangSplit', 'annihilationArt'],
   },
 ]
 
