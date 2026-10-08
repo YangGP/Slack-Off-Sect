@@ -26,6 +26,7 @@ export const RESOURCES = [
     glyph: '板',
     color: '#c9a87c',
     baseMax: 50,
+    storageWeight: 0.15,
     desc: '灵木刨出的精料。原木只配搭棚，正经殿宇的梁柱斗拱都要它。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -34,7 +35,8 @@ export const RESOURCES = [
     name: '阵基',
     glyph: '基',
     color: '#c9a87c',
-    baseMax: 50,
+    baseMax: 20,
+    storageWeight: 0.03,
     integer: true,
     desc: '木板搭骨、符箓刻纹、玄铁固结。金丹期宗门设施共用的阵法构件。',
   },
@@ -43,7 +45,8 @@ export const RESOURCES = [
     name: '玄钢',
     glyph: '钢',
     color: '#b8c4d0',
-    baseMax: 50,
+    baseMax: 30,
+    storageWeight: 0.04,
     desc: '玄铁反复折叠锻打，杂质尽去 —— 一剑之锋，从此有了骨。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -77,7 +80,8 @@ export const RESOURCES = [
     name: '仙草',
     glyph: '仙',
     color: '#a8e6a1',
-    baseMax: 50,
+    baseMax: 20,
+    storageWeight: 0.02,
     desc: '以灵泉浇灌百年，草叶上凝着露似的灵光。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -87,6 +91,7 @@ export const RESOURCES = [
     glyph: '丹',
     color: '#ffb46b',
     baseMax: 50,
+    storageWeight: 0.1,
     desc: '服之安神定气，助弟子破境。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -95,7 +100,8 @@ export const RESOURCES = [
     name: '九转丹',
     glyph: '丹',
     color: '#ffb347',
-    baseMax: 50,
+    baseMax: 10,
+    storageWeight: 0.01,
     desc: '九转九炼，一炉只出数枚，是压箱底的救命物。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -105,6 +111,7 @@ export const RESOURCES = [
     glyph: '符',
     color: '#ffe08a',
     baseMax: 50,
+    storageWeight: 0.1,
     desc: '一纸符箓，可镇妖避劫，也能换些香火钱。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -113,7 +120,8 @@ export const RESOURCES = [
     name: '灵符',
     glyph: '灵',
     color: '#ffe9b0',
-    baseMax: 50,
+    baseMax: 15,
+    storageWeight: 0.015,
     desc: '香火为墨、朱砂为骨，一符既成，可镇一山之妖。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -123,6 +131,7 @@ export const RESOURCES = [
     glyph: '器',
     color: '#d7a6ff',
     baseMax: 50,
+    storageWeight: 0.06,
     desc: '御剑飞行的门面，也是宗门的战力。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -131,7 +140,8 @@ export const RESOURCES = [
     name: '灵器',
     glyph: '灵',
     color: '#c9a6ff',
-    baseMax: 50,
+    baseMax: 10,
+    storageWeight: 0.01,
     desc: '以玄钢为骨、法器为魂，器物开始有了自己的灵性。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
@@ -140,7 +150,8 @@ export const RESOURCES = [
     name: '灵宝',
     glyph: '宝',
     color: '#ffd6f5',
-    baseMax: 50,
+    baseMax: 5,
+    storageWeight: 0.003,
     // 它不是"某种材料炼上去"，而是三条进阶支线**合起来**才成的一件东西
     desc: '灵器为骨、九转丹为髓、灵符为纹 —— 三样缺一，都只是半件宝物。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数

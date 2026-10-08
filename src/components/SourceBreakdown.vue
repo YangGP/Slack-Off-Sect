@@ -138,6 +138,10 @@ const bonusRows = computed(() => {
     </div>
     <!-- 与建筑（宗门）的提示同一套排版：标题 → 描述 → 分节 -->
     <div class="tip-desc">{{ meta.desc }}</div>
+    <div v-if="meta.storageWeight != null" class="tip-row">
+      <span class="k">通用扩仓</span>
+      <span class="v">基础容量的 {{ Math.round(meta.storageWeight * 1000) / 10 }}%；专属仓储全额计入</span>
+    </div>
 
     <div class="tip-section tip-row">
       <span class="k">进项</span>

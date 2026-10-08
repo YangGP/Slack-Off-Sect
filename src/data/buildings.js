@@ -6,7 +6,7 @@
  *   ratio       对某资源产出的百分比加成，按“启用中的数量”叠加
  *   ratioAll    对全部资源产出的百分比加成，按“启用中的数量”叠加
  *   storage     某资源的仓储上限，按“已建造数量”叠加
- *   storageAll  全部资源的仓储上限，按“已建造数量”叠加
+ *   storageAll  通用仓储，成品按层级折算，按“已建造数量”叠加
  *   maxDisciples 弟子上限
  *   morale      士气（民心）加成
  *   consumeRatio 降低弟子灵气消耗
@@ -153,7 +153,7 @@ export const BUILDINGS = [
     cost: { stone: 400, wood: 900, plank: 4, ore: 200 },
     priceRatio: 1.6,
     desc: '青石铺地、灵纹引气，住二十名弟子也不觉拥挤。',
-    effects: { maxDisciples: 20, storageAll: 400, morale: 4 },
+    effects: { maxDisciples: 20, storage: { qi: 400, wood: 200 }, morale: 4 },
     needs: { building: { id: 'logHouse', count: 5 }, upgrades: ['buildingCode'] },
   },
   {
@@ -164,7 +164,7 @@ export const BUILDINGS = [
     cost: { stone: 2500, insight: 1200, artifact: 5 },
     priceRatio: 1.7,
     desc: '凿山为府，聚灵成池。能住六十人，且人人吐纳有得。',
-    effects: { maxDisciples: 60, storageAll: 3000, morale: 6 },
+    effects: { maxDisciples: 60, storage: { qi: 3000, wood: 1200 }, morale: 6 },
     needs: { upgrades: ['grottoArt'] },
   },
 
@@ -198,14 +198,36 @@ export const BUILDINGS = [
   },
   {
     id: 'depot',
-    name: '石殿',
+    name: '材料库',
     glyph: '殿',
     group: 'store',
     cost: { stone: 1500, plank: 3, ore: 400 },
     priceRatio: 1.25,
-    desc: '整座山腹都掏空了，堆到天荒地老也放得下。',
-    effects: { storageAll: 2000 },
+    desc: '石殿分设料架与阵材格，专存营造原料、木板、玄钢和阵基。',
+    effects: { storage: { wood: 1600, stone: 1200, ore: 1000, plank: 300, steel: 20, arrayBase: 20 } },
     needs: { building: { id: 'warehouse', count: 5 }, upgrades: ['earthEssence'] },
+  },
+  {
+    id: 'medicineVault',
+    name: '药藏',
+    glyph: '药',
+    group: 'store',
+    cost: { plank: 4, arrayBase: 1, stone: 160, herb: 100 },
+    priceRatio: 1.22,
+    desc: '药架通风、玉匣封灵，灵草与丹药分格收存。普通药材多存，仙草与九转丹少量精藏。',
+    effects: { storage: { herb: 300, immortalHerb: 20, pill: 200, nineTurnPill: 8 } },
+    needs: { realm: 4, upgrades: ['alchemyArt', 'woodworking'] },
+  },
+  {
+    id: 'arcaneVault',
+    name: '法藏',
+    glyph: '藏',
+    group: 'store',
+    cost: { plank: 4, arrayBase: 1, stone: 180, ore: 100 },
+    priceRatio: 1.22,
+    desc: '符匣与器架各有禁制，符箓、法器及其进阶成品在此收存，灵宝独占小龛。',
+    effects: { storage: { talisman: 200, spiritTalisman: 10, artifact: 120, spiritArtifact: 6, spiritTreasure: 2 } },
+    needs: { realm: 4, upgrades: ['forgeArt', 'talismanArt'] },
   },
   {
     id: 'grotto',
@@ -215,8 +237,8 @@ export const BUILDINGS = [
     // 洞天以玄钢为骨：撑开一方小世界，梁架全用钢（可反复盖）
     cost: { stone: 8000, plank: 20, insight: 4000, artifact: 10, steel: 20 },
     priceRatio: 1.35,
-    desc: '一方小世界，装多少东西都不显挤，还自带静心之效。',
-    effects: { storageAll: 12000, morale: 5 },
+    desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
+    effects: { storageAll: 3000, storage: { qi: 9000, wood: 9000, stone: 9000, ore: 9000, insight: 9000, faith: 9000, yangParticle: 9000, yinParticle: 9000, qiEnergy: 4000 }, morale: 5 },
     needs: { upgrades: ['grottoArt'] },
   },
 
@@ -259,7 +281,7 @@ export const BUILDINGS = [
     name: '静心池',
     glyph: '静',
     group: 'cultivate',
-    cost: { herb: 200, arrayBase: 2, stone: 180 },
+    cost: { herb: 80, immortalHerb: 2, arrayBase: 2, stone: 180 },
     priceRatio: 1.3,
     desc: '池水照心，弟子泡一泡，脾气就小了一圈。',
     effects: { morale: 6 },
@@ -407,8 +429,8 @@ export const BUILDINGS = [
     // 塔是玄钢与灵符最大的去处：一重塔身一段钢、一重飞檐一道符（可反复盖）
     cost: { stone: 80000, plank: 60, ore: 20000, artifact: 50, insight: 50000, steel: 80, spiritTalisman: 40 },
     priceRatio: 1.6,
-    desc: '塔尖直插云海。站在塔顶的人，看得见飞升的路。',
-    effects: { ratioAll: 0.15, storageAll: 20000 },
+    desc: '塔尖直插云海，聚气存念并镇住正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
+    effects: { ratioAll: 0.15, storageAll: 5000, storage: { qi: 15000, wood: 15000, stone: 15000, ore: 15000, insight: 15000, faith: 15000, yangParticle: 15000, yinParticle: 15000, qiEnergy: 10000 } },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
 
     needs: { realm: 6, upgrades: ['towerPlan'] },

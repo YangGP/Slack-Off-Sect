@@ -302,9 +302,9 @@ export const CULTIVATION = [
     glyph: '精',
     cost: {insight:800, wood:1200, plank:12},
     desc: '掏空山腹而不塌，靠的不是蛮力，是懂得岩层怎么受力。',
-    effectDesc: '因此挖得出石殿：整座山腹都能当仓库。',
+    effectDesc: '因此挖得出材料库：石殿分格存放营造原料与阵材。',
     effects: { unlockBuildings: ['depot'] },
-    note: '解锁建筑：石殿',
+    note: '解锁建筑：材料库',
     needs: { upgrades: ['earthArt'], realm: 5 },
   },
   {

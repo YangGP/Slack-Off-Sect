@@ -192,6 +192,10 @@ function kindName(meta) {
                       <span class="tip-right">法宝 · Lv.{{ item.level }}</span>
                     </div>
                     <div class="tip-desc">{{ item.meta.desc }}</div>
+                    <div v-if="item.meta.refine?.materials" class="tip-row">
+                      <span class="k">进阶祭炼</span>
+                      <span class="v">第{{ (item.meta.refine.materialFromLevel || 0) + 1 }}次起需{{ Object.keys(item.meta.refine.materials).map(resName).join('、') }}，用量随层数增加</span>
+                    </div>
 
                     <div class="tip-section">价格</div>
                     <div v-for="(amount, res) in item.cost" :key="res" class="tip-row">

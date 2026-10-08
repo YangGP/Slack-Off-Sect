@@ -21,6 +21,7 @@ import {
   timeToAfford,
 } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
+import { CONFIG } from '@/data/config'
 import { costLabel } from '@/game/pricing'
 import { fmt, fmtCost, fmtStock, fmtTime } from '@/game/format'
 import BuildingButton from './BuildingButton.vue'
@@ -112,7 +113,7 @@ const tabs = computed(() => [
             </div>
             <div class="tip-row">
               <span class="k">聚灵阵加持</span>
-              <span class="v">每座聚灵阵再 +{{ fmt(0.5) }}</span>
+              <span class="v">前{{ CONFIG.CLICK_QI_FULL_FIELDS }}座每座 +{{ fmt(CONFIG.CLICK_QI_PER_FIELD) }}，之后增益递减</span>
             </div>
             <div class="tip-row">
               <span class="k">已吸取</span>

@@ -90,7 +90,7 @@ export function describeEffects(ef) {
   if (ef.storage) {
     for (const k in ef.storage) push(`${resName(k)} 上限`, `+${fmt(ef.storage[k])}`, 'muted')
   }
-  if (ef.storageAll) push('全部资源上限', `+${fmt(ef.storageAll)}`, 'muted')
+  if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（成品按层级折算）`, 'muted')
   if (ef.maxDisciples) push('弟子上限', `+${ef.maxDisciples}`, 'good')
   if (ef.morale) push('士气', `+${ef.morale}`, 'good')
   if (ef.consumeRatio) push('弟子灵气消耗', `-${fmtPercent(ef.consumeRatio)}`, 'good')

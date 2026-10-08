@@ -125,8 +125,8 @@ export const TECHNIQUES = [
     name: '储物袋',
     glyph: '袋',
     cost: { insight: 35, wood: 500, herb: 200 },
-    desc: '一袋可装半座库房。所有资源上限 +800。',
-    effects: { storageAll: 800 },
+    desc: '随身收纳少量物资。通用仓储 +400，成品按层级折算。',
+    effects: { storageAll: 400 },
     needs: { building: { id: 'granary', count: 2 } },
   },
   {
@@ -134,8 +134,8 @@ export const TECHNIQUES = [
     name: '纳物诀',
     glyph: '纳',
     cost: { insight: 750, stone: 2600, herb: 1200, talisman: 4 },
-    desc: '袖里乾坤，装得下整座山门。所有资源上限 +1500。',
-    effects: { storageAll: 1500 },
+    desc: '袖里乾坤，补足各处仓储周转。通用仓储 +750，成品按层级折算。',
+    effects: { storageAll: 750 },
     needs: { upgrades: ['storageBag'] },
   },
 
@@ -260,7 +260,7 @@ export const TECHNIQUES = [
     name: '九转丹炉',
     glyph: '炉',
     cost: { insight: 150, pill: 10, herb: 600, stone: 400 },
-    refine: { insight: 500 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 500, materials: { nineTurnPill: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
     desc: '炼丹术推演出的炉子，火候不必再靠手感。制作产出 +8%。',
     kind: 'treasure',
     effects: { craftBonus: 0.08 },
@@ -271,7 +271,7 @@ export const TECHNIQUES = [
     name: '百草葫芦',
     glyph: '葫',
     cost: { insight: 90, herb: 700, stone: 260 },
-    refine: { insight: 300 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 300, materials: { immortalHerb: 2 }, materialFromLevel: 0 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
     desc: '葫芦里自成一方小圃，采下的灵草越存越旺。灵草产出 +30%。',
     kind: 'treasure',
     effects: { ratio: { herb: 0.3 } },
@@ -282,7 +282,7 @@ export const TECHNIQUES = [
     name: '飞剑',
     glyph: '剑',
     cost: { insight: 450, artifact: 14, ore: 2000, stone: 1500 },
-    refine: { insight: 1500 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 1500, materials: { steel: 2, spiritArtifact: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
     desc: '炼器术的顶点之作。剑光起处，弟子办事快了一倍。全局产出 +8%。',
     kind: 'treasure',
     effects: { ratioAll: 0.08 },
@@ -370,7 +370,7 @@ export const TECHNIQUES = [
     name: '护山阵盘',
     glyph: '盘',
     cost: { insight: 660, ore: 2500, talisman: 10, stone: 2200 },
-    refine: { insight: 2200 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 2200, materials: { arrayBase: 2, spiritTalisman: 1 }, materialFromLevel: 1 },
     desc: '阵法初解的实物：一块刻满纹路的石盘，埋在阵眼上。天灾损失 −5%。',
     effects: { disasterGuard: 0.05 },
     kind: 'treasure',
@@ -392,9 +392,9 @@ export const TECHNIQUES = [
     name: '纳物戒',
     glyph: '戒',
     cost: { insight: 1800, stone: 7000, artifact: 25, wood: 4000 },
-    refine: { insight: 6000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '洞天福地的小成之作：一枚戒指里装得下整座库房。所有资源上限 +2000。',
-    effects: { storageAll: 2000 },
+    refine: { insight: 6000, materials: { spiritTreasure: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    desc: '洞天福地的小成之作：以纳物戒补足各类仓储。每层通用仓储 +500，成品按层级折算。',
+    effects: { storageAll: 500 },
     kind: 'treasure',
     needs: { upgrades: ['grottoArt'] },
   },

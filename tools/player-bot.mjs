@@ -38,6 +38,8 @@ export const PRIORITY = [
   'workshop',
   'mansion',
   'depot',
+  'medicineVault',
+  'arcaneVault',
   'trialTower',
   'mountainArray',
   'ancestorHall',

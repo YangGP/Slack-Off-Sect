@@ -1135,7 +1135,7 @@ section('可购买性：不会被仓储上限卡死')
     if (eff?.storageAll) {
       for (const r of RESOURCES) {
         if (caps[r.id] !== Infinity) {
-          caps[r.id] += eff.storageAll
+          caps[r.id] += eff.storageAll * (r.storageWeight ?? 1)
           added = true
         }
       }
@@ -1777,6 +1777,8 @@ section('长时挂机稳定性')
   E.setJob(state, derived, 'farmer', 6)
   E.setJob(state, derived, 'scholar', 4)
 
+  // 这份稳定性夹具从有效容量内开始；超额旧档另有专门回归。
+  for (const r of RESOURCES) state.resources[r.id] = Math.min(state.resources[r.id] || 0, derived.max[r.id])
   let nan = false
   for (let i = 0; i < 7200; i++) {
     E.tick(state, derived, 1, { events: false })
@@ -2844,6 +2846,93 @@ section('金丹工艺：阵基与库存目标')
   resetForReincarnation(s, 5)
   E.recompute(s, d)
   ok('转世清空本世库存目标与阵基', Object.keys(s.craftTargets).length === 0 && s.resources.arrayBase === 0)
+}
+
+section('分层仓储、点击与进阶祭炼')
+{
+  const { state: s, derived: d } = newGame()
+  s.buildings.mansion = { count: 6, on: true }
+  s.buildings.depot = { count: 2, on: true }
+  s.upgrades.storageBag = true
+  E.recompute(s, d)
+  ok('基础物资通用扩仓仍全额计入', d.max.wood === RESOURCE_MAP.wood.baseMax + 6 * 200 + 2 * 1600 + 400)
+  ok('工艺与稀有材料容量有层级差异', d.max.plank > d.max.arrayBase && d.max.arrayBase > d.max.spiritArtifact && d.max.spiritArtifact > d.max.spiritTreasure)
+  const pillBefore = d.max.pill
+  s.buildings.alchemyRoom = { count: 1, on: true }
+  E.recompute(s, d)
+  ok('专属成品仓储不被通用折算削弱', d.max.pill === pillBefore + 200)
+  ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer).every(r => Number.isInteger(d.max[r.id])))
+  const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: 1000 } })
+  E.recompute(old, d)
+  E.addResource(old, 'nineTurnPill', 10)
+  ok('旧档超额成品不被收入操作抹掉且不能继续囤货', old.resources.nineTurnPill === 1000)
+  E.payCost(old, { nineTurnPill: 3 })
+  E.tick(old, d, 1, { events: false })
+  ok('旧档超额成品可正常消费', old.resources.nineTurnPill === 997)
+  s.buildings.spiritField = { count: 5, on: true }
+  ok('开局点击收益保留', E.clickGain(s, d) === 5)
+  s.buildings.spiritField.count = 45
+  ok('多聚灵阵点击仍增益但小于原线性收益', E.clickGain(s, d) > 7.5 && E.clickGain(s, d) < 25)
+  s.upgrades.flyingSword = true
+  s.treasureLevels.flyingSword = 1
+  ok('低层祭炼不要求尚未需要的进阶材料', !E.refineCost(s, 'flyingSword').spiritArtifact)
+  s.treasureLevels.flyingSword = 2
+  const first = E.refineCost(s, 'flyingSword')
+  ok('进阶祭炼开始支付灵器与玄钢', first.spiritArtifact === 1 && first.steel === 2)
+  for (const [res, amount] of Object.entries(first)) s.resources[res] = amount
+  const denied = { ...s.resources }
+  s.resources.spiritArtifact = 0
+  ok('缺进阶材料不能祭炼', E.refineTreasure(s, d, 'flyingSword') === 0 && s.treasureLevels.flyingSword === 2)
+  s.resources.spiritArtifact = denied.spiritArtifact
+  E.refineTreasure(s, d, 'flyingSword')
+  ok('祭炼实际扣除进阶材料并提升层数', s.resources.spiritArtifact === 0 && s.resources.steel === 0 && s.treasureLevels.flyingSword === 3)
+  ok('进阶用料随层数增长并整枚计价', E.refineCost(s, 'flyingSword').spiritArtifact === 2)
+  ok('仙草增加可重复消费去向', UPGRADE_MAP.herbGourd.refine.materials.immortalHerb > 0)
+}
+
+section('分类仓库与扩仓可达性')
+{
+  const { state: s, derived: d } = newGame()
+  s.realm = 3
+  for (const id of ['alchemyArt', 'forgeArt', 'talismanArt', 'woodworking', 'earthArt']) s.upgrades[id] = true
+  s.buildings.warehouse = { count: 2, on: true }
+  E.recompute(s, d)
+  ok('专藏在金丹前不提前出现', !d.unlockedBuildings.includes('medicineVault') && !d.unlockedBuildings.includes('arcaneVault'))
+  s.realm = 4
+  for (const id of ['medicineVault', 'arcaneVault']) {
+    for (const [res, n] of Object.entries(BUILDING_MAP[id].cost)) s.resources[res] = Math.max(s.resources[res] || 0, n)
+  }
+  E.recompute(s, d)
+  ok('金丹掌握对应手艺且有材料后显示两类专藏', d.unlockedBuildings.includes('medicineVault') && d.unlockedBuildings.includes('arcaneVault'))
+  for (const id of ['medicineVault', 'arcaneVault']) {
+    const cost = E.buildingCost(s, id, 1)
+    ok(`${BUILDING_MAP[id].name}首座费用未超过既有容量`, Object.entries(cost).every(([res, n]) => n <= d.max[res]))
+    for (const [res, n] of Object.entries(cost)) s.resources[res] = n
+    const before = { ...d.max }
+    ok(`${BUILDING_MAP[id].name}可以实际建成`, E.buyBuilding(s, d, id, 1) === 1)
+    if (id === 'medicineVault') {
+      ok('药藏增加药材丹药容量并保留稀有度差异', d.max.pill - before.pill === 200 && d.max.nineTurnPill - before.nineTurnPill === 8 && d.max.immortalHerb - before.immortalHerb === 20)
+      ok('药藏不扩符器及感悟容量', d.max.artifact === before.artifact && d.max.insight === before.insight && d.max.talisman === before.talisman)
+    } else {
+      ok('法藏覆盖普通符器与进阶品', d.max.talisman - before.talisman === 200 && d.max.spiritArtifact - before.spiritArtifact === 6 && d.max.spiritTreasure - before.spiritTreasure === 2)
+      ok('法藏不扩丹药及原料容量', d.max.pill === before.pill && d.max.stone === before.stone)
+    }
+  }
+  const before = { ...d.max }
+  s.buildings.mansion = { count: 1, on: true }
+  E.recompute(s, d)
+  ok('扩人口不再顺带扩成品及感悟', d.max.pill === before.pill && d.max.insight === before.insight && d.max.qi === before.qi + 400)
+  const restored = normalizeState(JSON.parse(JSON.stringify(s)))
+  ok('分类仓库数量随存档保留', restored.buildings.medicineVault.count === 1 && restored.buildings.arcaneVault.count === 1)
+  ok('旧石殿沿用同一个存档编号', BUILDING_MAP.depot.name === '材料库' && !BUILDING_MAP.depot.effects.storageAll)
+  restored.resources.wood = 10000
+  restored.buildings.lumberYard = { count: 1, on: true }
+  E.recompute(restored, d)
+  E.tick(restored, d, 1, { events: false })
+  ok('扩仓调整后旧档超额原料不会被产出截掉', restored.resources.wood === 10000)
+  E.payCost(restored, { wood: 20 })
+  E.tick(restored, d, 1, { events: false })
+  ok('超额原料正常消费且停止补入', restored.resources.wood === 9980)
 }
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)

@@ -196,7 +196,8 @@ export function addResource(state, id, amount) {
   const before = state.resources[id] || 0
   let next = before + amount
   if (id !== 'karma' && state.__max && state.__max[id] != null) {
-    next = Math.min(next, state.__max[id])
+    // 降低仓储后保留旧库存；超过新上限时停止收入，消费仍正常。
+    next = Math.min(next, Math.max(before, state.__max[id]))
   }
   next = Math.max(0, next)
   // 整枚计数的资源（灵石/丹药/符箓/法器）不留小数：事件按百分比增减、旧存档都可能带小数
@@ -390,7 +391,7 @@ function applyEffects(ef, mult, targets, src) {
     for (const k in ef.storage) max[k] = (max[k] || 0) + ef.storage[k] * mult
   }
   if (ef.storageAll) {
-    for (const r of RESOURCES) max[r.id] = (max[r.id] || 0) + ef.storageAll * mult
+    for (const r of RESOURCES) max[r.id] = (max[r.id] || 0) + ef.storageAll * mult * (r.storageWeight ?? 1)
   }
   if (ef.maxDisciples) acc.maxDisciples += ef.maxDisciples * mult
   if (ef.morale) acc.moraleBonus += ef.morale * mult
@@ -694,6 +695,7 @@ function recomputeRaw(state, derived, supply) {
     net[r.id] = (rates[r.id] || 0) - out
   }
 
+  for (const r of RESOURCES) if (r.integer) max[r.id] = Math.floor(max[r.id] + EPS)
   derived.max = max
   state.__max = max // 供 addResource 使用（不参与存档序列化，仅内存）
   derived.rates = rates
@@ -1143,12 +1145,14 @@ function computeAutoCraftDrain(state, derived) {
 
 /**
  * 手动「吸取天地灵气」：开局什么都没有时唯一的灵气来源。
- * 每次点击 +CLICK_QI_BASE，每座聚灵阵再 +CLICK_QI_PER_FIELD（后期点着也不至于像挠痒）。
+ * 前20座聚灵阵线性增加点击收益，此后按平方根增长；不乘全局倍率。
  */
 export function clickGain(state, derived) {
   void derived
   const fields = countOf(state, 'spiritField')
-  return CONFIG.CLICK_QI_BASE + CONFIG.CLICK_QI_PER_FIELD * fields
+  const full = CONFIG.CLICK_QI_FULL_FIELDS
+  const effective = Math.min(fields, full) + Math.sqrt(Math.max(0, fields - full))
+  return CONFIG.CLICK_QI_BASE + CONFIG.CLICK_QI_PER_FIELD * effective
 }
 
 /** 执行一次「吸取天地灵气」，返回这次吸到多少 */
@@ -1214,6 +1218,14 @@ export function refineCost(state, id) {
   }
   const insight = meta.refine?.insight || 0
   if (insight) out.insight = insight * k
+  const level = treasureLevel(state, id)
+  const from = meta.refine?.materialFromLevel || 0
+  if (level >= from) {
+    const materialRatio = Math.pow(CONFIG.TREASURE_REFINE_RATIO, level - from)
+    for (const [res, amount] of Object.entries(meta.refine?.materials || {})) {
+      out[res] = (out[res] || 0) + amount * materialRatio
+    }
+  }
   return roundCost(out)
 }
 
@@ -1541,7 +1553,8 @@ export function tick(state, derived, dt, opts = {}) {
     const before = state.resources[r.id] || 0
     let next = before + rate * cap
     const max = derived.max[r.id]
-    if (next > max) next = max
+    // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
+    if (next > max && rate > 0) next = Math.max(before, max)
     if (next < 0) next = 0
     state.resources[r.id] = next
     if (next > 0) state.seen[r.id] = true

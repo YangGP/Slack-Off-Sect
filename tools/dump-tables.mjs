@@ -59,7 +59,7 @@ const effects = (e) => {
   if (e.ratioAll) out.push(`全局 +${pct(e.ratioAll)}`)
   if (e.jobRatio) out.push('职 ' + Object.entries(e.jobRatio).map(([k, v]) => `${jname(k)} +${pct(v)}`).join(' '))
   if (e.storage) out.push('储 ' + Object.entries(e.storage).map(([k, v]) => `${res(k)} +${v}`).join(' '))
-  if (e.storageAll) out.push(`全储 +${e.storageAll}`)
+  if (e.storageAll) out.push(`通用仓储 +${e.storageAll}（成品按层级折算）`)
   if (e.maxDisciples) out.push(`弟子 +${e.maxDisciples}`)
   if (e.morale) out.push(`士气 +${e.morale}`)
   if (e.consumeRatio) out.push(`消耗 −${pct(e.consumeRatio)}`)
@@ -76,11 +76,11 @@ const effects = (e) => {
 }
 
 emit('## A.1 资源\n')
-emit('| 资源 | id | 基础上限 | 隐藏 | 整枚计数 | 说明 |')
-emit('| --- | --- | --- | --- | --- | --- |')
+emit('| 资源 | id | 基础上限 | 通用扩仓比例 | 隐藏 | 整枚计数 | 说明 |')
+emit('| --- | --- | --- | --- | --- | --- | --- |')
 for (const r of RESOURCES) {
   emit(
-    `| ${r.name} | \`${r.id}\` | ${r.baseMax === Infinity ? '∞' : r.baseMax} | ${r.hidden ? '是' : '否'} | ${r.integer ? '是' : '否'} | ${r.desc} |`,
+    `| ${r.name} | \`${r.id}\` | ${r.baseMax === Infinity ? '∞' : r.baseMax} | ${(r.storageWeight ?? 1) * 100}% | ${r.hidden ? '是' : '否'} | ${r.integer ? '是' : '否'} | ${r.desc} |`,
   )
 }
 
@@ -128,6 +128,10 @@ emit('| --- | --- | --- | --- | --- |')
 for (const t of TECHNIQUES.filter((x) => x.kind === 'treasure')) {
   emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${effects(t.effects)} | ${needs(t.needs)} |`)
 }
+emit('\n进阶祭炼附加材料：达到指定层数后开始支付，按1.7倍逐层递增，基础祭炼费用照常支付。\n')
+emit('| 法宝 | 第几次祭炼起 | 起始附加材料 |')
+emit('| --- | --- | --- |')
+for (const t of TECHNIQUES.filter(t => t.refine?.materials)) emit(`| ${t.name} | ${(t.refine.materialFromLevel || 0) + 1} | ${cost(t.refine.materials)} |`)
 
 emit('\n## A.7 制作配方\n')
 emit('| 配方 | id | 产出 | 花费 | 解锁 |')
