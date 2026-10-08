@@ -60,6 +60,16 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'crystal',
+    name: '灵晶',
+    glyph: '晶',
+    color: '#b7a7ff',
+    baseMax: 30,
+    storageWeight: 0.02,
+    integer: true,
+    desc: '以符纹约束灵气凝成的稳定晶核。金丹后用于聚灵设施、观星与高级阵法。',
+  },
+  {
     id: 'ore',
     name: '玄铁',
     glyph: '铁',

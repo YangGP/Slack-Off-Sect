@@ -8,7 +8,7 @@
  *
  * 与 /技艺·法宝/ 的分工：
  *   修真（本文件）：只做解锁与系统开关，不提供 +% 加成
- *   技艺 / 法宝    ：只提供纯数值加成，本身不解锁任何东西
+ *   技艺           ：掌握配方与专业加工效率；法宝提供可祭炼的数值加成
  *
  * 两者共用「感悟」货币，也都用 `needs` 做门禁。修真内部会串成链
  * （炼丹术 → 炼器术 / 符箓入门；讲经法 → 观星术 → 阵法初解 → 阵道精通；静心诀 → 灵兽驯养），
@@ -52,6 +52,16 @@ export const CULTIVATION = [
     needs: { upgrades: ['qiOrigin'] },
   },
   // ---------- Ⅱ 识物：木、草、铁、香火各自的性质 ----------
+  {
+    id: 'crystalTheory',
+    name: '凝晶原理',
+    glyph: '晶',
+    cost: { insight: 300 },
+    desc: '金丹气机已稳，开始研究用符纹约束灵气，凝成可长期保存的晶核。',
+    effectDesc: '开启凝晶工艺与晶核聚灵阵；学会加工灵晶后才能完成建设。',
+    effects: { unlockBuildings: ['crystalArray'] },
+    needs: { realm: 4, upgrades: ['qiGazing', 'talismanArt'] },
+  },
 
   {
     id: 'herbStudy',
@@ -81,7 +91,7 @@ export const CULTIVATION = [
     id: 'incenseVow',
     name: '香火愿',
     glyph: '愿',
-    cost: { insight: 200, wood: 400, stone: 80 },
+    cost: { insight: 200, wood: 400 },
     desc: '立下山门，许下一桩愿，香客自会寻来。',
     effects: { unlockBuildings: ['gate'] },
     note: '解锁建筑：山门',
@@ -94,7 +104,7 @@ export const CULTIVATION = [
     id: 'earthArt',
     name: '土木术',
     glyph: '土',
-    cost: { insight: 120, wood: 300, stone: 40 },
+    cost: { insight: 120, wood: 300, ore: 40 },
     desc: '垒石为基、架木为梁，库房才立得住。',
     effects: { unlockBuildings: ['warehouse'] },
     note: '解锁建筑：库房',
@@ -106,7 +116,7 @@ export const CULTIVATION = [
     id: 'alchemyArt',
     name: '炼丹术',
     glyph: '丹',
-    cost: { insight: 200, stone: 120, herb: 100 },
+    cost: { insight: 200, herb: 120, wood: 120 },
     desc: '学会控火，方能开炉。解锁炼丹房与「采药制丹」。',
     effectDesc: '因此灵草可以入炉，丹药有了出处。',
     effects: { unlockBuildings: ['alchemyRoom'] },
@@ -117,7 +127,7 @@ export const CULTIVATION = [
     id: 'talismanArt',
     name: '符箓入门',
     glyph: '符',
-    cost: { insight: 240, stone: 140, wood: 400 },
+    cost: { insight: 240, wood: 400, herb: 100 },
     desc: '一笔落下，天地借力。解锁符箓堂与「朱砂符箓」。',
     effectDesc: '因此画得出符，镇妖避劫有了凭据。',
     effects: { unlockBuildings: ['talismanHall'] },
@@ -128,7 +138,7 @@ export const CULTIVATION = [
     id: 'forgeArt',
     name: '炼器术',
     glyph: '炼',
-    cost: { insight: 260, stone: 160, ore: 80 },
+    cost: { insight: 260, ore: 120, wood: 200 },
     desc: '丹火既通，转入炉锤。解锁炼器坊与「淬炼法器」。',
     effectDesc: '因此淬得出器，法器不再只是纸上谈兵。',
     effects: { unlockBuildings: ['forge'] },
@@ -140,7 +150,7 @@ export const CULTIVATION = [
     id: 'preachArt',
     name: '讲经法',
     glyph: '讲',
-    cost: { insight: 320, stone: 200 },
+    cost: { insight: 320 },
     desc: '把玄之又玄的道理，讲成弟子听得懂的人话。解锁讲经堂。',
     effectDesc: '因此长老可以登坛讲经，感悟的来源不再只有藏书。',
     effects: { unlockBuildings: ['academy'] },
@@ -151,7 +161,7 @@ export const CULTIVATION = [
     id: 'calmMind',
     name: '静心诀',
     glyph: '静',
-    cost: { insight: 400, stone: 250, herb: 200 },
+    cost: { insight: 400, herb: 200 },
     desc: '心静则灵气自聚。解锁静心池。',
     effectDesc: '因此弟子坐得住：静心池让心神与仓储都稳下来。',
     effects: { unlockBuildings: ['meditationPool'] },
@@ -189,8 +199,7 @@ export const CULTIVATION = [
     desc: '翻出祖师手札，字里行间都是捷径。解锁祖师殿。',
     effectDesc: '因此立得起祖师殿，香火更盛、人心更齐。',
     effects: { unlockBuildings: ['ancestorHall'] },
-    needs: { building: { id: 'incenseCauldron', count: 2 } },
-    needs: { realm: 7 },
+    needs: { building: { id: 'incenseCauldron', count: 2 }, realm: 7 },
   },
 
   {
@@ -223,8 +232,7 @@ export const CULTIVATION = [
     desc: '在山上开一方小世界。解锁洞天与洞府。',
     effectDesc: '因此开得出洞天与洞府：一方自成一界，装得下也住得下。',
     effects: { unlockBuildings: ['grotto', 'caveDwelling'] },
-    needs: { building: { id: 'depot', count: 2 } },
-    needs: { realm: 8 },
+    needs: { building: { id: 'depot', count: 2 }, realm: 8 },
   },
 
   {
@@ -243,7 +251,7 @@ export const CULTIVATION = [
     id: 'astrologyArt',
     name: '观星术',
     glyph: '星',
-    cost: { insight: 450, stone: 300 },
+    cost: { insight: 450, talisman: 6 },
     desc: '讲经讲到尽头，就得抬头看天。解锁观星台。',
     effectDesc: '因此搭得起观星台，从星象里读出资源的走势。',
     effects: { unlockBuildings: ['observatory'] },
@@ -254,24 +262,22 @@ export const CULTIVATION = [
     id: 'arrayBasics',
     name: '阵法初解',
     glyph: '阵',
-    cost: { insight: 1500, stone: 1200, artifact: 3 },
+    cost: { insight: 1500, talisman: 12, artifact: 3 },
     desc: '观星知势，方能布阵。解锁护山大阵。',
     effectDesc: '因此布得起护山大阵，天灾来时损失大减。',
     effects: { unlockBuildings: ['mountainArray'] },
-    needs: { upgrades: ['astrologyArt'], building: { id: 'academy', count: 2 } },
-    needs: { realm: 7 },
+    needs: { upgrades: ['astrologyArt'], building: { id: 'academy', count: 2 }, realm: 7 },
   },
 
   {
     id: 'arrayMastery',
     name: '阵道精通',
     glyph: '精',
-    cost: { insight: 9000, stone: 8000, talisman: 25 },
+    cost: { insight: 9000, talisman: 25, spiritTalisman: 4 },
     desc: '一草一木皆可为阵。解锁锁灵阵。',
     effectDesc: '因此锁得住一山之灵：锁灵阵把灵气囤得更紧。',
     effects: { unlockBuildings: ['spiritLockArray'] },
-    needs: { upgrades: ['arrayBasics'], building: { id: 'mountainArray', count: 3 } },
-    needs: { realm: 8 },
+    needs: { upgrades: ['arrayBasics'], building: { id: 'mountainArray', count: 3 }, realm: 8 },
   },
 
   {
@@ -311,7 +317,7 @@ export const CULTIVATION = [
     id: 'buildingCode',
     name: '营造法式',
     glyph: '营',
-    cost: {insight:2600, plank:30, pill:20, stone:1500},
+    cost: {insight:2600, plank:20, steel:4},
     desc: '材有等第、工有次第。一部法式定下来，殿宇才不只靠匠人手感。',
     effectDesc: '因此盖得起精舍：青石铺地、灵纹引气，十名弟子各有静修之处。',
     effects: { unlockBuildings: ['mansion'] },
@@ -476,7 +482,7 @@ export const CULTIVATION_STAGES = [
     key: 'sense',
     label: 'Ⅰ 感知',
     hint: '灵气是什么、从哪来、怎么快点聚起来',
-    ids: ['qiOrigin', 'condenseArt', 'qiGazing'],
+    ids: ['qiOrigin', 'condenseArt', 'qiGazing', 'crystalTheory'],
   },
   {
     key: 'matter',

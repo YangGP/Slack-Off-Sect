@@ -4,7 +4,7 @@
  * 里面有两类条目：
  *   技艺 —— 自己练出来的手艺（引气诀、伐木要术…），门禁看建筑
  *   法宝 —— 由修真研究解锁、炼成的器物（聚灵珠、飞剑、护山阵盘…），门禁看修真
- * 两者都只加数值、不解锁任何东西，所以放在同一页，用一行筛选区分。
+ * 技艺掌握加工配方与专业效率，法宝提供可祭炼的加成；用筛选区分。
  */
 import { computed } from 'vue'
 import { state } from '@/game/store'
@@ -32,7 +32,7 @@ const treasureCount = TECHNIQUES.filter((t) => t.kind === 'treasure').length
     :list="list"
     kind="technique"
     title="技艺与法宝"
-    hint="只加产出，不解锁"
+    hint="掌握工艺，强化专业产出"
     :filters="FILTERS"
     :filter="filter"
     filter-key="skillFilter"

@@ -28,6 +28,7 @@ export const PRIORITY = [
   'gate',
   'spiritVein',
   'gatheringArray',
+  'crystalArray',
   'academy',
   'alchemyRoom',
   'forge',
@@ -63,6 +64,7 @@ export const PRIORITY = [
  * 这里模拟玩家会做的事：基础材料留够才炼，成品也囤到够用就停。
  */
 export const ADVANCED_CRAFTS = {
+  condenseCrystal: { floors: { qi: 600, talisman: 4 }, cap: 200 },
   // 上限必须**高于游戏里的最大单笔需求**，否则参照玩家会卡在自己设的门槛上：
   // 早先玄钢上限 40、而渡劫期破境要 120，推演就永远停在 大乘期（96 小时都不动）。
   // 这条约束现在由冒烟断言守着（见「参照玩家的囤货上限」一节）。
@@ -259,7 +261,7 @@ export function createBot(state, derived) {
         continue
       }
       if (E.canAfford(state, c.cost)) {
-        const needed = target > 0 ? Math.ceil((target - (state.resources[c.out] || 0)) / (c.amount * (1 + derived.craftBonus))) : 10
+        const needed = target > 0 ? Math.ceil((target - (state.resources[c.out] || 0)) / E.craftYield(derived, c)) : 10
         E.craft(state, derived, c.id, { times: Math.min(10, needed) })
       }
     }

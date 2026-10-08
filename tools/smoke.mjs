@@ -139,7 +139,7 @@ section('数据完整性')
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
   const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCondense', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
-  const pureNumeric = ['ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'morale', 'consumeRatio', 'craftBonus', 'disasterGuard']
+  const pureNumeric = ['ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'morale', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard']
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
     '修真层以解锁/系统效果为主',
@@ -149,7 +149,7 @@ section('数据完整性')
   const skillLeaks = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok('技艺/法宝层不含任何解锁/系统效果', skillLeaks.length === 0, skillLeaks.map((u) => u.id).join(','))
   const skillPure = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).every((k) => pureNumeric.includes(k)))
-  ok('技艺/法宝层全是纯数值加成', skillPure.length === TECHNIQUES.length)
+  ok('技艺/法宝效果只强化数值，配方由前置条件绑定工艺', skillPure.length === TECHNIQUES.length)
 
 // 技艺层的炼成花费只用「资源 + 高级资源」，不吃感悟；法宝的祭炼仍然要感悟
 {
@@ -720,6 +720,7 @@ section('进项来源明细')
     const before = { ...d4.max }
     s4.resources.wood = 5000
     s4.resources.stone = 5000
+    s4.resources.ore = 5000
     s4.resources.qi = 5000
     E.trackPeak(s4)
     ok('库房真的建起来了（前置检查）', E.buyBuilding(s4, d4, 'warehouse', 1) === 1)
@@ -2609,12 +2610,13 @@ section('事件工艺奖励与交易')
   s.realm = 4
   s.upgrades.woodworking = true
   s.upgrades.talismanArt = true
+  s.upgrades.arrayAssembly = true
   s.buildings.forge = { count: 1, on: true }
   s.buildings.talismanHall = { count: 1, on: true }
   E.recompute(s, d)
   d.rates = { ...d.rates, wood: 350, qi: 500, ore: 100, stone: 30 }
   const rate = E.eventResourceRate(s, d, 'arrayBase')
-  ok('组合工艺奖励可沿木板符箓追溯产能', rate > 0 && rate <= (1 + d.craftBonus) / 4)
+  ok('组合工艺奖励可沿木板符箓追溯产能', rate > 0 && rate <= E.craftYield(d, CRAFT_MAP.assembleArrayBase) / 4)
   const low = E.eventOutcome(s, d, { lootRate: { artifact: 30 }, floor: { artifact: 1 } }).rows[0].gained
   d.craftBonus += 1
   const high = E.eventOutcome(s, d, { lootRate: { artifact: 30 }, floor: { artifact: 1 } }).rows[0].gained
@@ -2798,6 +2800,7 @@ section('金丹工艺：阵基与库存目标')
   const { state: s, derived: d } = newGame()
   s.upgrades.woodworking = true
   s.upgrades.talismanArt = true
+  s.upgrades.arrayAssembly = true
   s.buildings.talismanHall = { count: 1, on: true }
   s.resources.plank = 4
   s.resources.talisman = 4
@@ -2811,7 +2814,7 @@ section('金丹工艺：阵基与库存目标')
   const made = E.craft(s, d, 'assembleArrayBase', { times: 2 })
   ok('阵基消耗木板、符箓与玄铁，整件产出', made === 2 && s.resources.arrayBase === 2 && s.resources.plank === 0 && s.resources.talisman === 0 && s.resources.ore === 0)
   s.upgrades.preachArt = true
-  s.resources.stone = 120
+  s.resources.plank = 2
   ok('第一座讲经堂可以用基础阵基仓储启动', E.buyBuilding(s, d, 'academy', 1) === 1 && s.resources.arrayBase === 0)
   ok('阵基具有至少三处可重复建造用途', BUILDINGS.filter(b => b.cost.arrayBase > 0).length >= 3)
   ok('讲经堂、静心池在金丹开放并保留建筑前置', UPGRADE_MAP.preachArt.needs.realm === 4 && !!UPGRADE_MAP.preachArt.needs.building && UPGRADE_MAP.calmMind.needs.realm === 4 && !!UPGRADE_MAP.calmMind.needs.building)
@@ -2954,9 +2957,10 @@ section('仙缘仓储永久加成')
   ok('重复重算不会复利放大仓储', RESOURCES.every(r => d.max[r.id] === enlarged[r.id]))
   ok('仙缘扩仓不会直接增加库存', s.resources.pill === 0 && s.resources.qi === 0)
   const warehouseWood = E.buildingCost({ ...s, buildings: { warehouse: { count: 45, on: true } } }, 'warehouse', 1).wood
-  const depotStone = E.buildingCost({ ...s, buildings: { depot: { count: 25, on: true } } }, 'depot', 1).stone
+  // 此截图使用旧版石殿造价；保留历史容量回归，不把旧价当成当前材料库价格。
+  const depotStone = Math.ceil(1500 * Math.pow(1.25, 25))
   ok('截图下一座库房从容量不足变为可支付', warehouseWood > 336000 && warehouseWood <= 336000 * d.karmaStorageMult)
-  ok('截图下一座石殿从容量不足变为可支付', depotStone > 321000 && depotStone <= 321000 * d.karmaStorageMult)
+  ok('历史截图石殿需求落在仙缘增加后的容量内', depotStone > 321000 && depotStone <= 321000 * d.karmaStorageMult)
   s.karma = 250
   E.recompute(s, d)
   ok('250仙缘前仓储增益不递减', close(d.karmaStorageMult, 1.375, 1e-9))
@@ -3147,6 +3151,99 @@ section('事件三级分类与纪事兼容')
   ok('突破后仍能结束前阶段未决事务', !!E.resolveChoice(crossed, cd, EVENT_MAP.ancientCave.options.findIndex(o => o.effect.decline)) && crossed.pendingChoice === null)
   E.pushLog(s, '日常建造', 'good')
   ok('普通操作纪事不被标成事件', s.log[0].eventLevel === undefined && s.log[0].eventId === undefined)
+}
+
+section('金丹：修真、工艺、材料与建设闭环')
+{
+  const { state: s, derived: d } = newGame()
+  s.realm = 3
+  for (const id of ['qiOrigin', 'qiGazing', 'earthArt', 'woodworking', 'talismanArt', 'forgeArt']) s.upgrades[id] = true
+  s.buildings.talismanHall = { count: 1, on: true }
+  s.buildings.forge = { count: 1, on: true }
+  Object.assign(s.resources, { insight: 2000, qi: 3000, talisman: 100, ore: 1000, plank: 30, artifact: 10 })
+  E.recompute(s, d)
+  ok('金丹前不能研究凝晶或掌握淬玄工艺', !E.research(s, d, 'crystalTheory') && !E.research(s, d, 'steelWorking'))
+  s.realm = 4
+  E.recompute(s, d)
+  ok('金丹研究凝晶原理后能看到建设目标', E.research(s, d, 'crystalTheory') && d.unlockedBuildings.includes('crystalArray'))
+  ok('点修真不能直接制作灵晶或建成晶核阵', E.craft(s, d, 'condenseCrystal') === 0 && E.buyBuilding(s, d, 'crystalArray', 1) === 0)
+  ok('基础工坊不能绕过阵基与玄钢工艺', E.craft(s, d, 'assembleArrayBase') === 0 && E.craft(s, d, 'refineSteel') === 0)
+  ok('三条工艺用旧材料即可起步', ['arrayAssembly', 'steelWorking', 'crystalCraft'].every(id => E.research(s, d, id)))
+  ok('工艺条目显示它实际开放的配方', unlockGroups('crystalCraft').crafts.includes('凝气结晶') && unlockGroups('arrayAssembly').crafts.includes('组装阵基'))
+  const qiBefore = s.resources.qi
+  const talismanBefore = s.resources.talisman
+  const stoneBefore = s.resources.stone
+  const crystalMade = E.craft(s, d, 'condenseCrystal', { times: 4 })
+  ok('灵晶确实由灵气与符箓加工，独立于灵石', crystalMade === 4 && s.resources.qi === qiBefore - 1200 && s.resources.talisman === talismanBefore - 8 && s.resources.stone === stoneBefore)
+  ok('学工艺后能加工阵基并完成第一座晶核阵', E.craft(s, d, 'assembleArrayBase', { times: 2 }) === 2 && E.buyBuilding(s, d, 'crystalArray', 1) === 1)
+  ok('晶核阵消费成品并扩充灵晶仓储', s.resources.crystal === 0 && s.resources.arrayBase === 0 && d.max.crystal === 45)
+  const recipe = CRAFT_MAP.condenseCrystal
+  const beforeRate = E.eventResourceRate(s, d, 'crystal')
+  const beforeYield = E.craftYield(d, recipe)
+  s.upgrades.crystalPolishing = true
+  E.recompute(s, d)
+  ok('凝晶专业强化增加实际单份收益', close(E.craftYield(d, recipe) - beforeYield, 0.2))
+  d.rates = { qi: 600, wood: 80, ore: 40 }
+  const crystalRate = E.eventResourceRate(s, d, 'crystal')
+  d.craftBonusByResource.crystal += 0.5
+  ok('工艺奖励计价使用同一专业加成', E.eventResourceRate(s, d, 'crystal') > crystalRate && beforeRate >= 0)
+  s.upgrades.intuition = true
+  Object.assign(s.resources, { qi: 3000, talisman: 20, crystal: 0 })
+  s.autoCraft.condenseCrystal = true
+  s.settings.autoCraftOn = true
+  E.recompute(s, d)
+  E.setCraftTarget(s, d, 'condenseCrystal', 2)
+  E.simulateOffline(s, d, 30)
+  ok('灵晶离线自动制作遵守目标并实际扣料', s.resources.crystal === 2 && s.resources.talisman === 16)
+  const saved = parseImport(exportSave(s))
+  ok('灵晶工艺与库存目标可以存读档', saved.resources.crystal === 2 && saved.upgrades.crystalCraft && saved.craftTargets.condenseCrystal === 2)
+  const old = normalizeState({ resources: { stone: 17 }, buildings: { observatory: { count: 1, on: true } } })
+  ok('旧档保留库存与建筑，新增灵晶补零', old.resources.stone === 17 && old.resources.crystal === 0 && E.isBuildingUnlocked(old, 'observatory'))
+  resetForReincarnation(s, 0)
+  ok('重修清空灵晶和本世工艺', s.resources.crystal === 0 && !s.upgrades.crystalCraft)
+}
+
+section('专业制作：实际产出与设施启停')
+{
+  const { state: s, derived: d } = newGame()
+  Object.assign(s.resources, { wood: 10000, qi: 10000 })
+  s.buildings.workshop = { count: 1, on: true }
+  E.recompute(s, d)
+  const stoneYield = E.craftYield(d, CRAFT_MAP.condenseStone)
+  const pillYield = E.craftYield(d, CRAFT_MAP.refinePill)
+  s.buildings.alchemyRoom = { count: 10, on: true }
+  E.recompute(s, d)
+  ok('炼丹房提高丹药收益而不增加凝石收益', close(E.craftYield(d, CRAFT_MAP.refinePill) - pillYield, 0.5) && close(E.craftYield(d, CRAFT_MAP.condenseStone), stoneYield))
+  E.toggleBuilding(s, d, 'alchemyRoom')
+  ok('专业加成随设施停用停止', close(E.craftYield(d, CRAFT_MAP.refinePill), pillYield))
+  const effects = describeEffects(BUILDING_MAP.forge.effects)
+  ok('设施效果明确列出专业成品', effects.some(row => row.label === '玄钢 制作产出') && !effects.some(row => row.label === '制作产出'))
+  s.upgrades.alchemyCauldron = true
+  E.recompute(s, d)
+  const unrefined = E.craftYield(d, CRAFT_MAP.refinePill)
+  s.treasureLevels.alchemyCauldron = 2
+  E.recompute(s, d)
+  ok('法宝祭炼正确放大专业加成', close(E.craftYield(d, CRAFT_MAP.refinePill) - unrefined, 0.048))
+  s.resources.wood = 0
+  E.recompute(s, d)
+  ok('百工坊缺少维护材料时不提供通用制作收益', d.craftBonus === 0)
+}
+
+section('修真前置不被境界条件覆盖')
+for (const [id, parent, building, count, realm] of [
+  ['ancestorArt', null, 'incenseCauldron', 2, 7],
+  ['grottoArt', null, 'depot', 2, 8],
+  ['arrayBasics', 'astrologyArt', 'academy', 2, 7],
+  ['arrayMastery', 'arrayBasics', 'mountainArray', 3, 8],
+]) {
+  const { state: s } = newGame()
+  s.realm = realm
+  ok(`${id}仅达到境界仍不能参悟`, !E.isUpgradeUnlocked(s, UPGRADE_MAP[id]))
+  if (parent) s.upgrades[parent] = true
+  s.buildings[building] = { count, on: true }
+  ok(`${id}同时满足研究与建筑条件才开放`, E.isUpgradeUnlocked(s, UPGRADE_MAP[id]))
+  s.realm = realm - 1
+  ok(`${id}保留境界门槛`, !E.isUpgradeUnlocked(s, UPGRADE_MAP[id]))
 }
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)

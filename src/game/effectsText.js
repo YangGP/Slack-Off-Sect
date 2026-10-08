@@ -27,6 +27,7 @@ export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
     'jobRatio',
     'consumeRatio',
     'craftBonus',
+    'craftBonusByResource',
     'arrivalBonus',
     'breakthroughDiscount',
     'offlineHours',
@@ -95,6 +96,11 @@ export function describeEffects(ef) {
   if (ef.morale) push('士气', `+${ef.morale}`, 'good')
   if (ef.consumeRatio) push('弟子灵气消耗', `-${fmtPercent(ef.consumeRatio)}`, 'good')
   if (ef.craftBonus) push('制作产出', `+${fmtPercent(ef.craftBonus)}`, 'good')
+  if (ef.craftBonusByResource) {
+    for (const [res, value] of Object.entries(ef.craftBonusByResource)) {
+      push(`${resName(res)} 制作产出`, `+${fmtPercent(value)}`, 'good')
+    }
+  }
   if (ef.disasterGuard) push('妖兽侵袭损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
   if (ef.ascendBonus) push('飞升仙缘', `+${fmtPercent(ef.ascendBonus)}`, 'good')
   if (ef.arrivalBonus) push('弟子前来速度', `+${fmtPercent(ef.arrivalBonus)}`, 'good')

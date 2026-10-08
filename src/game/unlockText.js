@@ -61,8 +61,11 @@ for (const u of ALL_UPGRADES) {
   }
 }
 
-// ④ 配方：经由「解锁的建筑」开放（一跳）
+// ④ 配方：直接绑定工艺，或经由解锁的建筑开放（一跳）。
 for (const c of CRAFTS) {
+  for (const uid of [...(c.needs?.upgrades || []), ...(c.needs?.upgrade ? [c.needs.upgrade] : [])]) {
+    bucket(uid).crafts.add(c.id)
+  }
   const gate = c.needs?.building?.id
   if (!gate) continue
   for (const uid of buildingGates(gate)) {

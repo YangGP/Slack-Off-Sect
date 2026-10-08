@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, QUICK_CRAFT_LIMIT, ADVANCED_CRAFT_OUTPUTS } from '@/data/crafts'
-import { isCraftUnlocked, autoCraftStatus, maxCraftable } from '@/game/engine'
+import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield } from '@/game/engine'
 import { costLabel } from '@/game/pricing'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock } from '@/game/format'
@@ -28,6 +28,7 @@ const allRows = computed(() =>
     const canMake = maxCraftable(state, derived, c.id)
     return {
       meta: c,
+      yield: craftYield(derived, c),
       affordable: canMake >= 1,
       progress: state.craftProgress[c.id] || 0,
       auto: !!state.autoCraft[c.id],
@@ -75,7 +76,7 @@ const condenseStatus = computed(() => {
 <template>
   <div class="box" :class="compact ? 'craft-quick' : 'craft-full'">
     <div class="box-head">
-      {{ compact ? '快捷炼制' : '炼制' }}<span class="hint">制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
+      {{ compact ? '快捷炼制' : '炼制' }}<span class="hint">通用制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
       <button v-if="compact" class="craft-open" @click="actions.setTab('craft')">全部配方 →</button>
     </div>
     <div class="box-body">
@@ -120,7 +121,8 @@ const condenseStatus = computed(() => {
         </div>
         <div v-if="!compact" class="craft-cost small">
           <template v-for="(amount, res, index) in row.meta.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: (state.resources[res] || 0) < amount }">{{ resName(res) }} {{ fmtStock(amount) }}</span></template>
-          <span class="dim"> → </span><span class="good">{{ resName(row.meta.out) }} {{ fmt(row.meta.amount * (1 + derived.craftBonus)) }}</span>
+          <span class="dim"> → </span><span class="good">{{ resName(row.meta.out) }} {{ fmt(row.yield) }}</span>
+          <span v-if="derived.craftBonusByResource[row.meta.out]" class="dim"> · 专业加成 +{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
         </div>
         <div class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
@@ -134,7 +136,7 @@ const condenseStatus = computed(() => {
             {{ condenseStatus }}
           </span>
           <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseStone' && derived.autoCondenseUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
-          <span v-if="!compact && derived.craftBonus > 0" class="dim"> · 小数累积 {{ fmtPercent(row.progress) }}</span>
+          <span v-if="!compact && row.yield > row.meta.amount" class="dim"> · 小数累积 {{ fmtPercent(row.progress) }}</span>
         </div>
         <div class="craft-line">
           <button
@@ -192,7 +194,7 @@ const condenseStatus = computed(() => {
             </div>
             <div class="tip-row">
               <span class="k">每次得到</span>
-              <span class="v good">{{ fmt(row.meta.amount * (1 + derived.craftBonus)) }}</span>
+              <span class="v good">{{ fmt(row.yield) }}</span>
             </div>
             <div class="tip-row">
               <span class="k">这批能做</span>
@@ -202,7 +204,11 @@ const condenseStatus = computed(() => {
                 </template>
               </span>
             </div>
-            <div v-if="derived.craftBonus > 0" class="tip-row">
+            <div v-if="derived.craftBonusByResource[row.meta.out]" class="tip-row">
+              <span class="k">专业制作加成</span>
+              <span class="v good">+{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
+            </div>
+            <div v-if="row.yield > row.meta.amount" class="tip-row">
               <span class="k">小数累积</span>
               <span class="v">{{ fmtPercent(row.progress) }}</span>
             </div>

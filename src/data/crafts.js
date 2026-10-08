@@ -66,17 +66,27 @@ export const CRAFTS = [
     cost: { plank: 2, talisman: 2, ore: 20 },
     time: 4,
     desc: '两方木板搭骨，两张符箓定纹，玄铁铆合成一座阵基。用于讲经堂、静心池与护山大阵。',
-    needs: { realm: 4, upgrades: ['woodworking', 'talismanArt'], building: { id: 'talismanHall', count: 1 } },
+    needs: { realm: 4, upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'refineSteel',
     name: '淬玄成钢',
     out: 'steel',
     amount: 1,
-    cost: { ore: 20, stone: 30 },
+    cost: { ore: 40, qi: 120 },
     time: 4,
     desc: '玄铁入炉，反复折叠锻打，杂质随火星飞尽。',
-    needs: { building: { id: 'forge', count: 1 } },
+    needs: { upgrades: ['steelWorking'], building: { id: 'forge', count: 1 } },
+  },
+  {
+    id: 'condenseCrystal',
+    name: '凝气结晶',
+    out: 'crystal',
+    amount: 1,
+    cost: { qi: 300, talisman: 2 },
+    time: 5,
+    desc: '以两张符箓定住气机，将灵气压成稳定晶核。用于晶核聚灵阵、观星台与高级阵法。',
+    needs: { realm: 4, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'growImmortalHerb',
@@ -135,7 +145,7 @@ export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const QUICK_CRAFT_LIMIT = 4
 export const DEFAULT_QUICK_CRAFTS = ['condenseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['arrayBase', 'steel', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
+export const ADVANCED_CRAFT_OUTPUTS = ['arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]

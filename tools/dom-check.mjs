@@ -359,6 +359,7 @@ ok(
     state.buildings.warehouse = { count: 2, on: true } // 已建 2 座 → 提示里应出现「合计」
     state.resources.wood = 9999
     state.resources.stone = 9999
+    state.resources.ore = 9999
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 80))
     const storeItem = item('库房')
@@ -377,9 +378,9 @@ ok(
     ok('一行里不带逗号顿号堆叠（每行只有一项）', effectRows.every((r) => !r.includes('，') && !r.includes('、')), effectRows.join(' ｜ '))
     ok('库房不再给灵气 / 感悟 / 丹药 / 符箓 / 香火 / 法器 加上限', !/灵气 上限|感悟 上限|丹药 上限|符箓 上限|香火 上限|法器 上限/.test(tip.textContent), tip.textContent.replace(/\s+/g, ' ').slice(-120))
     ok('合计写在同一条里', effectRows.some((r) => r.includes('（合计')), effectRows.join(' ｜ '))
-    ok('悬停时高亮的正是这座建筑的造价（灵木 / 灵石）', (() => {
+    ok('悬停时高亮的正是这座建筑的造价（灵木 / 玄铁）', (() => {
       const lit = [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim())
-      return lit.includes('灵木') && lit.includes('灵石') && !lit.includes('灵气')
+      return lit.includes('灵木') && lit.includes('玄铁') && !lit.includes('灵气') && !lit.includes('灵石')
     })(), [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim()).join(','))
     storeItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))
     await new Promise((r) => setTimeout(r, 60))
@@ -723,6 +724,7 @@ ok('修真页不列技艺·法宝层的东西', !html().includes('引气诀') &&
   state.resources.insight = 120
   state.resources.stone = 400
   state.resources.herb = 50
+  state.resources.wood = 400
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 80))
   const rows = [...doc.querySelectorAll('.box-body > table.grid tbody tr')]
@@ -767,7 +769,7 @@ const cells = dataRows.map((tr) => ({
       /感悟\s*120 \/ 200（还差 .+）/.test(tip),
       costRows.join(' ｜ '),
     )
-    ok('够的花费只写需求值', /灵石\s*120(?!\s*\/)/.test(tip), costRows.join(' ｜ '))
+    ok('够的花费只写需求值', /灵木\s*120(?!\s*\/)/.test(tip), costRows.join(' ｜ '))
     trigger.dispatchEvent(new window.MouseEvent('mouseleave'))
     await new Promise((r) => setTimeout(r, 60))
   }
@@ -1272,6 +1274,36 @@ ok('点击加固实际扣料并清除威胁', !state.pendingChoice && state.reso
 ok('处理后展示药圃安宁且立即存档', text().includes('药圃安宁') && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).affairs.beastPeaceUntil > Date.now())
 actions.importText(beforeThreat)
 await new Promise((r) => setTimeout(r, 50))
+
+console.log('\n== 凝晶工艺与专业收益界面 ==')
+{
+  const previous = actions.exportText()
+  actions.importText(JSON.stringify({
+    realm: 4,
+    resources: { insight: 2000, qi: 3000, talisman: 100, ore: 500, wood: 500, plank: 20 },
+    upgrades: { qiOrigin: true, qiGazing: true, talismanArt: true },
+    buildings: { talismanHall: { count: 1, on: true }, workshop: { count: 1, on: true } },
+  }))
+  actions.research('crystalTheory')
+  state.ui.tab = 'craft'
+  state.ui.craftFilter = 'all'
+  await new Promise(r => setTimeout(r, 50))
+  ok('研究原理后配方仍锁定并说明所需工艺', !doc.querySelector('.main [data-craft="condenseCrystal"]') && doc.querySelector('.main details')?.textContent.includes('凝晶工艺'))
+  actions.research('crystalCraft')
+  await new Promise(r => setTimeout(r, 50))
+  const row = doc.querySelector('.main [data-craft="condenseCrystal"]')
+  ok('掌握工艺后出现灵晶配方及专业加成', !!row && /灵气\s*300/.test(row.textContent) && /符箓\s*2/.test(row.textContent) && /专业加成\s*\+5%/.test(row.textContent))
+  ok('配方展示通用加成与专业加成合计产出', /灵晶\s*1\.2/.test(row?.querySelector('.craft-cost')?.textContent || ''))
+  row?.querySelector('.btn.primary')?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('灵晶制作按钮实际扣料且整数入库', state.resources.crystal === 1 && state.resources.talisman === 92 && Math.abs(state.resources.qi - 2700) < 1e-6)
+  row?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 340))
+  ok('配方悬停明确专业收益及小数结转', doc.querySelector('.tip')?.textContent.includes('专业制作加成') && doc.querySelector('.tip')?.textContent.includes('小数累积'))
+  row?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
 
 console.warn = origWarn
 console.error = origError

@@ -64,6 +64,7 @@ const effects = (e) => {
   if (e.morale) out.push(`士气 +${e.morale}`)
   if (e.consumeRatio) out.push(`消耗 −${pct(e.consumeRatio)}`)
   if (e.craftBonus) out.push(`制作 +${pct(e.craftBonus)}`)
+  if (e.craftBonusByResource) for (const [id, value] of Object.entries(e.craftBonusByResource)) out.push(`${res(id)}制作 +${pct(value)}`)
   if (e.disasterGuard) out.push(`灾损 −${pct(e.disasterGuard)}`)
   if (e.ascendBonus) out.push(`仙缘 +${pct(e.ascendBonus)}`)
   if (e.arrivalBonus) out.push(`弟子前来 +${pct(e.arrivalBonus)}`)

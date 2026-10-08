@@ -60,6 +60,7 @@ export function createDerived() {
     /** 道果带来的全局产出倍率（飞升层） */
     daoMult: 1,
     craftBonus: 0,
+    craftBonusByResource: {},
     disasterGuard: 0,
     ascendBonus: 0,
     consumeReduction: 0,
@@ -399,6 +400,11 @@ function applyEffects(ef, mult, targets, src) {
   if (ef.morale) acc.moraleBonus += ef.morale * mult
   if (ef.consumeRatio) acc.consumeReduction += ef.consumeRatio * mult
   if (ef.craftBonus) acc.craftBonus += ef.craftBonus * mult
+  if (ef.craftBonusByResource) {
+    for (const [res, value] of Object.entries(ef.craftBonusByResource)) {
+      acc.craftBonusByResource[res] = (acc.craftBonusByResource[res] || 0) + value * mult
+    }
+  }
   if (ef.disasterGuard) acc.disasterGuard += ef.disasterGuard * mult
   if (ef.ascendBonus) acc.ascendBonus += ef.ascendBonus * mult
   if (ef.arrivalBonus) acc.arrivalBonus += ef.arrivalBonus * mult
@@ -464,6 +470,7 @@ function recomputeRaw(state, derived, supply) {
     moraleBonus: 0,
     consumeReduction: 0,
     craftBonus: 0,
+    craftBonusByResource: {},
     disasterGuard: 0,
     ascendBonus: 0,
     arrivalBonus: 0,
@@ -740,6 +747,7 @@ function recomputeRaw(state, derived, supply) {
   derived.karmaMult = karmaMult
   derived.ratioAll = acc.ratioAll
   derived.craftBonus = acc.craftBonus
+  derived.craftBonusByResource = acc.craftBonusByResource
   derived.disasterGuard = Math.min(0.8, acc.disasterGuard)
   derived.ascendBonus = acc.ascendBonus
   derived.consumeReduction = acc.consumeReduction
@@ -946,13 +954,18 @@ export function research(state, derived, id) {
   return true
 }
 
+/** 单份理论产出：通用与对应成品的专业加成相加，实际入库另做整数结转。 */
+export function craftYield(derived, recipe) {
+  return recipe.amount * (1 + (derived.craftBonus || 0) + (derived.craftBonusByResource?.[recipe.out] || 0))
+}
+
 /** 做一份（内部用：不改 derived、不写日志），返回实际得到几个 */
 function craftUnit(state, derived, recipe) {
   if (!canAfford(state, recipe.cost)) return 0
   const cap = derived.max[recipe.out]
   if ((state.resources[recipe.out] || 0) >= cap - EPS) return 0
   payCost(state, recipe.cost)
-  return addCraftGain(state, derived, recipe, recipe.amount * (1 + derived.craftBonus))
+  return addCraftGain(state, derived, recipe, craftYield(derived, recipe))
 }
 
 /** 按当前材料与仓储余量，这个配方最多还能做几份 */
@@ -1386,7 +1399,7 @@ export function eventResourceRate(state, derived, res, path = new Set()) {
   for (const [input, amount] of Object.entries(recipe.cost)) {
     batches = Math.min(batches, eventResourceRate(state, derived, input, next) / amount)
   }
-  return Math.max(direct, batches * recipe.amount * (1 + derived.craftBonus))
+  return Math.max(direct, batches * craftYield(derived, recipe))
 }
 
 /** 预览与结算共用应对规则，设施与库存变化后重新计算。 */
