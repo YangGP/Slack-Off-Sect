@@ -33,6 +33,9 @@ export const CONFIG = {
    * 永远还有一点点收益，但不会线性膨胀把后期压平。见 docs/DESIGN.md §8.4。
    */
   KARMA_BONUS_CAP: 2,
+  /** 仙缘仓储：每点 +0.15%，累计 +37.5% 后递减，渐近 +50%；不改变产出倍率。 */
+  KARMA_STORAGE_PER_POINT: 0.0015,
+  KARMA_STORAGE_CAP: 0.5,
   /** 每颗道果的全局产出加成（道果是飞升才给的更高一层货币） */
   DAO_PRODUCTION_BONUS: 0.05,
   /** 每颗道果对「转世/飞升时能拿多少仙缘」的加成 —— 上层反哺下层 */

@@ -2935,6 +2935,43 @@ section('分类仓库与扩仓可达性')
   ok('超额原料正常消费且停止补入', restored.resources.wood === 9980)
 }
 
+section('仙缘仓储永久加成')
+{
+  const { state: s, derived: d } = newGame()
+  s.buildings.medicineVault = { count: 2, on: true }
+  s.buildings.arcaneVault = { count: 1, on: true }
+  s.upgrades.storageBag = true
+  E.recompute(s, d)
+  const initial = { ...d.max }
+  ok('无仙缘时仓储倍率为1', d.karmaStorageMult === 1)
+  s.karma = 202
+  E.recompute(s, d)
+  ok('202仙缘增加30.3%仓储', close(d.karmaStorageMult, 1.303, 1e-9))
+  ok('仙缘统一放大基础、通用及专属容量', RESOURCES.filter(r => Number.isFinite(initial[r.id])).every(r => close(d.max[r.id], r.integer ? Math.floor(initial[r.id] * 1.303 + 1e-9) : initial[r.id] * 1.303, 1e-8)))
+  ok('仙缘及道果自身容量仍为无限', d.max.karma === Infinity && d.max.dao === Infinity)
+  const enlarged = { ...d.max }
+  E.recompute(s, d)
+  ok('重复重算不会复利放大仓储', RESOURCES.every(r => d.max[r.id] === enlarged[r.id]))
+  ok('仙缘扩仓不会直接增加库存', s.resources.pill === 0 && s.resources.qi === 0)
+  const warehouseWood = E.buildingCost({ ...s, buildings: { warehouse: { count: 45, on: true } } }, 'warehouse', 1).wood
+  const depotStone = E.buildingCost({ ...s, buildings: { depot: { count: 25, on: true } } }, 'depot', 1).stone
+  ok('截图下一座库房从容量不足变为可支付', warehouseWood > 336000 && warehouseWood <= 336000 * d.karmaStorageMult)
+  ok('截图下一座石殿从容量不足变为可支付', depotStone > 321000 && depotStone <= 321000 * d.karmaStorageMult)
+  s.karma = 250
+  E.recompute(s, d)
+  ok('250仙缘前仓储增益不递减', close(d.karmaStorageMult, 1.375, 1e-9))
+  s.karma = 500
+  E.recompute(s, d)
+  const high = d.karmaStorageMult
+  s.karma = 100000
+  E.recompute(s, d)
+  ok('高仙缘继续增益但低于50%软上限', high > 1.375 && high < d.karmaStorageMult && d.karmaStorageMult < 1.5)
+  s.karma = 202
+  resetForReincarnation(s, 0)
+  E.recompute(s, d)
+  ok('转世后基础容量保留仙缘增益', s.karma === 202 && close(d.max.qi, RESOURCE_MAP.qi.baseMax * 1.303, 1e-9) && d.karmaStorageMult > 1)
+}
+
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {
   console.log('失败清单：')

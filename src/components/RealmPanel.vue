@@ -98,12 +98,22 @@ function reincarnate() {
                       <span class="k">软上限</span>
                       <span class="v">
                         +200%（
-                        {{ Math.round(CONFIG.KARMA_BONUS_CAP / CONFIG.KARMA_BONUS_PER_POINT / 0.75) }}
+                        {{ Math.round(CONFIG.KARMA_BONUS_CAP * 0.75 / CONFIG.KARMA_BONUS_PER_POINT) }}
                         点之后递减）
                       </span>
                     </div>
                     <div class="tip-row">
                       <span class="k">当前</span><span class="v">×{{ derived.karmaMult.toFixed(2) }}</span>
+                    </div>
+                    <div class="tip-section">仓储加成</div>
+                    <div class="tip-row">
+                      <span class="k">每点</span><span class="v good">全部有限容量 +{{ fmtPercent(CONFIG.KARMA_STORAGE_PER_POINT, 2) }}</span>
+                    </div>
+                    <div class="tip-row">
+                      <span class="k">软上限</span><span class="v">+{{ fmtPercent(CONFIG.KARMA_STORAGE_CAP) }}（{{ Math.round(CONFIG.KARMA_STORAGE_CAP * 0.75 / CONFIG.KARMA_STORAGE_PER_POINT) }}点之后递减）</span>
+                    </div>
+                    <div class="tip-row">
+                      <span class="k">当前仓储</span><span class="v good">+{{ fmtPercent(derived.karmaStorageMult - 1, 1) }}</span>
                     </div>
                   </div>
                 </template>
@@ -238,8 +248,9 @@ function reincarnate() {
             <td class="dim nowrap">永久加成</td>
             <td class="num">
               仙缘 ×{{ derived.karmaMult.toFixed(2) }} <span class="dim">·</span> 道果 ×{{
-                derived.daoMult.toFixed(2)
+              derived.daoMult.toFixed(2)
               }}
+              <span class="dim">·</span> 仓储 +{{ fmtPercent(derived.karmaStorageMult - 1, 1) }}
             </td>
           </tr>
         </tbody>

@@ -17,6 +17,10 @@ const TOTAL = HOURS * 3600
 const DECISION_EVERY = 5
 
 const state = createInitialState()
+// 可选第三参数：带指定仙缘重修，用同一策略检查后续周目的仓储链。
+const karma = Number(process.argv[3] || 0)
+if (!Number.isFinite(karma) || karma < 0 || !Number.isInteger(karma)) throw new Error('仙缘需为非负整数')
+state.karma = karma
 const derived = E.createDerived()
 E.recompute(state, derived)
 const bot = createBot(state, derived)
@@ -45,7 +49,7 @@ function snapshot(t) {
   console.log(`          ${res}`)
 }
 
-console.log(`模拟 ${HOURS} 小时，每 ${DECISION_EVERY} 秒决策一次\n`)
+console.log(`模拟 ${HOURS} 小时，初始仙缘 ${karma}，每 ${DECISION_EVERY} 秒决策一次\n`)
 let previousRealm = state.realm
 let sawEnergy = false
 for (let t = 1; t <= TOTAL; t++) {

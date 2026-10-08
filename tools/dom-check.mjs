@@ -838,6 +838,30 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
 state.ui.tab = 'realm'
 await new Promise((r) => setTimeout(r, 50))
 ok('境界面板渲染', html().includes('飞升'))
+{
+  const oldKarma = state.karma
+  state.karma = 202
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 50))
+  ok('境界页显示仙缘仓储增益精度', text().includes('仓储 +30.3%'))
+  const karmaCell = [...doc.querySelectorAll('.main td')].find(el => el.textContent.trim() === '仙缘')?.nextElementSibling
+  const trigger = karmaCell?.querySelector('.tip-trigger')
+  trigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise((r) => setTimeout(r, 180))
+  const tip = doc.querySelector('.tip')?.textContent || ''
+  ok('仙缘悬停展示每点仓储增益与递减门槛', tip.includes('0.15%') && tip.includes('250点之后递减') && tip.includes('30.3%'))
+  ok('仙缘产出软上限提示为75点起递减', tip.includes('75') && !tip.includes('133'))
+  trigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  const resourceTrigger = doc.querySelector('.left .res-table .tip-trigger')
+  resourceTrigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise((r) => setTimeout(r, 180))
+  const resourceTip = doc.querySelector('.tip')?.textContent || ''
+  ok('资源悬停说明仙缘总容量加成', resourceTip.includes('仙缘仓储') && resourceTip.includes('30.3%'))
+  resourceTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  state.karma = oldKarma
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 50))
+}
 // 境界页：里程碑写进标题、转世与飞升分成两段、门槛未达成时不报可得数字
 {
   state.realm = 4

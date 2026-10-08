@@ -55,6 +55,8 @@ export function createDerived() {
     globalMult: 1,
     realmMult: 1,
     karmaMult: 1,
+    /** 仙缘对有限资源容量的独立倍率 */
+    karmaStorageMult: 1,
     /** 道果带来的全局产出倍率（飞升层） */
     daoMult: 1,
     craftBonus: 0,
@@ -598,6 +600,7 @@ function recomputeRaw(state, derived, supply) {
   const karmaRaw = Math.max(0, state.karma || 0) * CONFIG.KARMA_BONUS_PER_POINT
   const karmaBonus = softCap(karmaRaw, CONFIG.KARMA_BONUS_CAP)
   const karmaMult = 1 + karmaBonus + acc.karmaRatio
+  const karmaStorageMult = 1 + softCap(Math.max(0, state.karma || 0) * CONFIG.KARMA_STORAGE_PER_POINT, CONFIG.KARMA_STORAGE_CAP)
   /** 道果（飞升层）：每颗 +5% 全局产出，不设上限 —— 因为拿到它的成本极高（一次飞升约 90 小时） */
   const daoMult = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_PRODUCTION_BONUS
   const globalMult = realmMult * karmaMult * moraleMult * daoMult * (1 + buffAll)
@@ -695,7 +698,11 @@ function recomputeRaw(state, derived, supply) {
     net[r.id] = (rates[r.id] || 0) - out
   }
 
-  for (const r of RESOURCES) if (r.integer) max[r.id] = Math.floor(max[r.id] + EPS)
+  for (const r of RESOURCES) {
+    if (Number.isFinite(max[r.id])) max[r.id] *= karmaStorageMult
+    if (r.integer) max[r.id] = Math.floor(max[r.id] + EPS)
+  }
+  derived.karmaStorageMult = karmaStorageMult
   derived.max = max
   state.__max = max // 供 addResource 使用（不参与存档序列化，仅内存）
   derived.rates = rates

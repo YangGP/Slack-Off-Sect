@@ -215,7 +215,7 @@ export const RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '飞升时带走的因果。每点仙缘永久提升全局产出。',
+    desc: '转世与飞升带走的因果。每点仙缘永久提升全局产出与仓储容量，两种加成分别递减。',
   },
 ]
 

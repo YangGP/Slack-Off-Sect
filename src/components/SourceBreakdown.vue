@@ -24,6 +24,7 @@ const expense = computed(() => flow.value.expense)
 const net = computed(() => flow.value.net)
 const max = computed(() => derived.max[props.resId] ?? Infinity)
 const amount = computed(() => state.resources[props.resId] || 0)
+const karmaStorageText = computed(() => `${((derived.karmaStorageMult - 1) * 100).toFixed(1).replace(/\.0$/, '')}%`)
 /** 整枚计数的资源（灵石/丹药/符箓/法器）不显示小数 */
 const amountText = computed(() =>
   fmtStock(amount.value),
@@ -141,6 +142,9 @@ const bonusRows = computed(() => {
     <div v-if="meta.storageWeight != null" class="tip-row">
       <span class="k">通用扩仓</span>
       <span class="v">基础容量的 {{ Math.round(meta.storageWeight * 1000) / 10 }}%；专属仓储全额计入</span>
+    </div>
+    <div v-if="Number.isFinite(max) && derived.karmaStorageMult > 1" class="tip-row">
+      <span class="k">仙缘仓储</span><span class="v good">总容量 +{{ karmaStorageText }}</span>
     </div>
 
     <div class="tip-section tip-row">
