@@ -28,7 +28,7 @@ import {
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
-import { EVENTS, EVENT_MAP } from '../src/data/events.js'
+import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '../src/data/realms.js'
 import { SEASONS, CALENDAR } from '../src/data/calendar.js'
 import { CONFIG } from '../src/data/config.js'
@@ -2524,7 +2524,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
   for (const e of choice) {
     for (const o of e.options) {
       const eff = o.effect || {}
-      if (eff.decline) continue
+      if (eff.decline || e.threat) continue
       const hasGain = !!(eff.lootRate || eff.recruit)
       // 代价可以是比例（costShare，随资源缩放）、绝对值（cost）或按比例掠夺（disaster）
       const hasCost = !!(eff.cost || eff.costShare || eff.tradeCost || eff.disaster)
@@ -2547,7 +2547,7 @@ section('事件三分类：自然环境 / 突发 / 选择')
       if (e.type !== 'choice') continue
       for (const o of e.options) {
         const eff = o.effect || {}
-        if (eff.decline) continue
+        if (eff.decline || e.threat) continue
         if (eff.cost) flatCost.push(e.id + '/' + o.label)
         // 收获必须是"当前产出的多少秒" —— 产出随境界与建筑缩放，奖励因此水涨船高
         if (!eff.lootRate) noRate.push(e.id + '/' + o.label)
@@ -2651,7 +2651,7 @@ section('事件工艺奖励与交易')
   const stocks = { ...s.resources }
   E.resolveChoice(s, d, 0)
   ok('付费交易的预览和实际结算相符', expected.rows.every(row => close(s.resources[row.res], (stocks[row.res] || 0) - row.lost + row.gained)))
-  ok('所有选择都有无代价退出选项', EVENTS.filter(e => e.type === 'choice').every(e => e.options.some(o => o.effect.decline)))
+  ok('普通机会可无代价退出，威胁必须提供默认防守', EVENTS.filter(e => e.type === 'choice').every(e => e.options.some(o => e.threat ? o.effect.beastResponse === 'default' : o.effect.decline)))
   ok('阵基接入至少三条现有事件', EVENTS.filter(e => e.lootRate?.arrayBase || e.options?.some(o => o.effect.lootRate?.arrayBase)).length >= 3)
   ok('交易最低用料和产能时长有效', EVENTS.every(e => (e.options || []).every(o => Object.values(o.effect.tradeCost || {}).every(c => c.floor > 0 && c.seconds > 0))))
 }
@@ -3014,6 +3014,139 @@ section('快捷炼制偏好兼容')
   ok('炼制页与快捷偏好能存读档', restored.ui.tab === 'craft' && restored.settings.quickCrafts.join(',') === malformed.settings.quickCrafts.join(','))
   resetForReincarnation(restored, 0)
   ok('转世保留快捷偏好', restored.settings.quickCrafts.includes('refineSteel') && restored.settings.quickCrafts.length === 4)
+}
+
+section('金丹妖兽事务完整循环')
+{
+  const realNow = Date.now
+  let now = 1800000000000
+  Date.now = () => now
+  try {
+    const event = EVENT_MAP.beastThreat
+    const start = (karma = 0) => {
+      const { state: s, derived: d } = newGame()
+      s.realm = 4
+      s.karma = karma
+      s.resources.herb = 100000
+      E.recompute(s, d)
+      E.fireEvent(s, d, event)
+      return { s, d }
+    }
+    const { state: early, derived: ed } = newGame()
+    ok('金丹之前不能触发新妖兽事务', E.fireEvent(early, ed, event) === null)
+    const { s, d } = start()
+    ok('妖兽预兆有五分钟期限与有界损失', s.pendingChoice.deadline === now + 300000 && s.pendingChoice.herbLoss <= 80)
+    ok('威胁没有免费取消选项', !event.options.some(o => o.effect.decline))
+    ok('重大事务不覆盖现有选择', E.fireEvent(s, d, event) === null && E.fireEvent(s, d, EVENT_MAP.caravan) === null)
+    const stocks = JSON.stringify(s.resources)
+    ok('缺料时加固被拒绝并保留威胁', E.resolveChoice(s, d, 0) === null && s.pendingChoice?.id === event.id && JSON.stringify(s.resources) === stocks)
+    s.resources.arrayBase = 1
+    s.resources.talisman = 2
+    const preview = E.eventOutcome(s, d, event.options[0].effect)
+    ok('加固预览明确阵基与符箓用料', preview.affordable && preview.required.arrayBase === 1 && preview.required.talisman === 2)
+    E.resolveChoice(s, d, 0)
+    ok('加固实际扣料并保全药圃', s.resources.arrayBase === 0 && s.resources.talisman === 0 && s.resources.herb === 100000)
+    ok('加固形成十五分钟安宁和二十分钟冷却', s.affairs.beastPeaceUntil === now + 900000 && s.affairs.beastCooldownUntil === now + 1200000)
+    ok('安宁期间显式触发同样被拒绝', E.fireEvent(s, d, event) === null)
+    now += 900001
+    ok('安宁结束仍遵守同类冷却', E.fireEvent(s, d, event) === null)
+    now += 300000
+    ok('冷却结束能够再次触发', !!E.fireEvent(s, d, event))
+    s.upgrades.arrayBasics = true
+    ok('阵法初解将符箓用量降到一枚', E.eventOutcome(s, d, event.options[0].effect).required.talisman === 1)
+    s.resources.artifact = 1
+    s.resources.pill = 3
+    ok('无救护准备出击需要三枚丹药', E.eventOutcome(s, d, event.options[1].effect).required.pill === 3)
+    s.buildings.meditationPool = { count: 1, on: true }
+    ok('静心池将出击丹药用量降到一枚', E.eventOutcome(s, d, event.options[1].effect).required.pill === 1)
+    E.resolveChoice(s, d, 1)
+    ok('出击扣除法器丹药并获得三十分钟安宁', s.resources.artifact === 0 && s.resources.pill === 2 && s.affairs.beastPeaceUntil === now + 1800000)
+    const { s: retreat, d: rd } = start()
+    E.resolveChoice(retreat, rd, 2)
+    E.recompute(retreat, rd)
+    ok('收缩采药只降低灵草产出且不扣成品', retreat.buffs.some(b => b.target === 'herb' && b.mult === -0.25 && b.until === now + 120000))
+    now += 120001
+    E.tick(retreat, rd, 0.1, { events: false })
+    ok('收缩采药到期自动恢复', !retreat.buffs.some(b => b.id === 'withdrawHerbs'))
+    for (const karma of [0, 202]) {
+      const { s: guarded, d: gd } = start(karma)
+      gd.disasterGuard = 0.5
+      const expected = E.eventOutcome(guarded, gd, event.options[3].effect)
+      const loss = expected.rows.find(row => row.res === 'herb').lost
+      E.resolveChoice(guarded, gd, 3)
+      ok(`${karma}仙缘超额库存默认防守预览与结算相同且减损`, guarded.resources.herb === 100000 - loss && loss <= 40 && !guarded.pendingChoice)
+    }
+    const { s: expired, d: xd } = start()
+    const saved = normalizeState(JSON.parse(JSON.stringify(expired)))
+    ok('威胁期限与损失估价可存读档', saved.pendingChoice.deadline === expired.pendingChoice.deadline && saved.pendingChoice.herbLoss === expired.pendingChoice.herbLoss)
+    now += 300001
+    E.simulateOffline(saved, xd, 2)
+    const after = saved.resources.herb
+    ok('离线已有威胁有界结算一次并不积累新事件', !saved.pendingChoice && after >= 99920 && saved.stats.eventsSeen === 1)
+    E.simulateOffline(saved, xd, 2)
+    ok('再次离线不会重复扣损失', saved.resources.herb === after)
+    const { s: late, d: ld } = start()
+    late.resources.arrayBase = 1
+    late.resources.talisman = 2
+    now += 300001
+    E.resolveChoice(late, ld, 0)
+    ok('到期点击按默认防守结算，不花付费材料', !late.pendingChoice && late.resources.arrayBase === 1 && late.resources.talisman === 2)
+    const old = normalizeState({ pendingChoice: {} })
+    ok('旧档补齐事务状态并清除无效选择', old.affairs.beastPeaceUntil === 0 && old.pendingChoice === null)
+    resetForReincarnation(s, 0)
+    ok('转世清空威胁与本世安宁', !s.pendingChoice && s.affairs.beastPeaceUntil === 0 && s.affairs.beastCooldownUntil === 0)
+  } finally {
+    Date.now = realNow
+  }
+}
+
+section('事件三级分类与纪事兼容')
+{
+  ok('事件目录定义三级且等级标识唯一', EVENT_LEVELS.map(l => l.id).join(',') === '1,2,3')
+  ok('全部正式事件显式声明合法等级', EVENTS.every(e => EVENT_LEVELS.some(l => l.id === e.level)))
+  ok('三个等级均有实际内容', EVENT_LEVELS.every(l => EVENTS.some(e => e.level === l.id)))
+  ok('等级按境界阶段划分，处理类型独立', EVENT_MAP.ancestorBless.level === 1 && EVENT_MAP.ancientCave.level === 1 && EVENT_MAP.heavenGate.type === 'nature' && EVENT_MAP.heavenGate.level === 3 && EVENT_MAP.beastThreat.level === 2)
+  ok('全部事件的境界门槛与阶段存在交集', EVENTS.every(e => REALMS.some((_, realm) => isEventInRealm(e, realm))))
+  ok('筑基到金丹切换一级二级事件池', isEventInRealm(EVENT_MAP.spiritRain, 3) && !isEventInRealm(EVENT_MAP.spiritRain, 4) && !isEventInRealm(EVENT_MAP.beastThreat, 3) && isEventInRealm(EVENT_MAP.beastThreat, 4))
+  ok('化神到炼虚切换二级三级事件池', isEventInRealm(EVENT_MAP.beastThreat, 6) && !isEventInRealm(EVENT_MAP.beastThreat, 7) && !isEventInRealm(EVENT_MAP.thunderTemper, 6) && isEventInRealm(EVENT_MAP.thunderTemper, 7))
+  ok('阶段内仍遵守细分境界门槛', !isEventInRealm(EVENT_MAP.beastCub, 4) && isEventInRealm(EVENT_MAP.beastCub, 6) && !isEventInRealm(EVENT_MAP.heavenGate, 7) && isEventInRealm(EVENT_MAP.heavenGate, 8))
+  for (const realm of [3, 4, 6, 7]) {
+    const { state: stage, derived: sd } = newGame()
+    stage.realm = realm
+    const expected = realm < 4 ? 1 : realm < 7 ? 2 : 3
+    let valid = true
+    for (let i = 0; i < 100; i++) {
+      stage.pendingChoice = null
+      const event = E.fireEvent(stage, sd)
+      if (event && event.level !== expected) valid = false
+    }
+    ok(`${REALMS[realm].name}随机抽取只来自当前阶段`, valid)
+  }
+  ok('旧调试事件缺失或无效等级时归日常', getEventLevel({}).id === 1 && getEventLevel({ level: 99 }).id === 1)
+  const { state: s, derived: d } = newGame()
+  E.fireEvent(s, d, EVENT_MAP.spiritRain)
+  ok('即时事件纪事保留事件id和等级', s.log[0].eventId === 'spiritRain' && s.log[0].eventLevel === 1 && s.log[0].kind === 'good')
+  E.fireEvent(s, d, EVENT_MAP.grottoRift)
+  ok('选择预兆纪事记录天地级', s.log[0].eventId === 'grottoRift' && s.log[0].eventLevel === 3)
+  E.resolveChoice(s, d, EVENT_MAP.grottoRift.options.findIndex(o => o.effect.decline))
+  ok('选择结束后保留来源等级', s.log[0].eventId === 'grottoRift' && s.log[0].eventLevel === 3)
+  s.realm = 4
+  E.fireEvent(s, d, EVENT_MAP.beastThreat)
+  s.pendingChoice.deadline = Date.now() - 1
+  E.settleExpiredThreat(s, d)
+  ok('自动防守及安宁纪事均保留宗门级', s.log.slice(0, 2).every(row => row.eventId === 'beastThreat' && row.eventLevel === 2))
+  const saved = normalizeState(JSON.parse(JSON.stringify(s)))
+  ok('等级元数据可随纪事存读档', saved.log[0].eventLevel === 2 && saved.log[0].eventId === 'beastThreat')
+  const old = normalizeState({ log: [{ id: 1, text: '旧纪事', kind: 'event' }] })
+  ok('旧纪事保留原文且不臆测等级', old.log[0].text === '旧纪事' && old.log[0].eventLevel === undefined)
+  const reclassified = normalizeState({ log: [{ id: 1, text: '祖师显灵', eventId: 'ancestorBless', eventLevel: 2 }] })
+  ok('有来源的旧纪事按修正后的阶段归属读档', reclassified.log[0].eventLevel === 1)
+  const { state: crossed, derived: cd } = newGame()
+  E.fireEvent(crossed, cd, EVENT_MAP.ancientCave)
+  crossed.realm = 4
+  ok('突破后仍能结束前阶段未决事务', !!E.resolveChoice(crossed, cd, EVENT_MAP.ancientCave.options.findIndex(o => o.effect.decline)) && crossed.pendingChoice === null)
+  E.pushLog(s, '日常建造', 'good')
+  ok('普通操作纪事不被标成事件', s.log[0].eventLevel === undefined && s.log[0].eventId === undefined)
 }
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)

@@ -287,6 +287,8 @@ jsdom 已能覆盖「挂载 + 响应式 + 事件处理」这条最关键的链�
 
 ### 16.6 调平衡
 
+新增事件在 `src/data/events.js` 显式填写 `level: 1 / 2 / 3`：金丹前、金丹至化神、炼虚起。阶段范围集中在 `EVENT_LEVELS`，随机抽取通过 `isEventInRealm` 将其与事件自身 `minRealm` / `maxRealm` 取交集，突破分界后切换事件池。`type`（环境/突发/选择）与 `kind`（色调）独立。展示与筛选统一使用 `getEventLevel`；结算传递来源事件，纪事保存 `eventId` 和 `eventLevel`，不要在选项效果中重复等级。正式事件漏填等级、门槛与阶段没有交集会被完整性检查发现。更新后运行 `npm run docs:tables` 同步事件等级表。
+
 - 全局常量（tick、弟子口粮与前来间隔、士气、离线、事件间隔、日志上限）→ `src/data/config.js`。
 - 单条内容的强度 → 对应数据文件的 `cost / priceRatio / effects`（修真 / 技艺 / 法宝分居两个文件）。
 - 想验证改动 → `npm run audit -- <资源> <小时数> [假设性改动]` 量流量，

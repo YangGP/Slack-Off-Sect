@@ -6,6 +6,8 @@
  *   sudden  突发事件类 —— 立刻结算：发现遗迹资源 / 顿悟得感悟 / 丢失物资（`lootRate` / `disaster` / `recruit`）
  *   choice  选择类     —— 权衡收益与代价，或暂不介入
  *
+ * `level` 按金丹、炼虚两个分界标注阶段（1金丹前 / 2金丹至化神 / 3炼虚起）。
+ * 等级约束抽取阶段，minRealm / maxRealm 可在阶段内进一步限制；type、kind 表示处理方式与色调。
  * `kind` 保留作"色调"（good / bad），界面据此上色；`type` 决定机制。
  *
  * 事件只做"声明"，效果由 engine 解释执行：
@@ -23,6 +25,7 @@ export const EVENTS = [
   // ============================================================
   {
     id: 'spiritRain',
+    level: 1,
     type: 'nature',
     name: '灵雨润泽',
     weight: 12,
@@ -32,6 +35,7 @@ export const EVENTS = [
   },
   {
     id: 'springThunder',
+    level: 1,
     type: 'nature',
     name: '春雷惊蛰',
     weight: 10,
@@ -41,6 +45,7 @@ export const EVENTS = [
   },
   {
     id: 'purpleQi',
+    level: 2,
     type: 'nature',
     name: '紫气东来',
     weight: 6,
@@ -51,6 +56,7 @@ export const EVENTS = [
   },
   {
     id: 'ancestorBless',
+    level: 1,
     type: 'nature',
     name: '祖师显灵',
     weight: 8,
@@ -61,6 +67,7 @@ export const EVENTS = [
   },
   {
     id: 'heavenGate',
+    level: 3,
     type: 'nature',
     name: '天门一线',
     weight: 4,
@@ -71,6 +78,7 @@ export const EVENTS = [
   },
   {
     id: 'coldWave',
+    level: 1,
     type: 'nature',
     name: '寒潮',
     weight: 8,
@@ -80,6 +88,7 @@ export const EVENTS = [
   },
   {
     id: 'drought',
+    level: 1,
     type: 'nature',
     name: '旱魃过境',
     weight: 6,
@@ -90,6 +99,7 @@ export const EVENTS = [
   },
   {
     id: 'earthTremor',
+    level: 1,
     type: 'nature',
     name: '地脉微震',
     weight: 5,
@@ -104,6 +114,7 @@ export const EVENTS = [
   // ============================================================
   {
     id: 'pilgrims',
+    level: 1,
     type: 'sudden',
     name: '香客云集',
     weight: 10,
@@ -115,6 +126,7 @@ export const EVENTS = [
   },
   {
     id: 'wanderer',
+    level: 1,
     type: 'sudden',
     name: '游方散修',
     weight: 9,
@@ -124,6 +136,7 @@ export const EVENTS = [
   },
   {
     id: 'veinSurge',
+    level: 1,
     type: 'sudden',
     name: '灵脉潮涌',
     weight: 6,
@@ -134,6 +147,7 @@ export const EVENTS = [
   },
   {
     id: 'insightFlash',
+    level: 1,
     type: 'sudden',
     name: '顿悟',
     weight: 7,
@@ -144,6 +158,7 @@ export const EVENTS = [
   },
   {
     id: 'ruinsFound',
+    level: 2,
     type: 'sudden',
     name: '遗迹现世',
     weight: 5,
@@ -155,6 +170,7 @@ export const EVENTS = [
   },
   {
     id: 'scrapScroll',
+    level: 1,
     type: 'sudden',
     name: '拾得残卷',
     weight: 9,
@@ -166,6 +182,7 @@ export const EVENTS = [
   },
   {
     id: 'goodHarvest',
+    level: 1,
     type: 'sudden',
     name: '丰年',
     weight: 9,
@@ -176,6 +193,7 @@ export const EVENTS = [
   },
   {
     id: 'guestSect',
+    level: 2,
     type: 'sudden',
     name: '道友来访',
     weight: 8,
@@ -187,6 +205,8 @@ export const EVENTS = [
   },
   {
     id: 'beastRaid',
+    level: 1,
+    maxRealm: 3,
     type: 'sudden',
     name: '妖兽侵袭',
     weight: 14,
@@ -196,6 +216,7 @@ export const EVENTS = [
   },
   {
     id: 'qiTide',
+    level: 1,
     type: 'sudden',
     name: '灵潮倒卷',
     weight: 8,
@@ -206,6 +227,7 @@ export const EVENTS = [
   },
   {
     id: 'furnaceFail',
+    level: 1,
     type: 'sudden',
     name: '丹炉炸炉',
     weight: 7,
@@ -216,6 +238,7 @@ export const EVENTS = [
   },
   {
     id: 'mountainFlood',
+    level: 1,
     type: 'sudden',
     name: '山洪',
     weight: 6,
@@ -229,7 +252,21 @@ export const EVENTS = [
   // 选择类：选一个，另一个的代价也要接受（收益 > 代价）
   // ============================================================
   {
+    id: 'beastThreat',
+    level: 2,
+    type: 'choice', name: '妖兽窥伺药圃',
+    weight: 14, kind: 'event', minRealm: 4, threat: true, responseSeconds: 300,
+    text: '山脚发现新鲜兽迹，妖兽正在试探药圃外围。五分钟内安排应对，逾期由弟子依现有阵法守护山门。',
+    options: [
+      { label: '加固外围阵法', desc: '投入阵基与符箓，保住药圃；阵法初解可节省符箓。安宁十五分钟。', effect: { beastResponse: 'fortify' } },
+      { label: '派弟子驱逐', desc: '消耗法器与丹药，驱散兽群；静心池辅助调息，减少丹药用量。安宁三十分钟。', effect: { beastResponse: 'drive' } },
+      { label: '暂时收缩采药', desc: '不花成品，灵草产出降低25%，持续两分钟。安宁十分钟。', effect: { beastResponse: 'withdraw' } },
+      { label: '依现有阵法防守', desc: '不主动动用成品，承受有限灵草损失，护山减免照常生效。安宁五分钟。', effect: { beastResponse: 'default' } },
+    ],
+  },
+  {
     id: 'ancientCave',
+    level: 1,
     type: 'choice',
     name: '荒山古洞',
     weight: 7,
@@ -255,6 +292,7 @@ export const EVENTS = [
   },
   {
     id: 'rogueJoins',
+    level: 1,
     type: 'choice',
     name: '散修投奔',
     weight: 8,
@@ -276,6 +314,7 @@ export const EVENTS = [
   },
   {
     id: 'veinStir',
+    level: 2,
     type: 'choice',
     name: '灵脉异动',
     weight: 6,
@@ -305,6 +344,7 @@ export const EVENTS = [
   },
   {
     id: 'stoneStele',
+    level: 2,
     type: 'choice',
     name: '古碑残文',
     weight: 7,
@@ -330,6 +370,7 @@ export const EVENTS = [
   },
   {
     id: 'beastCub',
+    level: 2,
     type: 'choice',
     name: '灵兽幼崽',
     weight: 6,
@@ -355,6 +396,7 @@ export const EVENTS = [
   },
   {
     id: 'caravan',
+    level: 2,
     type: 'choice',
     name: '商队过境',
     weight: 7,
@@ -380,6 +422,7 @@ export const EVENTS = [
   },
   {
     id: 'grottoRift',
+    level: 3,
     type: 'choice',
     name: '洞天裂隙',
     weight: 5,
@@ -405,6 +448,7 @@ export const EVENTS = [
   },
   {
     id: 'thunderTemper',
+    level: 3,
     type: 'choice',
     name: '以身试劫',
     weight: 6,
@@ -434,6 +478,7 @@ export const EVENTS = [
   },
   {
     id: 'veinContest',
+    level: 3,
     type: 'choice',
     name: '夺脉之争',
     weight: 6,
@@ -463,6 +508,7 @@ export const EVENTS = [
   },
   {
     id: 'ancientBattlefield',
+    level: 3,
     type: 'choice',
     name: '古战场残阵',
     weight: 5,
@@ -492,6 +538,7 @@ export const EVENTS = [
   },
   {
     id: 'coldPool',
+    level: 3,
     type: 'choice',
     name: '万载寒潭',
     weight: 5,
@@ -521,6 +568,7 @@ export const EVENTS = [
   },
   {
     id: 'treasureWager',
+    level: 3,
     type: 'choice',
     name: '以灵宝为注',
     weight: 4,
@@ -550,6 +598,7 @@ export const EVENTS = [
   },
   {
     id: 'tribulationTrial',
+    level: 3,
     type: 'choice',
     name: '天劫预演',
     weight: 4,
@@ -578,7 +627,7 @@ export const EVENTS = [
     ],
   },
 
-].map(event => event.type === 'choice' ? {
+].map(event => event.type === 'choice' && !event.threat ? {
   ...event,
   options: [...event.options, {
     label: '暂不介入',
@@ -588,6 +637,26 @@ export const EVENTS = [
 } : event)
 
 export const EVENT_MAP = Object.fromEntries(EVENTS.map((e) => [e.id, e]))
+
+/** 等级目录：扩展事件时显式填写 level，展示与筛选共用此处。 */
+export const EVENT_LEVELS = [
+  { id: 1, name: '金丹前', label: '一级·金丹前', hint: '凡体、引气、炼气、筑基', minRealm: 0, maxRealm: 3 },
+  { id: 2, name: '金丹至化神', label: '二级·金丹至化神', hint: '金丹、元婴、化神', minRealm: 4, maxRealm: 6 },
+  { id: 3, name: '炼虚起', label: '三级·炼虚起', hint: '炼虚、合体、大乘、渡劫', minRealm: 7, maxRealm: 10 },
+]
+export const EVENT_LEVEL_MAP = Object.fromEntries(EVENT_LEVELS.map(level => [level.id, level]))
+
+/** 兼容未标等级的旧调用与调试事件；正式事件由完整性检查要求显式标注。 */
+export function getEventLevel(event) {
+  return EVENT_LEVELS.find(level => level.id === event?.level) || EVENT_LEVEL_MAP[1]
+}
+
+/** 按阶段范围与单条事件门槛取交集，突破金丹/炼虚后切换事件池。 */
+export function isEventInRealm(event, realm) {
+  const level = getEventLevel(event)
+  return realm >= Math.max(level.minRealm, event.minRealm || 0)
+    && realm <= Math.min(level.maxRealm, event.maxRealm ?? Infinity)
+}
 
 /** 三类事件的展示名与说明（界面与文档共用一份口径） */
 export const EVENT_TYPES = [

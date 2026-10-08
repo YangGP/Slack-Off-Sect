@@ -7,7 +7,7 @@ import { TECHNIQUES } from '@/data/techniques'
 import { CRAFTS, CRAFT_MAP, craftTime } from '@/data/crafts'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
-import { EVENTS, EVENT_MAP } from '@/data/events'
+import { EVENTS, EVENT_MAP, getEventLevel, isEventInRealm } from '@/data/events'
 import { CALENDAR, TERMS, SEASONS, DAYS_PER_SEASON, DAYS_PER_YEAR } from '@/data/calendar'
 
 const EPS = 1e-9
@@ -803,9 +803,14 @@ export function recompute(state, derived, seconds = 1) {
 // 日志
 // ============================================================
 
-export function pushLog(state, text, kind = 'info') {
+export function pushLog(state, text, kind = 'info', event = null) {
   state.logSeq = (state.logSeq || 0) + 1
-  state.log.unshift({ id: state.logSeq, at: Date.now(), text, kind })
+  const entry = { id: state.logSeq, at: Date.now(), text, kind }
+  if (event) {
+    entry.eventId = event.id
+    entry.eventLevel = getEventLevel(event).id
+  }
+  state.log.unshift(entry)
   if (state.log.length > CONFIG.LOG_LIMIT) state.log.length = CONFIG.LOG_LIMIT
   return state.logSeq
 }
@@ -1341,10 +1346,20 @@ export function reincarnationGain(state, derived) {
 // 随机事件
 // ============================================================
 
+function eventEligible(state, event) {
+  if (!isEventInRealm(event, state.realm)) return false
+  if (event.type === 'choice' && state.pendingChoice) return false
+  if (event.threat) {
+    const until = Math.max(state.affairs?.beastPeaceUntil || 0, state.affairs?.beastCooldownUntil || 0)
+    if (Date.now() < until) return false
+  }
+  return true
+}
+
 function pickEvent(state) {
   // 有未决选择时不再抽到"选择类"，避免玩家回来面对一堆积压的选择
   const pool = EVENTS.filter(
-    (e) => (e.minRealm || 0) <= state.realm && !(e.type === 'choice' && state.pendingChoice),
+    (e) => eventEligible(state, e),
   )
   if (!pool.length) return null
   const total = pool.reduce((s, e) => s + e.weight, 0)
@@ -1374,7 +1389,29 @@ export function eventResourceRate(state, derived, res, path = new Set()) {
   return Math.max(direct, batches * recipe.amount * (1 + derived.craftBonus))
 }
 
+/** 预览与结算共用应对规则，设施与库存变化后重新计算。 */
+export function eventEffect(state, derived, spec) {
+  if (!spec.beastResponse) return spec
+  const fixedCost = (cost) => Object.fromEntries(Object.entries(cost).map(([res, floor]) => [res, { floor, seconds: 0 }]))
+  switch (spec.beastResponse) {
+    case 'fortify':
+      return { tradeCost: fixedCost({ arrayBase: 1, talisman: state.upgrades.arrayBasics ? 1 : 2 }), peaceSeconds: 900 }
+    case 'drive': {
+      const pool = state.buildings.meditationPool
+      const rescue = pool?.count > 0 && pool.on !== false
+      return { tradeCost: fixedCost({ artifact: 1, pill: rescue ? 1 : 3 }), peaceSeconds: 1800 }
+    }
+    case 'withdraw':
+      return { buff: { id: 'withdrawHerbs', name: '收缩采药', mult: -0.25, target: 'herb', duration: 120 }, peaceSeconds: 600 }
+    case 'default':
+      return { boundedLoss: { herb: Math.min(80, Math.max(0, state.pendingChoice?.herbLoss ?? 20)) }, peaceSeconds: 300 }
+    default:
+      return spec
+  }
+}
+
 export function eventOutcome(state, derived, spec, disasterPercent = spec.disaster?.lossPercent?.[0] || 0) {
+  spec = eventEffect(state, derived, spec)
   const rows = []
   const required = {}
   for (const [res, cost] of Object.entries(spec.tradeCost || {})) {
@@ -1385,7 +1422,7 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
   const affordable = Object.entries(required).every(([res, amount]) => (state.resources[res] || 0) >= amount)
   const resources = new Set([
     ...Object.keys(spec.cost || {}), ...Object.keys(spec.costShare || {}), ...Object.keys(required),
-    ...(spec.disaster?.resources || []), ...Object.keys(spec.lootRate || {}),
+    ...(spec.disaster?.resources || []), ...Object.keys(spec.lootRate || {}), ...Object.keys(spec.boundedLoss || {}),
   ])
   for (const res of resources) {
     const integer = RESOURCE_MAP[res]?.integer
@@ -1396,7 +1433,8 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     const remaining = have - fixed - share
     const disaster = spec.disaster?.resources.includes(res)
       ? whole(remaining * disasterPercent * (1 - (derived.disasterGuard || 0))) : 0
-    const lost = fixed + share + disaster
+    const bounded = whole(Math.min(remaining, (spec.boundedLoss?.[res] || 0) * (1 - clamp(derived.disasterGuard || 0, 0, 1))))
+    const lost = fixed + share + disaster + bounded
     const offered = spec.lootRate?.[res] != null
       ? whole(Math.max(spec.floor?.[res] || 0, eventResourceRate(state, derived, res) * spec.lootRate[res])) : 0
     const room = Math.max(0, (state.__max?.[res] ?? Infinity) - (have - lost))
@@ -1407,7 +1445,7 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
   return { rows, recruits, required, affordable }
 }
 
-function settleEventOutcome(state, derived, spec, text, kind) {
+function settleEventOutcome(state, derived, spec, text, kind, source) {
   const range = spec.disaster?.lossPercent || [0, 0]
   const pct = range[0] + Math.random() * (range[1] - range[0])
   const outcome = eventOutcome(state, derived, spec, pct)
@@ -1419,7 +1457,7 @@ function settleEventOutcome(state, derived, spec, text, kind) {
     if (gained > 0) parts.push(`${RESOURCE_MAP[row.res].name} +${Math.round(gained)}`)
     if (row.overflow > 0) parts.push(`${RESOURCE_MAP[row.res].name} ${Math.round(row.overflow)} 装不下`)
   }
-  if (spec.disaster) {
+  if (spec.disaster || spec.boundedLoss) {
     state.stats.disasters += 1
     if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
   }
@@ -1428,15 +1466,16 @@ function settleEventOutcome(state, derived, spec, text, kind) {
     state.stats.recruits += outcome.recruits
     parts.push(`弟子 +${outcome.recruits}`)
   } else if (spec.recruit) parts.push('居所已满，无法收徒')
-  pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind)
+  pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
 }
 
-function applyEventEffects(state, derived, spec, text, kind) {
-  return applyEventBody(state, derived, spec, text, kind)
+function applyEventEffects(state, derived, spec, text, kind, source) {
+  return applyEventBody(state, derived, spec, text, kind, source)
 }
 
 /** 原有的事件主体（buff / lootRate / disaster / 其余） */
-function applyEventBody(state, derived, event, text, kind) {
+function applyEventBody(state, derived, event, text, kind, source) {
+  event = eventEffect(state, derived, event)
   if (event.buff) {
     const b = event.buff
     const until = Date.now() + (b.duration || 60) * 1000
@@ -1449,7 +1488,13 @@ function applyEventBody(state, derived, event, text, kind) {
     }
   }
 
-  settleEventOutcome(state, derived, event, text, kind)
+  settleEventOutcome(state, derived, event, text, kind, source)
+  if (event.peaceSeconds) {
+    state.affairs ||= { beastPeaceUntil: 0, beastCooldownUntil: 0 }
+    state.affairs.beastPeaceUntil = Date.now() + event.peaceSeconds * 1000
+    state.affairs.beastCooldownUntil = Date.now() + Math.max(1200, event.peaceSeconds) * 1000
+    pushLog(state, `药圃恢复安宁，${event.peaceSeconds / 60}分钟内妖兽不再窥伺；同类事务最早二十分钟后再来。`, 'good', source)
+  }
 
   return event
 }
@@ -1462,6 +1507,8 @@ function applyEventBody(state, derived, event, text, kind) {
 export function fireEvent(state, derived, ev = null) {
   const event = ev || pickEvent(state)
   if (!event) return null
+  // 显式触发也遵守新事务的境界和冷却，既有调试事件保留原行为。
+  if (event.threat && !eventEligible(state, event)) return null
   if (event.type === 'choice' && state.pendingChoice) return null
   if (event.type !== 'choice' && !eventOutcome(state, derived, event).affordable) return null
   state.nextEventAt = Date.now() +
@@ -1470,11 +1517,16 @@ export function fireEvent(state, derived, ev = null) {
 
   if (event.type === 'choice') {
     state.pendingChoice = { id: event.id, at: Date.now() }
-    pushLog(state, `${event.text}【待你决断】`, 'event')
+    if (event.threat) {
+      state.pendingChoice.deadline = Date.now() + event.responseSeconds * 1000
+      // 按触发时产能估价并封顶，扩仓与囤货不会抬高灾损。
+      state.pendingChoice.herbLoss = Math.min(80, Math.max(20, eventResourceRate(state, derived, 'herb') * 20))
+    }
+    pushLog(state, `${event.text}【待你决断】`, 'event', event)
     return event
   }
 
-  applyEventEffects(state, derived, event, event.text, event.kind)
+  applyEventEffects(state, derived, event, event.text, event.kind, event)
   return event
 }
 
@@ -1486,18 +1538,32 @@ export function resolveChoice(state, derived, index) {
   const pending = state.pendingChoice
   if (!pending) return null
   const event = EVENT_MAP[pending.id]
+  if (event?.threat && Date.now() >= pending.deadline) {
+    return settleExpiredThreat(state, derived)
+  }
   const opt = event?.options?.[index]
   if (!event || !opt) return null
   if (!eventOutcome(state, derived, opt.effect || {}).affordable) return null
   state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
-  state.pendingChoice = null
   applyEventEffects(
     state,
     derived,
     opt.effect || {},
     `${event.name}·${opt.label}：${opt.desc}`,
     'event',
+    event,
   )
+  state.pendingChoice = null
+  return event
+}
+
+/** 已有威胁到期只结算一次；离线期间不抽取新的事务。 */
+export function settleExpiredThreat(state, derived) {
+  const pending = state.pendingChoice
+  const event = EVENT_MAP[pending?.id]
+  if (!event?.threat || Date.now() < pending.deadline) return null
+  applyEventEffects(state, derived, { beastResponse: 'default' }, `${event.name}：处理期已过，弟子依现有阵法守住山门。`, 'bad', event)
+  state.pendingChoice = null
   return event
 }
 
@@ -1549,6 +1615,7 @@ export function tick(state, derived, dt, opts = {}) {
   const { offline = false, events = true } = opts
   const cap = dt > 60 ? 60 : dt
   recompute(state, derived, cap)
+  if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
 
   // 1) 资源结算（灵气先算净产出）
   for (const r of RESOURCES) {

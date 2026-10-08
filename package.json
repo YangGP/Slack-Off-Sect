@@ -1,7 +1,7 @@
 {
   "name": "slack-off-sect",
   "private": true,
-  "version": "0.0.8",
+  "version": "0.0.10",
   "license": "MIT",
   "description": "Slack Off Sect (摸鱼宗门) —— 一个 Vue3 + Vite 的修仙宗门挂机放置游戏",
   "type": "module",

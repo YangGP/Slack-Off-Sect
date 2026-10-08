@@ -11,7 +11,7 @@ import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
-import { EVENTS } from '../src/data/events.js'
+import { EVENTS, EVENT_LEVELS, getEventLevel } from '../src/data/events.js'
 
 const res = (id) => RESOURCES.find((r) => r.id === id)?.name || id
 
@@ -152,14 +152,20 @@ emit('| --- | --- | --- |')
 for (const a of ACHIEVEMENTS) emit(`| ${a.name} | \`${a.id}\` | ${a.desc} |`)
 
 emit('\n## A.10 随机事件\n')
-emit('三类：**自然环境**（限时影响全局产出）/ **突发**（立刻结算）/ **选择**（二选一，收益与代价并列）。')
-emit('收益一律按"当前产出的多少秒"发放，代价一律按当前存量的百分比 —— 两者都随境界与资源缩放。\n')
-emit('| 类别 | 事件 | id | 色调 | 权重 | 境界 | 收益 | 代价 |')
-emit('| --- | --- | --- | --- | --- | --- | --- | --- |')
+emit('等级与处理类型独立：' + EVENT_LEVELS.map(l => `**${l.label}**（${l.hint}）`).join(' / ') + '。')
+emit('处理类型：**自然环境**（限时影响产出）/ **突发**（立刻结算）/ **选择**（选择一项，收益与代价并列）。')
+emit('机缘收益按产能估价，交易需足额付料；灾损可按库存比例或有界产能估价，防务应对可消耗固定成品并获得安宁期。\n')
+emit('| 等级 | 类别 | 事件 | id | 色调 | 权重 | 境界 | 收益 | 代价 |')
+emit('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
 {
   const TYPE_NAME = { nature: '环境', sudden: '突发', choice: '选择' }
   const pct = (v) => `${Math.round(v * 10000) / 100}%`
-  const realmOf = (e) => (e.minRealm ? REALMS[e.minRealm].name : '—')
+  const realmOf = (e) => {
+    const level = getEventLevel(e)
+    const min = Math.max(level.minRealm, e.minRealm || 0)
+    const max = Math.min(level.maxRealm, e.maxRealm ?? Infinity)
+    return min === max ? REALMS[min].name : `${REALMS[min].name}～${REALMS[max].name}`
+  }
   const gains = (spec) => {
     const out = []
     if (spec.lootRate) out.push(Object.entries(spec.lootRate).map(([k, v]) => `${res(k)} ×${v}s`).join('、'))
@@ -179,13 +185,14 @@ emit('| --- | --- | --- | --- | --- | --- | --- | --- |')
   }
   for (const e of EVENTS) {
     const type = TYPE_NAME[e.type] || e.type || '—'
+    const level = getEventLevel(e).label
     if (e.type === 'choice') {
-      emit(`| ${type} | **${e.name}** | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | 二选一（见下 ${e.options.length} 行） | — |`)
+      emit(`| ${level} | ${type} | **${e.name}** | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | 选择一项（见下 ${e.options.length} 行） | ${e.threat ? '5分钟到期默认防守，同类冷却至少20分钟' : '—'} |`)
       for (const o of e.options) {
-        emit(`| ${type} ▸ | ${o.label} | \`${e.id}\` | — | — | — | ${gains(o.effect || {})} | ${costs(o.effect || {})} |`)
+        emit(`| ${level} | ${type} ▸ | ${o.label} | \`${e.id}\` | — | — | — | ${e.threat ? o.desc : gains(o.effect || {})} | ${e.threat ? '具体用料与减免见 [金丹药圃防务](MIDGAME-EVENTS.md)' : costs(o.effect || {})} |`)
       }
     } else {
-      emit(`| ${type} | ${e.name} | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | ${gains(e)} | ${costs(e)} |`)
+      emit(`| ${level} | ${type} | ${e.name} | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | ${gains(e)} | ${costs(e)} |`)
     }
   }
 }

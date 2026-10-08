@@ -2,6 +2,7 @@ import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { CONFIG } from '@/data/config'
 import { DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
+import { EVENT_MAP, getEventLevel } from '@/data/events'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -60,8 +61,10 @@ export function createInitialState() {
     starvationTimer: 0,
     leaveTimer: 0,
     buffs: [],
-  /** 未决的选择类事件（{ id, at }），为空表示没有待决 */
-  pendingChoice: null,
+    /** 未决选择（{ id, at }）；妖兽威胁另存 deadline 与 herbLoss。 */
+    pendingChoice: null,
+    // 金丹周边事务：安宁期与同类威胁冷却，随本世重置。
+    affairs: { beastPeaceUntil: 0, beastCooldownUntil: 0 },
 
     log: [],
     logSeq: 0,
@@ -139,7 +142,22 @@ export function normalizeState(state) {
   merged.craftTimers = state.craftTimers || state.craftQueue || {}
   merged.treasureLevels = state.treasureLevels || {}
   merged.buffs = Array.isArray(state.buffs) ? state.buffs : []
-  merged.log = Array.isArray(state.log) ? state.log : []
+  merged.affairs = { ...fresh.affairs }
+  for (const key of Object.keys(fresh.affairs)) {
+    const value = state.affairs?.[key]
+    if (Number.isFinite(value) && value >= 0) merged.affairs[key] = value
+  }
+  merged.pendingChoice = state.pendingChoice?.id ? { ...state.pendingChoice } : null
+  if (merged.pendingChoice?.id === 'beastThreat') {
+    const p = merged.pendingChoice
+    if (!Number.isFinite(p.deadline)) p.deadline = (Number.isFinite(p.at) ? p.at : Date.now()) + 300000
+    if (!Number.isFinite(p.herbLoss)) p.herbLoss = 20
+    p.herbLoss = Math.max(0, Math.min(80, p.herbLoss))
+  }
+  merged.log = Array.isArray(state.log) ? state.log.map(entry => {
+    const event = Object.hasOwn(EVENT_MAP, entry.eventId) ? EVENT_MAP[entry.eventId] : null
+    return event ? { ...entry, eventLevel: getEventLevel(event).id } : entry
+  }) : []
   merged.stats = { ...fresh.stats, ...(state.stats || {}) }
   merged.stats.crafted = { ...(state.stats && state.stats.crafted) }
   merged.settings = { ...fresh.settings, ...(state.settings || {}) }
@@ -149,7 +167,6 @@ export function normalizeState(state) {
   const now = Date.now()
   merged.buffs = merged.buffs.filter((b) => (b.until || 0) > now)
   return merged
-  if (state.pendingChoice && !state.pendingChoice.id) state.pendingChoice = null
 }
 
 /**
@@ -199,6 +216,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.leaveTimer = 0
   state.buffs = []
   state.pendingChoice = null
+  state.affairs = { ...fresh.affairs }
   state.stats.lifeInsight = 0
   if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
   else state.stats.ascensions += 1

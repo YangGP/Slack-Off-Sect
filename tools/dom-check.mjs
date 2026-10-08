@@ -11,6 +11,7 @@ import { JSDOM } from 'jsdom'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { CHANGELOG, CURRENT_VERSION } from '../src/data/changelog.js'
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS } from '../src/data/crafts.js'
+import { EVENT_MAP } from '../src/data/events.js'
 
 let passed = 0
 let failed = 0
@@ -680,6 +681,36 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
   state.log = snapshot
 }
 
+// 等级和纪事类型、关键词独立组合；旧纪事不凭文案猜等级。
+{
+  const snapshot = state.log
+  state.log = [
+    { id: 93001, at: Date.now(), text: '灵雨润泽', kind: 'good', eventLevel: 1, eventId: 'spiritRain' },
+    { id: 93002, at: Date.now(), text: '妖兽窥伺药圃', kind: 'event', eventLevel: 2, eventId: 'beastThreat' },
+    { id: 93003, at: Date.now(), text: '天门一线', kind: 'good', eventLevel: 3, eventId: 'heavenGate' },
+    { id: 93004, at: Date.now(), text: '旧纪事', kind: 'event' },
+  ]
+  await new Promise(r => setTimeout(r, 50))
+  const lines = () => [...doc.querySelectorAll('.log .log-text')].map(el => el.textContent)
+  const button = (name) => [...doc.querySelectorAll('.log-filters button')].find(b => b.textContent.trim() === name)
+  ok('纪事显示三级标签，旧纪事照常展示', lines().length === 4 && lines()[0].includes('一级·金丹前') && lines()[3] === '旧纪事')
+  button('二级·金丹至化神').click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('等级筛选只显示相应事件', lines().length === 1 && lines()[0].includes('妖兽'))
+  button('进展').click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('等级与纪事类型可以组合筛选', lines().length === 0)
+  button('重置').click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('重置同时恢复等级和类型', lines().length === 4)
+  button('三级·炼虚起').click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('天地级可单独筛选且按钮表达选中状态', lines().length === 1 && lines()[0].includes('天门') && button('三级·炼虚起').getAttribute('aria-pressed') === 'true')
+  button('全部等级').click()
+  state.log = snapshot
+  await new Promise(r => setTimeout(r, 50))
+}
+
 state.ui.tab = 'cultivation'
 await new Promise((r) => setTimeout(r, 50))
 ok('修真页渲染出来了', html().includes('研究本源'))
@@ -1217,6 +1248,30 @@ ok('材料不足时仍可不介入', !!decline && !decline.disabled)
 decline?.click()
 await new Promise((r) => setTimeout(r, 50))
 ok('不介入按钮可正常结束事件', !state.pendingChoice && !window.document.querySelector('.choice'))
+
+const beforeThreat = JSON.stringify(state)
+state.realm = 4
+state.affairs = { beastPeaceUntil: 0, beastCooldownUntil: 0 }
+state.resources.arrayBase = 0
+state.resources.talisman = 0
+state.resources.herb = 100
+engine.recompute(state, derived)
+engine.fireEvent(state, derived, EVENT_MAP.beastThreat)
+await new Promise((r) => setTimeout(r, 50))
+const threatButtons = [...window.document.querySelectorAll('.choice-row button')]
+ok('妖兽事务展示四种应对且不能免费取消', threatButtons.length === 4 && !threatButtons.some(b => b.textContent === '暂不介入'))
+ok('妖兽事务展示期限与默认方案', text().includes('到期依现有阵法防守'))
+ok('待决事务显示宗门等级', window.document.querySelector('.choice-head')?.textContent.includes('二级·金丹至化神'))
+ok('缺料时加固禁用，默认防守可操作', threatButtons[0]?.disabled && !threatButtons[3]?.disabled)
+state.resources.arrayBase = 1
+state.resources.talisman = 2
+await new Promise((r) => setTimeout(r, 50))
+window.document.querySelector('.choice-row button')?.click()
+await new Promise((r) => setTimeout(r, 50))
+ok('点击加固实际扣料并清除威胁', !state.pendingChoice && state.resources.arrayBase === 0 && state.resources.talisman === 0)
+ok('处理后展示药圃安宁且立即存档', text().includes('药圃安宁') && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).affairs.beastPeaceUntil > Date.now())
+actions.importText(beforeThreat)
+await new Promise((r) => setTimeout(r, 50))
 
 console.warn = origWarn
 console.error = origError
