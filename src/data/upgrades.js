@@ -313,7 +313,7 @@ export const CULTIVATION = [
     glyph: '营',
     cost: {insight:2600, plank:30, pill:20, stone:1500},
     desc: '材有等第、工有次第。一部法式定下来，殿宇才不只靠匠人手感。',
-    effectDesc: '因此盖得起精舍：青石铺地、灵纹引气，住得下二十名弟子。',
+    effectDesc: '因此盖得起精舍：青石铺地、灵纹引气，十名弟子各有静修之处。',
     effects: { unlockBuildings: ['mansion'] },
     note: '解锁建筑：精舍',
     needs: { upgrades: ['earthEssence'], realm: 6 },

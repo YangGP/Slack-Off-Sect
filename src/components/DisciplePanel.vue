@@ -43,6 +43,9 @@ function setJob(jobId, value) {
       职位分配<span class="hint">人数来自门中弟子，闲散的人不干活</span>
     </div>
     <div class="box-body">
+      <div v-if="state.disciples.total > derived.maxDisciples" class="small dim">
+        现有弟子超过居所容量，原有弟子与分工保留；扩建出空位后继续收徒。
+      </div>
       <table class="grid">
         <thead>
           <tr>

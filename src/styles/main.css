@@ -908,6 +908,54 @@ details.fold[open] > summary::before {
 
 /* ------------------------------ 其它 ------------------------------ */
 
+.changelog-entry {
+  position: fixed;
+  right: 16px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--link);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wrap {
+  padding-bottom: 48px;
+}
+
+.changelog-dialog {
+  width: 640px;
+}
+
+.changelog-release + .changelog-release {
+  border-top: 1px solid var(--line-soft);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.changelog-release h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.changelog-release time {
+  display: inline-block;
+  margin-left: 6px;
+  font-weight: normal;
+}
+
+.changelog-release ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.changelog-release li + li {
+  margin-top: 5px;
+}
+
 textarea {
   width: 100%;
   min-height: 96px;

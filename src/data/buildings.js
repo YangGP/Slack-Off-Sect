@@ -152,8 +152,8 @@ export const BUILDINGS = [
     group: 'home',
     cost: { stone: 400, wood: 900, plank: 4, ore: 200 },
     priceRatio: 1.6,
-    desc: '青石铺地、灵纹引气，住二十名弟子也不觉拥挤。',
-    effects: { maxDisciples: 20, storage: { qi: 400, wood: 200 }, morale: 4 },
+    desc: '青石铺地、灵纹引气，十名弟子各有静修之处。',
+    effects: { maxDisciples: 10, storage: { qi: 400, wood: 200 }, morale: 4 },
     needs: { building: { id: 'logHouse', count: 5 }, upgrades: ['buildingCode'] },
   },
   {
@@ -163,8 +163,8 @@ export const BUILDINGS = [
     group: 'home',
     cost: { stone: 2500, insight: 1200, artifact: 5 },
     priceRatio: 1.7,
-    desc: '凿山为府，聚灵成池。能住六十人，且人人吐纳有得。',
-    effects: { maxDisciples: 60, storage: { qi: 3000, wood: 1200 }, morale: 6 },
+    desc: '凿山为府，聚灵成池。二十四名弟子分室静修，吐纳有得。',
+    effects: { maxDisciples: 24, storage: { qi: 3000, wood: 1200 }, morale: 6 },
     needs: { upgrades: ['grottoArt'] },
   },
 

@@ -3,6 +3,7 @@
 一个用 **Vue 3 + Vite（纯 JavaScript）** 写的修仙宗门挂机放置游戏。
 
 **在线试玩**：https://YangGP.github.io/Slack-Off-Sect/ （推到 main 后由 GitHub Actions 自动发布）
+当前版本 **v0.07**；页面右下角“更新日志”可查看从 v0.01 开始的近期更新记录。
 玩法结构参考了 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（猫国建设者）的放置玩法与数据组织方式：
 资源池 + 职位分配 + 可叠加建筑 + 修真（学术）+ 技艺·法宝（工坊）+ 制作配方 + 成就 + 随机事件 + 转世（飞升）。
 

@@ -18,6 +18,7 @@ import CalendarPanel from './components/CalendarPanel.vue'
 import TotalsPanel from './components/TotalsPanel.vue'
 import BuffBar from './components/BuffBar.vue'
 import OfflineModal from './components/OfflineModal.vue'
+import ChangelogModal from './components/ChangelogModal.vue'
 
 const panels = {
   sect: SectPanel,
@@ -99,4 +100,5 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
 
     <OfflineModal />
   </div>
+  <ChangelogModal />
 </template>

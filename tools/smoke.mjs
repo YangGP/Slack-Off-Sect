@@ -2972,6 +2972,33 @@ section('仙缘仓储永久加成')
   ok('转世后基础容量保留仙缘增益', s.karma === 202 && close(d.max.qi, RESOURCE_MAP.qi.baseMax * 1.303, 1e-9) && d.karmaStorageMult > 1)
 }
 
+section('高阶居所人口曲线')
+{
+  ok('精舍容量增幅不超过木屋两倍', BUILDING_MAP.mansion.effects.maxDisciples <= BUILDING_MAP.logHouse.effects.maxDisciples * 2)
+  ok('洞府容量增幅不超过精舍三倍', BUILDING_MAP.caveDwelling.effects.maxDisciples <= BUILDING_MAP.mansion.effects.maxDisciples * 3)
+  const { state: s, derived: d } = newGame()
+  s.realm = 6
+  s.upgrades.buildingCode = true
+  s.buildings.hut = { count: 5, on: true }
+  s.buildings.logHouse = { count: 5, on: true }
+  E.recompute(s, d)
+  const before = d.maxDisciples
+  for (const [res, amount] of Object.entries(E.buildingCost(s, 'mansion', 1))) s.resources[res] = amount
+  ok('精舍保持既有前置并能实际建造', E.buyBuilding(s, d, 'mansion', 1) === 1)
+  ok('首座精舍人口40到50，跳幅为25%', before === 40 && d.maxDisciples === 50)
+  E.recruitArrivals(s, d, 3600, { silent: true })
+  ok('持续收徒只填满新的住房容量', s.disciples.total === 50 && E.recruitArrivals(s, d, 3600, { silent: true }) === 0)
+  E.setJob(s, d, 'woodcutter', 100)
+  ok('新住房容量约束可派出的劳动力', s.disciples.jobs.woodcutter === 50 && E.idleDisciples(s) === 0)
+  const old = normalizeState({ ...s, buildings: { hut: { count: 20, on: true }, logHouse: { count: 17, on: true }, mansion: { count: 13, on: true }, caveDwelling: { count: 10, on: true } }, disciples: { total: 893, jobs: { farmer: 100, woodcutter: 100 } } })
+  E.recompute(old, d)
+  ok('截图居所组合人口容量1002降至512', d.maxDisciples === 512)
+  ok('更新保留旧档已有弟子与分工', old.disciples.total === 893 && old.disciples.jobs.woodcutter === 100)
+  ok('旧档超员时停止自动收徒', E.recruitArrivals(old, d, 3600, { silent: true }) === 0 && old.disciples.total === 893)
+  const restored = normalizeState(JSON.parse(JSON.stringify(old)))
+  ok('旧档超员弟子可再次存读档', restored.disciples.total === 893)
+}
+
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {
   console.log('失败清单：')

@@ -9,6 +9,7 @@
  */
 import { JSDOM } from 'jsdom'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { CHANGELOG, CURRENT_VERSION } from '../src/data/changelog.js'
 
 let passed = 0
 let failed = 0
@@ -106,6 +107,35 @@ ok(
 ok('标签页渲染出来了', text().includes('弟子') && text().includes('修真') && text().includes('技艺'))
 ok('侧栏历法渲染出来了', text().includes('历法') && /第 \d+ 年/.test(text()))
 ok('侧栏累计项还在', text().includes('累计灵气'))
+{
+  const doc = window.document
+  const entry = doc.querySelector('.changelog-entry')
+  ok('右下角更新日志入口显示当前版本', !!entry && entry.textContent.includes(CURRENT_VERSION) && entry.getAttribute('aria-haspopup') === 'dialog')
+  ok('更新日志默认关闭', !doc.querySelector('.changelog-dialog'))
+  entry?.click()
+  await new Promise((r) => setTimeout(r, 50))
+  const dialog = doc.querySelector('.changelog-dialog')
+  const releases = [...(dialog?.querySelectorAll('.changelog-release h2') || [])]
+  ok('日志按最新到v0.01展示全部更新', releases.length === CHANGELOG.length && releases[0]?.textContent.includes(CURRENT_VERSION) && releases.at(-1)?.textContent.includes('v0.01'))
+  ok('日志包含最近人口与仓储修改', dialog?.textContent.includes('24人') && dialog?.textContent.includes('0.15%') && dialog?.textContent.includes('药藏'))
+  const closeButton = dialog?.querySelector('.dialog-foot button')
+  ok('日志打开后聚焦关闭按钮', doc.activeElement === closeButton)
+  closeButton?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+  ok('键盘可以进入版本列表滚动', doc.activeElement === dialog?.querySelector('.dialog-body'))
+  doc.activeElement?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  await new Promise((r) => setTimeout(r, 50))
+  ok('Esc关闭日志并返回入口焦点', !doc.querySelector('.changelog-dialog') && doc.activeElement === entry)
+  entry?.click()
+  await new Promise((r) => setTimeout(r, 50))
+  doc.querySelector('.changelog-mask')?.click()
+  await new Promise((r) => setTimeout(r, 50))
+  ok('点击遮罩关闭更新日志', !doc.querySelector('.changelog-dialog'))
+  entry?.click()
+  await new Promise((r) => setTimeout(r, 50))
+  doc.querySelector('.changelog-dialog .dialog-foot button')?.click()
+  await new Promise((r) => setTimeout(r, 50))
+  ok('关闭按钮关闭更新日志', !doc.querySelector('.changelog-dialog'))
+}
 ok(
   '累计默认折叠（<details> 未展开）',
   (() => {
@@ -863,6 +893,18 @@ ok('境界面板渲染', html().includes('飞升'))
   await new Promise((r) => setTimeout(r, 50))
 }
 // 境界页：里程碑写进标题、转世与飞升分成两段、门槛未达成时不报可得数字
+{
+  const oldTab = state.ui.tab
+  const oldTotal = state.disciples.total
+  state.disciples.total = derived.maxDisciples + 1
+  state.ui.tab = 'disciples'
+  await new Promise((r) => setTimeout(r, 50))
+  ok('弟子页说明超额旧人口保留并暂停收徒', text().includes('现有弟子超过居所容量') && text().includes('原有弟子与分工保留'))
+  state.disciples.total = oldTotal
+  state.ui.tab = oldTab
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 50))
+}
 {
   state.realm = 4
   state.ui.tab = 'realm'
