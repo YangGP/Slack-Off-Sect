@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { state, derived } from '@/game/store'
 import { CRAFTS } from '@/data/crafts'
-import { isCraftUnlocked } from '@/game/engine'
+import { isCraftUnlocked, resourceFlow } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
 import { fmt, fmtCost, fmtRate, fmtStock, fmtTime } from '@/game/format'
 
@@ -15,10 +15,13 @@ const props = defineProps({
 })
 
 const meta = computed(() => RESOURCE_MAP[props.resId] || { name: props.resId })
-const income = computed(() => derived.rates[props.resId] || 0)
-const expenseItems = computed(() => derived.expenseSources[props.resId] || [])
-const expense = computed(() => expenseItems.value.reduce((s, i) => s + Math.max(0, -i.value), 0))
-const net = computed(() => income.value - expense.value)
+const flow = computed(() => resourceFlow(derived, props.resId))
+const income = computed(() => flow.value.income)
+// 出项 = 口粮/维护费 + 此刻正在跑的自动制作（也要吃材料）。
+// 后者并进来，净额与满仓/耗尽预估才不会被高估；结算口径的 expense 不含它（见 computeAutoCraftDrain）
+const expenseItems = computed(() => flow.value.expenseItems)
+const expense = computed(() => flow.value.expense)
+const net = computed(() => flow.value.net)
 const max = computed(() => derived.max[props.resId] ?? Infinity)
 const amount = computed(() => state.resources[props.resId] || 0)
 /** 整枚计数的资源（灵石/丹药/符箓/法器）不显示小数 */

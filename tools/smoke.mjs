@@ -138,7 +138,7 @@ section('数据完整性')
 
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
-  const unlockApps = ['unlockBuildings', 'autoCraft', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
+  const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCondense', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
   const pureNumeric = ['ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'morale', 'consumeRatio', 'craftBonus', 'disasterGuard']
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
@@ -839,6 +839,84 @@ section('还差多久买得起')
   )
   state.autoCraft.condenseStone = false
 
+  // 凝灵诀：每逢节气，灵气满仓时把仓内一定比例（AUTO_CONDENSE_RATIO）凝成灵石；不满仓不动手
+  {
+    const { state: s4, derived: d4 } = newGame()
+    ok('未参悟凝灵诀时不置位', d4.autoCondenseUnlocked === false)
+    s4.upgrades.condenseArt = true
+    E.recompute(s4, d4)
+    ok('参悟凝灵诀后置位 autoCondenseUnlocked', d4.autoCondenseUnlocked === true)
+    ok('凝灵诀开放库存目标但不提前解锁常驻自动', d4.autoCraftUnlocked === false && d4.craftTargetsUnlocked === true)
+    s4.upgrades.intuition = true
+    E.recompute(s4, d4)
+    ok('《心有灵犀》即解锁库存目标（不再等金丹期）', d4.autoCraftUnlocked === true && d4.craftTargetsUnlocked === true)
+    const qiMax = d4.max.qi
+    const qiCost = E.CRAFT_MAP.condenseStone.cost.qi
+    s4.resources.qi = qiMax * 0.999
+    ok('灵气不满仓时不动手', E.runAutoCondense(s4, d4) === false && s4.resources.qi === qiMax * 0.999)
+    s4.resources.qi = qiMax
+    const expect = Math.floor((qiMax * CONFIG.AUTO_CONDENSE_RATIO) / qiCost)
+    ok(
+      '满仓时按仓内比例一次凝掉',
+      E.runAutoCondense(s4, d4) === true &&
+        close(s4.resources.qi, qiMax - expect * qiCost, 1e-6) &&
+        s4.resources.stone === expect,
+    )
+    s4.resources.stone = d4.max.stone
+    s4.resources.qi = qiMax
+    ok('灵石满仓时不再凝', E.runAutoCondense(s4, d4) === false)
+    s4.resources.stone = 0
+    s4.settings.autoCraftOn = false
+    ok('关闭总开关时凝灵诀不扣灵气', !E.runAutoCondense(s4, d4) && s4.resources.qi === qiMax)
+    s4.settings.autoCraftOn = true
+    E.setCraftTarget(s4, d4, 'condenseStone', 2)
+    E.runAutoCondense(s4, d4)
+    ok('批量凝石逐份遵守库存目标', s4.resources.stone === 2 && s4.resources.qi === qiMax - qiCost * 2)
+    s4.resources.qi = qiMax
+    ok('目标已达时不凝石', !E.runAutoCondense(s4, d4) && s4.resources.qi === qiMax)
+    s4.resources.stone = 1
+    E.runAutoCondense(s4, d4)
+    ok('消费灵石后下一次凝石补回目标', s4.resources.stone === 2 && s4.resources.qi === qiMax - qiCost)
+    E.setCraftTarget(s4, d4, 'condenseStone', 0)
+    s4.dao = 1
+    s4.settings.craftReservePercent = 90
+    s4.resources.qi = qiMax
+    s4.resources.stone = 0
+    E.recompute(s4, d4)
+    E.runAutoCondense(s4, d4)
+    ok('凝灵诀按份保留道果指定的材料', s4.resources.qi >= qiMax * 0.9 && s4.resources.stone === 1)
+    s4.upgrades.condenseArt = false
+    E.recompute(s4, d4)
+    ok('移除凝灵诀后解锁标记恢复 false', d4.autoCondenseUnlocked === false)
+  }
+
+  // 凝灵诀由节气驱动：跨过节气边界的那一刻结算（挂在 tick 的历法推进里，离线模拟同样逐步过 tick）
+  {
+    const { state: s5, derived: d5 } = newGame()
+    s5.upgrades.condenseArt = true
+    E.recompute(s5, d5)
+    const qiMax = d5.max.qi
+    const qiCost = E.CRAFT_MAP.condenseStone.cost.qi
+    const expect = Math.floor((qiMax * CONFIG.AUTO_CONDENSE_RATIO) / qiCost)
+    s5.resources.qi = qiMax
+    E.simulateOffline(s5, d5, CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS + 1)
+    ok(
+      '节气一到，满仓灵气凝成灵石（离线也照做）',
+      s5.resources.stone === expect && close(s5.resources.qi, qiMax - expect * qiCost, 1e-6),
+      `stone=${s5.resources.stone} qi=${s5.resources.qi}`,
+    )
+    s5.resources.stone = 0
+    s5.resources.qi = qiMax
+    E.setCraftTarget(s5, d5, 'condenseStone', 2)
+    E.simulateOffline(s5, d5, CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS)
+    ok('离线节气凝石也遵守库存目标', s5.resources.stone === 2 && s5.resources.qi === qiMax - qiCost * 2)
+    s5.resources.qi = qiMax
+    s5.resources.stone = 0
+    s5.settings.autoCraftOn = false
+    E.simulateOffline(s5, d5, CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS)
+    ok('离线凝石遵守总开关', s5.resources.stone === 0 && s5.resources.qi === qiMax)
+  }
+
   ok(
     '灵气按净额计算等待时间',
     close(
@@ -1233,6 +1311,33 @@ section('自动制作（一份一份不瞬发，就是原来的「连续」）')
   E.runAutoCraft(state, derived, step * 3)
   ok('材料补上后接着做', state.resources.stone - st3 >= 2, `实际 +${state.resources.stone - st3}`)
   ok('本轮计数继续累加', state.craftTimers.condenseStone.made > madeBefore)
+
+  // 悬停明细的「出项」要计入此刻自动制作的材料消耗（满仓/耗尽预估同一口径），
+  // 但不并进 expenseSources —— tick 按 expense 结算、自动制作另按份实付，并进去会双扣
+  state.resources.stone = 0
+  state.resources.qi = 450
+  E.recompute(state, derived)
+  const drainQi = derived.autoCraftDrain.qi || []
+  ok(
+    '出项快照计入自动制作的材料消耗（45 灵气 ÷ 单件耗时）',
+    drainQi.length === 1 &&
+      drainQi[0].id === 'condenseStone' &&
+      close(drainQi[0].value, -45 / step, 1e-9),
+    `实际 ${drainQi.map((x) => x.value).join(', ')}`,
+  )
+  ok(
+    '结算口径的 expenseSources 不含自动制作（tick 会双扣）',
+    !(derived.expenseSources.qi || []).some((x) => x.kind === 'autoCraft'),
+  )
+  state.autoCraft.condenseStone = false
+  E.recompute(state, derived)
+  ok('关掉自动后出项快照清空', (derived.autoCraftDrain.qi || []).length === 0)
+  state.autoCraft.condenseStone = true
+  state.resources.qi = 10 // 连一份材料都不够：配方暂停，此刻不消耗
+  E.recompute(state, derived)
+  ok('材料不够时配方暂停，不再计入出项', (derived.autoCraftDrain.qi || []).length === 0)
+  state.resources.qi = 450
+  E.recompute(state, derived)
 
   // 总开关一关就停
   state.settings.autoCraftOn = false

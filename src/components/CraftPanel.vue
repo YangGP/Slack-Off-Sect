@@ -19,6 +19,8 @@ import { costLabel } from '@/game/pricing'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtCost, fmtPercent, fmtStock } from '@/game/format'
 import { RESOURCE_MAP } from '@/data/resources'
+import { CONFIG } from '@/data/config'
+import { CALENDAR } from '@/data/calendar'
 import HoverTip from './HoverTip.vue'
 
 /** 批量快捷：按「材料能做出的份数」取比例 */
@@ -58,6 +60,13 @@ function updateTarget(id, event) {
   actions.setCraftTarget(id, event.target.value)
   event.target.value = String(autoCraftStatus(state, derived, id).target)
 }
+const condenseStatus = computed(() => {
+  if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
+  const target = autoCraftStatus(state, derived, 'condenseStone').target
+  if (target > 0 && state.resources.stone >= target) return '凝灵诀 · 目标已达'
+  if (state.resources.stone >= derived.max.stone) return '凝灵诀 · 灵石满仓'
+  return '凝灵诀 · 节气满仓自凝'
+})
 </script>
 
 <template>
@@ -98,6 +107,12 @@ function updateTarget(id, event) {
             自动中 · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
           </span>
           <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
+          <span
+            v-else-if="row.meta.id === 'condenseStone' && derived.autoCondenseUnlocked"
+            class="small dim"
+          >
+            {{ condenseStatus }}
+          </span>
           <span class="have">{{ resName(row.meta.out) }} {{ fmtStock(row.have) }}</span>
           <span v-if="derived.craftBonus > 0" class="small good">+{{ fmtPercent(row.progress) }}</span>
         </div>
@@ -173,6 +188,10 @@ function updateTarget(id, event) {
             </div>
 
             <div class="tip-section">自动制作</div>
+            <div v-if="row.meta.id === 'condenseStone' && derived.autoCondenseUnlocked" class="tip-row">
+              <span class="k">凝灵诀</span>
+              <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>
+            </div>
             <div v-if="derived.craftTargetsUnlocked" class="tip-row">
               <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}（一份制作的加成可能超过目标）</span>
             </div>

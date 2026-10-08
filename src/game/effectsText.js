@@ -102,6 +102,7 @@ export function describeEffects(ef) {
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
+  if (ef.autoCondense) push('节气满仓自凝灵石', '', 'good')
   if (ef.unlockBuildings) {
     for (const id of ef.unlockBuildings) {
       push('解锁建筑', BUILDING_MAP[id]?.name || id, 'unlock')

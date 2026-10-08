@@ -86,6 +86,8 @@ export const CONFIG = {
   EVENT_MAX_GAP: 420,
   // 刷新派生数据的最小间隔（秒），避免每帧全量重算
   RECOMPUTE_MIN_GAP: 0.25,
+  // 凝灵诀：每逢节气（15 天 = 45 秒），灵气满仓时把仓内这个比例的灵气凝成灵石
+  AUTO_CONDENSE_RATIO: 0.5,
   // 日志上限
   LOG_LIMIT: 220,
 }

@@ -9,7 +9,7 @@ import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { canAfford, refineCost, treasureLevel, treasureMult } from '@/game/engine'
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
-import { effectRows } from '@/game/unlockText'
+import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
 import { costLabel, enough as enoughOf } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -320,12 +320,40 @@ function kindName(meta) {
       </details>
 
       <details class="fold" v-if="researched.length">
-        <summary>已参悟（{{ researched.length }} 条）</summary>
-        <div class="small" style="padding-top: 4px">
-          <span v-for="(u, i) in researched" :key="u.id" class="good"
-            >{{ i ? '、' : '' }}{{ u.name }}</span
-          >
-        </div>
+        <summary>已参悟（{{ researched.length }} 条）—— 悬停名称看详情</summary>
+        <table class="grid" style="padding-top: 4px">
+          <tbody>
+            <tr v-for="item in researched" :key="item.id">
+              <td class="nowrap">
+                <HoverTip :width="380">
+                  <span class="good">{{ item.name }}</span>
+                  <span class="small dim">　{{ kindName(item) }}</span>
+                  <template #tip>
+                    <div class="tip-body">
+                      <div class="tip-title">
+                        {{ item.name }}
+                        <span class="tip-right">{{ kindName(item) }}</span>
+                      </div>
+                      <div class="tip-desc">{{ item.desc }}</div>
+
+                      <div class="tip-section">效果</div>
+                      <div v-for="(row, ri) in effectRows(item, describeEffects)" :key="ri" class="tip-row">
+                        <span class="k">{{ row.label }}</span>
+                        <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
+                      </div>
+                      <div v-if="item.effectDesc" class="tip-row">
+                        <span class="k">因此</span>
+                        <!-- effectDesc 本身就以「因此」开头，这里去掉前缀，免得标签与正文重复 -->
+                        <span class="v">{{ item.effectDesc.replace(/^因此[：:]?\s*/, '') }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </HoverTip>
+              </td>
+              <td class="small">{{ effectLine(item, describeEffects) || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
       </details>
     </div>
   </div>

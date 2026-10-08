@@ -977,6 +977,46 @@ const raw = JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1'))
 ok('存档结构完整', !!(raw.resources && raw.disciples && raw.stats && raw.buildings))
 
 // ---------- 6. 报错检查 ----------
+console.log('\n== 统一资源净额 ==')
+derived.rates.qi = 10
+derived.expenseSources.qi = [{ label: '弟子口粮', value: -2 }]
+derived.autoCraftDrain.qi = [{ label: '自动·凝气成石', value: -12 }]
+derived.expense.qi = -2
+derived.netQi = 8
+await new Promise((r) => setTimeout(r, 50))
+ok('顶部净额计入加工耗料', /净额\s*-4\/秒/.test(window.document.querySelector('.stat-line')?.textContent || ''))
+ok('顶部出项计入口粮与加工耗料', /出项\s*-14\/秒/.test(window.document.querySelector('.stat-line')?.textContent || ''))
+const qiRow = [...window.document.querySelectorAll('.res-table tr')].find(row => row.querySelector('.res-name')?.textContent === '灵气')
+ok('资源列表净额与顶部一致', qiRow?.querySelector('.res-rate')?.textContent.trim() === '-4/秒')
+qiRow?.dispatchEvent(new window.MouseEvent('mouseenter'))
+await new Promise((r) => setTimeout(r, 350))
+const flowTip = window.document.querySelector('.tip')
+ok('悬停净额与资源列表一致', [...(flowTip?.querySelectorAll('.tip-total') || [])].some(row => /净额\s*-4\/秒/.test(row.textContent)))
+ok('展示耗料没有并入实际结算费用', derived.expense.qi === -2 && derived.netQi === 8)
+qiRow?.dispatchEvent(new window.MouseEvent('mouseleave'))
+engine.recompute(state, derived)
+await new Promise((r) => setTimeout(r, 50))
+
+console.log('\n== 凝灵诀状态 ==')
+const beforeCondense = actions.exportText()
+state.upgrades.condenseArt = true
+state.upgrades.intuition = false
+state.dao = 0
+state.settings.autoCraftOn = false
+state.resources.stone = 0
+engine.recompute(state, derived)
+await new Promise((r) => setTimeout(r, 50))
+ok('凝灵诀在常驻自动解锁前提供库存目标', !derived.autoCraftUnlocked && !!window.document.querySelector('input[aria-label="凝气成石库存目标"]'))
+ok('凝灵诀展示总开关暂停状态', text().includes('凝灵诀 · 总开关已暂停'))
+state.settings.autoCraftOn = true
+actions.setCraftTarget('condenseStone', 2)
+state.resources.stone = 2
+engine.recompute(state, derived)
+await new Promise((r) => setTimeout(r, 50))
+ok('凝灵诀展示库存目标已达状态', text().includes('凝灵诀 · 目标已达'))
+actions.importText(beforeCondense)
+await new Promise((r) => setTimeout(r, 50))
+
 console.log('\n== 事件选择 ==')
 state.resources.wood = 100
 engine.recompute(state, derived)

@@ -41,6 +41,8 @@ export function createDerived() {
     sources: {},
     sourceFactor: {},
     expenseSources: {},
+    /** 此刻正在跑的自动制作对材料的每秒消耗（res -> 出项条目）。不计入 expense —— tick 按 expense 结算，自动制作另按份实付，并进去会双扣 */
+    autoCraftDrain: {},
     prodRaw: {},
     upkeep: 0,
     rawUpkeep: 0,
@@ -63,6 +65,7 @@ export function createDerived() {
     breakthroughDiscount: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     autoCraftUnlocked: false,
+    autoCondenseUnlocked: false,
     daoAutomation: false,
     craftTargetsUnlocked: false,
     buildingSupply: {},
@@ -400,6 +403,7 @@ function applyEffects(ef, mult, targets, src) {
   if (ef.offlineHours) acc.offlineHours += ef.offlineHours * mult
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
   if (ef.autoCraft) acc.autoCraftUnlocked = true
+  if (ef.autoCondense) acc.autoCondenseUnlocked = true
   if (ef.prod) {
     for (const k in ef.prod) prod[k] = (prod[k] || 0) + ef.prod[k] * mult
   }
@@ -464,6 +468,7 @@ function recomputeRaw(state, derived, supply) {
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     karmaRatio: 0,
     autoCraftUnlocked: false,
+    autoCondenseUnlocked: false,
     ratioAll: 0,
   }
   // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目] }
@@ -733,10 +738,14 @@ function recomputeRaw(state, derived, supply) {
   derived.breakthroughDiscount = acc.breakthroughDiscount
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = (state.dao || 0) >= 1
-  derived.craftTargetsUnlocked = state.realm >= 4 || derived.daoAutomation
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
+  derived.autoCondenseUnlocked = acc.autoCondenseUnlocked
+  // 满仓凝石与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
+  derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseUnlocked
   derived.ratio = ratio
   derived.jobRatio = jobRatio
+  // 此刻正在跑的自动制作对材料的每秒消耗（悬停明细的出项口径，见 computeAutoCraftDrain 的说明）
+  derived.autoCraftDrain = computeAutoCraftDrain(state, derived)
 
   // 解锁列表
   derived.unlockedBuildings = BUILDINGS.filter((b) => isBuildingUnlocked(state, b.id)).map((b) => b.id)
@@ -1044,6 +1053,30 @@ export function runAutoCraft(state, derived, dt) {
   return made
 }
 
+/**
+ * 《凝灵诀》：每逢节气，若灵气满仓，把仓内一定比例（AUTO_CONDENSE_RATIO）的灵气
+ * 一次凝成灵石；仓库没满时不动手，不要求整节气收支累计。
+ * 由 tick 的历法推进在节气变化的那一刻调用（离线模拟同样逐步过 tick，所以离线也照做）。
+ * 与《心有灵犀》的常驻自动制作互不冲突：那是照节奏一直做，这只在节气收盈余。
+ */
+export function runAutoCondense(state, derived) {
+  if (!derived.autoCondenseUnlocked || !state.settings.autoCraftOn) return false
+  const qiMax = derived.max.qi || 0
+  const qi = state.resources.qi || 0
+  if (qi < qiMax - EPS) return false
+  const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
+  const recipe = CRAFT_MAP.condenseStone
+  const times = Math.floor((qi * ratio) / recipe.cost.qi)
+  let made = false
+  for (let i = 0; i < times; i++) {
+    // 每份重新检查，批量转换也遵守库存目标、仓储和道果材料保留量。
+    if (!canAutoCraft(state, derived, recipe)) break
+    if (!craft(state, derived, recipe.id, { times: 1, silent: true })) break
+    made = true
+  }
+  return made
+}
+
 export function canAutoCraft(state, derived, recipe) {
   if (!isCraftUnlocked(state, recipe)) return false
   const target = craftTarget(state, derived, recipe.id)
@@ -1070,6 +1103,42 @@ export function setCraftTarget(state, derived, recipeId, value) {
   state.craftTargets ||= {}
   state.craftTargets[recipeId] = Math.floor(target)
   return true
+}
+
+/** 界面统一使用此收支快照；不改变 tick 的实际扣料与口粮判断。 */
+export function resourceFlow(derived, resId) {
+  const expenseItems = [
+    ...(derived.expenseSources[resId] || []),
+    ...(derived.autoCraftDrain?.[resId] || []),
+  ]
+  const income = derived.rates[resId] || 0
+  const expense = expenseItems.reduce((sum, item) => sum + Math.max(0, -item.value), 0)
+  return { income, expense, net: income - expense, expenseItems }
+}
+
+/**
+ * 当前可运行的自动配方按节拍估算耗料，暂停配方不计入。
+ * 供界面净额和趋势展示，不并入 expense，避免按份制作与持续费用双扣。
+ */
+function computeAutoCraftDrain(state, derived) {
+  const drain = {}
+  for (const recipe of CRAFTS) {
+    if (!isAutoCrafting(state, derived, recipe.id)) continue
+    if ((state.resources[recipe.out] || 0) >= (derived.max[recipe.out] || Infinity) - EPS) continue
+    if (!canAutoCraft(state, derived, recipe)) continue
+    const per = craftTime(recipe)
+    for (const res in recipe.cost) {
+      if (!drain[res]) drain[res] = []
+      drain[res].push({
+        kind: 'autoCraft',
+        id: recipe.id,
+        label: '自动·' + recipe.name,
+        count: 0,
+        value: -recipe.cost[res] / per,
+      })
+    }
+  }
+  return drain
 }
 
 /**
@@ -1545,6 +1614,8 @@ export function tick(state, derived, dt, opts = {}) {
   state.totalDays = (state.totalDays || 0) + cap / CALENDAR.DAY_SECONDS
   const cal = calendarAt(state.totalDays)
   if (cal.termIndex !== calBefore.termIndex) {
+    // 凝灵诀：节气一到，满仓的灵气按比例凝成灵石（不满仓不动手，离线也照做）
+    runAutoCondense(state, derived)
     if (!offline && cal.seasonIndex !== calBefore.seasonIndex) {
       pushLog(
         state,

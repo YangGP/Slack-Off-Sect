@@ -31,6 +31,16 @@ export const CULTIVATION = [
     needs: { building: { id: 'library', count: 2 } },
   },
   {
+    id: 'condenseArt',
+    name: '凝灵诀',
+    glyph: '凝',
+    cost: { insight: 120, wood: 150, stone: 20 },
+    desc: '灵气满仓之时不必守着聚灵阵 —— 节气一至，气满自凝，点点成石。',
+    effectDesc: '因此每逢节气，满仓的灵气会自动凝出一批灵石，溢出的灵气不再白白浪费。',
+    effects: { autoCondense: true },
+    needs: { upgrades: ['qiOrigin'] },
+  },
+  {
     id: 'qiGazing',
     name: '观气法',
     glyph: '观',
@@ -466,7 +476,7 @@ export const CULTIVATION_STAGES = [
     key: 'sense',
     label: 'Ⅰ 感知',
     hint: '灵气是什么、从哪来、怎么快点聚起来',
-    ids: ['qiOrigin', 'qiGazing'],
+    ids: ['qiOrigin', 'condenseArt', 'qiGazing'],
   },
   {
     key: 'matter',

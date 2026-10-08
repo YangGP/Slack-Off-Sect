@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { state, derived, view, ui } from '@/game/store'
 import { fmt, fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
-import { idleDisciples, nextArrivalIn } from '@/game/engine'
+import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import ResourcePanel from './components/ResourcePanel.vue'
 import TabNav from './components/TabNav.vue'
 import SectPanel from './components/SectPanel.vue'
@@ -31,6 +31,7 @@ const panels = {
 
 const activePanel = computed(() => panels[state.ui.tab] || SectPanel)
 const idle = computed(() => idleDisciples(state))
+const qiFlow = computed(() => resourceFlow(derived, 'qi'))
 /** 有空房时顶栏显示「下一位弟子还有多久」 */
 const waitNext = computed(() => nextArrivalIn(state, derived))
 // 最近一次操作提示，4 秒后自行消失（不弹气泡，只在状态行显示一行字）
@@ -55,12 +56,12 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
       </template>
       <span class="sep">·</span>士气
       <b :class="derived.morale < 60 ? 'bad' : ''">{{ fmt(derived.morale) }}%</b>
-      <span class="sep">·</span>灵气进项 <b class="good">{{ fmtRate(derived.rates.qi) }}</b>
+      <span class="sep">·</span>灵气进项 <b class="good">{{ fmtRate(qiFlow.income) }}</b>
       <span class="sep">·</span>出项
-      <b class="bad">{{ fmtRate(derived.expense?.qi || 0) }}</b>
+      <b class="bad">{{ fmtRate(-qiFlow.expense) }}</b>
       <span class="dim" v-if="derived.maintenance?.qi">（含阵眼维护 {{ fmtRate(-derived.maintenance.qi) }}）</span>
       <span class="sep">·</span>净额
-      <b :class="derived.netQi < 0 ? 'bad' : 'good'">{{ fmtRate(derived.netQi) }}</b>
+      <b :class="qiFlow.net < 0 ? 'bad' : 'good'">{{ fmtRate(qiFlow.net) }}</b>
       <span class="sep">·</span>全局 <b>×{{ derived.globalMult.toFixed(2) }}</b>
       <span class="dim">（加成 +{{ fmtPercent(derived.ratioAll) }}）</span>
       <template v-if="state.karma > 0">

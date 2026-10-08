@@ -2,6 +2,7 @@
 import { state, derived, view, ui } from '@/game/store'
 import { fmt, fmtCost, fmtFixed, fmtResource } from '@/game/format'
 import { RESOURCE_MAP } from '@/data/resources'
+import { resourceFlow } from '@/game/engine'
 import HoverTip from './HoverTip.vue'
 import SourceBreakdown from './SourceBreakdown.vue'
 
@@ -25,17 +26,17 @@ function maxOf(id) {
 }
 
 function incomeOf(id) {
-  return derived.rates[id] || 0
+  return resourceFlow(derived, id).income
 }
 
-/** 出项 = 弟子口粮（灵气）+ 带维护费建筑的持续消耗 */
+/** 出项包含口粮、维护费与当前自动加工耗料。 */
 function expenseOf(id) {
-  return -(derived.expense?.[id] || 0)
+  return resourceFlow(derived, id).expense
 }
 
 /** 第三列是净额（进项 − 出项），带正负号 */
 function netOf(id) {
-  return incomeOf(id) - expenseOf(id)
+  return resourceFlow(derived, id).net
 }
 
 /** 整枚计数的资源（灵石/丹药/符箓/法器）不显示小数，连续资源保留两位 */
