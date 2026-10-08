@@ -42,6 +42,8 @@ for (const key of [
   'Text',
   'Comment',
   'DocumentFragment',
+  'Document',
+  'ShadowRoot',
   'MutationObserver',
   'CustomEvent',
   'Event',
@@ -622,6 +624,60 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
     '链式前置写在「条件未达成」的说明里',
     lockedNames.includes('阵法精要') && html().includes('需参悟《引气诀》'),
   )
+}
+
+// 标签计数应与当前能点击的参悟 / 炼成按钮一致，并随资源变化。
+{
+  const snapshot = { ...state.resources }
+  const badge = (name) => [...doc.querySelectorAll('.tabs .tab')]
+    .find((el) => el.textContent.trim().startsWith(name))?.querySelector('.badge')?.textContent.trim() || ''
+  for (const id of Object.keys(state.resources)) state.resources[id] = 0
+  await new Promise((r) => setTimeout(r, 50))
+  ok('材料不足的修真与技艺不计入括号', badge('修真') === '' && badge('技艺') === '')
+  for (const id of Object.keys(state.resources)) state.resources[id] = 1e9
+  for (const [tab, name] of [['cultivation', '修真'], ['skills', '技艺']]) {
+    state.ui.tab = tab
+    await new Promise((r) => setTimeout(r, 50))
+    const enabled = [...doc.querySelectorAll('.box-body > table.grid tbody button')]
+      .filter((el) => !el.disabled && ['参悟', '炼成'].includes(el.textContent.trim())).length
+    ok(`${name}括号只统计可用项`, enabled > 0 && badge(name) === `(${enabled})`, badge(name))
+  }
+  state.resources = snapshot
+}
+
+// 纪事按类型与关键词组合过滤，清空 / 替换日志后仍然同步。
+{
+  const snapshot = state.log
+  state.log = []
+  engine.pushLog(state, '建成 测试聚灵阵', 'good')
+  engine.pushLog(state, '测试妖兽侵袭', 'bad')
+  engine.pushLog(state, '测试异象', 'event')
+  await new Promise((r) => setTimeout(r, 50))
+  const lines = () => [...doc.querySelectorAll('.log .log-text')].map((el) => el.textContent)
+  const filterButton = (name) => [...doc.querySelectorAll('.log-filters button')]
+    .find((el) => el.textContent.trim() === name)
+  ok('替换日志数组后纪事显示最新内容', lines().length === 3)
+  filterButton('进展').click()
+  await new Promise((r) => setTimeout(r, 50))
+  ok('纪事类型筛选只显示对应记录', lines().length === 1 && lines()[0].includes('聚灵阵'))
+  const search = doc.querySelector('.log-search')
+  search.value = '妖兽'
+  search.dispatchEvent(new window.Event('input', { bubbles: true }))
+  await new Promise((r) => setTimeout(r, 50))
+  ok('类型与关键词组合过滤并提示空结果', !lines().length && text().includes('没有符合筛选条件的纪事'))
+  filterButton('全部').click()
+  await new Promise((r) => setTimeout(r, 50))
+  ok('关键词搜索匹配日志内容', lines().length === 1 && lines()[0].includes('妖兽'))
+  engine.pushLog(state, '测试妖兽退散', 'good')
+  await new Promise((r) => setTimeout(r, 50))
+  ok('新增日志自动应用当前过滤', lines().length === 2)
+  filterButton('重置').click()
+  await new Promise((r) => setTimeout(r, 50))
+  ok('重置过滤恢复全部纪事', lines().length === 4 && search.value === '')
+  actions.clearLog()
+  await new Promise((r) => setTimeout(r, 50))
+  ok('清空纪事立即刷新列表', !lines().length && text().includes('山中清静，暂无大事'))
+  state.log = snapshot
 }
 
 state.ui.tab = 'cultivation'

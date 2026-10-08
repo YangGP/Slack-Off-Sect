@@ -1,12 +1,29 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { fmtClock, fmtAmount } from '@/game/format'
 import { EVENT_MAP } from '@/data/events'
 import { RESOURCE_MAP } from '@/data/resources'
 import { eventOutcome } from '@/game/engine'
 
-const log = state.log
+const FILTERS = [
+  { id: 'all', name: '全部' },
+  { id: 'info', name: '日常' },
+  { id: 'good', name: '进展' },
+  { id: 'bad', name: '警示' },
+  { id: 'event', name: '事件' },
+  { id: 'realm', name: '境界' },
+]
+const filter = ref('all')
+const keyword = ref('')
+const log = computed(() => state.log)
+const filteredLog = computed(() => {
+  const query = keyword.value.trim().toLocaleLowerCase()
+  return log.value.filter((item) =>
+    (filter.value === 'all' || (item.kind || 'info') === filter.value)
+    && (!query || item.text.toLocaleLowerCase().includes(query)),
+  )
+})
 const pending = computed(() => {
   const p = state.pendingChoice
   return p ? EVENT_MAP[p.id] : null
@@ -34,7 +51,19 @@ function preview(effect) {
     <div class="box-head">
       宗门纪事
       <button class="link" style="margin-left: 8px" @click="actions.clearLog()">清空纪事</button>
-      <span class="hint">共 {{ log.length }} 条</span>
+      <span class="hint">显示 {{ filteredLog.length }} / {{ log.length }} 条</span>
+    </div>
+    <div class="filters log-filters" aria-label="纪事类型筛选">
+      <button
+        v-for="f in FILTERS"
+        :key="f.id"
+        class="filter"
+        :class="{ on: filter === f.id }"
+        :aria-pressed="filter === f.id"
+        @click="filter = f.id"
+      >{{ f.name }}</button>
+      <input v-model="keyword" class="log-search" type="search" aria-label="搜索纪事" placeholder="搜索纪事">
+      <button v-if="filter !== 'all' || keyword" class="filter" @click="filter = 'all'; keyword = ''">重置</button>
     </div>
     <!-- 选择只结算所选项；材料不足时可暂不介入。 -->
     <div v-if="pending" class="choice">
@@ -52,7 +81,8 @@ function preview(effect) {
 
     <div class="log">
       <div v-if="!log.length" class="empty">山中清静，暂无大事。</div>
-      <div v-for="item in log" :key="item.id" class="log-line" :class="item.kind">
+      <div v-else-if="!filteredLog.length" class="empty">没有符合筛选条件的纪事。</div>
+      <div v-for="item in filteredLog" :key="item.id" class="log-line" :class="item.kind">
         <span class="log-dot">○</span>
         <span class="log-text">{{ item.text }}</span>
         <span class="log-time">{{ fmtClock(item.at) }}</span>

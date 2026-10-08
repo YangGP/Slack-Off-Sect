@@ -546,6 +546,25 @@ input[type="checkbox"] {
 
 /* ------------------------------ 纪事 ------------------------------ */
 
+.log-filters {
+  gap: 4px 6px;
+}
+
+.log-search {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.log-search:focus {
+  outline: 1px solid var(--link);
+}
+
 .log {
   max-height: 340px;
   overflow-y: auto;

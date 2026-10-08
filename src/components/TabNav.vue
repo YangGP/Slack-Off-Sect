@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { state, view, actions } from '@/game/store'
 import { ACHIEVEMENTS } from '@/data/achievements'
-import { idleDisciples } from '@/game/engine'
+import { canAfford, idleDisciples } from '@/game/engine'
+import { UPGRADE_MAP } from '@/data/upgrades'
 
 const TABS = [
   { id: 'sect', name: '宗门' },
@@ -17,8 +18,8 @@ const TABS = [
 
 const badges = computed(() => ({
   disciples: idleDisciples(state),
-  cultivation: (view.researchableCultivation.value || []).length,
-  skills: (view.researchableSkills.value || []).length,
+  cultivation: view.researchableCultivation.value.filter((id) => canAfford(state, UPGRADE_MAP[id].cost)).length,
+  skills: view.researchableSkills.value.filter((id) => canAfford(state, UPGRADE_MAP[id].cost)).length,
   achievements: `${Object.keys(state.achievements).length}/${ACHIEVEMENTS.length}`,
 }))
 
