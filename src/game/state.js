@@ -1,6 +1,7 @@
 import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { CONFIG } from '@/data/config'
+import { DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -94,6 +95,7 @@ export function createInitialState() {
       offlineProgress: true,
       craftReservePercent: 20,
       autoCraftPriority: 'condenseStone',
+      quickCrafts: [...DEFAULT_QUICK_CRAFTS],
     },
 
     ui: {
@@ -103,6 +105,7 @@ export function createInitialState() {
       sectFilter: 'all',
       // 技艺页筛选：all / skill / treasure
       skillFilter: 'all',
+      craftFilter: 'all',
     },
   }
 }
@@ -140,6 +143,7 @@ export function normalizeState(state) {
   merged.stats = { ...fresh.stats, ...(state.stats || {}) }
   merged.stats.crafted = { ...(state.stats && state.stats.crafted) }
   merged.settings = { ...fresh.settings, ...(state.settings || {}) }
+  merged.settings.quickCrafts = normalizeQuickCrafts(merged.settings.quickCrafts)
   merged.ui = { ...fresh.ui, ...(state.ui || {}) }
   // 去掉已经过期的 buff
   const now = Date.now()

@@ -2999,6 +2999,23 @@ section('高阶居所人口曲线')
   ok('旧档超员弟子可再次存读档', restored.disciples.total === 893)
 }
 
+section('快捷炼制偏好兼容')
+{
+  const initial = createInitialState()
+  ok('新档默认保留凝石制丹木板快捷', initial.settings.quickCrafts.join(',') === 'condenseStone,refinePill,sawPlank')
+  const old = normalizeState({ settings: { autoCraftOn: false } })
+  ok('旧档补齐快捷且不改变自动总开关', old.settings.quickCrafts.length === 3 && old.settings.autoCraftOn === false)
+  const malformed = normalizeState({ settings: { quickCrafts: ['unknown', 'constructor', 'toString', 'condenseStone', 'condenseStone', null, 'refinePill', 'sawPlank', 'refineSteel', 'drawTalisman'] } })
+  ok('快捷导入去重过滤无效项并限制四个', malformed.settings.quickCrafts.join(',') === 'condenseStone,refinePill,sawPlank,refineSteel')
+  const empty = normalizeState({ settings: { quickCrafts: [] } })
+  ok('允许玩家清空快捷偏好', empty.settings.quickCrafts.length === 0)
+  malformed.ui.tab = 'craft'
+  const restored = normalizeState(JSON.parse(JSON.stringify(malformed)))
+  ok('炼制页与快捷偏好能存读档', restored.ui.tab === 'craft' && restored.settings.quickCrafts.join(',') === malformed.settings.quickCrafts.join(','))
+  resetForReincarnation(restored, 0)
+  ok('转世保留快捷偏好', restored.settings.quickCrafts.includes('refineSteel') && restored.settings.quickCrafts.length === 4)
+}
+
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {
   console.log('失败清单：')

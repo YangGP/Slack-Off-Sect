@@ -25,6 +25,7 @@ const panels = {
   disciples: DisciplePanel,
   cultivation: CultivationPanel,
   skills: SkillPanel,
+  craft: CraftPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,
@@ -76,10 +77,10 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
     <TabNav />
 
     <div class="cols">
-      <!-- 左列：资源明细 + 炼制（炼制只在这儿，不占页签） -->
+      <!-- 左列：资源明细与常用快捷；完整操作在炼制页 -->
       <aside class="left">
         <ResourcePanel />
-        <CraftPanel />
+        <CraftPanel compact />
       </aside>
 
       <!-- 中列：唯一的一层边框容器，建筑网格/面板从顶部直接开始 -->

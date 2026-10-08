@@ -9,6 +9,7 @@ const TABS = [
   { id: 'disciples', name: '弟子' },
   { id: 'cultivation', name: '修真' },
   { id: 'skills', name: '技艺' },
+  { id: 'craft', name: '炼制' },
   { id: 'realm', name: '境界' },
   { id: 'achievements', name: '成就' },
   { id: 'settings', name: '设置' },

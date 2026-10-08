@@ -841,6 +841,65 @@ details.fold[open] > summary::before {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.craft-full .craft-row {
+  padding: 10px 0;
+}
+
+.craft-full .craft-name {
+  font-weight: 600;
+}
+
+.craft-status {
+  min-height: 20px;
+  padding: 2px 0;
+}
+
+.craft-cost {
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.craft-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding-bottom: 8px;
+}
+
+.craft-settings > .dim,
+.craft-settings > .good {
+  flex-basis: 100%;
+}
+
+.craft-target-hint {
+  padding: 6px 0;
+}
+
+.craft-pin {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.craft-open {
+  float: right;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--link);
+  cursor: pointer;
+}
+
+.craft-quick .craft-line {
+  gap: 4px;
+}
+
+.craft-quick .craft-row .btn {
+  padding: 1px 6px;
 }
 
 .craft-row .craft-name {

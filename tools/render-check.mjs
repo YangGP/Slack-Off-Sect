@@ -93,6 +93,7 @@ const TABS = [
   ['disciples', '职位分配'],
   ['cultivation', '修真'],
   ['skills', '技艺与法宝'],
+  ['craft', '库存'],
   ['realm', '飞升'],
   ['achievements', '成就'],
   ['settings', '存档'],
