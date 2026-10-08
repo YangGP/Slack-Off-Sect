@@ -1065,11 +1065,32 @@ ok('境界面板渲染', html().includes('飞升'))
   ok('重修后配方自动开关可用', !doc.querySelector('.left .craft-row input[type="checkbox"]').disabled)
   const targetInput = doc.querySelector('.main [aria-label="凝气成石库存目标"]')
   ok('道果重修后可设置配方库存目标', !!targetInput)
+  targetInput.focus()
+  targetInput.value = ''
+  targetInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  state.resources.qi += 1
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 40))
+  ok('清空目标准备输入时刷新不会填回旧值', targetInput.value === '')
+  targetInput.value = '12'
+  targetInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  state.resources.qi += 1
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 40))
+  ok('目标尚未提交时刷新保留正在输入的数字', targetInput.value === '12')
+  ok('编辑草稿不会提前改变自动炼制目标', !state.craftTargets.condenseStone)
+  targetInput.dispatchEvent(new window.Event('change', { bubbles: true }))
+  targetInput.blur()
+  ok('多位数目标提交后保存', state.craftTargets.condenseStone === 12 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).craftTargets.condenseStone === 12)
   targetInput.value = '3'
   targetInput.dispatchEvent(new window.Event('change', { bubbles: true }))
   ok('输入库存目标更新并保存', state.craftTargets.condenseStone === 3 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).craftTargets.condenseStone === 3)
   targetInput.value = '-1'
+  targetInput.dispatchEvent(new window.Event('input', { bubbles: true }))
   targetInput.dispatchEvent(new window.Event('change', { bubbles: true }))
+  state.resources.qi += 1
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 40))
   ok('非法目标输入恢复原值', targetInput.value === '3' && state.craftTargets.condenseStone === 3)
   window.confirm = savedConfirm2
   // 后面的存档用例要用到一间茅屋，这里补回来

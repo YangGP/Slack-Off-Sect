@@ -1,6 +1,6 @@
 <script setup>
 /** 完整炼制页与左栏快捷炼制共用同一套操作、状态和悬停明细。 */
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, QUICK_CRAFT_LIMIT, ADVANCED_CRAFT_OUTPUTS } from '@/data/crafts'
 import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield } from '@/game/engine'
@@ -15,6 +15,8 @@ import HoverTip from './HoverTip.vue'
 const props = defineProps({ compact: Boolean })
 const FILTERS = [{ id: 'all', name: '全部' }, { id: 'basic', name: '基础' }, { id: 'advanced', name: '进阶' }, { id: 'auto', name: '已选自动' }]
 const filter = computed(() => state.ui.craftFilter || 'all')
+// 库存每帧刷新；编辑中的草稿不能被尚未提交的库存目标覆盖。
+const targetDrafts = reactive({})
 
 /** 批量快捷：按「材料能做出的份数」取比例 */
 const BATCHES = [
@@ -58,6 +60,7 @@ function resName(id) {
 
 function updateTarget(id, event) {
   actions.setCraftTarget(id, event.target.value)
+  delete targetDrafts[id]
   event.target.value = String(autoCraftStatus(state, derived, id).target)
 }
 function updateQuick(id, event) {
@@ -165,8 +168,10 @@ const condenseStatus = computed(() => {
             自动
           </label>
           <label v-if="!compact && derived.craftTargetsUnlocked" class="small">目标
-            <input class="qty" type="number" min="0" step="1" :value="row.autoStatus.target"
-              :aria-label="`${row.meta.name}库存目标`" @change="updateTarget(row.meta.id, $event)" />
+            <input class="qty" type="number" min="0" step="1" :value="targetDrafts[row.meta.id] ?? row.autoStatus.target"
+              :aria-label="`${row.meta.name}库存目标`"
+              @input="targetDrafts[row.meta.id] = $event.target.value"
+              @change="updateTarget(row.meta.id, $event)" />
           </label>
         </div>
 
