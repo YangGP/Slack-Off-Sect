@@ -60,6 +60,7 @@ export function createDerived() {
     /** 道果带来的全局产出倍率（飞升层） */
     daoMult: 1,
     craftBonus: 0,
+    craftSpeed: 1,
     craftBonusByResource: {},
     disasterGuard: 0,
     ascendBonus: 0,
@@ -353,7 +354,7 @@ export function timeToAfford(state, derived, resId, need, depth = 0) {
     if (!Number.isFinite(sub)) return Infinity
     if (sub > wait) wait = sub
   }
-  if (isAutoCrafting(state, derived, recipe.id)) wait += copies * craftTime(recipe)
+  if (isAutoCrafting(state, derived, recipe.id)) wait += copies * craftTime(recipe, derived)
   return wait
 }
 
@@ -600,6 +601,7 @@ function recomputeRaw(state, derived, supply) {
   }
 
   const realmMult = REALMS[state.realm]?.mult ?? 1
+  derived.craftSpeed = Math.max(1, Math.sqrt(realmMult / CONFIG.CRAFT_SPEED_REALM_BASE))
   /**
    * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
    * 这是通用 idler 的 soft cap 形状：early 不打折、late 不膨胀。
@@ -954,9 +956,10 @@ export function research(state, derived, id) {
   return true
 }
 
-/** 单份理论产出：通用与对应成品的专业加成相加，实际入库另做整数结转。 */
+/** 制作增产随设施和专业技艺叠加，不对加工品设置统一上限。 */
 export function craftYield(derived, recipe) {
-  return recipe.amount * (1 + (derived.craftBonus || 0) + (derived.craftBonusByResource?.[recipe.out] || 0))
+  const bonus = (derived.craftBonus || 0) + (derived.craftBonusByResource?.[recipe.out] || 0)
+  return recipe.amount * (1 + bonus)
 }
 
 /** 做一份（内部用：不改 derived、不写日志），返回实际得到几个 */
@@ -1027,7 +1030,7 @@ export function isAutoCrafting(state, derived, recipeId) {
 export function autoCraftStatus(state, derived, recipeId) {
   const recipe = CRAFT_MAP[recipeId]
   const timer = (state.craftTimers && state.craftTimers[recipeId]) || null
-  const step = craftTime(recipe)
+  const step = craftTime(recipe, derived)
   const out = {
     on: isAutoCrafting(state, derived, recipeId),
     step,
@@ -1060,10 +1063,10 @@ export function runAutoCraft(state, derived, dt) {
   }
   for (const recipe of recipes) {
     if (!isAutoCrafting(state, derived, recipe.id)) continue
-    const step = craftTime(recipe)
+    const step = craftTime(recipe, derived)
     const timer = state.craftTimers[recipe.id] || { t: 0, made: 0 }
     timer.t = (timer.t || 0) + dt
-    while (timer.t >= step) {
+    while (timer.t + EPS >= step) {
       const full = (state.resources[recipe.out] || 0) >= derived.max[recipe.out] - EPS
       if (!canAutoCraft(state, derived, recipe) || full) {
         // 材料/仓储不够：最多攒一份，材料一恢复就接着做，但不会攒成一波爆发
@@ -1072,7 +1075,7 @@ export function runAutoCraft(state, derived, dt) {
       }
       craftUnit(state, derived, recipe)
       timer.made = (timer.made || 0) + 1
-      timer.t -= step
+      timer.t = Math.max(0, timer.t - step)
       made = true
     }
     state.craftTimers[recipe.id] = timer
@@ -1153,7 +1156,7 @@ function computeAutoCraftDrain(state, derived) {
     if (!isAutoCrafting(state, derived, recipe.id)) continue
     if ((state.resources[recipe.out] || 0) >= (derived.max[recipe.out] || Infinity) - EPS) continue
     if (!canAutoCraft(state, derived, recipe)) continue
-    const per = craftTime(recipe)
+    const per = craftTime(recipe, derived)
     for (const res in recipe.cost) {
       if (!drain[res]) drain[res] = []
       drain[res].push({
@@ -1395,7 +1398,7 @@ export function eventResourceRate(state, derived, res, path = new Set()) {
   const recipe = CRAFTS.find(c => c.out === res && isCraftUnlocked(state, c))
   if (!recipe) return direct
   const next = new Set(path).add(res)
-  let batches = 1 / craftTime(recipe)
+  let batches = 1 / craftTime(recipe, derived)
   for (const [input, amount] of Object.entries(recipe.cost)) {
     batches = Math.min(batches, eventResourceRate(state, derived, input, next) / amount)
   }

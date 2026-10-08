@@ -30,31 +30,31 @@ export const REALMS = [
   },
   {
     name: '元婴期',
-    mult: 2.6,
+    mult: 3,
     desc: '元婴出窍，神游百里而肉身不动。',
     cost: { insight: 4000, stone: 1500, pill: 45, artifact: 8, talisman: 20 },
   },
   {
     name: '化神期',
-    mult: 3.5,
+    mult: 5,
     desc: '神识如网，覆盖整座山门。',
     cost: { insight: 8000, stone: 3600, pill: 90, artifact: 20, talisman: 50 },
   },
   {
     name: '炼虚期',
-    mult: 5.0,
+    mult: 8,
     desc: '炼化虚空，举手投足皆是天地之力。',
     cost: { insight: 12000, stone: 8400, pill: 160, artifact: 40, talisman: 90 },
   },
   {
     name: '合体期',
-    mult: 7.5,
+    mult: 14,
     desc: '与道合真，人与宗门同呼吸。',
     cost: { insight: 30000, stone: 21000, pill: 260, artifact: 70, talisman: 150, faith: 3000 },
   },
   {
     name: '大乘期',
-    mult: 12,
+    mult: 24,
     desc: '此界修行之极，再往前便是天。',
     cost: {
       insight: 80000,
@@ -69,7 +69,7 @@ export const REALMS = [
   },
   {
     name: '渡劫期',
-    mult: 20,
+    mult: 40,
     desc: '天雷在头顶盘旋，只等一个飞升的时机。',
     cost: {
       insight: 200000,

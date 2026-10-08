@@ -230,8 +230,8 @@ export const TECHNIQUES = [
     name: '御剑术',
     glyph: '剑',
     cost: { insight: 780, ore: 4000, artifact: 18, steel: 6 },
-    desc: '剑光起处，弟子办事快了一倍。全局产出 +6%，法器、灵器与灵宝制作产出 +5%。',
-    effects: { ratioAll: 0.06, craftBonusByResource: { artifact: 0.05, spiritArtifact: 0.05, spiritTreasure: 0.05 } },
+    desc: '御剑运木探矿，剑火淬炼器胚。灵木与玄铁产出 +20%，法器、灵器与灵宝制作产出 +10%。',
+    effects: { ratio: { wood: 0.2, ore: 0.2 }, craftBonusByResource: { artifact: 0.1, spiritArtifact: 0.1, spiritTreasure: 0.1 } },
     needs: { upgrades: ['deepShaft'], building: { id: 'forge', count: 3 } },
   },
 
@@ -250,9 +250,38 @@ export const TECHNIQUES = [
     name: '阵纹精研',
     glyph: '精',
     cost: { insight: 3600, talisman: 45, artifact: 20, crystal: 20 },
-    desc: '一横一竖都有讲究，整座山的灵气都顺了。全局产出 +3%。',
-    effects: { ratioAll: 0.03 },
+    desc: '一横一竖都有讲究。灵气产出 +60%，阵基、灵晶与灵符制作产出 +30%，符箓制作产出 +20%。',
+    effects: { ratio: { qi: 0.6 }, craftBonusByResource: { arrayBase: 0.3, crystal: 0.3, spiritTalisman: 0.3, talisman: 0.2 } },
     needs: { upgrades: ['arrayMastery'] },
+  },
+
+  // ---------- 炼虚产业升级：原料扩产与对应加工分开结算 ----------
+  {
+    id: 'spiritSaw',
+    name: '灵纹锯阵',
+    glyph: '锯',
+    cost: { insight: 4500, plank: 80, steel: 20, crystal: 15 },
+    desc: '以灵纹驱动锯阵，扩建林场并精切板材。灵木产出 +95%，木板制作产出 +50%。',
+    effects: { ratio: { wood: 0.95 }, craftBonusByResource: { plank: 0.5 } },
+    needs: { realm: 6, upgrades: ['timberCraft', 'waterworkshop'] },
+  },
+  {
+    id: 'spiritSmelting',
+    name: '灵火冶炼',
+    glyph: '冶',
+    cost: { insight: 4500, steel: 25, artifact: 40, crystal: 15 },
+    desc: '以灵火探脉淬铁，器胚成材更稳。玄铁产出 +95%，玄钢制作产出 +50%，法器与灵器制作产出 +30%。',
+    effects: { ratio: { ore: 0.95 }, craftBonusByResource: { steel: 0.5, artifact: 0.3, spiritArtifact: 0.3 } },
+    needs: { realm: 6, upgrades: ['deepShaft', 'steelWorking', 'swordFlight'] },
+  },
+  {
+    id: 'spiritCultivation',
+    name: '百草育灵',
+    glyph: '育',
+    cost: { insight: 4500, pill: 80, immortalHerb: 15, crystal: 15 },
+    desc: '轮作养地，提纯药性。灵草产出 +95%，丹药制作产出 +50%，仙草制作产出 +30%。',
+    effects: { ratio: { herb: 0.95 }, craftBonusByResource: { pill: 0.5, immortalHerb: 0.3 } },
+    needs: { realm: 6, upgrades: ['herbRotation', 'alchemyFire'] },
   },
 
   // ---------- 顶阶 ----------
@@ -261,8 +290,8 @@ export const TECHNIQUES = [
     name: '大乘心经',
     glyph: '乘',
     cost: { insight: 9000, artifact: 60, talisman: 60, pill: 60, faith: 6000 },
-    desc: '读懂了这一卷，山下山上再无分别。全局产出 +12%。',
-    effects: { ratioAll: 0.12 },
+    desc: '以心养药，以愿证道。感悟与香火产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。',
+    effects: { ratio: { insight: 1.2, faith: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
     needs: { realm: 8, upgrades: ['greatVehicleSeal'] },
   },
 
@@ -286,9 +315,9 @@ export const TECHNIQUES = [
     glyph: '幡',
     cost: { insight: 45, wood: 600, stone: 200 },
     refine: { insight: 150 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '按灵源考的图样缝成的幡，插在院里，诸般产出都顺一点。全局产出 +2%。',
+    desc: '按灵源考的图样缝成的幡，为气田与药圃引来灵气。灵气与灵草产出 +10%。',
     kind: 'treasure',
-    effects: { ratioAll: 0.02 },
+    effects: { ratio: { qi: 0.1, herb: 0.1 } },
     needs: { upgrades: ['qiOrigin'] },
   },
   {
@@ -319,9 +348,9 @@ export const TECHNIQUES = [
     glyph: '剑',
     cost: { insight: 450, artifact: 14, ore: 2000, stone: 1500 },
     refine: { insight: 1500, materials: { steel: 2, spiritArtifact: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '炼器术的顶点之作。剑光起处，弟子办事快了一倍。全局产出 +8%。',
+    desc: '剑光穿林破岩，也可分割器胚。灵木与玄铁产出 +40%，法器与灵器制作产出 +15%。',
     kind: 'treasure',
-    effects: { ratioAll: 0.08 },
+    effects: { ratio: { wood: 0.4, ore: 0.4 }, craftBonusByResource: { artifact: 0.15, spiritArtifact: 0.15 } },
     needs: { upgrades: ['forgeArt'] },
   },
   {
@@ -440,8 +469,8 @@ export const TECHNIQUES = [
     glyph: '印',
     cost: { insight: 3600, talisman: 50, artifact: 35, ore: 8000, stone: 11000 },
     refine: { insight: 12000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '阵道精通之后才敢动手刻的印，压在山门上，满山灵气都听话。全局产出 +5%。',
-    effects: { ratioAll: 0.05 },
+    desc: '镇住山脉气眼与矿纹。灵气产出 +80%，玄铁与灵石产出 +60%，阵基与灵符制作产出 +40%。',
+    effects: { ratio: { qi: 0.8, ore: 0.6, stone: 0.6 }, craftBonusByResource: { arrayBase: 0.4, spiritTalisman: 0.4 } },
     kind: 'treasure',
     needs: { upgrades: ['arrayMastery'] },
   },

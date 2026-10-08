@@ -87,6 +87,7 @@ const condenseStatus = computed(() => {
         <label class="sw"><input type="checkbox" :checked="state.settings.autoCraftOn" @change="actions.setSetting('autoCraftOn', $event.target.checked)" />自动制作总开关</label>
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷最多 {{ QUICK_CRAFT_LIMIT }} 个</span>
       </div>
+      <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
       <div v-if="!compact && derived.daoAutomation" class="small craft-settings">
         <div class="good">道果统筹 · 重修时即可自动炼制</div>
         <label>材料保留
@@ -228,7 +229,7 @@ const condenseStatus = computed(() => {
             </div>
             <div class="tip-row">
               <span class="k">节奏</span>
-              <span class="v">每 {{ row.autoStatus.step }} 秒 1 份</span>
+              <span class="v">每 {{ fmt(row.autoStatus.step) }} 秒 1 份</span>
             </div>
             <div class="tip-row">
               <span class="k">还能做</span>

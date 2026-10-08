@@ -101,7 +101,7 @@ export const BUILDINGS = [
     cost: { stone: 600, insight: 300 },
     priceRatio: 1.4,
     desc: '在小阵之上再叠三重纹路，把方圆百里的灵气都攒进山门。',
-    effects: { ratioAll: 0.03, prod: { qi: 0.5 } },
+    effects: { ratio: { qi: 0.08 }, prod: { qi: 3 } },
     upkeep: { qi: 1.2 }, // 大阵自己在引气，也在漏气
 
     // 先学会「观气」，才画得出大阵（修真 · 观气法）
@@ -112,11 +112,11 @@ export const BUILDINGS = [
     name: '晶核聚灵阵',
     glyph: '晶',
     group: 'produce',
-    cost: { crystal: 4, plank: 4, arrayBase: 2, ore: 120 },
+    cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
     unlockRatio: 0,
     desc: '阵基定形、晶核聚气。金丹后以凝晶工艺建成，稳定汇聚灵气并保存备用晶核。',
-    effects: { prod: { qi: 2 }, ratio: { qi: 0.02 }, storage: { crystal: 15 } },
+    effects: { prod: { qi: 15 }, ratio: { qi: 0.02 }, storage: { crystal: 15 } },
     upkeep: { qi: 1 },
     needs: { realm: 4, upgrades: ['crystalTheory'] },
   },
@@ -125,10 +125,10 @@ export const BUILDINGS = [
     name: '灵兽园',
     glyph: '兽',
     group: 'produce',
-    cost: { wood: 1500, plank: 6, herb: 800, stone: 1500 },
+    cost: { wood: 6000, plank: 30, herb: 4000, stone: 6000 },
     priceRatio: 1.45,
     desc: '养几只懂事的灵兽，采药驮矿都不必弟子亲自跑。',
-    effects: { prod: { herb: 0.15, ore: 0.1 }, morale: 2 },
+    effects: { prod: { wood: 1.2, herb: 1.5, ore: 1 }, morale: 2 },
     upkeep: { herb: 0.05 }, // 灵兽要喂
 
     needs: { upgrades: ['beastTaming'] },
@@ -162,7 +162,7 @@ export const BUILDINGS = [
     name: '精舍',
     glyph: '舍',
     group: 'home',
-    cost: { wood: 900, plank: 6, ore: 200, arrayBase: 2 },
+    cost: { wood: 3000, plank: 25, ore: 800, arrayBase: 4 },
     priceRatio: 1.6,
     desc: '青石铺地、灵纹引气，十名弟子各有静修之处。',
     effects: { maxDisciples: 10, storage: { qi: 400, wood: 200 }, morale: 4 },
@@ -173,7 +173,7 @@ export const BUILDINGS = [
     name: '洞府',
     glyph: '洞',
     group: 'home',
-    cost: { plank: 12, crystal: 30, steel: 6, artifact: 5 },
+    cost: { plank: 100, crystal: 100, steel: 30, artifact: 25 },
     priceRatio: 1.7,
     desc: '凿山为府，聚灵成池。二十四名弟子分室静修，吐纳有得。',
     effects: { maxDisciples: 24, storage: { qi: 3000, wood: 1200 }, morale: 6 },
@@ -190,7 +190,7 @@ export const BUILDINGS = [
     priceRatio: 1.18,
     desc: '囤灵气如囤粮，也堆得下木料与草药 —— 荒年不至于饿着弟子。',
     // 灵木也在这里囤：早期灵木产量几天内涨几十倍，只靠基础上限 200 会一直在「0 ↔ 满仓」之间跳
-    effects: { storage: { qi: 400, wood: 150, herb: 60 } },
+    effects: { storage: { qi: 800, wood: 300, herb: 120 } },
     needs: { building: { id: 'spiritField', count: 2 } },
   },
   {
@@ -205,7 +205,7 @@ export const BUILDINGS = [
     // 份额按「这种资源平时流得多快」分配（8 小时推演：灵木 72/秒、灵草 11、玄铁 7.5；
     // 灵石没有产出，靠凝气成石现印，按兑换后的灵气量折算）。
     // 灵气上限归「谷仓」，感悟归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
-    effects: { storage: { wood: 360, stone: 240, ore: 120, herb: 150 } },
+    effects: { storage: { wood: 1000, stone: 800, ore: 400, herb: 500 } },
     needs: { upgrades: ['earthArt'] },
   },
   {
@@ -213,10 +213,10 @@ export const BUILDINGS = [
     name: '材料库',
     glyph: '殿',
     group: 'store',
-    cost: { plank: 6, ore: 400, steel: 4 },
+    cost: { plank: 20, ore: 1500, steel: 10 },
     priceRatio: 1.25,
     desc: '石殿分设料架与阵材格，专存营造原料、木板、玄钢和阵基。',
-    effects: { storage: { wood: 1600, stone: 1200, ore: 1000, plank: 300, steel: 20, arrayBase: 20 } },
+    effects: { storage: { wood: 10000, stone: 8000, ore: 6000, plank: 1500, steel: 120, arrayBase: 100 } },
     needs: { building: { id: 'warehouse', count: 5 }, upgrades: ['earthEssence'] },
   },
   {
@@ -224,10 +224,10 @@ export const BUILDINGS = [
     name: '药藏',
     glyph: '药',
     group: 'store',
-    cost: { plank: 4, arrayBase: 1, herb: 100 },
+    cost: { plank: 12, arrayBase: 2, herb: 500 },
     priceRatio: 1.22,
     desc: '药架通风、玉匣封灵，灵草与丹药分格收存。普通药材多存，仙草与九转丹少量精藏。',
-    effects: { storage: { herb: 300, immortalHerb: 20, pill: 200, nineTurnPill: 8 } },
+    effects: { storage: { herb: 2000, immortalHerb: 80, pill: 1000, nineTurnPill: 100 } },
     needs: { realm: 4, upgrades: ['alchemyArt', 'woodworking'] },
   },
   {
@@ -235,10 +235,10 @@ export const BUILDINGS = [
     name: '法藏',
     glyph: '藏',
     group: 'store',
-    cost: { plank: 4, arrayBase: 1, ore: 100 },
+    cost: { plank: 12, arrayBase: 2, ore: 500 },
     priceRatio: 1.22,
     desc: '符匣与器架各有禁制，符箓、法器及其进阶成品在此收存，灵晶另设晶格，灵宝独占小龛。',
-    effects: { storage: { talisman: 200, spiritTalisman: 10, artifact: 120, spiritArtifact: 6, spiritTreasure: 2, crystal: 30 } },
+    effects: { storage: { talisman: 1000, spiritTalisman: 200, artifact: 600, spiritArtifact: 100, spiritTreasure: 10, crystal: 150 } },
     needs: { realm: 4, upgrades: ['forgeArt', 'talismanArt'] },
   },
   {
@@ -247,10 +247,10 @@ export const BUILDINGS = [
     glyph: '天',
     group: 'store',
     // 洞天以玄钢为骨：撑开一方小世界，梁架全用钢（可反复盖）
-    cost: { stone: 8000, plank: 20, insight: 4000, artifact: 10, steel: 20 },
+    cost: { stone: 40000, plank: 100, insight: 20000, artifact: 50, steel: 100 },
     priceRatio: 1.35,
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
-    effects: { storageAll: 3000, storage: { qi: 9000, wood: 9000, stone: 9000, ore: 9000, insight: 9000, faith: 9000, yangParticle: 9000, yinParticle: 9000, qiEnergy: 4000 }, morale: 5 },
+    effects: { storageAll: 12000, storage: { qi: 75000, wood: 75000, stone: 75000, ore: 75000, insight: 75000, faith: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000 }, morale: 5 },
     needs: { upgrades: ['grottoArt'] },
   },
 
@@ -271,10 +271,10 @@ export const BUILDINGS = [
     name: '讲经堂',
     glyph: '讲',
     group: 'cultivate',
-    cost: { arrayBase: 2, plank: 2 },
+    cost: { arrayBase: 4, plank: 25 },
     priceRatio: 1.25,
     desc: '长老登坛讲经，一人讲、百人悟。',
-    effects: { ratio: { insight: 0.35 }, storage: { insight: 800 } },
+    effects: { ratio: { insight: 0.35 }, storage: { insight: 1600 } },
     needs: { upgrades: ['preachArt'] },
     unlockRatio: 0,
   },
@@ -283,10 +283,10 @@ export const BUILDINGS = [
     name: '观星台',
     glyph: '星',
     group: 'cultivate',
-    cost: { crystal: 20, plank: 6, ore: 200 },
+    cost: { crystal: 50, plank: 30, ore: 1000 },
     priceRatio: 1.3,
     desc: '夜观天象，把满天星斗读成一部功法。',
-    effects: { ratio: { insight: 0.5 }, storage: { insight: 600 } },
+    effects: { ratio: { insight: 0.5 }, storage: { insight: 6000 } },
     needs: { upgrades: ['astrologyArt'] },
     unlockRatio: 0,
   },
@@ -295,7 +295,7 @@ export const BUILDINGS = [
     name: '静心池',
     glyph: '静',
     group: 'cultivate',
-    cost: { herb: 80, immortalHerb: 2, arrayBase: 2 },
+    cost: { herb: 500, immortalHerb: 10, arrayBase: 4 },
     priceRatio: 1.3,
     desc: '池水照心，弟子泡一泡，脾气就小了一圈。',
     effects: { morale: 6 },
@@ -307,10 +307,10 @@ export const BUILDINGS = [
     name: '试炼塔',
     glyph: '塔',
     group: 'cultivate',
-    cost: { ore: 600, steel: 6, arrayBase: 4, artifact: 6 },
+    cost: { ore: 3000, steel: 25, arrayBase: 10, artifact: 25 },
     priceRatio: 1.35,
-    desc: '层层有险，闯过者心境大进，宗门气运也随之上扬。',
-    effects: { ratioAll: 0.05, morale: 3 },
+    desc: '层层有险，闯过者心境大进，也练出了辨矿与参悟的本领。感悟产出 +15%，玄铁产出 +10%。',
+    effects: { ratio: { insight: 0.15, ore: 0.1 }, morale: 3 },
     upkeep: { ore: 0.6 }, // 试炼要修机关、耗玄铁
 
     needs: { realm: 4, upgrades: ['trialArt'] },
@@ -360,11 +360,11 @@ export const BUILDINGS = [
     group: 'craft',
     cost: { plank: 6, ore: 400 },
     priceRatio: 1.3,
-    desc: '炼丹、炼器、画符、木作的弟子在此互通有无。梁柱、案台、炉架全用板材 —— 同样的料，出手成色更高：每座制作产出 +15%（可叠加）。少了它只是慢，不会缺货。',
+    desc: '炼丹、炼器、画符、木作的弟子在此互通有无。梁柱、案台、炉架全用板材，每座制作产出 +6%（可叠加）。',
     // 它**只是加成建筑**：不锁任何配方或条目（数据里没有一条 needs 指向它），
-    // 效果也只留与制作有关的：制作产出 +15%/座、木板上限 +300/座。
+    // 效果也只留与制作有关的：制作产出 +6%/座、木板上限 +300/座。
     // 「按启用数量叠加」—— 停用一座就少一份加成，所以它值得一个 停/启 的取舍。
-    effects: { craftBonus: 0.15, storage: { plank: 300 } },
+    effects: { craftBonus: 0.06, storage: { plank: 300 } },
     upkeep: { wood: 0.8 }, // 百工齐开，木料像流水
     // 只要有第一座工坊（炼丹房）就能开张 —— 不必等炼器坊，木板与自动制作因此提前到手
     needs: { buildings: [{ id: 'alchemyRoom', count: 1 }] },
@@ -400,10 +400,10 @@ export const BUILDINGS = [
     name: '祖师殿',
     glyph: '祖',
     group: 'incense',
-    cost: { stone: 3000, plank: 8, insight: 1500, talisman: 5 },
+    cost: { stone: 12000, plank: 40, insight: 6000, talisman: 25 },
     priceRatio: 1.35,
     desc: '历代祖师的牌位在此，弟子路过都要收一收心思。',
-    effects: { ratio: { faith: 0.5 }, morale: 8, ratioAll: 0.03 },
+    effects: { ratio: { faith: 0.5, insight: 0.1 }, morale: 8 },
     needs: { upgrades: ['ancestorArt'] },
   },
 
@@ -414,7 +414,7 @@ export const BUILDINGS = [
     glyph: '护',
     group: 'array',
     // 护山大阵压着山门气脉，每一角都要镇符（可反复盖）
-    cost: { crystal: 40, arrayBase: 8, spiritTalisman: 8 },
+    cost: { crystal: 150, arrayBase: 25, spiritTalisman: 25 },
     priceRatio: 1.45,
     desc: '阵纹沿山脊铺开，妖兽撞上来只会留下几道白印。',
     effects: { disasterGuard: 0.08, morale: 2 },
@@ -427,10 +427,10 @@ export const BUILDINGS = [
     name: '锁灵阵',
     glyph: '锁',
     group: 'array',
-    cost: { crystal: 80, arrayBase: 6, spiritTalisman: 4 },
+    cost: { crystal: 300, arrayBase: 25, spiritTalisman: 25 },
     priceRatio: 1.5,
     desc: '把弟子吐纳时逸散的灵气锁回阵中，一丝也不浪费。',
-    effects: { consumeRatio: 0.03, ratioAll: 0.05 },
+    effects: { consumeRatio: 0.03, ratio: { qi: 0.15 } },
     needs: { upgrades: ['arrayMastery'] },
   },
 
@@ -442,10 +442,10 @@ export const BUILDINGS = [
     group: 'wonder',
     // 塔身越高越吃风：每一重都要贴镇风灵符（可反复盖 → 灵符的持续去处）
     // 塔是玄钢与灵符最大的去处：一重塔身一段钢、一重飞檐一道符（可反复盖）
-    cost: { stone: 80000, plank: 60, ore: 20000, artifact: 50, insight: 50000, steel: 80, spiritTalisman: 40 },
+    cost: { stone: 400000, plank: 300, ore: 100000, artifact: 250, insight: 250000, steel: 400, spiritTalisman: 200 },
     priceRatio: 1.6,
     desc: '塔尖直插云海，聚气存念并镇住正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
-    effects: { ratioAll: 0.15, storageAll: 5000, storage: { qi: 15000, wood: 15000, stone: 15000, ore: 15000, insight: 15000, faith: 15000, yangParticle: 15000, yinParticle: 15000, qiEnergy: 10000 } },
+    effects: { ratio: { qi: 0.3, insight: 0.3, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { qi: 150000, wood: 150000, stone: 150000, ore: 150000, insight: 150000, faith: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000 } },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
 
     needs: { realm: 6, upgrades: ['towerPlan'] },
@@ -456,9 +456,8 @@ export const BUILDINGS = [
     glyph: '阴',
     group: 'wonder',
     // 阵要一直烧灵气：拆开一个灵气分子，才得到一对正负灵子
-    // 造价必须落在玩家"实际能达到的仓储上限"之内：早先写 25 万灵石，
-    // 而参照玩家在渡劫期的灵石上限只有约 22.8 万 —— 于是这两座永远盖不出来（推演曲线一字不差）。
-    cost: { stone: 40000, insight: 20000, artifact: 30 },
+    // 终局造价由洞天与通天塔承接容量，并由长期推演检查实际可达。
+    cost: { stone: 200000, insight: 100000, artifact: 150, crystal: 100, arrayBase: 25 },
     priceRatio: 1.5,
     desc: '阵法把灵气分子拆成正负两半 —— 拆得越久，越像在跟天地借火。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
@@ -470,7 +469,7 @@ export const BUILDINGS = [
     name: '湮灭炉',
     glyph: '湮',
     group: 'wonder',
-    cost: { wood: 50000, stone: 60000, artifact: 30 },
+    cost: { wood: 250000, stone: 300000, artifact: 150, steel: 100, spiritArtifact: 10 },
     priceRatio: 1.6,
     desc: '正负灵子在炉心相遇，归于虚无，只留下滚烫的灵能。',
     effects: { prod: { qiEnergy: 0.06 } },
@@ -484,10 +483,10 @@ export const BUILDINGS = [
     group: 'wonder',
     // 池里要投九转丹镇住因果（同上：可反复盖）
     // 池口封符、池底投丹（都可反复盖）
-    cost: { stone: 200000, insight: 150000, pill: 200, talisman: 200, spiritArtifact: 10, spiritTreasure: 2, nineTurnPill: 5, spiritTalisman: 15 },
+    cost: { stone: 1000000, insight: 750000, pill: 1000, talisman: 1000, spiritArtifact: 50, spiritTreasure: 10, nineTurnPill: 25, spiritTalisman: 75 },
     priceRatio: 1.7,
     desc: '池中养着一缕前世因果，飞升时能多带走几分。',
-    effects: { ratioAll: 0.25, ascendBonus: 0.25 },
+    effects: { ratio: { insight: 0.5, faith: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },
     upkeep: { insight: 4 }, // 养一缕因果要耗感悟
 
     needs: { realm: 8, upgrades: ['karmaConcord'] },

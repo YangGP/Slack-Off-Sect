@@ -64,18 +64,18 @@ export const PRIORITY = [
  * 这里模拟玩家会做的事：基础材料留够才炼，成品也囤到够用就停。
  */
 export const ADVANCED_CRAFTS = {
-  condenseCrystal: { floors: { qi: 600, talisman: 4 }, cap: 200 },
+  condenseCrystal: { floors: { qi: 600, talisman: 10 }, cap: 600 },
   // 上限必须**高于游戏里的最大单笔需求**，否则参照玩家会卡在自己设的门槛上：
   // 早先玄钢上限 40、而渡劫期破境要 120，推演就永远停在 大乘期（96 小时都不动）。
   // 这条约束现在由冒烟断言守着（见「参照玩家的囤货上限」一节）。
-  refineSteel: { base: 'ore', floor: 300, cap: 200 },
+  refineSteel: { base: 'ore', floor: 300, cap: 600 },
   growImmortalHerb: { base: 'herb', floor: 400, cap: 200 },
-  refineNineTurnPill: { base: 'pill', floor: 60, cap: 80 },
-  drawSpiritTalisman: { base: 'talisman', floor: 120, cap: 120 },
-  forgeSpiritArtifact: { base: 'artifact', floor: 60, cap: 80 },
+  refineNineTurnPill: { base: 'pill', floor: 160, cap: 100 },
+  drawSpiritTalisman: { base: 'talisman', floor: 220, cap: 300 },
+  forgeSpiritArtifact: { base: 'artifact', floor: 160, cap: 100 },
   // 组合型进阶：三种料都要留够才动手（floors 支持多料，base/floor 是单料的简写）
   forgeSpiritTreasure: {
-    floors: { spiritArtifact: 40, nineTurnPill: 20, spiritTalisman: 30 },
+    floors: { spiritArtifact: 65, nineTurnPill: 45, spiritTalisman: 80 },
     cap: 40,
   },
 }
@@ -159,6 +159,7 @@ export function createBot(state, derived) {
   }
 
   function act() {
+    let craftDemand = {}
     // 金丹后按近期建筑/研究/破境需求设置加工库存目标，避免把原料无限加工。
     // 这是新目标控件允许玩家执行的策略，手动与自动制作使用同一目标。
     if (derived.craftTargetsUnlocked) {
@@ -169,11 +170,17 @@ export function createBot(state, derived) {
       for (const id of derived.unlockedBuildings) {
         for (const [res, amount] of Object.entries(E.buildingCost(state, id, 1))) demand[res] = Math.max(demand[res] || 0, amount)
       }
+      craftDemand = demand
       for (const c of CRAFTS) {
         if (!['plank', 'pill', 'talisman', 'artifact', 'arrayBase'].includes(c.out)) continue
         // 阵基的下料也是短期需求；普通成品还预留进阶配方的一份料。
         let inputDemand = 0
-        for (const recipe of CRAFTS) if (derived.availableCrafts.includes(recipe.id)) inputDemand = Math.max(inputDemand, recipe.cost[c.out] || 0)
+        for (const recipe of CRAFTS) {
+          if (!derived.availableCrafts.includes(recipe.id)) continue
+          const policy = ADVANCED_CRAFTS[recipe.id]
+          const floor = policy?.floors?.[c.out] || (policy?.base === c.out ? policy.floor : 0)
+          inputDemand = Math.max(inputDemand, recipe.cost[c.out] || 0, floor)
+        }
         E.setCraftTarget(state, derived, c.id, Math.ceil(Math.max(20, demand[c.out] || 0, inputDemand) * 1.25))
       }
     }
@@ -256,7 +263,8 @@ export function createBot(state, derived) {
           if ((state.resources[res] || 0) < need) enough = false
         }
         if (!enough) continue
-        if ((state.resources[c.out] || 0) >= adv.cap) continue
+        const cap = Math.min(derived.max[c.out], Math.max(adv.cap, craftDemand[c.out] || 0))
+        if ((state.resources[c.out] || 0) >= cap) continue
         if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 1 })
         continue
       }
