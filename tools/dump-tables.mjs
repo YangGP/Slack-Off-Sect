@@ -67,12 +67,13 @@ const effects = (e) => {
   if (e.craftBonusByResource) for (const [id, value] of Object.entries(e.craftBonusByResource)) out.push(`${res(id)}制作 +${pct(value)}`)
   if (e.disasterGuard) out.push(`灾损 −${pct(e.disasterGuard)}`)
   if (e.ascendBonus) out.push(`仙缘 +${pct(e.ascendBonus)}`)
-  if (e.arrivalBonus) out.push(`弟子前来 +${pct(e.arrivalBonus)}`)
+  if (e.arrivalBonus) out.push(`弟子前来间隔 −${pct(e.arrivalBonus)}`)
   if (e.breakthroughDiscount) out.push(`破境 −${pct(e.breakthroughDiscount)}`)
   if (e.offlineHours) out.push(`离线 +${e.offlineHours}h`)
-  if (e.karmaRatio) out.push(`仙缘系数 +${e.karmaRatio}`)
+  if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')
-  if (e.unlockBuildings) out.push('解锁 ' + e.unlockBuildings.map(bname).join('/'))
+  if (e.autoCondense) out.push('节气满仓自动凝石')
+  if (e.unlockBuildings?.length) out.push('解锁 ' + e.unlockBuildings.map(bname).join('/'))
   return out.join('；')
 }
 
@@ -124,10 +125,11 @@ for (const t of TECHNIQUES.filter((x) => x.kind !== 'treasure')) {
 }
 
 emit('\n## A.6 法宝（由修真解锁的器物）\n')
-emit('| 法宝 | id | 花费 | 效果 | 解锁 |')
-emit('| --- | --- | --- | --- | --- |')
+emit('炼成后基础效果生效；祭炼 n 级效果 ×(1 + 0.3n)，费用按当前等级以 1.7 倍递增。非感悟材料沿用炼成费用，感悟使用下表祭炼基价，无等级硬上限。\n')
+emit('| 法宝 | id | 炼成花费 | 祭炼基础感悟 | 效果 | 解锁 |')
+emit('| --- | --- | --- | --- | --- | --- |')
 for (const t of TECHNIQUES.filter((x) => x.kind === 'treasure')) {
-  emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${effects(t.effects)} | ${needs(t.needs)} |`)
+  emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${t.refine?.insight || 0} | ${effects(t.effects)} | ${needs(t.needs)} |`)
 }
 emit('\n进阶祭炼附加材料：达到指定层数后开始支付，按1.7倍逐层递增，基础祭炼费用照常支付。\n')
 emit('| 法宝 | 第几次祭炼起 | 起始附加材料 |')
@@ -135,10 +137,11 @@ emit('| --- | --- | --- |')
 for (const t of TECHNIQUES.filter(t => t.refine?.materials)) emit(`| ${t.name} | ${(t.refine.materialFromLevel || 0) + 1} | ${cost(t.refine.materials)} |`)
 
 emit('\n## A.7 制作配方\n')
-emit('| 配方 | id | 产出 | 花费 | 解锁 |')
-emit('| --- | --- | --- | --- | --- |')
+emit('秒数为自动加工基础间隔；实际间隔除以境界加工速度，手动制作瞬时完成。每份收益另乘通用与专业制作加成，普通生产倍率不直接提高配方收益。\n')
+emit('| 配方 | id | 基础产出 | 花费 | 基础秒数 | 解锁 |')
+emit('| --- | --- | --- | --- | --- | --- |')
 for (const c of CRAFTS) {
-  emit(`| ${c.name} | \`${c.id}\` | ${res(c.out)} ×${c.amount} | ${cost(c.cost)} | ${c.unlocked ? '初始' : needs(c.needs)} |`)
+  emit(`| ${c.name} | \`${c.id}\` | ${res(c.out)} ×${c.amount} | ${cost(c.cost)} | ${c.time} | ${c.unlocked ? '初始' : needs(c.needs)} |`)
 }
 
 emit('\n## A.8 境界\n')
@@ -147,7 +150,7 @@ emit('| --- | --- | --- |')
 for (const r of REALMS) emit(`| ${r.name} | ×${r.mult} | ${r.cost ? cost(r.cost) : '—'} |`)
 
 emit('\n## A.9 成就\n')
-emit(`每条成就：+${ACHIEVEMENT_REWARD * 100}% 全局\n`)
+emit(ACHIEVEMENT_REWARD === 0 ? '成就仅记录行为与进度，当前不提供产出奖励。\n' : `每条成就：+${ACHIEVEMENT_REWARD * 100}% 全局\n`)
 emit('| 成就 | id | 条件 |')
 emit('| --- | --- | --- |')
 for (const a of ACHIEVEMENTS) emit(`| ${a.name} | \`${a.id}\` | ${a.desc} |`)
