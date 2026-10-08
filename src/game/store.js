@@ -1,6 +1,6 @@
 import { reactive, computed } from 'vue'
 import { CONFIG } from '@/data/config'
-import { CRAFT_MAP, QUICK_CRAFT_LIMIT, normalizeQuickCrafts } from '@/data/crafts'
+import { CRAFT_MAP, normalizeQuickCrafts } from '@/data/crafts'
 import { RESOURCES, VISIBLE_RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { BUILDINGS } from '@/data/buildings'
@@ -377,10 +377,6 @@ export const actions = {
     const ids = normalizeQuickCrafts(state.settings.quickCrafts)
     if (ids.includes(id)) actions.setSetting('quickCrafts', ids.filter(item => item !== id))
     else {
-      if (ids.length >= QUICK_CRAFT_LIMIT) {
-        toast(`快捷炼制最多保留${QUICK_CRAFT_LIMIT}个配方，请先移除一个`, 'info')
-        return false
-      }
       actions.setSetting('quickCrafts', [...ids, id])
     }
     return true

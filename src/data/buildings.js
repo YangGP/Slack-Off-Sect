@@ -64,7 +64,7 @@ export const BUILDINGS = [
     // 天然来源必须是"细水长流"，不能变成替代整条"以气凝石"的瓶颈。
     // 实测教训：0.12/秒 × 可无限叠，24 小时就能冲到渡劫期（原本 72 小时）。
     priceRatio: 1.55,
-    desc: '顺着灵脉再往深处走，岩层里嵌着天然灵石 —— 凿下来就能用，不必再以气凝石。',
+    desc: '顺着灵脉再往深处走，岩层里嵌着天然灵石 —— 凿下来就能用。启用后，每名矿工额外采出 0.0008 灵石/秒。',
     effects: { prod: { stone: 0.03 } },
     needs: { upgrades: ['prospectStudy'] },
   },
@@ -494,6 +494,17 @@ export const BUILDINGS = [
 ]
 
 export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
+
+/** 宗门列表的发展顺序：基础营造先出现，后续按产业与境界阶段排列。 */
+export const BUILDING_DISPLAY_ORDER = [
+  'spiritField', 'hut', 'lumberYard', 'granary', 'library', 'logHouse',
+  'mine', 'spiritQuarry', 'herbGarden', 'warehouse', 'spiritVein', 'gatheringArray',
+  'alchemyRoom', 'forge', 'talismanHall', 'workshop', 'gate',
+  'crystalArray', 'academy', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
+  'depot', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
+  'beastGarden', 'caveDwelling', 'grotto', 'spiritLockArray',
+  'heavenTower', 'splitArray', 'annihilationFurnace', 'karmaPool',
+]
 
 /** 分组标题与顺序 */
 export const BUILDING_GROUPS = [

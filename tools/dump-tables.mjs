@@ -90,7 +90,9 @@ emit('\n## A.2 职位\n')
 emit('| 职位 | id | 产出 | 每人每秒 | 解锁 |')
 emit('| --- | --- | --- | --- | --- |')
 for (const j of JOBS) {
-  emit(`| ${j.name} | \`${j.id}\` | ${res(j.resource)} | ${j.base} | ${j.unlocked ? '初始' : needs(j.needs)} |`)
+  const output = j.secondary ? `${res(j.resource)} + ${res(j.secondary.resource)}` : res(j.resource)
+  const rate = j.secondary ? `${j.base}；${bname(j.secondary.building)}启用时另产${j.secondary.base}${res(j.secondary.resource)}` : j.base
+  emit(`| ${j.name} | \`${j.id}\` | ${output} | ${rate} | ${j.unlocked ? '初始' : needs(j.needs)} |`)
 }
 
 emit('\n## A.3 建筑\n')

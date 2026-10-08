@@ -85,7 +85,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
 
       <!-- 中列：唯一的一层边框容器，建筑网格/面板从顶部直接开始 -->
       <main class="main">
-        <div class="panel">
+        <div class="panel" :class="{ 'panel-craft': state.ui.tab === 'craft' }">
           <component :is="activePanel" />
         </div>
       </main>

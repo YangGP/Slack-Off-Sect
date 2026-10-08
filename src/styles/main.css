@@ -32,6 +32,8 @@ body,
 #app {
   margin: 0;
   padding: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -51,7 +53,14 @@ button {
 .wrap {
   max-width: 1380px;
   margin: 0 auto;
-  padding: 10px 16px 48px;
+  padding: 10px 16px 40px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wrap > :not(.cols) {
+  flex-shrink: 0;
 }
 
 /* ------------------------------ 顶端 ------------------------------ */
@@ -239,34 +248,67 @@ button {
 /* ------------------------------ 三列布局 ------------------------------ */
 
 .cols {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 284px minmax(0, 1fr) 300px;
   gap: 18px;
-  align-items: flex-start;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .left {
-  flex: 0 0 284px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.left > .box:first-child {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 60%;
+  overflow: auto;
 }
 
 .main {
-  flex: 1 1 520px;
   min-width: 0;
+  min-height: 0;
 }
 
 .right {
-  flex: 0 0 300px;
+  min-height: 0;
+  overflow: auto;
 }
 
 @media (max-width: 1279px) {
+  .cols {
+    grid-template-columns: 284px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 160px);
+  }
   .right {
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 879px) {
+  .cols {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .left, .main, .right {
+    flex: 0 0 auto;
+    width: 100%;
+  }
   .left {
-    flex: 1 1 100%;
+    height: 55dvh;
+  }
+  .main {
+    height: 75dvh;
+  }
+  .right {
+    max-height: 45dvh;
   }
 }
 
@@ -274,6 +316,33 @@ button {
 .panel {
   border: 1px solid var(--line);
   padding: 10px 14px 14px;
+  height: 100%;
+  overflow: auto;
+}
+
+.panel-craft {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.craft-full, .craft-quick {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.craft-full > .box-head, .craft-quick > .box-head {
+  flex-shrink: 0;
+}
+
+.craft-full > .box-body, .craft-quick > .box-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 /* ------------------------------ 分节 ------------------------------ */
@@ -738,6 +807,7 @@ details.fold[open] > summary::before {
 
 .tip {
   position: fixed;
+  visibility: hidden;
   z-index: 40;
   pointer-events: none;
   background: #fff;
@@ -746,6 +816,10 @@ details.fold[open] > summary::before {
   font-size: 14px;
   line-height: 1.5;
   color: var(--text);
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  overflow-wrap: anywhere;
 }
 
 .tip-title {
@@ -771,10 +845,12 @@ details.fold[open] > summary::before {
 .tip-row .k {
   color: var(--dim);
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tip-row .v {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -1053,16 +1129,39 @@ textarea {
 }
 
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--line);
+  background: #c4c4c4;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+  min-height: 28px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #a4a4a4;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #858585;
 }
 
 ::-webkit-scrollbar-track {
-  background: #fff;
+  background: transparent;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c4c4c4 transparent;
+  }
 }
 
 /* 修真表的段标题行：五段主线（见 docs/RESEARCH.md） */

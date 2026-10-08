@@ -34,6 +34,14 @@ const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></h
   pretendToBeVisual: true,
 })
 const { window } = dom
+const visualViewport = new window.EventTarget()
+Object.defineProperties(visualViewport, {
+  width: { get() { return this.widthOverride ?? window.innerWidth } },
+  height: { get() { return this.heightOverride ?? window.innerHeight } },
+  offsetLeft: { value: 0, writable: true },
+  offsetTop: { value: 0, writable: true },
+})
+Object.defineProperty(window, 'visualViewport', { value: visualViewport, configurable: true })
 
 for (const key of [
   'HTMLElement',
@@ -417,7 +425,7 @@ ok(
     after.filter((n) => before.includes(n)).join('|') === before.join('|'),
     `${before.slice(0, 4).join('/')} → ${after.slice(0, 4).join('/')}`,
   )
-  ok('顺序就是数据里的分组顺序（聚灵阵最前）', after[0] === '聚灵阵' && after.includes('茅屋'), after.slice(0, 3).join('/'))
+  ok('可见基础建筑按发展顺序排列（聚灵阵、茅屋、伐木场）', after.slice(0, 3).join(',') === '聚灵阵,茅屋,伐木场', after.slice(0, 3).join('/'))
   // 恢复成一个「部分买得起」的状态，后面的断言依赖这个
   state.resources.qi = qtBefore
   state.resources.wood = 5000
@@ -707,7 +715,10 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
   button('三级·炼虚起').click()
   await new Promise(r => setTimeout(r, 50))
   ok('天地级可单独筛选且按钮表达选中状态', lines().length === 1 && lines()[0].includes('天门') && button('三级·炼虚起').getAttribute('aria-pressed') === 'true')
-  button('全部等级').click()
+  ok('纪事移除全部等级按钮', !button('全部等级'))
+  button('三级·炼虚起').click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('再次点击已选等级取消筛选并显示全部纪事', lines().length === 4 && button('三级·炼虚起').getAttribute('aria-pressed') === 'false')
   state.log = snapshot
   await new Promise(r => setTimeout(r, 50))
 }
@@ -1188,6 +1199,8 @@ console.log('\n== 凝灵诀状态 ==')
   actions.setSetting('quickCrafts', ['condenseStone', 'refinePill', 'sawPlank'])
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 50))
+  const buildingNames = [...doc.querySelectorAll('.main .build-btn')].map(el => el.textContent.trim().replace(/\s*\(\d+\)$/, ''))
+  ok('全解锁时基础居所在矿业前、药藏在精舍前、因果池最后', buildingNames.indexOf('茅屋') < buildingNames.indexOf('玄铁矿') && buildingNames.indexOf('药藏') < buildingNames.indexOf('精舍') && buildingNames.at(-1) === '因果池')
   doc.querySelector('.left .craft-open')?.click()
   await new Promise((r) => setTimeout(r, 50))
   ok('快捷入口能打开完整炼制页', state.ui.tab === 'craft' && !!doc.querySelector('.main .craft-full'))
@@ -1206,12 +1219,10 @@ console.log('\n== 凝灵诀状态 ==')
   const fifthPin = doc.querySelector('[aria-label="淬玄成钢快捷炼制"]')
   fifthPin?.click()
   await new Promise((r) => setTimeout(r, 50))
-  ok('第五个快捷被拒绝且复选框恢复', state.settings.quickCrafts.length === 4 && !state.settings.quickCrafts.includes('refineSteel') && !fifthPin.checked)
+  ok('第五个快捷可选且左栏同步', state.settings.quickCrafts.length === 5 && state.settings.quickCrafts.includes('refineSteel') && fifthPin.checked && doc.querySelectorAll('.left .craft-row').length === 5)
   doc.querySelector('[aria-label="刨木成板快捷炼制"]')?.click()
   await new Promise((r) => setTimeout(r, 50))
-  fifthPin?.click()
-  await new Promise((r) => setTimeout(r, 50))
-  ok('移除一个快捷后可以替换配方', !doc.querySelector('.left [data-craft="sawPlank"]') && !!doc.querySelector('.left [data-craft="refineSteel"]'))
+  ok('取消快捷只移除指定配方', !doc.querySelector('.left [data-craft="sawPlank"]') && !!doc.querySelector('.left [data-craft="refineSteel"]'))
   const auto = doc.querySelector('.main [data-craft="condenseStone"] .sw input')
   auto?.click()
   await new Promise((r) => setTimeout(r, 50))
@@ -1227,9 +1238,69 @@ console.log('\n== 凝灵诀状态 ==')
   doc.querySelector('.left [data-craft="condenseStone"] .primary')?.click()
   await new Promise((r) => setTimeout(r, 50))
   ok('快捷制作结果立即反映到完整页', state.resources.stone > 0 && doc.querySelector('.main [data-craft="condenseStone"] .have').textContent.includes(String(state.resources.stone)))
+  for (const craft of CRAFTS) if (!state.settings.quickCrafts.includes(craft.id)) actions.toggleQuickCraft(craft.id)
+  const pinnedSave = actions.exportText()
+  actions.importText(pinnedSave)
+  await new Promise(r => setTimeout(r, 50))
+  ok('所有配方可同时固定且读档不截断', doc.querySelectorAll('.left .craft-row').length === CRAFTS.length && state.settings.quickCrafts.length === CRAFTS.length)
   actions.importText(previous)
   await new Promise((r) => setTimeout(r, 50))
 }
+console.log('\n== 长 tooltip 边界与滚动 ==')
+{
+  const originalRect = window.HTMLElement.prototype.getBoundingClientRect
+  const originalWidth = window.innerWidth
+  const originalHeight = window.innerHeight
+  let tipContentHeight = 480
+  window.innerWidth = 800
+  window.innerHeight = 600
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.classList.contains('tip')) return { width: Math.min(350, parseFloat(this.style.maxWidth)), height: Math.min(tipContentHeight, parseFloat(this.style.maxHeight)) }
+    return { top: window.innerHeight - 30, left: window.innerWidth - 60, right: window.innerWidth - 20, bottom: window.innerHeight - 10 }
+  }
+  const trigger = doc.querySelector('.left .res-table .tip-trigger')
+  trigger.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const tip = doc.querySelector('.tip')
+  ok('长提示按实际高度上移且在右边界翻转', tip?.style.top === '112px' && tip.style.left === '382px' && tip.style.visibility === 'visible')
+  visualViewport.widthOverride = 500
+  visualViewport.heightOverride = 340
+  visualViewport.offsetLeft = 10
+  visualViewport.offsetTop = 20
+  visualViewport.dispatchEvent(new window.Event('resize'))
+  ok('可见视口小于页面时同步限制提示尺寸及底边', tip.style.maxHeight === '324px' && tip.style.top === '28px' && tip.style.left === '152px')
+  tipContentHeight = 150
+  visualViewport.dispatchEvent(new window.Event('resize'))
+  ok('较短提示贴住可见视口底部安全距离', tip.style.top === '202px')
+  tipContentHeight = 900
+  visualViewport.heightOverride = 260
+  visualViewport.offsetTop = 40
+  visualViewport.dispatchEvent(new window.Event('scroll'))
+  ok('可见视口平移或提示变长后仍保留底部安全距离', tip.style.maxHeight === '244px' && tip.style.top === '48px')
+  visualViewport.widthOverride = undefined
+  visualViewport.heightOverride = undefined
+  visualViewport.offsetLeft = 0
+  visualViewport.offsetTop = 0
+  window.innerWidth = 240
+  window.innerHeight = 300
+  window.dispatchEvent(new window.Event('resize'))
+  await new Promise(r => setTimeout(r, 20))
+  ok('缩小视口时提示重新限制到安全边距', tip?.style.top === '8px' && tip.style.left === '8px')
+  Object.defineProperty(tip, 'scrollHeight', { configurable: true, value: 900 })
+  Object.defineProperty(tip, 'clientHeight', { configurable: true, value: 284 })
+  const wheel = new window.WheelEvent('wheel', { deltaY: 100, cancelable: true })
+  trigger.dispatchEvent(wheel)
+  tip.dispatchEvent(new window.Event('scroll'))
+  await new Promise(r => setTimeout(r, 20))
+  ok('触发器滚轮可阅读长提示且提示自身滚动不关闭', wheel.defaultPrevented && tip.scrollTop === 100 && doc.querySelector('.tip') === tip)
+  trigger.dispatchEvent(new window.MouseEvent('mouseleave'))
+  await new Promise(r => setTimeout(r, 20))
+  ok('离开触发器仍关闭提示', !doc.querySelector('.tip'))
+  window.HTMLElement.prototype.getBoundingClientRect = originalRect
+  window.innerWidth = originalWidth
+  window.innerHeight = originalHeight
+}
+
 const beforeCondense = actions.exportText()
 state.ui.tab = 'craft'
 state.upgrades.condenseArt = true

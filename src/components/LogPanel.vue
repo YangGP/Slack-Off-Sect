@@ -79,8 +79,7 @@ function preview(effect) {
       <button v-if="filter !== 'all' || keyword || levelFilter" class="filter" @click="filter = 'all'; keyword = ''; levelFilter = 0">重置</button>
     </div>
     <div class="filters log-filters" aria-label="事件等级筛选">
-      <button class="filter" :class="{ on: levelFilter === 0 }" :aria-pressed="levelFilter === 0" @click="levelFilter = 0">全部等级</button>
-      <button v-for="level in EVENT_LEVELS" :key="level.id" class="filter" :class="{ on: levelFilter === level.id }" :aria-pressed="levelFilter === level.id" @click="levelFilter = level.id">{{ level.label }}</button>
+      <button v-for="level in EVENT_LEVELS" :key="level.id" class="filter" :class="{ on: levelFilter === level.id }" :aria-pressed="levelFilter === level.id" @click="levelFilter = levelFilter === level.id ? 0 : level.id">{{ level.label }}</button>
     </div>
     <div v-if="peaceTime > 0" class="small good">药圃安宁 · 还有 {{ fmtTime(peaceTime) }}，妖兽暂不再来。</div>
     <!-- 普通来访可谢绝；已有威胁按期限默认防守。 -->

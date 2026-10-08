@@ -637,6 +637,28 @@ section('建筑维护费（只有带维护费的建筑能停用）')
 }
 
 // ------------------------------------------------------------
+section('矿工灵石副产出')
+{
+  const { state: s, derived: d } = newGame()
+  s.disciples.total = 10
+  s.disciples.jobs.miner = 10
+  s.buildings.mine = { count: 1, on: true }
+  E.recompute(s, d)
+  ok('没有灵石矿时矿工仅产玄铁', !(d.sources.stone || []).some(x => x.id === 'miner'))
+  s.buildings.spiritQuarry = { count: 1, on: true }
+  E.recompute(s, d)
+  const stone = d.sources.stone.find(x => x.id === 'miner')
+  const ore = d.sources.ore.find(x => x.id === 'miner')
+  ok('矿工灵石基础产出比玄铁低两个数量级', close(stone.raw, 0.008) && close(stone.raw / ore.raw, 0.01))
+  ok('灵石副产出记入收支来源并应用灵石倍率', stone.count === 10 && close(stone.value, stone.raw * d.sourceFactor.stone) && close(d.sources.stone.reduce((sum, x) => sum + x.value, 0), d.rates.stone))
+  s.buildings.spiritQuarry.count = 10
+  E.recompute(s, d)
+  ok('多座灵石矿不重复放大矿工副产出', close(d.sources.stone.find(x => x.id === 'miner').raw, 0.008))
+  s.buildings.spiritQuarry.on = false
+  E.recompute(s, d)
+  ok('停用灵石矿后副产出停止且玄铁保留', !d.sources.stone?.some(x => x.id === 'miner') && d.sources.ore.some(x => x.id === 'miner'))
+}
+
 section('进项来源明细')
 // ------------------------------------------------------------
 {
@@ -3014,14 +3036,14 @@ section('快捷炼制偏好兼容')
   const old = normalizeState({ settings: { autoCraftOn: false } })
   ok('旧档补齐快捷且不改变自动总开关', old.settings.quickCrafts.length === 3 && old.settings.autoCraftOn === false)
   const malformed = normalizeState({ settings: { quickCrafts: ['unknown', 'constructor', 'toString', 'condenseStone', 'condenseStone', null, 'refinePill', 'sawPlank', 'refineSteel', 'drawTalisman'] } })
-  ok('快捷导入去重过滤无效项并限制四个', malformed.settings.quickCrafts.join(',') === 'condenseStone,refinePill,sawPlank,refineSteel')
+  ok('快捷导入去重过滤无效项且保留超过四个配方', malformed.settings.quickCrafts.join(',') === 'condenseStone,refinePill,sawPlank,refineSteel,drawTalisman')
   const empty = normalizeState({ settings: { quickCrafts: [] } })
   ok('允许玩家清空快捷偏好', empty.settings.quickCrafts.length === 0)
   malformed.ui.tab = 'craft'
   const restored = normalizeState(JSON.parse(JSON.stringify(malformed)))
   ok('炼制页与快捷偏好能存读档', restored.ui.tab === 'craft' && restored.settings.quickCrafts.join(',') === malformed.settings.quickCrafts.join(','))
   resetForReincarnation(restored, 0)
-  ok('转世保留快捷偏好', restored.settings.quickCrafts.includes('refineSteel') && restored.settings.quickCrafts.length === 4)
+  ok('转世保留全部快捷偏好', restored.settings.quickCrafts.includes('refineSteel') && restored.settings.quickCrafts.length === 5)
 }
 
 section('金丹妖兽事务完整循环')

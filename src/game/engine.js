@@ -106,6 +106,13 @@ export function activeOf(state, id) {
   return e.on ? e.count : 0
 }
 
+/** 职位基础产出；副产出依赖启用中的专业设施。 */
+export function jobOutputs(state, job) {
+  const outputs = [{ resource: job.resource, base: job.base }]
+  if (job.secondary && activeOf(state, job.secondary.building) > 0) outputs.push(job.secondary)
+  return outputs
+}
+
 export function idleDisciples(state) {
   let assigned = 0
   for (const j of JOBS) assigned += state.disciples.jobs[j.id] || 0
@@ -572,9 +579,11 @@ function recomputeRaw(state, derived, supply) {
   for (const job of JOBS) {
     const n = state.disciples.jobs[job.id] || 0
     if (n > 0) {
-      const raw = job.base * n * (1 + (jobRatio[job.id] || 0))
-      prod[job.resource] = (prod[job.resource] || 0) + raw
-      addSource(job.resource, { kind: 'job', id: job.id, label: job.name, count: n, raw })
+      for (const output of jobOutputs(state, job)) {
+        const raw = output.base * n * (1 + (jobRatio[job.id] || 0))
+        prod[output.resource] = (prod[output.resource] || 0) + raw
+        addSource(output.resource, { kind: 'job', id: job.id, label: job.name, count: n, raw })
+      }
     }
   }
 

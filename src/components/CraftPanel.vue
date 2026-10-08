@@ -2,7 +2,7 @@
 /** 完整炼制页与左栏快捷炼制共用同一套操作、状态和悬停明细。 */
 import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
-import { CRAFTS, QUICK_CRAFT_LIMIT, ADVANCED_CRAFT_OUTPUTS } from '@/data/crafts'
+import { CRAFTS, ADVANCED_CRAFT_OUTPUTS } from '@/data/crafts'
 import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield } from '@/game/engine'
 import { costLabel } from '@/game/pricing'
 import { describeNeeds } from '@/game/effectsText'
@@ -85,7 +85,7 @@ const condenseStatus = computed(() => {
     <div class="box-body">
       <div v-if="!compact" class="craft-settings small">
         <label class="sw"><input type="checkbox" :checked="state.settings.autoCraftOn" @change="actions.setSetting('autoCraftOn', $event.target.checked)" />自动制作总开关</label>
-        <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷最多 {{ QUICK_CRAFT_LIMIT }} 个</span>
+        <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
       </div>
       <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
       <div v-if="!compact && derived.daoAutomation" class="small craft-settings">

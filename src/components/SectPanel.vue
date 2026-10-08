@@ -9,7 +9,7 @@
  */
 import { computed } from 'vue'
 import { state, derived, view, actions } from '@/game/store'
-import { BUILDINGS, BUILDING_GROUPS } from '@/data/buildings'
+import { BUILDINGS, BUILDING_GROUPS, BUILDING_DISPLAY_ORDER } from '@/data/buildings'
 import {
   isBuildingUnlocked,
   canAfford,
@@ -36,6 +36,7 @@ const FILTERS = [
 
 const groups = view.buildingsByGroup
 const filter = computed(() => state.ui.sectFilter || 'all')
+const buildingOrder = new Map(BUILDING_DISPLAY_ORDER.map((id, index) => [id, index]))
 
 /** 核心按钮只在「全部 / 可建造」里出现 */
 const showCore = computed(() => filter.value === 'all' || filter.value === 'affordable')
@@ -73,8 +74,8 @@ const list = computed(() => {
   } else if (f !== 'all') {
     items = items.filter((b) => b.group === f)
   }
-  // 顺序固定按数据顺序（也是分组顺序），不随「买得起 / 数量」跳动
-  return items
+  // 新建筑未指定展示顺序时放在末尾；价格、库存和数量不影响位置。
+  return [...items].sort((a, b) => (buildingOrder.get(a.id) ?? Infinity) - (buildingOrder.get(b.id) ?? Infinity))
 })
 
 const tabs = computed(() => [

@@ -26,9 +26,11 @@ export const JOBS = [
     id: 'miner',
     name: '矿工',
     glyph: '矿',
-    desc: '在玄铁矿脉里刨食，产出炼器所需的玄铁。',
+    desc: '在玄铁矿脉里刨食，产出炼器所需的玄铁；灵石矿启用时，也会采出少量灵石。',
     resource: 'ore',
     base: 0.08,
+    // 灵石是修炼硬通货，副产出仅为玄铁的 1/100；矿井数量不重复放大人力。
+    secondary: { resource: 'stone', base: 0.0008, building: 'spiritQuarry' },
     needs: { building: { id: 'mine', count: 1 } },
   },
   {

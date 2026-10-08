@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { JOBS } from '@/data/jobs'
-import { idleDisciples, nextArrivalIn } from '@/game/engine'
+import { idleDisciples, nextArrivalIn, jobOutputs } from '@/game/engine'
+import { RESOURCE_MAP } from '@/data/resources'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
 
@@ -13,19 +14,15 @@ const rows = computed(() =>
   JOBS.map((job) => {
     const unlocked = derived.unlockedJobs.includes(job.id)
     const count = state.disciples.jobs[job.id] || 0
-    const res = job.resource
-    const perDisciple =
-      job.base *
-      (1 + (derived.jobRatio?.[job.id] || 0)) *
-      (1 + (derived.ratio?.[res] || 0)) *
-      (1 + (derived.ratioAll || 0)) *
-      derived.globalMult
+    const outputs = jobOutputs(state, job).map(({ resource, base }) => {
+      const perDisciple = base * (1 + (derived.jobRatio?.[job.id] || 0)) * (derived.sourceFactor[resource] ?? 1)
+      return { resource, name: RESOURCE_MAP[resource].name, perDisciple, total: perDisciple * count }
+    })
     return {
       ...job,
       unlocked,
       count,
-      perDisciple,
-      total: perDisciple * count,
+      outputs,
       needsText: describeNeeds(job.needs).join('，'),
     }
   }),
@@ -60,8 +57,16 @@ function setJob(jobId, value) {
           <tr v-for="job in rows" :key="job.id" :class="{ off: !job.unlocked }" :title="job.desc">
             <td class="nowrap">{{ job.name }}</td>
             <td class="num">{{ job.count }}</td>
-            <td class="num good">{{ fmtRate(job.perDisciple) }}</td>
-            <td class="num">{{ job.count > 0 ? fmtRate(job.total) : '—' }}</td>
+            <td class="num good">
+              <div v-for="output in job.outputs" :key="output.resource">
+                <span v-if="job.outputs.length > 1">{{ output.name }} </span>{{ fmtRate(output.perDisciple) }}
+              </div>
+            </td>
+            <td class="num">
+              <div v-for="output in job.outputs" :key="output.resource">
+                <span v-if="job.outputs.length > 1">{{ output.name }} </span>{{ job.count > 0 ? fmtRate(output.total) : '—' }}
+              </div>
+            </td>
             <td class="btn-row">
               <template v-if="job.unlocked">
                 <button class="btn" :disabled="job.count <= 0" @click="actions.shiftJob(job.id, -10)">

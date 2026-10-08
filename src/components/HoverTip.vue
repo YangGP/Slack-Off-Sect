@@ -12,7 +12,7 @@
  * 把 #tip 内容用 Teleport 挂到 body 上做固定定位，避免被表格/滚动容器裁掉。
  * 提示框永远不与鼠标抢事件（pointer-events: none）。
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   width: { type: Number, default: 300 },
@@ -26,34 +26,48 @@ const emit = defineEmits(['show', 'hide'])
 
 const open = ref(false)
 const trigger = ref(null)
-const pos = ref({ top: 0, left: 0 })
+const tip = ref(null)
 let timer = null
+let observer = null
 
 function place() {
   const el = trigger.value
-  if (!el || typeof el.getBoundingClientRect !== 'function') return
+  if (!el || !tip.value || typeof el.getBoundingClientRect !== 'function') return
   const rect = el.getBoundingClientRect()
-  const vw = window.innerWidth || 1280
-  const vh = window.innerHeight || 800
+  const viewport = window.visualViewport
+  const root = document.documentElement
+  const viewportLeft = viewport?.offsetLeft || 0
+  const viewportTop = viewport?.offsetTop || 0
+  // 缩放、软键盘、嵌入式浏览器均可能让可见视口小于布局视口。
+  const vw = Math.min(...[viewport?.width, root.clientWidth, window.innerWidth].filter(value => value > 0))
+  const vh = Math.min(...[viewport?.height, root.clientHeight, window.innerHeight].filter(value => value > 0))
   const margin = 8
-  // 优先放在触发元素右侧；右边放不下就翻到左侧
+  const node = tip.value
+  // 同步限制尺寸，再测量；重定位也同步写入，避免内容变高时闪出底边。
+  node.style.maxWidth = Math.max(0, vw - margin * 2) + 'px'
+  node.style.maxHeight = Math.max(0, vh - margin * 2) + 'px'
+  const { width, height } = node.getBoundingClientRect()
   let left = rect.right + margin
-  if (left + props.width > vw - margin) {
-    left = rect.left - props.width - margin
+  const rightEdge = viewportLeft + vw - margin
+  const bottomEdge = viewportTop + vh - margin
+  if (left + width > rightEdge) {
+    left = rect.left - width - margin
   }
-  if (left < margin) left = margin
+  left = Math.max(viewportLeft + margin, Math.min(left, rightEdge - width))
   // 竖直方向贴着触发元素，超出视口就上提
-  let top = rect.top
-  const estimated = 240
-  if (top + estimated > vh - margin) top = Math.max(margin, vh - estimated - margin)
-  pos.value = { top, left }
+  const top = Math.max(viewportTop + margin, Math.min(rect.top, bottomEdge - height))
+  node.style.top = top + 'px'
+  node.style.left = left + 'px'
+  node.style.visibility = 'visible'
 }
 
 function show() {
   clearTimeout(timer)
-  timer = setTimeout(() => {
-    place()
+  timer = setTimeout(async () => {
     open.value = true
+    await nextTick()
+    if (!open.value) return
+    place()
     emit('show')
   }, props.delay)
 }
@@ -68,14 +82,38 @@ function onKey(e) {
   if (e.key === 'Escape') hide()
 }
 
+// 提示不抢鼠标事件；在触发器上滚轮即可阅读超长内容。
+function scrollTip(e) {
+  if (!open.value || !tip.value || tip.value.scrollHeight <= tip.value.clientHeight || !e.deltaY) return
+  e.preventDefault()
+  tip.value.scrollTop += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? tip.value.clientHeight : 1)
+}
+
+function onScroll(e) {
+  if (e.target !== tip.value) hide()
+}
+
+watch(tip, (el) => {
+  observer?.disconnect()
+  if (el && observer) observer.observe(el)
+})
+
 onMounted(() => {
-  window.addEventListener('scroll', hide, true)
+  if (window.ResizeObserver) observer = new window.ResizeObserver(place)
+  window.addEventListener('scroll', onScroll, true)
+  window.addEventListener('resize', place)
+  window.visualViewport?.addEventListener('resize', place)
+  window.visualViewport?.addEventListener('scroll', place)
   window.addEventListener('keydown', onKey)
 })
 
 onBeforeUnmount(() => {
   clearTimeout(timer)
-  window.removeEventListener('scroll', hide, true)
+  observer?.disconnect()
+  window.removeEventListener('scroll', onScroll, true)
+  window.removeEventListener('resize', place)
+  window.visualViewport?.removeEventListener('resize', place)
+  window.visualViewport?.removeEventListener('scroll', place)
   window.removeEventListener('keydown', onKey)
   emit('hide')
 })
@@ -92,14 +130,16 @@ defineExpose({ show, hide, open })
     @mouseleave="hide"
     @focusin="show"
     @focusout="hide"
+    @wheel="scrollTip"
   >
     <slot />
     <Teleport to="body">
       <div
         v-if="open"
+        ref="tip"
         class="tip"
         role="tooltip"
-        :style="{ top: pos.top + 'px', left: pos.left + 'px', width: width + 'px' }"
+        :style="{ width: width + 'px' }"
       >
         <slot name="tip" />
       </div>

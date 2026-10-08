@@ -167,13 +167,12 @@ export const CRAFTS = [
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
-export const QUICK_CRAFT_LIMIT = 4
 export const DEFAULT_QUICK_CRAFTS = ['condenseStone', 'refinePill', 'sawPlank']
 export const ADVANCED_CRAFT_OUTPUTS = ['arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]
-  return [...new Set(ids.filter(id => typeof id === 'string' && Object.hasOwn(CRAFT_MAP, id)))].slice(0, QUICK_CRAFT_LIMIT)
+  return [...new Set(ids.filter(id => typeof id === 'string' && Object.hasOwn(CRAFT_MAP, id)))]
 }
 
 /** 配方的单件耗时（秒），缺省 1 秒 */
