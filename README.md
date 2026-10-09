@@ -3,7 +3,7 @@
 一个用 **Vue 3 + Vite（纯 JavaScript）** 写的修仙宗门挂机放置游戏。
 
 **在线试玩**：https://YangGP.github.io/Slack-Off-Sect/ （推到 main 后由 GitHub Actions 自动发布）
-当前版本 **v0.16**；页面右下角“更新日志”可查看从 v0.01 开始的近期更新记录。
+当前版本 **v0.2**；页面右下角“更新日志”可查看从 v0.01 开始的近期更新记录。
 玩法结构参考了 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（猫国建设者）的放置玩法与数据组织方式：
 资源池 + 职位分配 + 可叠加建筑 + 修真（学术）+ 技艺·法宝（工坊）+ 制作配方 + 成就 + 随机事件 + 转世（飞升）。
 
@@ -121,6 +121,8 @@ slack-off-sect/
     ├── player-bot.mjs          # 模拟玩家策略（balance 与 audit 共用，保证结论一致）
     ├── audit-lib.mjs           # 流量审计的公共实现（进项来源、逐时段速率、贴顶比例、参悟进度）
     ├── resource-audit.mjs      # 资源流量审计：某资源的进项/出项/存量/门槛到达时间（npm run audit）
+    ├── building-reachability.mjs # 真实前置、资源来源与仓储约束下的建筑可达性
+    ├── pacing-audit.mjs        # 首次生产／建设、阶段耗时、事件与分工策略对照
     ├── dump-tables.mjs         # 从数据文件生成 docs/TABLES.md（npm run docs:tables）
     └── balance.mjs             # 挂机节奏推演（模拟一个勤快玩家跑 N 小时）
 ```
@@ -131,7 +133,7 @@ slack-off-sect/
 
 ```bash
 npm run audit -- stone 8                        # 灵石 8 小时的进项/出项/门槛到达时间
-npm run audit -- stone 8 --craft=50             # 假设凝气成石改成 50 灵气
+npm run audit -- stone 8 --craft=50             # 假设点石成灵改成 50 灵气
 npm run audit -- stone 8 --prod=mine:stone:0.1  # 假设玄铁矿产灵石 0.1/秒
 npm run audit -- stone 8 --realm=0.5            # 假设破境灵石花费减半
 npm run audit -- insight 8 --upcost=2           # 假设所有参悟花费翻倍

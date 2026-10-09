@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { state, derived, view, ui } from '@/game/store'
 import { fmt, fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
+import { CURRENT_VERSION } from '@/data/changelog'
 import ResourcePanel from './components/ResourcePanel.vue'
 import TabNav from './components/TabNav.vue'
 import SectPanel from './components/SectPanel.vue'
@@ -45,6 +46,12 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
     <div class="title-line">
       摸鱼宗门<span class="sub">Slack Off Sect</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
+    </div>
+
+    <div class="update-notice" role="note" aria-label="版本更新提示">
+      <strong>{{ CURRENT_VERSION }} 大量调整 · 建议转世</strong>
+      <span>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</span>
+      <button class="btn" type="button" @click="state.ui.tab = 'realm'">前往境界</button>
     </div>
 
     <div class="stat-line">

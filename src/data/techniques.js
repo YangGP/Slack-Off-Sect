@@ -20,7 +20,7 @@ export const TECHNIQUES = [
     cost: { insight: 6, wood: 120 },
     desc: '最粗浅的吐纳法门，却是一切的开端。灵气产出 +10%。',
     effects: { ratio: { qi: 0.1 } },
-    needs: { building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
   },
   {
     id: 'forestryArt',
@@ -29,7 +29,7 @@ export const TECHNIQUES = [
     cost: { insight: 9, wood: 260 },
     desc: '顺纹下斧，省力三成。灵木产出 +20%。',
     effects: { ratio: { wood: 0.2 } },
-    needs: { building: { id: 'lumberYard', count: 1 } },
+    needs: { upgrades: ['woodworking'], building: { id: 'lumberYard', count: 1 } },
   },
   {
     id: 'prospectArt',
@@ -68,7 +68,7 @@ export const TECHNIQUES = [
     cost: { insight: 45, stone: 60, wood: 400 },
     desc: '阵纹怎么走更省灵气，阵徒心里最有数。',
     effects: { ratio: { qi: 0.1 }, jobRatio: { farmer: 0.25 } },
-    needs: { upgrades: ['qiArt'], building: { id: 'spiritField', count: 5 } },
+    needs: { upgrades: ['qiGazing', 'qiArt'], building: { id: 'spiritField', count: 5 } },
   },
   {
     id: 'timberCraft',
@@ -184,7 +184,7 @@ export const TECHNIQUES = [
     cost: { insight: 35, wood: 400 },
     desc: '不立文字，当面点破。感悟产出 +10%。',
     effects: { ratio: { insight: 0.1 } },
-    needs: { building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
   },
   {
     id: 'starReading',

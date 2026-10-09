@@ -7,7 +7,7 @@
  */
 import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { canAfford, refineCost, treasureLevel, treasureMult } from '@/game/engine'
+import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible } from '@/game/engine'
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
@@ -86,6 +86,7 @@ const available = computed(() =>
 const locked = computed(() =>
   props.list
     .filter((u) => !state.upgrades[u.id] && !availableIds.value.includes(u.id))
+    .filter((u) => isProgressionVisible(state, u.needs))
     .map((u) => ({
       meta: u,
       needs: describeNeeds(u.needs).join('，') || '条件未知',
@@ -140,7 +141,7 @@ function kindName(meta) {
 <template>
   <div class="box">
     <div class="box-head">
-      {{ title }}<span class="hint">{{ hint }}　已参悟 {{ researched.length }} / {{ list.length }}</span>
+      {{ title }}<span class="hint">{{ hint }}　已参悟 {{ researched.length }}</span>
       <span class="hint faint">　悬停「花费」查看效果</span>
     </div>
     <div class="box-body">
@@ -316,10 +317,10 @@ function kindName(meta) {
           </template>
         </tbody>
       </table>
-      <div v-else class="empty">暂时没有可参悟的条目 —— 换个条件，或者先去攒感悟。</div>
+      <div v-else class="empty">暂时没有可参悟的条目，建设对应产业、推进研究后会逐步开放。</div>
 
       <details class="fold" v-if="locked.length">
-        <summary>条件未达成（{{ locked.length }} 条，达成后才会显现）</summary>
+        <summary>下一步（{{ locked.length }} 条，条件达成后开放）</summary>
         <table class="grid">
           <tbody>
             <tr v-for="item in locked" :key="item.meta.id">

@@ -82,6 +82,9 @@ export const CONFIG = {
   // 手动「吸取天地灵气」：每次点击得到多少灵气（每座聚灵阵再加一点，免得后期点着像挠痒）
   CLICK_QI_BASE: 2.5,
   CLICK_QI_PER_FIELD: 0.5,
+  // 手动催生灵木：固定兑换，不受生产或加工倍率影响。
+  GROW_WOOD_QI_COST: 10,
+  GROW_WOOD_GAIN: 1,
   // 前20座保留原点击增长；此后按平方根增长，主动点击仍有用但不会线性膨胀。
   CLICK_QI_FULL_FIELDS: 20,
   // 弟子不用招募：有空房就每这么多秒自己来一名（可被《广开山门》缩短）

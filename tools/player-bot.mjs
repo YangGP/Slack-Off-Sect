@@ -20,7 +20,7 @@ export const PRIORITY = [
   'granary',
   'logHouse',
   'mine',
-  // 普通石料来源：采石场喂灵石矿/聚灵大阵/库房的石矿造价，也供「点石成灵」
+  // 普通石料来源：采矿场喂灵石矿/聚灵大阵/库房的石矿造价，也供「点石成灵」
   // （参照玩家必须知道它，否则建筑永远卡在石矿上）
   'quarry',
   // 天然灵石来源：与玄铁矿同一条寻脉线，排在旁边（参照玩家必须知道它，
@@ -71,7 +71,7 @@ export const ADVANCED_CRAFTS = {
   // 点石成灵吃石矿：矿要留够盖房砌阵（600 起）。
   // 灵石是硬通货，囤货上限交给需求侧（craftDemand 含破境/奇观费用），cap 只做保底 ——
   // 因果池单笔要 100 万灵石，cap 低于它就会卡参照玩家（冒烟断言守着这条）。
-  infuseStone: { base: 'rock', floor: 600, cap: 1000000 },
+  infuseStone: { base: 'rock', floor: 10, cap: 1000000 },
   // 灵液吃硬通货（灵气），按需炼：灵气富余才凝液，囤到上限就停
   condenseLiquid: { base: 'qi', floor: 600, cap: 60 },
   condenseCrystal: { floors: { spiritLiquid: 12, talisman: 10 }, cap: 600 },
@@ -95,6 +95,17 @@ export const STONE_QI_FLOOR = 400
 
 export function createBot(state, derived) {
   function assignJobs() {
+    // 新设施只开放职位，不再自带原料。即使人口住满，也为新开放产业调配一人。
+    for (const id of ['scholar', 'woodcutter', 'miner', 'herbalist', 'incenseKeeper']) {
+      if (!derived.unlockedJobs.includes(id) || (state.disciples.jobs[id] || 0) > 0) continue
+      if (E.idleDisciples(state) === 0) {
+        const donor = Object.entries(state.disciples.jobs)
+          .filter(([job, count]) => job !== 'farmer' && count > 1)
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+        if (donor) E.setJob(state, derived, donor[0], donor[1] - 1)
+      }
+      if (E.idleDisciples(state) > 0) E.setJob(state, derived, id, 1)
+    }
     const idle = E.idleDisciples(state)
     if (idle <= 0) return
     // 派多少农民：按**基准口径**算，也就是「基准口粮 ÷ 阵徒基准产出」——
@@ -155,6 +166,9 @@ export function createBot(state, derived) {
       const id = PRIORITY[idx]
       if (!derived.unlockedBuildings.includes(id)) continue
       const cost = E.buildingCost(state, id, 1)
+      // 先建伐木场、谷仓，再攒首座采矿场，避免反复扩屋把开局木料花光。
+      if (E.countOf(state, 'hut') > 0 && E.countOf(state, 'quarry') === 0 && cost.wood &&
+          id !== (E.countOf(state, 'lumberYard') === 0 ? 'lumberYard' : E.countOf(state, 'granary') === 0 ? 'granary' : 'quarry')) continue
       if ((cost.qi || 0) > qiBudget) continue
       if (!E.canAfford(state, cost)) continue
       const score = idx + E.countOf(state, id) * 0.6
@@ -209,23 +223,13 @@ export function createBot(state, derived) {
       }
     }
 
-    // —— 开局拾取石材，采石场建成后接替手动供料 ——
-    if (E.countOf(state, 'quarry') === 0) {
-      for (let i = 0; i < 12 && state.resources.rock < 12; i++) E.gatherRock(state, derived)
-    }
-
-    // —— 开局：手动吸气，再灌入石材制作灵石 ——
+    // —— 开局：手动吸气建第一间茅屋，弟子随后采木、采石 ——
     if (E.countOf(state, 'hut') === 0) {
       const fieldCost = E.BUILDING_MAP.spiritField.cost.qi
       const hutCost = E.BUILDING_MAP.hut.cost.qi
-      const recipe = E.CRAFT_MAP.condenseStone
-      const target = E.countOf(state, 'spiritField') === 0 ? fieldCost : hutCost + recipe.cost.qi
+      const target = E.countOf(state, 'spiritField') === 0 ? fieldCost : hutCost
       for (let i = 0; i < 12 && state.resources.qi < target; i++) E.drawQi(state, derived)
       E.recompute(state, derived)
-      // 第一间茅屋要四枚灵石，逐份制作并保留茅屋的灵气。
-      if ((state.resources.stone || 0) < E.BUILDING_MAP.hut.cost.stone && state.resources.qi >= recipe.cost.qi + hutCost) {
-        E.craft(state, derived, 'condenseStone', { times: 1 })
-      }
     }
 
     assignJobs()
@@ -269,7 +273,7 @@ export function createBot(state, derived) {
       if (!derived.availableCrafts.includes(c.id)) continue
       const target = E.craftTarget(state, derived, c.id)
       if (target > 0 && (state.resources[c.out] || 0) >= target) continue
-      if (c.id === 'condenseStone' && state.resources.qi < STONE_QI_FLOOR) continue
+      if (c.id === 'infuseStone' && state.resources.qi < STONE_QI_FLOOR) continue
       const adv = ADVANCED_CRAFTS[c.id]
       if (adv) {
         // 进阶品按需炼：料要留够（单料 base/floor，多料 floors），成品囤够就停（一次一份）

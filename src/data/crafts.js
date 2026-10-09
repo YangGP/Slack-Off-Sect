@@ -8,16 +8,6 @@
  */
 export const CRAFTS = [
   {
-    id: 'condenseStone',
-    name: '凝气成石',
-    out: 'stone',
-    amount: 1,
-    cost: { rock: 1, qi: 45 },
-    time: 0.5,
-    desc: '将灵气灌入一块石材，使矿物承载灵气，制成一枚灵石。开局可先拾取石材，之后由采石场供料。',
-    unlocked: true,
-  },
-  {
     id: 'infuseStone',
     name: '点石成灵',
     out: 'stone',
@@ -26,7 +16,7 @@ export const CRAFTS = [
     primary: ['rock'],
     cost: { rock: 3, qi: 15 },
     time: 3,
-    desc: '从三块石材中筛选、切出易于存气的矿料，再灌入灵气制成一枚灵石。比直接凝气成石省气，但消耗更多石材。',
+    desc: '从三块石材中筛选、切出易于存气的矿料，再灌入灵气制成一枚灵石。需采矿场提供石材，每份消耗石矿3与灵气15。',
     needs: { building: { id: 'quarry', count: 1 } },
   },
   {
@@ -191,7 +181,7 @@ export const CRAFTS = [
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
-export const DEFAULT_QUICK_CRAFTS = ['condenseStone', 'refinePill', 'sawPlank']
+export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
 export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
 
 export function normalizeQuickCrafts(ids) {

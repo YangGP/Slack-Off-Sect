@@ -34,16 +34,6 @@ export const CULTIVATION = [
     needs: { building: { id: 'library', count: 2 } },
   },
   {
-    id: 'condenseArt',
-    name: '凝灵诀',
-    glyph: '凝',
-    cost: { insight: 120, wood: 150, stone: 20 },
-    desc: '灵气满仓之时不必守着聚灵阵 —— 节气一至，将盈余灵气灌入备好的石材，制成灵石。',
-    effectDesc: '每逢节气，灵气满仓且石材充足时自动制作灵石；缺石材则暂停，遵守库存目标与材料保留量。',
-    effects: { autoCondense: true },
-    needs: { upgrades: ['qiOrigin'] },
-  },
-  {
     id: 'qiGazing',
     name: '观气法',
     glyph: '观',
@@ -55,6 +45,16 @@ export const CULTIVATION = [
     needs: { upgrades: ['qiOrigin'] },
   },
   {
+    id: 'condenseArt',
+    name: '凝灵诀',
+    glyph: '凝',
+    cost: { insight: 120, wood: 150, stone: 20 },
+    desc: '观清气脉后，掌握向石材稳定灌灵的方法。节气一至，将满仓盈余灵气灌入备好的石材，制成灵石。',
+    effectDesc: '每逢节气，灵气满仓且石材充足时自动制作灵石；缺石材则暂停，遵守库存目标与材料保留量。',
+    effects: { autoCondense: true },
+    needs: { upgrades: ['qiGazing'], building: { id: 'quarry', count: 1 } },
+  },
+  {
     id: 'breakthroughArt',
     name: '破境心法',
     glyph: '破',
@@ -62,7 +62,7 @@ export const CULTIVATION = [
     desc: '破境时少走弯路，花费降低 15%。',
     effectDesc: '因此破境时省下一成半材料，冲关更从容。',
     effects: { breakthroughDiscount: 0.15 },
-    needs: { realm: 3 },
+    needs: { realm: 3, upgrades: ['qiGazing', 'alchemyArt'] },
   },
 
   // ---------- Ⅱ 凝聚（筑基→金丹）：怎么把灵气存住、存好 ----------
@@ -217,7 +217,7 @@ export const CULTIVATION = [
     glyph: '用',
     cost: { insight: 65000, crystal: 30, spiritArtifact: 8 },
     desc: '湮灭炉里翻出的能量，不只用来催产 —— 引它入坊，凝石解板的火候都稳了。',
-    effectDesc: '因此灵能同时提高灵石（凝气成石、点石成灵）与木板的制作收益。',
+    effectDesc: '因此灵能同时提高灵石（点石成灵）与木板的制作收益。',
     effects: { energyCraft: true },
     note: '效果：灵能加成覆盖灵石与木板的全部制作配方',
     needs: { upgrades: ['annihilationArt'], realm: 9 },
@@ -274,11 +274,11 @@ export const CULTIVATION = [
     name: '灵植术',
     glyph: '植',
     cost: { insight: 40, wood: 120 },
-    desc: '识得草木性情，才敢开圃种药。',
+    desc: '掌握灌灵之法后，考察草木如何吸纳灵气，辨识药性，才能开圃种药。',
     effects: { unlockBuildings: ['herbGarden'] },
     note: '解锁建筑：药圃',
     effectDesc: '因此敢开圃种药：有了稳定的灵草来源。',
-    needs: { building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['condenseArt'], building: { id: 'library', count: 1 } },
   },
   // 自技艺页迁入（工艺）：木料链第二环，开放刨木成板
   {
@@ -290,7 +290,7 @@ export const CULTIVATION = [
     effects: { craftBonusByResource: { plank: 0.05 } },
     // 它是木料链的第二环：伐木场出原木 → 器械解板 → 木板才是百工坊的料。
     // 所以它**不能**要百工坊，也不能要木板（否则与"百工坊用木板下料"闭环）。
-    needs: { building: { id: 'lumberYard', count: 2 } },
+    needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 2 }, { id: 'mine', count: 1 }] },
   },
   // 自技艺页迁入（工艺）
   {
@@ -329,7 +329,7 @@ export const CULTIVATION = [
     name: '探矿术',
     glyph: '探',
     cost: { insight: 60, wood: 200 },
-    desc: '循着山势与水脉找矿，比瞎挖强得多。',
+    desc: '考察灵植根系与土层后，沿山势、水脉与岩层追索矿脉，找出玄铁所在。',
     effects: { unlockBuildings: ['mine'] },
     note: '解锁建筑：玄铁矿',
     effectDesc: '因此循脉找矿：玄铁矿挖得下去了。',
@@ -343,7 +343,7 @@ export const CULTIVATION = [
     desc: '丹火既通，转入炉锤。解锁炼器坊与「淬炼法器」。',
     effectDesc: '因此淬得出器，法器不再只是纸上谈兵。',
     effects: { unlockBuildings: ['forge'] },
-    needs: { upgrades: ['alchemyArt'] },
+    needs: { upgrades: ['alchemyArt', 'woodworking'], building: { id: 'mine', count: 1 } },
   },
   // 自技艺页迁入（工艺）：开放淬玄成钢
   {
@@ -393,10 +393,10 @@ export const CULTIVATION = [
     name: '符箓入门',
     glyph: '符',
     cost: { insight: 240, wood: 400, herb: 100 },
-    desc: '一笔落下，天地借力。解锁符箓堂与「朱砂符箓」。',
+    desc: '观气识纹、炼器定形之后，学会将引气纹路落在符纸上。解锁符箓堂与「朱砂符箓」。',
     effectDesc: '因此画得出符，镇妖避劫有了凭据。',
     effects: { unlockBuildings: ['talismanHall'] },
-    needs: { upgrades: ['alchemyArt'] },
+    needs: { upgrades: ['forgeArt', 'qiGazing'] },
   },
   // 自技艺页迁入（工艺）：开放组装阵基
   {
@@ -446,10 +446,10 @@ export const CULTIVATION = [
     name: '炼丹术',
     glyph: '丹',
     cost: { insight: 200, herb: 120, wood: 120 },
-    desc: '学会控火，方能开炉。解锁炼丹房与「采药制丹」。',
+    desc: '识得药性并建成药圃后，研究如何以丹火提炼灵草，方能开炉制丹。解锁炼丹房与「采药制丹」。',
     effectDesc: '因此灵草可以入炉，丹药有了出处。',
     effects: { unlockBuildings: ['alchemyRoom'] },
-    needs: { building: { id: 'library', count: 2 } },
+    needs: { upgrades: ['herbStudy'], buildings: [{ id: 'library', count: 2 }, { id: 'herbGarden', count: 1 }] },
   },
   // 自技艺页迁入（工艺）
   {
@@ -459,7 +459,7 @@ export const CULTIVATION = [
     cost: { insight: 270, herb: 900, pill: 6 },
     desc: '火候拿捏到分毫不差，出炉的成色都不一样。丹药与九转丹制作产出 +5%。',
     effects: { craftBonusByResource: { pill: 0.05, nineTurnPill: 0.05 } },
-    needs: { building: { id: 'alchemyRoom', count: 1 } },
+    needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
 
   // ---------- 香火族 ----------
@@ -496,8 +496,8 @@ export const CULTIVATION = [
     effects: { unlockBuildings: ['warehouse'] },
     note: '解锁建筑：库房',
     effectDesc: '因此垒得起库房：基础物资存得住，才谈得上囤积。',
-    // 原先依赖技艺版探矿术（prospectArt），两线重组后改指修真版探矿术 + 矿场规模，时序不变
-    needs: { upgrades: ['prospectStudy'], building: { id: 'mine', count: 3 } },
+    // 先取得矿料并掌握木作器械，再研究石基木架的营造与扩仓。
+    needs: { upgrades: ['prospectStudy', 'woodworking'], building: { id: 'mine', count: 3 } },
   },
   {
     id: 'earthEssence',
@@ -652,7 +652,7 @@ export const CULTIVATION_STAGES = [
     key: 'qiSense',
     label: '灵气研究 Ⅰ 观气',
     hint: '灵气是什么、在哪、怎么聚（凡体→筑基）',
-    ids: ['qiOrigin', 'condenseArt', 'qiGazing', 'breakthroughArt'],
+    ids: ['qiOrigin', 'qiGazing', 'condenseArt', 'breakthroughArt'],
   },
   {
     key: 'qiCondense',

@@ -44,6 +44,7 @@ const needs = (n) => {
   if (!n) return '—'
   const out = []
   if (n.building) out.push(`${bname(n.building.id)} ≥ ${n.building.count}`)
+  if (n.anyBuildings) out.push(n.anyBuildings.map(b => `${bname(b.id)} ≥ ${b.count}`).join(' 或 '))
   if (n.buildings) for (const b of n.buildings) out.push(`${bname(b.id)} ≥ ${b.count}`)
   if (n.upgrade) out.push(`《${uname(n.upgrade)}》`)
   if (n.upgrades) for (const u of n.upgrades) out.push(`《${uname(u)}》`)
@@ -90,8 +91,9 @@ emit('\n## A.2 职位\n')
 emit('| 职位 | id | 产出 | 每人每秒 | 解锁 |')
 emit('| --- | --- | --- | --- | --- |')
 for (const j of JOBS) {
-  const output = j.secondary ? `${res(j.resource)} + ${res(j.secondary.resource)}` : res(j.resource)
-  const rate = j.secondary ? `${j.base}；${bname(j.secondary.building)}启用时另产${j.secondary.base}${res(j.secondary.resource)}` : j.base
+  const outputs = [{ resource: j.resource, base: j.base, building: j.building }, ...(j.additionalOutputs || []), ...(j.secondary ? [j.secondary] : [])]
+  const output = outputs.map(o => res(o.resource)).join(' + ')
+  const rate = outputs.map(o => `${o.building ? bname(o.building) + '启用时' : ''}${o.base}${res(o.resource)}`).join('；')
   emit(`| ${j.name} | \`${j.id}\` | ${output} | ${rate} | ${j.unlocked ? '初始' : needs(j.needs)} |`)
 }
 

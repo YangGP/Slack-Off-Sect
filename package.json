@@ -1,7 +1,7 @@
 {
   "name": "slack-off-sect",
   "private": true,
-  "version": "0.0.16",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "Slack Off Sect (摸鱼宗门) —— 一个 Vue3 + Vite 的修仙宗门挂机放置游戏",
   "type": "module",
@@ -15,14 +15,13 @@
     "check": "npm run check:encoding && npm run smoke && npm run check:render && npm run check:dom",
     "check:encoding": "node tools/check-encoding.mjs",
     "audit": "vite build --ssr tools/resource-audit.mjs --outDir .smoke-audit --emptyOutDir && node .smoke-audit/resource-audit.js",
-    "audit:materials": "vite build --ssr tools/material-audit.mjs --outDir .smoke-mat --emptyOutDir && node .smoke-mat/material-audit.js",
     "balance": "vite build --ssr tools/balance.mjs --outDir .smoke-balance --emptyOutDir && node .smoke-balance/balance.js",
-    "balance:clicks": "vite build --ssr tools/click-balance.mjs --outDir .smoke-click --emptyOutDir && node .smoke-click/click-balance.js",
     "audit:economy": "vite build --ssr tools/economy-audit.mjs --outDir .smoke-economy --emptyOutDir && node .smoke-economy/economy-audit.js",
+    "audit:buildings": "vite build --ssr tools/building-reachability.mjs --outDir .smoke-reachability --emptyOutDir && node .smoke-reachability/building-reachability.js",
+    "audit:pacing": "vite build --ssr tools/pacing-audit.mjs --outDir .smoke-pacing --emptyOutDir && node .smoke-pacing/pacing-audit.js",
     "balance:events": "vite build --ssr tools/event-balance.mjs --outDir .smoke-event-balance --emptyOutDir && node .smoke-event-balance/event-balance.js",
     "balance:visits": "vite build --ssr tools/playstyles.mjs --outDir .smoke-visits --emptyOutDir && node .smoke-visits/playstyles.js",
-    "docs:tables": "node tools/dump-tables.mjs",
-    "early": "vite build --ssr tools/early-audit.mjs --outDir .early --emptyOutDir && node .early/early-audit.js"
+    "docs:tables": "node tools/dump-tables.mjs"
   },
   "dependencies": {
     "vue": "^3.5.43"

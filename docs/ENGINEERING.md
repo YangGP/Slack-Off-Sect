@@ -194,12 +194,11 @@ jsdom用于可复现的DOM验证，不能替代真实浏览器的布局、触控
 | --- | --- |
 | npm run balance -- 72 0 | 指定时长、初始仙缘的整体节奏推演 |
 | npm run audit -- stone 8 | 资源进项、出项、仓储与门槛 |
-| npm run audit:materials | 材料去向与加工链 |
-| npm run audit:economy | 点击、仓储与消费审计 |
+| npm run audit:economy | 整件资源仓储、基础需求与材料去向 |
+| npm run audit:buildings | 真实前置、资源来源与仓储约束下的建筑可达性 |
+| npm run audit:pacing -- 72 0 0 0 rush 0 labor | 阶段耗时、首次生产／建设与主动调配人手的节奏推演 |
 | npm run balance:events -- 24 | 固定种子比较事件样本 |
-| npm run balance:clicks | 主动点击影响 |
 | npm run balance:visits -- 24 | 持续与间歇上线比较 |
-| npm run early | 前期发展 |
 
 分析工具共用参照玩家策略，但策略、季节、事件、仙缘／道果和决策频率仍影响结论。记录结果时附上版本与条件；历史时间表不代表当前玩家预计进度。
 

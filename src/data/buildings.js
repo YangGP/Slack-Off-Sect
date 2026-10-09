@@ -35,23 +35,23 @@ export const BUILDINGS = [
     name: '伐木场',
     glyph: '伐',
     group: 'produce',
-    cost: { qi: 150, stone: 6 },
+    cost: { qi: 150, wood: 60 },
     priceRatio: 1.15,
-    desc: '斧锯齐备，樵夫不用再徒手掰树。',
-    effects: { prod: { wood: 0.12 }, ratio: { wood: 0.05 } },
-    needs: { building: { id: 'spiritField', count: 2 } },
+    desc: '木架与料场齐备，樵夫采回的灵木在此归整，伐木更有章法。',
+    effects: { ratio: { wood: 0.05 } },
+    needs: { building: { id: 'hut', count: 1 } },
   },
   {
     id: 'quarry',
-    name: '采石场',
+    name: '采矿场',
     glyph: '采',
     group: 'produce',
     // 实物建筑用材料计价：钎锤支架都是木匠活，不吃灵气；也不用自己的产出（石矿）当造价
     cost: { wood: 300 },
     priceRatio: 1.15,
-    desc: '钎锤齐备，从山体上整块凿下岩石。垒墙、砌基、点石成灵，都靠它。',
-    effects: { prod: { rock: 0.05 } },
-    needs: { building: { id: 'lumberYard', count: 1 } },
+    desc: '钎锤齐备，开放矿工职位；派遣弟子后才能从山体上凿下石矿，供垒墙、砌基与点石成灵。',
+    effects: {},
+    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'granary', count: 1 }] },
   },
   {
     id: 'mine',
@@ -61,8 +61,8 @@ export const BUILDINGS = [
     // 木料搭支架，不再用修炼硬通货充当普通砌石。
     cost: { wood: 450 },
     priceRatio: 1.15,
-    desc: '顺着灵脉往下挖，便能挖到泛着寒光的玄铁。',
-    effects: { prod: { ore: 0.05 } },
+    desc: '勘定矿脉，开放矿工职位；派遣弟子后才能挖出泛着寒光的玄铁。',
+    effects: {},
     needs: { upgrades: ['prospectStudy'] },
   },
   {
@@ -73,12 +73,10 @@ export const BUILDINGS = [
     // 与玄铁矿同在"寻脉"这一条线上：石矿砌井口、木料搭支架（实物建筑不吃灵气，
     // 也不再用修炼硬通货充当砌石 —— 灵石留给凝灵与交易）
     cost: { wood: 700, rock: 100, ore: 80 },
-    // 叠加重税：灵石是全局硬通货（研究 / 建筑 / 破境都吃它），
-    // 天然来源必须是"细水长流"，不能变成替代整条"以气凝石"的瓶颈。
-    // 实测教训：0.12/秒 × 可无限叠，24 小时就能冲到渡劫期（原本 72 小时）。
+    // 天然灵石由矿工采出，多座矿井不重复放大人力。
     priceRatio: 1.55,
-    desc: '顺着灵脉再往深处走，岩层里嵌着天然灵石 —— 凿下来就能用。启用后，每名矿工额外采出 0.0008 灵石/秒。',
-    effects: { prod: { stone: 0.03 } },
+    desc: '岩层里嵌着天然灵石。启用后，已分配的每名矿工额外采出 0.0008 灵石/秒；无人采矿时不产出。',
+    effects: {},
     needs: { upgrades: ['prospectStudy'] },
   },
   {
@@ -89,8 +87,8 @@ export const BUILDINGS = [
     // 普通药圃用木料营造，灵石留给凝灵与交易。
     cost: { wood: 400 },
     priceRatio: 1.15,
-    desc: '按四时节气轮种，灵草自会一茬茬地长。',
-    effects: { prod: { herb: 0.04 } },
+    desc: '按四时节气轮种，开放采药人职位；派遣弟子照料和采收后才能取得灵草。',
+    effects: {},
     needs: { upgrades: ['herbStudy'] },
   },
   {
@@ -115,7 +113,7 @@ export const BUILDINGS = [
     cost: { rock: 400, stone: 150, insight: 300 },
     priceRatio: 1.4,
     desc: '在小阵之上再叠三重纹路，把方圆百里的灵气都攒进山门。',
-    effects: { ratio: { qi: 0.08 }, prod: { qi: 3 } },
+    effects: { ratio: { qi: 0.08 } },
     upkeep: { qi: 1.2 }, // 大阵自己在引气，也在漏气
 
     // 先学会「观气」，才画得出大阵（修真 · 观气法）
@@ -129,8 +127,8 @@ export const BUILDINGS = [
     cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
     unlockRatio: 0,
-    desc: '阵基定形、晶核聚气。金丹后以凝晶工艺建成，稳定汇聚灵气并保存备用晶核。',
-    effects: { prod: { qi: 15 }, ratio: { qi: 0.02 }, storage: { crystal: 15 } },
+    desc: '阵基定形、晶核聚气。金丹后以凝晶工艺建成，提高灵气产出并保存备用晶核。',
+    effects: { ratio: { qi: 0.02 }, storage: { crystal: 15 } },
     upkeep: { qi: 1 },
     needs: { realm: 4, upgrades: ['crystalTheory'] },
   },
@@ -141,8 +139,8 @@ export const BUILDINGS = [
     group: 'produce',
     cost: { wood: 6000, plank: 30, herb: 4000, stone: 6000 },
     priceRatio: 1.45,
-    desc: '养几只懂事的灵兽，采药驮矿都不必弟子亲自跑。',
-    effects: { prod: { wood: 1.2, herb: 1.5, ore: 1 }, morale: 2 },
+    desc: '养几只懂事的灵兽，弟子照料时也能舒缓心神，提高宗门士气。',
+    effects: { morale: 2 },
     upkeep: { herb: 0.05 }, // 灵兽要喂
 
     needs: { upgrades: ['beastTaming'] },
@@ -154,9 +152,9 @@ export const BUILDINGS = [
     name: '茅屋',
     glyph: '茅',
     group: 'home',
-    cost: { qi: 80, stone: 4 },
+    cost: { qi: 80, wood: 20 },
     priceRatio: 1.55,
-    desc: '几根灵木搭起的屋子，能住两名弟子。宗门再小，也得有张床。',
+    desc: '能住两名弟子。本世第一间以灵气搭起临时居所，不需灵木；后续营造需要灵木与灵气。',
     effects: { maxDisciples: 2, storage: { qi: 60 } },
     needs: { building: { id: 'spiritField', count: 1 } },
   },
@@ -165,9 +163,9 @@ export const BUILDINGS = [
     name: '木屋',
     glyph: '木',
     group: 'home',
-    cost: { wood: 260, ore: 20 },
+    cost: { wood: 300, stone: 20 },
     priceRatio: 1.55,
-    desc: '梁柱规整、铁箍咬合，冬暖夏凉，可容六名弟子。',
+    desc: '木梁榫卯相扣，灵石嵌入梁柱引气，冬暖夏凉，可容六名弟子。',
     effects: { maxDisciples: 6, storage: { qi: 200, wood: 120 } },
     needs: { building: { id: 'hut', count: 5 } },
   },
@@ -218,7 +216,7 @@ export const BUILDINGS = [
     desc: '石基铁箍木架，专存灵木、灵石、石矿、玄铁、灵草这些基础物资 —— 丹药符箓另有去处。',
     // 库房只存**基础物资**：灵木 / 灵石 / 石矿 / 玄铁 / 灵草。
     // 份额按「这种资源平时流得多快」分配（8 小时推演：灵木 72/秒、灵草 11、玄铁 7.5；
-    // 灵石没有产出，靠凝气成石现印，按兑换后的灵气量折算）。
+    // 灵石没有产出，靠点石成灵现印，按兑换后的灵气量折算）。
     // 灵气上限归「谷仓」，感悟归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
     effects: { storage: { wood: 1000, stone: 800, rock: 600, ore: 400, herb: 500 } },
     needs: { upgrades: ['earthArt'] },
@@ -278,7 +276,7 @@ export const BUILDINGS = [
     cost: { qi: 200, wood: 60 },
     priceRatio: 1.18,
     desc: '一阁典籍，是宗门最早的学问。弟子在此抄经静坐，念头慢慢熬成感悟。',
-    effects: { prod: { insight: 0.03 }, ratio: { insight: 0.15 }, storage: { insight: 400 } },
+    effects: { ratio: { insight: 0.15 }, storage: { insight: 400 } },
     needs: { building: { id: 'spiritField', count: 3 } },
   },
   {
@@ -393,8 +391,8 @@ export const BUILDINGS = [
     group: 'incense',
     cost: { wood: 600, ore: 40 },
     priceRatio: 1.3,
-    desc: '山门一立，香客便知此处有仙。',
-    effects: { prod: { faith: 0.015 }, storage: { faith: 80 } },
+    desc: '山门一立，香客便知此处有仙。开放香使职位，派遣弟子接待香客才能收取香火。',
+    effects: { storage: { faith: 80 } },
     needs: { upgrades: ['incenseVow'], building: { id: 'hut', count: 3 } },
   },
   {

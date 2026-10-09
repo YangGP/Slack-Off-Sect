@@ -26,12 +26,14 @@ export const JOBS = [
     id: 'miner',
     name: '矿工',
     glyph: '矿',
-    desc: '在玄铁矿脉里刨食，产出炼器所需的玄铁；灵石矿启用时，也会采出少量灵石。',
-    resource: 'ore',
-    base: 0.08,
+    desc: '统一开采宗门矿产：采矿场启用时采石矿，玄铁矿启用时采玄铁，灵石矿启用时另采少量灵石。同一批矿工同时提供已开放矿场的产出。',
+    resource: 'rock',
+    base: 0.15,
+    building: 'quarry',
+    additionalOutputs: [{ resource: 'ore', base: 0.08, building: 'mine' }],
     // 灵石是修炼硬通货，副产出仅为玄铁的 1/100；矿井数量不重复放大人力。
     secondary: { resource: 'stone', base: 0.0008, building: 'spiritQuarry' },
-    needs: { building: { id: 'mine', count: 1 } },
+    needs: { anyBuildings: [{ id: 'quarry', count: 1 }, { id: 'mine', count: 1 }] },
   },
   {
     id: 'herbalist',

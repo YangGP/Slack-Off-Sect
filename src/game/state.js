@@ -48,6 +48,8 @@ export function createInitialState() {
     craftTimers: {},
 
     buildings: {},
+    starterHutBuilt: false,
+    starterHutStanding: false,
     upgrades: {},
     achievements: {},
     craftProgress: {},
@@ -97,7 +99,7 @@ export function createInitialState() {
       autoCraftOn: true,
       offlineProgress: true,
       craftReservePercent: 20,
-      autoCraftPriority: 'condenseStone',
+      autoCraftPriority: 'infuseStone',
       quickCrafts: [...DEFAULT_QUICK_CRAFTS],
     },
 
@@ -129,11 +131,19 @@ export function normalizeState(state) {
     ...(state.disciples || {}),
     jobs: { ...fresh.disciples.jobs, ...((state.disciples && state.disciples.jobs) || {}) },
   }
+  // 采石工并入矿工，原有分配相加，人口总数保持不变。
+  merged.disciples.jobs.miner = (merged.disciples.jobs.miner || 0) + (merged.disciples.jobs.stonecutter || 0)
+  delete merged.disciples.jobs.stonecutter
   // 老档补「飞升层」与「转世计数」
   merged.dao = state.dao || 0
   merged.stats = merged.stats || {}
   merged.stats.reincarnations = merged.stats.reincarnations || 0
   merged.buildings = Object.fromEntries(Object.entries(state.buildings || {}).map(([id, entry]) => [id, { ...entry }]))
+  // 旧档已有人口或建设进度时视为已领取首屋，防止拆屋读档重复免木料。
+  merged.starterHutBuilt = typeof state.starterHutBuilt === 'boolean' ? state.starterHutBuilt :
+    ((merged.buildings.hut?.count || 0) > 0 || (merged.disciples.total || 0) > 0 || (state.stats?.recruits || 0) > 0 ||
+      ['logHouse', 'mansion', 'caveDwelling'].some(id => (merged.buildings[id]?.count || 0) > 0))
+  merged.starterHutStanding = !!state.starterHutStanding && merged.starterHutBuilt && (merged.buildings.hut?.count || 0) > 0
   merged.upgrades = { ...(state.upgrades || {}) }
   // 已移除的早期空间技艺不再参与研究、统计或容量计算。
   delete merged.upgrades.storageBag
@@ -181,6 +191,13 @@ export function normalizeState(state) {
   merged.stats = { ...fresh.stats, ...(state.stats || {}) }
   merged.stats.crafted = { ...(state.stats && state.stats.crafted) }
   merged.settings = { ...fresh.settings, ...(state.settings || {}) }
+  for (const key of ['autoCraft', 'craftTargets', 'craftTimers', 'craftProgress']) {
+    merged[key] = { ...merged[key] }
+    if (Object.hasOwn(merged[key], 'condenseStone') && !Object.hasOwn(merged[key], 'infuseStone')) merged[key].infuseStone = merged[key].condenseStone
+    delete merged[key].condenseStone
+  }
+  if (merged.settings.autoCraftPriority === 'condenseStone') merged.settings.autoCraftPriority = 'infuseStone'
+  if (Array.isArray(merged.settings.quickCrafts)) merged.settings.quickCrafts = merged.settings.quickCrafts.map(id => id === 'condenseStone' ? 'infuseStone' : id)
   merged.settings.quickCrafts = normalizeQuickCrafts(merged.settings.quickCrafts)
   merged.ui = { ...fresh.ui, ...(state.ui || {}) }
   // 去掉已经过期的 buff
@@ -221,6 +238,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.disciples = { total: 0, jobs: { ...fresh.disciples.jobs } }
   state.arrivalTimer = 0
   state.buildings = {}
+  state.starterHutBuilt = false
+  state.starterHutStanding = false
   state.upgrades = {}
   state.treasureLevels = {}
   state.craftProgress = {}

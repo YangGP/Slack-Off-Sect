@@ -3,7 +3,7 @@
 import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS } from '@/data/crafts'
-import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield } from '@/game/engine'
+import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield, isProgressionVisible } from '@/game/engine'
 import { costLabel } from '@/game/pricing'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock } from '@/game/format'
@@ -51,7 +51,7 @@ const rows = computed(() => {
 })
 
 const locked = computed(() =>
-  CRAFTS.filter((c) => !isCraftUnlocked(state, c)).map((c) => ({
+  CRAFTS.filter((c) => !isCraftUnlocked(state, c) && isProgressionVisible(state, c.needs)).map((c) => ({
     meta: c,
     needs: describeNeeds(c.needs).join('，'),
   })),
@@ -72,10 +72,11 @@ function updateQuick(id, event) {
 }
 const condenseStatus = computed(() => {
   if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
-  const target = autoCraftStatus(state, derived, 'condenseStone').target
+  if (!(state.buildings.quarry?.count > 0)) return '凝灵诀 · 需采矿场'
+  const target = autoCraftStatus(state, derived, 'infuseStone').target
   if (target > 0 && state.resources.stone >= target) return '凝灵诀 · 目标已达'
   if (state.resources.stone >= derived.max.stone) return '凝灵诀 · 灵石满仓'
-  if ((state.resources.rock || 0) < CRAFTS.find(c => c.id === 'condenseStone').cost.rock) return '凝灵诀 · 缺石材暂停'
+  if ((state.resources.rock || 0) < CRAFTS.find(c => c.id === 'infuseStone').cost.rock) return '凝灵诀 · 缺石材暂停'
   return '凝灵诀 · 节气满仓自凝'
 })
 </script>
@@ -141,12 +142,12 @@ const condenseStatus = computed(() => {
           </span>
           <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
           <span
-            v-else-if="row.meta.id === 'condenseStone' && derived.autoCondenseUnlocked"
+            v-else-if="row.meta.id === 'infuseStone' && derived.autoCondenseUnlocked"
             class="small dim"
           >
             {{ condenseStatus }}
           </span>
-          <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseStone' && derived.autoCondenseUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
+          <span v-if="!row.autoStatus.on && !(row.meta.id === 'infuseStone' && derived.autoCondenseUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
           <span v-if="!compact && row.yield > row.meta.amount" class="dim"> · 小数累积 {{ fmtPercent(row.progress) }}</span>
         </div>
         <div class="craft-line">
@@ -227,7 +228,7 @@ const condenseStatus = computed(() => {
             </div>
 
             <div class="tip-section">自动制作</div>
-            <div v-if="row.meta.id === 'condenseStone' && derived.autoCondenseUnlocked" class="tip-row">
+            <div v-if="row.meta.id === 'infuseStone' && derived.autoCondenseUnlocked" class="tip-row">
               <span class="k">凝灵诀</span>
               <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>
             </div>

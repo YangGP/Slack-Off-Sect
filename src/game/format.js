@@ -20,7 +20,7 @@ const UNITS = [
 
 function trim(num, digits) {
   const s = num.toFixed(digits)
-  return s.replace(/\.?0+$/, '')
+  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s
 }
 
 /** 通用数量格式化，例如 12345 -> 1.23万 */

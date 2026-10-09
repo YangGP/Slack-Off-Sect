@@ -265,9 +265,8 @@ export const actions = {
     E.recompute(state, derived)
     return total
   },
-
-  gatherRock() {
-    const gained = E.gatherRock(state, derived)
+  growWood() {
+    const gained = E.growWood(state, derived)
     E.recompute(state, derived)
     return gained
   },

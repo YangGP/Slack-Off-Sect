@@ -109,7 +109,10 @@ export function activeOf(state, id) {
 
 /** 职位基础产出；副产出依赖启用中的专业设施。 */
 export function jobOutputs(state, job) {
-  const outputs = [{ resource: job.resource, base: job.base }]
+  const outputs = !job.building || activeOf(state, job.building) > 0 ? [{ resource: job.resource, base: job.base }] : []
+  for (const output of job.additionalOutputs || []) {
+    if (!output.building || activeOf(state, output.building) > 0) outputs.push(output)
+  }
   if (job.secondary && activeOf(state, job.secondary.building) > 0) outputs.push(job.secondary)
   return outputs
 }
@@ -122,6 +125,7 @@ export function idleDisciples(state) {
 
 export function checkNeeds(state, needs) {
   if (!needs) return true
+  if (needs.anyBuildings && !needs.anyBuildings.some(b => countOf(state, b.id) >= b.count)) return false
   if (needs.building && countOf(state, needs.building.id) < needs.building.count) return false
   if (needs.buildings) {
     for (const b of needs.buildings) {
@@ -152,9 +156,10 @@ export function isBuildingUnlocked(state, id) {
   if (!checkNeeds(state, meta.needs)) return false
   const ratio = meta.unlockRatio == null ? 0.3 : meta.unlockRatio
   if (ratio <= 0) return true
-  for (const res in meta.cost || {}) {
+  const revealCost = id === 'hut' && !state.starterHutBuilt ? { qi: meta.cost.qi } : meta.cost
+  for (const res in revealCost || {}) {
     const seen = (state.peak && state.peak[res]) || 0
-    if (seen < meta.cost[res] * ratio - 1e-9) return false
+    if (seen < revealCost[res] * ratio - 1e-9) return false
   }
   return true
 }
@@ -177,6 +182,20 @@ export function isJobUnlocked(state, job) {
 export function isUpgradeUnlocked(state, up) {
   if (state.upgrades[up.id]) return true
   return checkNeeds(state, up.needs)
+}
+
+/** 只预告当前分支的下一步，不在开局列出整棵研究和工艺树。 */
+export function isProgressionVisible(state, needs) {
+  if (!needs) return true
+  if (needs.realm != null && state.realm < needs.realm) return false
+  const upgrades = [...(needs.upgrades || []), ...(needs.upgrade ? [needs.upgrade] : [])]
+  if (upgrades.some(id => !state.upgrades[id])) return false
+  // 研究前置已掌握时可预告待建的专业建筑；基础技艺则先建立对应产业。
+  if (upgrades.length) return true
+  const buildings = [...(needs.buildings || []), ...(needs.building ? [needs.building] : [])]
+  if (buildings.some(b => countOf(state, b.id) === 0)) return false
+  if (needs.anyBuildings && !needs.anyBuildings.some(b => countOf(state, b.id) > 0)) return false
+  return true
 }
 
 export function isCraftUnlocked(state, craft) {
@@ -243,16 +262,18 @@ export function scaleCost(cost, factor) {
 }
 
 /** 购买第 n 座（从 0 开始计数）建筑的价格 */
-export function buildingPriceAt(meta, index) {
+export function buildingPriceAt(meta, index, starterHut = false) {
   const factor = Math.pow(meta.priceRatio || 1.15, index)
-  return scaleCost(meta.cost, factor)
+  const cost = scaleCost(meta.cost, factor)
+  if (meta.id === 'hut' && index === 0 && starterHut) delete cost.wood
+  return cost
 }
 
 /** 购买 count 座建筑从 from 开始的总价 */
-export function buildingCostFrom(meta, from, count) {
+export function buildingCostFrom(meta, from, count, starterHut = false) {
   const total = {}
   for (let i = 0; i < count; i++) {
-    const price = buildingPriceAt(meta, from + i)
+    const price = buildingPriceAt(meta, from + i, starterHut)
     for (const k in price) total[k] = (total[k] || 0) + price[k]
   }
   return total
@@ -261,7 +282,7 @@ export function buildingCostFrom(meta, from, count) {
 export function buildingCost(state, id, count = 1) {
   const meta = BUILDING_MAP[id]
   if (!meta) return {}
-  return buildingCostFrom(meta, countOf(state, id), count)
+  return buildingCostFrom(meta, countOf(state, id), count, !state.starterHutBuilt)
 }
 
 /** 在现有资源下最多能买几座（上限 cap 防止死循环） */
@@ -272,7 +293,7 @@ export function maxAffordable(state, id, cap = 500) {
   const running = {}
   let n = 0
   for (; n < cap; n++) {
-    const price = buildingPriceAt(meta, from + n)
+    const price = buildingPriceAt(meta, from + n, !state.starterHutBuilt)
     let ok = true
     for (const k in price) {
       const have = state.resources[k] || 0
@@ -870,6 +891,10 @@ export function buyBuilding(state, derived, id, count = 1) {
   const cost = buildingCost(state, id, count)
   if (!canAfford(state, cost)) return 0
   payCost(state, cost)
+  if (id === 'hut') {
+    if (!state.starterHutBuilt && countOf(state, id) === 0) state.starterHutStanding = true
+    state.starterHutBuilt = true
+  }
   const e = entryOf(state, id)
   e.count += count
   if (e.on === undefined) e.on = true
@@ -885,7 +910,8 @@ export function sellBuilding(state, derived, id, count = 1) {
   const e = state.buildings[id]
   if (!meta || !e || e.count <= 0) return 0
   const n = Math.min(count, e.count)
-  const refund = buildingCostFrom(meta, e.count - n, n)
+  const refund = buildingCostFrom(meta, e.count - n, n, !!state.starterHutStanding)
+  if (id === 'hut' && e.count === n) state.starterHutStanding = false
   for (const k in refund) {
     // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」
     refund[k] = RESOURCE_MAP[k]?.integer ? Math.floor(refund[k] * 0.5 + 1e-9) : refund[k] * 0.5
@@ -1127,7 +1153,8 @@ export function runAutoCondense(state, derived) {
   const qi = state.resources.qi || 0
   if (qi < qiMax - EPS) return false
   const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
-  const recipe = CRAFT_MAP.condenseStone
+  const recipe = CRAFT_MAP.infuseStone
+  if (!isCraftUnlocked(state, recipe)) return false
   const times = Math.floor((qi * ratio) / recipe.cost.qi)
   let made = false
   for (let i = 0; i < times; i++) {
@@ -1223,11 +1250,22 @@ export function drawQi(state, derived) {
   return gain
 }
 
-/** 开局拾取普通石材；采石场接替长期供料，满仓时不再采集。 */
-export function gatherRock(state, derived) {
-  const gain = Math.max(0, Math.min(1, (derived.max.rock || 0) - (state.resources.rock || 0)))
-  addResource(state, 'rock', gain)
-  return gain
+/** 每次催生按剩余容量缩减收益与费用，避免满仓或临近满仓浪费灵气。 */
+export function woodGrowth(state, derived) {
+  const room = Math.max(0, (derived.max.wood || 0) - (state.resources.wood || 0))
+  const gain = Math.min(CONFIG.GROW_WOOD_GAIN, room)
+  const cost = { qi: CONFIG.GROW_WOOD_QI_COST * gain / CONFIG.GROW_WOOD_GAIN }
+  return { gain, cost, affordable: gain > EPS && canAfford(state, cost) }
+}
+
+export function growWood(state, derived) {
+  const growth = woodGrowth(state, derived)
+  if (!growth.affordable) return 0
+  const gained = addResource(state, 'wood', growth.gain)
+  if (gained <= 0) return 0
+  payCost(state, { qi: CONFIG.GROW_WOOD_QI_COST * gained / CONFIG.GROW_WOOD_GAIN })
+  trackPeak(state)
+  return gained
 }
 
 export function craft(state, derived, recipeId, { silent = false, times = 1 } = {}) {

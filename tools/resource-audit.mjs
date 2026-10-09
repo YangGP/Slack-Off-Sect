@@ -7,7 +7,7 @@
  *   node .smoke-audit/resource-audit.js [资源id] [小时数] [假设性改动…]
  *
  * 假设性改动（只影响本次运行，不改项目文件）：
- *   --craft=50                      凝气成石的灵气成本改成 50
+ *   --craft=50                      点石成灵的灵气成本改成 50
  *   --cap=250                       该资源的基础上限改成 250
  *   --prod=玄铁矿id:stone:0.015      给某建筑加一条每秒产出（可重复）
  *   --realm=0.5                     所有破境对该资源的花费 ×0.5
@@ -31,7 +31,7 @@ const patchNotes = []
 for (const a of args) {
   if (a.startsWith('--craft=')) {
     patches.craftQi = Number(a.split('=')[1])
-    patchNotes.push(`凝气成石的灵气成本 → ${patches.craftQi}`)
+    patchNotes.push(`点石成灵的灵气成本 → ${patches.craftQi}`)
   } else if (a.startsWith('--cap=')) {
     patches.baseMax = Number(a.split('=')[1])
     patchNotes.push(`基础上限 → ${patches.baseMax}`)

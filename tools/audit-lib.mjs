@@ -19,7 +19,7 @@ import { JOBS } from '../src/data/jobs.js'
  * @param {string} opts.resId 要审计的资源
  * @param {number} opts.hours 模拟小时数
  * @param {object} [opts.patches] 假设性改动
- * @param {number} [opts.patches.craftQi] 凝气成石的灵气成本
+ * @param {number} [opts.patches.craftQi] 点石成灵的灵气成本
  * @param {number} [opts.patches.baseMax] 该资源基础上限
  * @param {Array}  [opts.patches.prods]   [{ buildingId, res, value }]
  * @param {number} [opts.patches.realmFactor] 破境花费倍数
@@ -35,9 +35,9 @@ export function auditResource({ resId = 'stone', hours = 8, patches = {}, thresh
   // ---- 套用假设性改动，并记下还原动作 ----
   const restores = []
   if (patches.craftQi != null) {
-    const old = CRAFT_MAP.condenseStone.cost.qi
-    CRAFT_MAP.condenseStone.cost.qi = patches.craftQi
-    restores.push(() => (CRAFT_MAP.condenseStone.cost.qi = old))
+    const old = CRAFT_MAP.infuseStone.cost.qi
+    CRAFT_MAP.infuseStone.cost.qi = patches.craftQi
+    restores.push(() => (CRAFT_MAP.infuseStone.cost.qi = old))
   }
   if (patches.baseMax != null) {
     const old = RESOURCE_MAP[resId].baseMax

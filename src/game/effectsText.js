@@ -109,7 +109,7 @@ export function describeEffects(ef) {
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
   if (ef.autoCondense) push('节气满仓自凝灵石', '', 'good')
-  if (ef.energyCraft) push('灵能应用', '灵能同时提高灵石（凝气成石、点石成灵）与木板的制作产出', 'good')
+  if (ef.energyCraft) push('灵能应用', '灵能同时提高灵石（点石成灵）与木板的制作产出', 'good')
   if (ef.unlockBuildings) {
     for (const id of ef.unlockBuildings) {
       push('解锁建筑', BUILDING_MAP[id]?.name || id, 'unlock')
@@ -122,6 +122,7 @@ export function describeEffects(ef) {
 export function describeNeeds(needs) {
   if (!needs) return []
   const out = []
+  if (needs.anyBuildings) out.push(`需建成其一：${needs.anyBuildings.map(b => `${BUILDING_MAP[b.id]?.name || b.id} ×${b.count}`).join(' / ')}`)
   if (needs.building) {
     out.push(`需建成 ${BUILDING_MAP[needs.building.id]?.name || needs.building.id} ×${needs.building.count}`)
   }

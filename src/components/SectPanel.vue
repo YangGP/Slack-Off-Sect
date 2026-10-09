@@ -2,11 +2,7 @@
 /**
  * 宗门页：筛选行 + 建筑按钮网格（猫国式的中间内容区）。
  *
- * 网格最前面三个是「核心按钮」：
- *   1. 吸取天地灵气 —— 开局什么都没有时唯一的灵气来源（点一下 +N）
- *   2. 拾取石材     —— 为制作灵石提供矿物载体
- *   3. 凝气成石     —— 将灵气灌入石材，开局第一间屋子就花它
- * 这三个不参与分组筛选，只跟着「全部 / 可建造」走。
+ * 吸取天地灵气是开局的手动来源，原料由弟子采集。
  */
 import { computed } from 'vue'
 import { state, derived, view, actions } from '@/game/store'
@@ -17,14 +13,10 @@ import {
   buildingCost,
   countOf,
   clickGain,
-  CRAFT_MAP,
-  maxCraftable,
-  timeToAfford,
+  woodGrowth,
 } from '@/game/engine'
-import { RESOURCE_MAP } from '@/data/resources'
 import { CONFIG } from '@/data/config'
-import { costLabel } from '@/game/pricing'
-import { fmt, fmtCost, fmtStock, fmtTime } from '@/game/format'
+import { fmt } from '@/game/format'
 import BuildingButton from './BuildingButton.vue'
 import HoverTip from './HoverTip.vue'
 
@@ -43,24 +35,7 @@ const buildingOrder = new Map(BUILDING_DISPLAY_ORDER.map((id, index) => [id, ind
 const showCore = computed(() => filter.value === 'all' || filter.value === 'affordable')
 
 const gain = computed(() => clickGain(state, derived))
-
-/** 「凝气成石」的即时状态（成本、能否做、能做几份） */
-const stone = computed(() => {
-  const meta = CRAFT_MAP.condenseStone
-  const cost = meta.cost
-  return {
-    meta,
-    cost,
-    affordable: canAfford(state, cost),
-    canMake: maxCraftable(state, derived, 'condenseStone'),
-  }
-})
-
-function costLine(cost) {
-  return Object.entries(cost)
-    .map(([res, v]) => `${RESOURCE_MAP[res]?.name || res} ${fmtCost(v)}`)
-    .join(' + ')
-}
+const growth = computed(() => woodGrowth(state, derived))
 
 /** 已解锁的建筑（未解锁的还没露面） */
 const unlocked = computed(() => BUILDINGS.filter((b) => isBuildingUnlocked(state, b.id)))
@@ -129,55 +104,27 @@ const tabs = computed(() => [
 
     <div v-if="showCore" class="build-item">
       <HoverTip :width="300">
-        <button class="build-btn" :disabled="state.resources.rock >= derived.max.rock" @click="actions.gatherRock()">
-          拾取石材
+        <button class="build-btn" :class="{ poor: !growth.affordable }" :disabled="!growth.affordable" @click="actions.growWood()">
+          催生灵木
         </button>
         <template #tip>
           <div class="tip-body">
-            <div class="tip-title">拾取石材</div>
-            <div class="tip-desc">从山坡拾取普通岩石，每次获得石矿 1。灌入灵气可制作灵石；建成采石场后可持续供料。</div>
-            <div class="tip-row"><span class="k">现有 / 上限</span><span class="v">{{ fmtStock(state.resources.rock || 0) }} / {{ fmtStock(derived.max.rock) }}</span></div>
-          </div>
-        </template>
-      </HoverTip>
-    </div>
-
-    <!-- 核心按钮 3：以石材承载灵气 -->
-    <div v-if="showCore" class="build-item">
-      <HoverTip :width="320">
-        <button
-          class="build-btn"
-          :class="{ poor: !stone.affordable }"
-          @click="actions.craft('condenseStone')"
-        >
-          凝气成石
-        </button>
-        <template #tip>
-          <div class="tip-body">
-            <div class="tip-title">
-              凝气成石
-              <span class="tip-right">灵石 ×1</span>
-            </div>
-            <div class="tip-desc">{{ stone.meta.desc }}</div>
-            <div class="tip-section">价格</div>
-            <div v-for="(amount, res) in stone.cost" :key="res" class="tip-row">
-              <span class="k">{{ RESOURCE_MAP[res]?.name || res }}</span>
-              <span class="v" :class="{ bad: (state.resources[res] || 0) < amount }">
-                {{ costLabel(state, derived, res, amount) }}
-              </span>
-            </div>
-            <div class="tip-section">产出</div>
+            <div class="tip-title">催生灵木</div>
+            <div class="tip-desc">以灵气催动山中木芽，取得营造所需的灵木。开局即可使用。</div>
+            <div class="tip-section">价格与收益</div>
             <div class="tip-row">
-              <span class="k">现有</span>
-              <span class="v">灵石 {{ fmtStock(state.resources.stone || 0) }}</span>
+              <span class="k">每次兑换</span>
+              <span class="v">灵气 {{ fmt(CONFIG.GROW_WOOD_QI_COST) }} → 灵木 {{ fmt(CONFIG.GROW_WOOD_GAIN) }}</span>
             </div>
             <div class="tip-row">
-              <span class="k">材料够做</span>
-              <span class="v">{{ stone.canMake }} 份</span>
+              <span class="k">本次费用</span>
+              <span class="v" :class="{ bad: !growth.affordable && growth.gain > 0 }">灵气 {{ fmt(growth.cost.qi) }}</span>
             </div>
-            <div class="tip-flavor">
-              点一下立刻得一枚；要批量或挂机自动做，用左栏炼制块（{{ costLine(stone.cost) }}）。
+            <div class="tip-row">
+              <span class="k">本次收益</span>
+              <span class="v good">灵木 +{{ fmt(growth.gain) }}</span>
             </div>
+            <div class="tip-flavor">满仓时停止；剩余容量不足时同比减少费用与收益。</div>
           </div>
         </template>
       </HoverTip>

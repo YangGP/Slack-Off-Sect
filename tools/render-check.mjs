@@ -70,8 +70,8 @@ function makeRichState() {
   state.disciples.total = 40
   state.disciples.jobs = {}
   for (const j of JOBS) state.disciples.jobs[j.id] = 4
-  state.craftProgress = { condenseStone: 0.5 }
-  state.autoCraft = { condenseStone: true }
+  state.craftProgress = { infuseStone: 0.5 }
+  state.autoCraft = { infuseStone: true }
   state.realm = 8
   state.karma = 30
   state.moralePenalty = -10

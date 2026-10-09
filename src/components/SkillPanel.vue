@@ -24,7 +24,6 @@ const list = computed(() => {
   if (f === 'skill') return TECHNIQUES.filter((t) => t.kind !== 'treasure')
   return TECHNIQUES
 })
-const treasureCount = TECHNIQUES.filter((t) => t.kind === 'treasure').length
 </script>
 
 <template>
@@ -36,6 +35,6 @@ const treasureCount = TECHNIQUES.filter((t) => t.kind === 'treasure').length
     :filters="FILTERS"
     :filter="filter"
     filter-key="skillFilter"
-    :note="`${treasureCount} 件法宝由修真解锁`"
+    note="法宝随对应研究逐步开放"
   />
 </template>
