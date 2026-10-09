@@ -23,37 +23,39 @@ export const REALMS = [
     name: '筑基期',
     mult: 1.6,
     desc: '道基既立，内视经脉：灵压、灵流、灵阻皆可感。已有人猜想「气」里有更细之物，却拿不出凭据。',
-    cost: { insight: 500, stone: 180, pill: 5 },
+    cost: { insight: 500, stone: 300, pill: 25 },
   },
   {
     name: '金丹期',
     mult: 2.0,
     desc: '一颗金丹吞入腹，始知我命不由天 —— 结丹高压之下，内观到正负灵荷一闪而逝，第一次「看见」灵气别有构造。',
-    cost: { insight: 1500, stone: 540, pill: 18, artifact: 2 },
+    // 首座库房的灵石总容量950；一座炼丹房／炼器坊的成品容量250／170。
+    // 固定费用按这一阶段的可达仓储设定，不随玩家当前仓容上涨。
+    cost: { insight: 1500, stone: 650, pill: 100, artifact: 60 },
   },
   {
     name: '元婴期',
     mult: 3,
     desc: '元婴出窍，神游百里而肉身不动 —— 神识所及，已能分辨并驱使正负灵子。',
-    cost: { insight: 4000, stone: 1500, pill: 45, artifact: 8, talisman: 20 },
+    cost: { insight: 4000, stone: 1500, pill: 160, artifact: 90, talisman: 20 },
   },
   {
     name: '化神期',
     mult: 5,
     desc: '神识与灵能场合一：灵子云与场线尽收眼底，山门内外如观掌纹。',
-    cost: { insight: 8000, stone: 3600, pill: 90, artifact: 20, talisman: 50 },
+    cost: { insight: 8000, stone: 3600, pill: 240, artifact: 140, talisman: 50 },
   },
   {
     name: '炼虚期',
     mult: 8,
     desc: '炼化虚空，能提取自由灵子、结成灵子束与灵子对 —— 举手投足皆是天地之力。',
-    cost: { insight: 12000, stone: 8400, pill: 160, artifact: 40, talisman: 90 },
+    cost: { insight: 12000, stone: 8400, pill: 360, artifact: 220, talisman: 90 },
   },
   {
     name: '合体期',
     mult: 14,
     desc: '与道合真：肉身与天地灵能场共振，人与宗门同呼吸。',
-    cost: { insight: 30000, stone: 21000, pill: 260, artifact: 70, talisman: 150, faith: 3000 },
+    cost: { insight: 30000, stone: 21000, pill: 520, artifact: 350, talisman: 150, faith: 3000 },
   },
   {
     name: '大乘期',
@@ -62,8 +64,8 @@ export const REALMS = [
     cost: {
       insight: 80000,
       stone: 54000,
-      pill: 400,
-      artifact: 110,
+      pill: 800,
+      artifact: 550,
       talisman: 240,
       faith: 9000,
       steel: 10,
@@ -77,8 +79,8 @@ export const REALMS = [
     cost: {
       insight: 150000,
       stone: 150000,
-      pill: 600,
-      artifact: 180,
+      pill: 1200,
+      artifact: 900,
       talisman: 400,
       faith: 25000,
       steel: 30,

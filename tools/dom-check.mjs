@@ -1139,7 +1139,7 @@ ok('境界面板渲染', html().includes('飞升'))
 // 灵石缺口也要有计时器：它没有产出，但能靠点石成灵现印（见 engine.timeToAfford）
 {
   state.ui.tab = 'realm'
-  state.realm = 3 // 筑基期 → 金丹期，要灵石 540
+  state.realm = 3 // 筑基期 → 金丹期
   state.resources.stone = 0
   state.resources.qi = 100
   state.buildings.spiritField = { count: 20, on: true }
@@ -1148,7 +1148,8 @@ ok('境界面板渲染', html().includes('飞升'))
   state.disciples.jobs = { miner: 1 }
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 80))
-  const etas = engine.timeToAfford(state, derived, 'stone', 540)
+  const stoneNeeded = engine.realmCost(state, derived, state.realm + 1).stone
+  const etas = engine.timeToAfford(state, derived, 'stone', stoneNeeded)
   const realmText = html()
   ok('灵石缺口能算出等待时间（现印路径）', Number.isFinite(etas) && etas > 0, `${etas}`)
   // 破境表的花费列同样只写需求值，倒计时在它自己的悬停提示里
@@ -1165,7 +1166,7 @@ ok('境界面板渲染', html().includes('飞升'))
     await new Promise((r) => setTimeout(r, 340))
     const tip = doc.querySelector('.tip')?.textContent.replace(/\s+/g, ' ').trim() || ''
     ok('破境提示沿用宗门排版（价格 / 效果分节）', tip.includes('价格') && tip.includes('效果'), tip.slice(0, 70))
-    ok('破境提示里灵石带倒计时', /灵石\s*0 \/ 540（还差 .+）/.test(tip), tip.slice(0, 120))
+    ok('破境提示里灵石带倒计时', new RegExp(`灵石\\s*0 / ${stoneNeeded}（还差 .+）`).test(tip), tip.slice(0, 120))
     // 口粮随境界上涨（DESIGN §5.4）：破境提示要写明「养人也要涨价」，
     // 否则玩家会在破境那一刻突然发现灵气净额变负，却不知道是谁涨的
     ok(
