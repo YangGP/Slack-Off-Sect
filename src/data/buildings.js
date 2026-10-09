@@ -42,6 +42,18 @@ export const BUILDINGS = [
     needs: { building: { id: 'spiritField', count: 2 } },
   },
   {
+    id: 'quarry',
+    name: '采石场',
+    glyph: '采',
+    group: 'produce',
+    // 实物建筑用材料计价：钎锤支架都是木匠活，不吃灵气；也不用自己的产出（石矿）当造价
+    cost: { wood: 300 },
+    priceRatio: 1.15,
+    desc: '钎锤齐备，从山体上整块凿下岩石。垒墙、砌基、点石成灵，都靠它。',
+    effects: { prod: { rock: 0.05 } },
+    needs: { building: { id: 'lumberYard', count: 1 } },
+  },
+  {
     id: 'mine',
     name: '玄铁矿',
     glyph: '矿',
@@ -58,8 +70,9 @@ export const BUILDINGS = [
     name: '灵石矿',
     glyph: '灵',
     group: 'produce',
-    // 与玄铁矿同在"寻脉"这一条线上：石料砌井口、木料搭支架（实物建筑不吃灵气）
-    cost: { wood: 700, stone: 60, ore: 80 },
+    // 与玄铁矿同在"寻脉"这一条线上：石矿砌井口、木料搭支架（实物建筑不吃灵气，
+    // 也不再用修炼硬通货充当砌石 —— 灵石留给凝灵与交易）
+    cost: { wood: 700, rock: 100, ore: 80 },
     // 叠加重税：灵石是全局硬通货（研究 / 建筑 / 破境都吃它），
     // 天然来源必须是"细水长流"，不能变成替代整条"以气凝石"的瓶颈。
     // 实测教训：0.12/秒 × 可无限叠，24 小时就能冲到渡劫期（原本 72 小时）。
@@ -98,7 +111,8 @@ export const BUILDINGS = [
     name: '聚灵大阵',
     glyph: '叠',
     group: 'produce',
-    cost: { stone: 600, insight: 300 },
+    // 阵基以石矿垒筑、少量灵石研粉描纹：硬通货只占零头，砌筑重活交给石矿
+    cost: { rock: 400, stone: 150, insight: 300 },
     priceRatio: 1.4,
     desc: '在小阵之上再叠三重纹路，把方圆百里的灵气都攒进山门。',
     effects: { ratio: { qi: 0.08 }, prod: { qi: 3 } },
@@ -198,14 +212,15 @@ export const BUILDINGS = [
     name: '库房',
     glyph: '库',
     group: 'store',
-    cost: { wood: 200, ore: 60 },
+    // 石砌墙基、铁箍木架：石矿承重，灵石不掺和
+    cost: { wood: 200, rock: 150, ore: 60 },
     priceRatio: 1.18,
-    desc: '铁箍木架，专存灵木、灵石、玄铁、灵草这些基础物资 —— 丹药符箓另有去处。',
-    // 库房只存**基础物资**：灵木 / 灵石 / 玄铁 / 灵草。
+    desc: '石基铁箍木架，专存灵木、灵石、石矿、玄铁、灵草这些基础物资 —— 丹药符箓另有去处。',
+    // 库房只存**基础物资**：灵木 / 灵石 / 石矿 / 玄铁 / 灵草。
     // 份额按「这种资源平时流得多快」分配（8 小时推演：灵木 72/秒、灵草 11、玄铁 7.5；
     // 灵石没有产出，靠凝气成石现印，按兑换后的灵气量折算）。
     // 灵气上限归「谷仓」，感悟归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
-    effects: { storage: { wood: 1000, stone: 800, ore: 400, herb: 500 } },
+    effects: { storage: { wood: 1000, stone: 800, rock: 600, ore: 400, herb: 500 } },
     needs: { upgrades: ['earthArt'] },
   },
   {
@@ -216,7 +231,7 @@ export const BUILDINGS = [
     cost: { plank: 20, ore: 1500, steel: 10 },
     priceRatio: 1.25,
     desc: '石殿分设料架与阵材格，专存营造原料、木板、玄钢和阵基。',
-    effects: { storage: { wood: 10000, stone: 8000, ore: 6000, plank: 1500, steel: 120, arrayBase: 100 } },
+    effects: { storage: { wood: 10000, stone: 8000, rock: 6000, ore: 6000, plank: 1500, steel: 120, arrayBase: 100 } },
     needs: { building: { id: 'warehouse', count: 5 }, upgrades: ['earthEssence'] },
   },
   {
@@ -237,8 +252,8 @@ export const BUILDINGS = [
     group: 'store',
     cost: { plank: 12, arrayBase: 2, ore: 500 },
     priceRatio: 1.22,
-    desc: '符匣与器架各有禁制，符箓、法器及其进阶成品在此收存，灵晶另设晶格，灵宝独占小龛。',
-    effects: { storage: { talisman: 1000, spiritTalisman: 200, artifact: 600, spiritArtifact: 100, spiritTreasure: 10, crystal: 150 } },
+    desc: '符匣与器架各有禁制，符箓、法器及其进阶成品在此收存，灵液另设玉瓶，灵晶另设晶格，灵宝独占小龛。',
+    effects: { storage: { talisman: 1000, spiritTalisman: 200, artifact: 600, spiritArtifact: 100, spiritTreasure: 10, spiritLiquid: 120, crystal: 150 } },
     needs: { realm: 4, upgrades: ['forgeArt', 'talismanArt'] },
   },
   {
@@ -250,7 +265,7 @@ export const BUILDINGS = [
     cost: { stone: 40000, plank: 100, insight: 20000, artifact: 50, steel: 100 },
     priceRatio: 1.35,
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
-    effects: { storageAll: 12000, storage: { qi: 75000, wood: 75000, stone: 75000, ore: 75000, insight: 75000, faith: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000 }, morale: 5 },
+    effects: { storageAll: 12000, storage: { qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, insight: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000 }, morale: 5 },
     needs: { upgrades: ['grottoArt'] },
   },
 
@@ -444,24 +459,37 @@ export const BUILDINGS = [
     // 塔是玄钢与灵符最大的去处：一重塔身一段钢、一重飞檐一道符（可反复盖）
     cost: { stone: 400000, plank: 300, ore: 100000, artifact: 250, insight: 250000, steel: 400, spiritTalisman: 200 },
     priceRatio: 1.6,
-    desc: '塔尖直插云海，聚气存念并镇住正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
-    effects: { ratio: { qi: 0.3, insight: 0.3, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { qi: 150000, wood: 150000, stone: 150000, ore: 150000, insight: 150000, faith: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000 } },
+    desc: '塔尖直插云海，聚气存念并镇住灵气分子与正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
+    effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, insight: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000 } },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
 
     needs: { realm: 6, upgrades: ['towerPlan'] },
   },
   {
     id: 'splitArray',
-    name: '阴阳分灵阵',
-    glyph: '阴',
+    name: '分灵阵',
+    glyph: '分',
     group: 'wonder',
-    // 阵要一直烧灵气：拆开一个灵气分子，才得到一对正负灵子
+    // 阵要一直烧灵气：把灵气离析成灵气分子，是粒子链的第一步（灵气分子 → 偏极解离 → 正负灵子 → 湮灭）
     // 终局造价由洞天与通天塔承接容量，并由长期推演检查实际可达。
     cost: { stone: 200000, insight: 100000, artifact: 150, crystal: 100, arrayBase: 25 },
     priceRatio: 1.5,
-    desc: '阵法把灵气分子拆成正负两半 —— 拆得越久，越像在跟天地借火。',
+    desc: '阵法从灵气中离析出相抱的灵气分子 —— 拆得越久，越像在跟天地借火。',
+    effects: { prod: { qiParticle: 0.04 } },
+    upkeep: { qi: 8 }, // 拆气是要耗气的：这是本作最大的灵气去处
+    needs: { upgrades: ['particleTheory'], realm: 8 },
+  },
+  {
+    id: 'polarizeArray',
+    name: '偏极阵',
+    glyph: '偏',
+    group: 'wonder',
+    // 粒子链第二步：输入解离能，处理分子；一对一供料仅指基础数据的归一化流量。
+    cost: { stone: 180000, insight: 80000, artifact: 80, crystal: 120, arrayBase: 20, qiParticle: 10 },
+    priceRatio: 1.5,
+    desc: '输入灵气作为解离能，打开分子束缚；双极场让正负灵子分流，避免重新复合。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
-    upkeep: { qi: 8 }, // 拆分子是要耗气的：这是本作最大的灵气去处
+    upkeep: { qiParticle: 0.04, qi: 1 }, // 物料与解离供能分别结算
     needs: { upgrades: ['yinyangSplit'], realm: 9 },
   },
   {
@@ -471,7 +499,7 @@ export const BUILDINGS = [
     group: 'wonder',
     cost: { wood: 250000, stone: 300000, artifact: 150, steel: 100, spiritArtifact: 10 },
     priceRatio: 1.6,
-    desc: '正负灵子在炉心相遇，归于虚无，只留下滚烫的灵能。',
+    desc: '炉心控制供料、相位与场形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。',
     effects: { prod: { qiEnergy: 0.06 } },
     upkeep: { yangParticle: 0.02, yinParticle: 0.02 }, // 成对吃掉正负灵子
     needs: { upgrades: ['annihilationArt'], realm: 9 },
@@ -497,13 +525,13 @@ export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 
 /** 宗门列表的发展顺序：基础营造先出现，后续按产业与境界阶段排列。 */
 export const BUILDING_DISPLAY_ORDER = [
-  'spiritField', 'hut', 'lumberYard', 'granary', 'library', 'logHouse',
+  'spiritField', 'hut', 'lumberYard', 'quarry', 'granary', 'library', 'logHouse',
   'mine', 'spiritQuarry', 'herbGarden', 'warehouse', 'spiritVein', 'gatheringArray',
   'alchemyRoom', 'forge', 'talismanHall', 'workshop', 'gate',
   'crystalArray', 'academy', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
   'depot', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
   'beastGarden', 'caveDwelling', 'grotto', 'spiritLockArray',
-  'heavenTower', 'splitArray', 'annihilationFurnace', 'karmaPool',
+  'heavenTower', 'splitArray', 'polarizeArray', 'annihilationFurnace', 'karmaPool',
 ]
 
 /** 分组标题与顺序 */

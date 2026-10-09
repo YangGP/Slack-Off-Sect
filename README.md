@@ -3,7 +3,7 @@
 一个用 **Vue 3 + Vite（纯 JavaScript）** 写的修仙宗门挂机放置游戏。
 
 **在线试玩**：https://YangGP.github.io/Slack-Off-Sect/ （推到 main 后由 GitHub Actions 自动发布）
-当前版本 **v0.14**；页面右下角“更新日志”可查看从 v0.01 开始的近期更新记录。
+当前版本 **v0.16**；页面右下角“更新日志”可查看从 v0.01 开始的近期更新记录。
 玩法结构参考了 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（猫国建设者）的放置玩法与数据组织方式：
 资源池 + 职位分配 + 可叠加建筑 + 修真（学术）+ 技艺·法宝（工坊）+ 制作配方 + 成就 + 随机事件 + 转世（飞升）。
 
@@ -18,7 +18,7 @@
 > | [docs/EARLY-GAME.md](docs/EARLY-GAME.md) | 前期与猫国的实测对照、改造方案与结果（第 1 分钟只给一座建筑的理由） |
 > | [docs/BALANCE.md](docs/BALANCE.md) | 历次平衡改动的账本：每次「问题 → 改法 → 改前/改后实测」 |
 > | [docs/RESEARCH.md](docs/RESEARCH.md) | 修真线研究：体系定位与尚未实施的可选机制 |
-> | [docs/CULTIVATION-REVIEW.md](docs/CULTIVATION-REVIEW.md) | 当前修真与工艺体系审视：完整前置、费用、效果、加工链与设计疑点（以 v0.14 代码为准） |
+> | [docs/CULTIVATION-REVIEW.md](docs/CULTIVATION-REVIEW.md) | 当前修真与工艺体系审视：完整前置、费用、效果、加工链与设计疑点（以 v0.16 代码为准） |
 > | [docs/ROADMAP.md](docs/ROADMAP.md) | 未排期方向：体系审视、阶段节奏、周边事务、成就与弟子成长 |
 > | [docs/TABLES.md](docs/TABLES.md) | 全量数据表（资源 / 职位 / 建筑 / 修真 / 技艺 / 法宝 / 配方 / 境界 / 成就 / 事件），由 `npm run docs:tables` 生成 |
 > | [docs/CRAFT-PROGRESSION.md](docs/CRAFT-PROGRESSION.md) | v0.11 金丹工艺改动历史；当前配方见数据表 |

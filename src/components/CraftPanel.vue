@@ -42,6 +42,9 @@ const allRows = computed(() =>
   }),
 )
 
+const allAuto = computed(() => allRows.value.length > 0 && allRows.value.every(row => row.auto))
+const someAuto = computed(() => allRows.value.some(row => row.auto))
+
 const rows = computed(() => {
   if (props.compact) return allRows.value.filter(row => state.settings.quickCrafts.includes(row.meta.id))
   return allRows.value.filter(row => filter.value === 'auto' ? row.auto : filter.value === 'basic' ? !ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : filter.value === 'advanced' ? ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : true)
@@ -72,6 +75,7 @@ const condenseStatus = computed(() => {
   const target = autoCraftStatus(state, derived, 'condenseStone').target
   if (target > 0 && state.resources.stone >= target) return '凝灵诀 · 目标已达'
   if (state.resources.stone >= derived.max.stone) return '凝灵诀 · 灵石满仓'
+  if ((state.resources.rock || 0) < CRAFTS.find(c => c.id === 'condenseStone').cost.rock) return '凝灵诀 · 缺石材暂停'
   return '凝灵诀 · 节气满仓自凝'
 })
 </script>
@@ -85,6 +89,9 @@ const condenseStatus = computed(() => {
     <div class="box-body">
       <div v-if="!compact" class="craft-settings small">
         <label class="sw"><input type="checkbox" :checked="state.settings.autoCraftOn" @change="actions.setSetting('autoCraftOn', $event.target.checked)" />自动制作总开关</label>
+        <label class="sw" title="勾选全部已解锁配方，取消勾选则清除全部自动选择；不受筛选影响，总开关保持不变">
+          <input type="checkbox" aria-label="全部自动" :checked="allAuto" :indeterminate.prop="someAuto && !allAuto" :disabled="!derived.autoCraftUnlocked" @change="actions.setAllAutoCraft($event.target.checked)" />全部自动
+        </label>
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
       </div>
       <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>

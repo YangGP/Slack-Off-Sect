@@ -5,7 +5,7 @@
 历次平衡改动在 [BALANCE.md](./BALANCE.md)，全量数据表在 [TABLES.md](./TABLES.md)，
 前期发展的审视（与猫国的实测对照、改造方案与结果）在 [EARLY-GAME.md](./EARLY-GAME.md)。
 下一步的可选方案（想做但还没做的）在 [ROADMAP.md](./ROADMAP.md)，
-修真的定位与五段主线研究在 [RESEARCH.md](./RESEARCH.md)。
+修真的定位与两线研究结构（灵气研究主线、材料研究辅线）在 [RESEARCH.md](./RESEARCH.md)。
 
 ---
 ## 前端架构

@@ -133,11 +133,31 @@ export function normalizeState(state) {
   merged.dao = state.dao || 0
   merged.stats = merged.stats || {}
   merged.stats.reincarnations = merged.stats.reincarnations || 0
-  merged.buildings = state.buildings || {}
-  merged.upgrades = state.upgrades || {}
+  merged.buildings = Object.fromEntries(Object.entries(state.buildings || {}).map(([id, entry]) => [id, { ...entry }]))
+  merged.upgrades = { ...(state.upgrades || {}) }
+  // 已移除的早期空间技艺不再参与研究、统计或容量计算。
+  delete merged.upgrades.storageBag
+  delete merged.upgrades.voidPouch
+  // v0.14 及更早的存档没有灵气分子字段；只迁移一次，保留旧分灵设施的正负灵子产线。
+  if (!Object.hasOwn(state.resources || {}, 'qiParticle')) {
+    const split = merged.buildings.splitArray
+    if (split?.count > 0) {
+      merged.buildings.polarizeArray = merged.buildings.polarizeArray || { ...split }
+      merged.upgrades.particleTheory = true
+    }
+    // 已使用凝晶／育仙草的旧档应能继续供料，不要求重新解锁上游新配方。
+    if (merged.upgrades.crystalTheory || merged.upgrades.crystalCraft ||
+        (state.stats?.crafted?.immortalHerb || 0) > 0 || state.autoCraft?.growImmortalHerb) {
+      merged.upgrades.liquidArt = true
+    }
+  }
   merged.achievements = state.achievements || {}
   merged.craftProgress = state.craftProgress || {}
   merged.autoCraft = state.autoCraft || {}
+  if (!Object.hasOwn(state.resources || {}, 'qiParticle') &&
+      (merged.autoCraft.condenseCrystal || merged.autoCraft.growImmortalHerb)) {
+    merged.autoCraft = { ...merged.autoCraft, condenseLiquid: true }
+  }
   merged.craftTargets = { ...fresh.craftTargets, ...(state.craftTargets || {}) }
   merged.craftTimers = state.craftTimers || state.craftQueue || {}
   merged.treasureLevels = state.treasureLevels || {}

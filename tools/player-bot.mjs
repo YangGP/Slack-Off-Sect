@@ -20,6 +20,9 @@ export const PRIORITY = [
   'granary',
   'logHouse',
   'mine',
+  // 普通石料来源：采石场喂灵石矿/聚灵大阵/库房的石矿造价，也供「点石成灵」
+  // （参照玩家必须知道它，否则建筑永远卡在石矿上）
+  'quarry',
   // 天然灵石来源：与玄铁矿同一条寻脉线，排在旁边（参照玩家必须知道它，
   // 否则新建筑永远不出现在推演里 —— 实测加进去之前，10 小时曲线一字不差）
   'spiritQuarry',
@@ -50,8 +53,9 @@ export const PRIORITY = [
   'spiritLockArray',
   'heavenTower',
   'karmaPool',
-  // 第二种驱动：分灵阵烧灵气换粒子，湮灭炉把粒子换成灵能（灵能会逸散，所以要持续产）
+  // 第二种驱动：分灵阵烧灵气离析出灵气分子，偏极阵解离成正负灵子，湮灭炉把粒子换成灵能（灵能会逸散，所以要持续产）
   'splitArray',
+  'polarizeArray',
   'annihilationFurnace',
 ]
 
@@ -64,12 +68,18 @@ export const PRIORITY = [
  * 这里模拟玩家会做的事：基础材料留够才炼，成品也囤到够用就停。
  */
 export const ADVANCED_CRAFTS = {
-  condenseCrystal: { floors: { qi: 600, talisman: 10 }, cap: 600 },
+  // 点石成灵吃石矿：矿要留够盖房砌阵（600 起）。
+  // 灵石是硬通货，囤货上限交给需求侧（craftDemand 含破境/奇观费用），cap 只做保底 ——
+  // 因果池单笔要 100 万灵石，cap 低于它就会卡参照玩家（冒烟断言守着这条）。
+  infuseStone: { base: 'rock', floor: 600, cap: 1000000 },
+  // 灵液吃硬通货（灵气），按需炼：灵气富余才凝液，囤到上限就停
+  condenseLiquid: { base: 'qi', floor: 600, cap: 60 },
+  condenseCrystal: { floors: { spiritLiquid: 12, talisman: 10 }, cap: 600 },
   // 上限必须**高于游戏里的最大单笔需求**，否则参照玩家会卡在自己设的门槛上：
   // 早先玄钢上限 40、而渡劫期破境要 120，推演就永远停在 大乘期（96 小时都不动）。
   // 这条约束现在由冒烟断言守着（见「参照玩家的囤货上限」一节）。
   refineSteel: { base: 'ore', floor: 300, cap: 600 },
-  growImmortalHerb: { base: 'herb', floor: 400, cap: 200 },
+  growImmortalHerb: { floors: { herb: 400, spiritLiquid: 6 }, cap: 200 },
   refineNineTurnPill: { base: 'pill', floor: 160, cap: 100 },
   drawSpiritTalisman: { base: 'talisman', floor: 220, cap: 300 },
   forgeSpiritArtifact: { base: 'artifact', floor: 160, cap: 100 },
@@ -199,15 +209,21 @@ export function createBot(state, derived) {
       }
     }
 
-    // —— 开局：什么都没有，只能靠自己点 + 凝气成石（对标猫国的采集薄荷）——
+    // —— 开局拾取石材，采石场建成后接替手动供料 ——
+    if (E.countOf(state, 'quarry') === 0) {
+      for (let i = 0; i < 12 && state.resources.rock < 12; i++) E.gatherRock(state, derived)
+    }
+
+    // —— 开局：手动吸气，再灌入石材制作灵石 ——
     if (E.countOf(state, 'hut') === 0) {
       const fieldCost = E.BUILDING_MAP.spiritField.cost.qi
       const hutCost = E.BUILDING_MAP.hut.cost.qi
-      const target = E.countOf(state, 'spiritField') === 0 ? fieldCost : hutCost + 45
+      const recipe = E.CRAFT_MAP.condenseStone
+      const target = E.countOf(state, 'spiritField') === 0 ? fieldCost : hutCost + recipe.cost.qi
       for (let i = 0; i < 12 && state.resources.qi < target; i++) E.drawQi(state, derived)
       E.recompute(state, derived)
-      // 茅屋要一枚灵石：攒够灵气就凝一颗
-      if ((state.resources.stone || 0) < 1 && state.resources.qi >= 45 + hutCost) {
+      // 第一间茅屋要四枚灵石，逐份制作并保留茅屋的灵气。
+      if ((state.resources.stone || 0) < E.BUILDING_MAP.hut.cost.stone && state.resources.qi >= recipe.cost.qi + hutCost) {
         E.craft(state, derived, 'condenseStone', { times: 1 })
       }
     }

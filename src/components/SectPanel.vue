@@ -2,10 +2,11 @@
 /**
  * 宗门页：筛选行 + 建筑按钮网格（猫国式的中间内容区）。
  *
- * 网格最前面两个是「核心按钮」，照猫国的 addCoreBtns 排：
+ * 网格最前面三个是「核心按钮」：
  *   1. 吸取天地灵气 —— 开局什么都没有时唯一的灵气来源（点一下 +N）
- *   2. 凝气成石     —— 把灵气凝成灵石，开局第一间屋子就花它
- * 这两个不参与分组筛选，只跟着「全部 / 可建造」走。
+ *   2. 拾取石材     —— 为制作灵石提供矿物载体
+ *   3. 凝气成石     —— 将灵气灌入石材，开局第一间屋子就花它
+ * 这三个不参与分组筛选，只跟着「全部 / 可建造」走。
  */
 import { computed } from 'vue'
 import { state, derived, view, actions } from '@/game/store'
@@ -126,7 +127,22 @@ const tabs = computed(() => [
       </HoverTip>
     </div>
 
-    <!-- 核心按钮 2：凝气成石（照猫国的「炼制猫薄荷」放在第二位） -->
+    <div v-if="showCore" class="build-item">
+      <HoverTip :width="300">
+        <button class="build-btn" :disabled="state.resources.rock >= derived.max.rock" @click="actions.gatherRock()">
+          拾取石材
+        </button>
+        <template #tip>
+          <div class="tip-body">
+            <div class="tip-title">拾取石材</div>
+            <div class="tip-desc">从山坡拾取普通岩石，每次获得石矿 1。灌入灵气可制作灵石；建成采石场后可持续供料。</div>
+            <div class="tip-row"><span class="k">现有 / 上限</span><span class="v">{{ fmtStock(state.resources.rock || 0) }} / {{ fmtStock(derived.max.rock) }}</span></div>
+          </div>
+        </template>
+      </HoverTip>
+    </div>
+
+    <!-- 核心按钮 3：以石材承载灵气 -->
     <div v-if="showCore" class="build-item">
       <HoverTip :width="320">
         <button

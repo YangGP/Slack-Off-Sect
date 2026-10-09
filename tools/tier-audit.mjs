@@ -3,7 +3,7 @@ import * as E from '../src/game/engine.js'
 import { createBot } from './player-bot.mjs'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
-import { TECHNIQUES } from '../src/data/techniques.js'
+import { UPGRADE_MAP } from '../src/data/upgrades.js'
 
 // 同一参照玩家的加工链审计；产能是独立供料上界，不是并发实际收入。
 const state = createInitialState()
@@ -35,7 +35,8 @@ for (let t = 1; t <= hours * 3600; t++) {
   const marginal = {}
   for (const id of ['arrayRefine', 'mahayanaArt', 'zhenyueSeal']) {
     if (!state.upgrades[id]) continue
-    const technique = TECHNIQUES.find(u => u.id === id)
+    // 两线重组后 arrayRefine / mahayanaArt 已在修真页，统一按 id 查全表
+    const technique = UPGRADE_MAP[id]
     const beforeRates = { ...derived.rates }
     const beforeYields = Object.fromEntries(CRAFTS.map(c => [c.out, E.craftYield(derived, c)]))
     const level = state.upgrades[id]

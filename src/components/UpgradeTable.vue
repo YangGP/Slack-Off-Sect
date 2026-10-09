@@ -101,6 +101,7 @@ const forged = computed(() =>
     .map((u) => {
       const cost = refineCost(state, u.id)
       const mult = treasureMult(state, u)
+      const supply = derived.upgradeSupply[u.id] ?? 1
       const text = (m) =>
         describeEffects(scaleEffectsBy(u.effects, m))
           .map((t) => t.text)
@@ -111,8 +112,10 @@ const forged = computed(() =>
         mult,
         cost,
         affordable: !!cost && canAfford(state, cost),
-        eff: text(mult),
+        eff: text(mult * supply),
         unitEff: text(mult + CONFIG.TREASURE_REFINE_STEP),
+        supply,
+        upkeep: Object.entries(u.upkeep || {}).map(([res, amount]) => `${resName(res)} ${fmt(amount * mult)}/秒`).join('、'),
       }
     }),
 )
@@ -173,7 +176,7 @@ function kindName(meta) {
             <td class="num nowrap">
               Lv.{{ item.level }}<span class="small dim"> ×{{ item.mult.toFixed(2) }}</span>
             </td>
-            <td class="eff">{{ item.eff }}</td>
+            <td class="eff">{{ item.eff }}<span v-if="item.upkeep" class="small dim"> · {{ item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span></td>
             <td class="cost nowrap">
               <HoverTip :width="380">
                 <span class="cost-line">
@@ -206,12 +209,16 @@ function kindName(meta) {
                     </div>
 
                     <div class="tip-section">效果</div>
+                    <div v-if="item.upkeep" class="tip-row">
+                      <span class="k">满供消耗</span>
+                      <span class="v">{{ item.upkeep }}；供能不足按比例运行</span>
+                    </div>
                     <div class="tip-row">
                       <span class="k">当前</span>
                       <span class="v">{{ item.eff }}（×{{ item.mult.toFixed(2) }}）</span>
                     </div>
                     <div class="tip-row">
-                      <span class="k">祭炼后（Lv.{{ item.level + 1 }}）</span>
+                      <span class="k">祭炼后{{ item.upkeep ? '满供' : '' }}（Lv.{{ item.level + 1 }}）</span>
                       <span class="v good">
                         {{ item.unitEff }}（×{{ (item.mult + 0.3).toFixed(2) }}）
                       </span>

@@ -69,6 +69,12 @@ export const CONFIG = {
    * 否则后期会变成"一条倍率通吃"，把刻意分开的三层又糊成一团。
    */
   QI_ENERGY_BASIC: ['wood', 'stone', 'ore', 'herb', 'plank'],
+  /**
+   * 《灵能应用》参悟后，灵能同时写进这些资源的**制作收益**（按成品作用于全部配方）。
+   * QI_ENERGY_BASIC 里只有木板、灵石主要依靠加工获得（普通产出倍率吃不到），
+   * 引灵能入坊后名实相符 —— 见 docs/RESEARCH.md 主线第Ⅳ章。
+   */
+  QI_ENERGY_CRAFT: ['stone', 'plank'],
   // 法宝祭炼：每级效果 +30%，花费按 1.7 倍递增
   // （不设等级上限：指数成本自己封顶 —— 16 件法宝各炼到 10 级，累计需求约全树感悟总价的 57 倍）
   TREASURE_REFINE_STEP: 0.3,

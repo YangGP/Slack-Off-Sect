@@ -140,10 +140,11 @@ section('数据完整性')
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
   const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCondense', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
   const pureNumeric = ['ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'morale', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard']
+  // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
-    '修真层以解锁/系统效果为主',
-    artUnlocks.length >= CULTIVATION.length - 1,
+    '修真页承担全部解锁/系统效果',
+    artUnlocks.length >= 30,
     `${artUnlocks.length}/${CULTIVATION.length}`,
   )
   const skillLeaks = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
@@ -181,9 +182,9 @@ section('数据完整性')
   )
   const treasures = TECHNIQUES.filter((t) => t.kind === 'treasure')
   ok(
-    '每件法宝都写了祭炼的感悟基数，合计 33,110（= 原来那档感悟量，祭炼不打折）',
+    '每件法宝都写了祭炼的感悟基数，合计 68,510（v0.14 的 16 件为 33,110，v0.16 新增 8 件另计 35,400，祭炼不打折）',
     treasures.every((t) => (t.refine?.insight || 0) > 0) &&
-      treasures.reduce((s, t) => s + t.refine.insight, 0) === 33110,
+      treasures.reduce((s, t) => s + t.refine.insight, 0) === 68510,
     `${treasures.reduce((s, t) => s + (t.refine?.insight || 0), 0)}（${treasures.length} 件）`,
   )
   ok(
@@ -219,10 +220,30 @@ section('数据完整性')
       !(t.needs.upgrades || []).every((id) => CULTIVATION.some((c) => c.id === id)),
   )
   ok('每件法宝都由修真节点解锁', !badTreasure, badTreasure ? badTreasure.id : '')
+  // 两线重组：修真页的纯数值增益只能来自自技艺页迁入的迁移清单
+  // （材料研究的工艺/精研 + 主线的成果兑现，共 13 个，清单见 docs/RESEARCH.md）
+  const MIGRATED_NUMERIC_IDS = [
+    'woodworking', 'waterworkshop', 'spiritSaw', 'spiritCultivation',
+    'steelWorking', 'swordFlight', 'spiritSmelting',
+    'arrayAssembly', 'crystalCraft', 'crystalPolishing', 'alchemyFire',
+    'arrayRefine', 'mahayanaArt',
+  ]
+  const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
   ok(
-    '修真节点自身不带纯数值加成（研究就是研究）',
-    CULTIVATION.every((c) => Object.keys(c.effects || {}).every((k) => !pureNumeric.includes(k))),
+    '修真页的数值增益全部来自两线迁移清单（13 个节点）',
+    numericCult.length === 13 && numericCult.every((c) => MIGRATED_NUMERIC_IDS.includes(c.id)),
+    numericCult.map((c) => c.id).join(','),
   )
+  ok('迁移清单 13 个节点全部落在修真页', MIGRATED_NUMERIC_IDS.every((id) => CULTIVATION.some((c) => c.id === id)))
+  ok('技艺页不再包含迁移节点', TECHNIQUES.every((t) => !MIGRATED_NUMERIC_IDS.includes(t.id)))
+  // 两线重组的依赖与标注修正
+  ok(
+    '修真页节点不再引用技艺版探矿术（矿脉经），消除反向跨层依赖',
+    CULTIVATION.every((c) => !(c.needs?.upgrades || []).includes('prospectArt')) &&
+      (CULTIVATION.find((c) => c.id === 'earthArt').needs?.upgrades || []).includes('prospectStudy'),
+  )
+  ok('候时法境界标注与实际门槛对齐（化神）', E.UPGRADE_MAP.hourArt.needs.realm === 6, `realm ${E.UPGRADE_MAP.hourArt.needs.realm}`)
+  ok('大乘心经境界标注与实际门槛对齐（大乘）', E.UPGRADE_MAP.mahayanaArt.needs.realm === 9, `realm ${E.UPGRADE_MAP.mahayanaArt.needs.realm}`)
 
   let badJobRes = null
   for (const j of JOBS) if (!resIds.has(j.resource)) badJobRes = j.id
@@ -719,12 +740,12 @@ section('进项来源明细')
   ok('库房改为逐资源上限（不再用 storageAll）', !!wh.effects.storage && !wh.effects.storageAll)
     const st = wh.effects.storage
     ok(
-      '库房只存基础物资（灵木 / 灵石 / 玄铁 / 灵草）',
-      Object.keys(st).sort().join(',') === 'herb,ore,stone,wood',
+      '库房只存基础物资（灵木 / 灵石 / 石矿 / 玄铁 / 灵草）',
+      Object.keys(st).sort().join(',') === 'herb,ore,rock,stone,wood',
       Object.keys(st).join(','),
     )
     ok('库房不再碰灵气 / 感悟 / 丹药 / 符箓 / 香火 / 法器', ['qi', 'insight', 'pill', 'talisman', 'faith', 'artifact'].every((k) => !st[k]))
-    ok('份额按流量排序（灵木最多、玄铁最少）', st.wood > st.stone && st.stone > st.herb && st.herb > st.ore, JSON.stringify(st))
+    ok('份额按流量排序（灵木最多、玄铁最少）', st.wood > st.stone && st.stone > st.rock && st.rock > st.herb && st.herb > st.ore, JSON.stringify(st))
     // 被移出去的那几种资源，各自有专属建筑在给上限
     const capSource = (res) =>
       BUILDINGS.filter(
@@ -742,6 +763,7 @@ section('进项来源明细')
     const before = { ...d4.max }
     s4.resources.wood = 5000
     s4.resources.stone = 5000
+    s4.resources.rock = 5000
     s4.resources.ore = 5000
     s4.resources.qi = 5000
     E.trackPeak(s4)
@@ -838,6 +860,7 @@ section('还差多久买得起')
   )
 
   // 灵石没有产出，全靠「凝气成石」现印 —— 这条路径也要给出计时器
+  state.resources.rock = 100 // 本段单独验证灵气等待，矿物载体已备齐。
   const stoneCost = E.CRAFT_MAP.condenseStone.cost.qi
   const netQi = derived.netQi
   ok('灵石的计量走现印路径', netQi > 0, `netQi=${netQi}`)
@@ -846,7 +869,9 @@ section('还差多久买得起')
     close(E.timeToAfford(state, derived, 'stone', 30), (30 * stoneCost - state.resources.qi) / netQi, 1e-6),
     `${E.timeToAfford(state, derived, 'stone', 30)}`,
   )
+  state.resources.stone = 1
   ok('灵石已经够时返回 0', E.timeToAfford(state, derived, 'stone', 1) === 0)
+  state.resources.stone = 0
 
   // 勾上「自动」之后，还要把一份一份做的耗时算进去
   state.upgrades.intuition = true
@@ -865,6 +890,7 @@ section('还差多久买得起')
   // 凝灵诀：每逢节气，灵气满仓时把仓内一定比例（AUTO_CONDENSE_RATIO）凝成灵石；不满仓不动手
   {
     const { state: s4, derived: d4 } = newGame()
+    s4.resources.rock = d4.max.rock
     ok('未参悟凝灵诀时不置位', d4.autoCondenseUnlocked === false)
     s4.upgrades.condenseArt = true
     E.recompute(s4, d4)
@@ -916,6 +942,7 @@ section('还差多久买得起')
   // 凝灵诀由节气驱动：跨过节气边界的那一刻结算（挂在 tick 的历法推进里，离线模拟同样逐步过 tick）
   {
     const { state: s5, derived: d5 } = newGame()
+    s5.resources.rock = d5.max.rock
     s5.upgrades.condenseArt = true
     E.recompute(s5, d5)
     const qiMax = d5.max.qi
@@ -964,6 +991,7 @@ section('还差多久买得起')
     s3.buildings.herbGarden = { count: 4, on: true }
     s3.buildings.lumberYard = { count: 30, on: true } // 先覆盖三座工坊维护，再积累制作材料
     s3.buildings.mine = { count: 3, on: true }
+    s3.buildings.quarry = { count: 3, on: true }
     s3.resources.qi = 5000
     E.recompute(s3, d3)
     for (const [res, name] of [
@@ -1243,6 +1271,7 @@ section('自动制作（一份一份不瞬发，就是原来的「连续」）')
   // 先给足仓储：这一段专门测节奏，不想被「灵石上限 150」挡住
   state.buildings.warehouse = { count: 30, on: true }
   state.resources.qi = 4500 // 够做 100 份凝气成石
+  state.resources.rock = 1000 // 节奏测试备足石材，缺料另测。
   E.recompute(state, derived)
   const step = E.craftTime(E.CRAFT_MAP.condenseStone)
 
@@ -1461,14 +1490,39 @@ section('法宝祭炼（可重复升级）')
 }
 
 // ------------------------------------------------------------
+section('批量自动炼制')
+{
+  const { state: s, derived: d } = newGame()
+  s.settings.autoCraftOn = false
+  ok('未解锁自动炼制不能批量开启', !E.setAllAutoCraft(s, d, true) && !s.settings.autoCraftOn && Object.keys(s.autoCraft).length === 0)
+  s.upgrades.intuition = true
+  E.recompute(s, d)
+  s.ui.craftFilter = 'advanced'
+  ok('批量自动可在缺料时开启且保持总开关关闭', E.setAllAutoCraft(s, d, true) && !s.settings.autoCraftOn && s.autoCraft.condenseStone)
+  ok('批量自动只选择已解锁配方，不受筛选影响', CRAFTS.every(c => !!s.autoCraft[c.id] === E.isCraftUnlocked(s, c)))
+  s.craftTargets.condenseStone = 8
+  s.autoCraft.refinePill = true // 旧偏好即使当前配方锁定，也要可清除。
+  s.settings.autoCraftOn = true
+  ok('取消自动清除所有选择且保持总开关开启', E.setAllAutoCraft(s, d, false) && s.settings.autoCraftOn && Object.values(s.autoCraft).every(on => !on))
+  ok('批量切换保留库存目标', s.craftTargets.condenseStone === 8)
+  s.upgrades.intuition = false
+  s.upgrades.condenseArt = true
+  s.resources.qi = d.max.qi
+  s.resources.rock = 10
+  E.recompute(s, d)
+  ok('取消配方自动不影响节气凝石且不需要常驻解锁', E.setAllAutoCraft(s, d, false) && s.settings.autoCraftOn && E.runAutoCondense(s, d) && s.resources.stone > 0)
+}
+
 section('制作')
 // ------------------------------------------------------------
 {
   const { state, derived } = newGame()
   state.resources.qi = 1000
+  state.resources.rock = 3
   const made = E.craft(state, derived, 'condenseStone')
   ok('凝气成石产出 1 枚', made === 1 && state.resources.stone === 1, `实际 ${made}/${state.resources.stone}`)
   ok('扣除了 45 灵气', close(state.resources.qi, 955, 1e-6), `实际 ${state.resources.qi}`)
+  ok('凝石同时消耗一块石材', state.resources.rock === 2)
   ok('统计已记录', state.stats.crafted.stone === 1)
 
   // 制作加成：小数累积机制
@@ -2085,12 +2139,12 @@ section('修真线第一阶段：先懂原理才能盖')
     JSON.stringify(BUILDING_MAP.gatheringArray.needs),
   )
 
-  // 顺序：数据顺序就是界面顺序（见 CultivationPanel），所以五段主线要体现在数组里
+  // 顺序：数据顺序就是界面顺序（见 CultivationPanel），所以两线分组要体现在数组里
   const ids = CULTIVATION.map((u) => u.id)
   const unstaged = ids.filter((id) => !CULTIVATION_STAGE_OF[id])
-  ok('每个修真节点都归入五段主线之一', unstaged.length === 0, unstaged.join(','))
+  ok('每个修真节点都归入两线分组之一（主线五章 + 材料六族 + 宗门经营）', unstaged.length === 0, unstaged.join(','))
   ok(
-    '第一段是「气从哪来」（灵源考 + 观气法同段且在最前）',
+    '第一章是「观气」（灵源考 + 观气法同章且在最前）',
     ids[0] === 'qiOrigin' &&
       CULTIVATION_STAGE_OF.qiGazing?.index === CULTIVATION_STAGE_OF.qiOrigin?.index &&
       CULTIVATION_STAGE_OF.qiOrigin?.index === 0,
@@ -2253,6 +2307,7 @@ section('百工坊：提前到手 + 制作加成')
     s2.buildings.alchemyRoom = { count: 1, on: true }
     if (withWorkshop) s2.buildings.workshop = { count: 1, on: true }
     s2.resources.qi = 1e6
+    s2.resources.rock = 20
     s2.resources.stone = 0 // 成品上限不高，先清空免得被上限挡住
     E.recompute(s2, d2)
     E.craft(s2, d2, 'condenseStone', { times: 20, silent: true })
@@ -2305,6 +2360,114 @@ section('灵石矿：天然的灵石来源')
       (s.resources.stone || 0) > before,
       `${before} → ${(s.resources.stone || 0).toFixed(2)}`,
     )
+  }
+}
+
+// ------------------------------------------------------------
+section('新增加工链与旧存档兼容')
+{
+  const legacy = createInitialState()
+  delete legacy.resources.qiParticle
+  delete legacy.resources.spiritLiquid
+  legacy.buildings.splitArray = { count: 2, on: false }
+  legacy.upgrades.yinyangSplit = true
+  legacy.upgrades.crystalTheory = true
+  legacy.autoCraft.condenseCrystal = true
+  legacy.stats.crafted.immortalHerb = 5
+  const restored = normalizeState(legacy)
+  ok('旧分灵阵迁移补齐偏极阵并保留数量与停用状态', restored.buildings.polarizeArray?.count === 2 && restored.buildings.polarizeArray.on === false && restored.upgrades.particleTheory)
+  ok('旧凝晶产线补齐凝液法与自动上游', restored.upgrades.liquidArt && restored.autoCraft.condenseLiquid)
+  ok('迁移不改写原始存档对象', !legacy.buildings.polarizeArray && !legacy.upgrades.liquidArt && !legacy.autoCraft.condenseLiquid)
+  const twice = normalizeState(restored)
+  ok('重复读档不重复发放设施', twice.buildings.polarizeArray.count === 2)
+  const current = createInitialState()
+  current.buildings.splitArray = { count: 1, on: true }
+  current.upgrades.crystalTheory = true
+  const unchanged = normalizeState(current)
+  ok('新版存档遵守新产线，不自动补设施或研究', !unchanged.buildings.polarizeArray && !unchanged.upgrades.liquidArt)
+  const herbLegacy = { resources: {}, stats: { crafted: { immortalHerb: 1 } } }
+  ok('旧育仙草记录也能补齐凝液法', normalizeState(herbLegacy).upgrades.liquidArt)
+  const { state: s, derived: d } = newGame()
+  s.buildings.quarry = { count: 1, on: true }
+  E.recompute(s, d)
+  d.net = { qi: 1, rock: 1, stone: 0.01 }
+  ok('等待时间比较采集与两条凝石配方，选择最快路线', close(E.timeToAfford(s, d, 'stone', 1), 15))
+  d.craftBonus = 1
+  ok('等待时间计入制作收益，避免高估原料需求', close(E.timeToAfford(s, d, 'stone', 2), 15))
+  d.rates = { qi: 3, rock: 3 }
+  const rateWithQuarry = E.eventResourceRate(s, d, 'stone')
+  delete s.buildings.quarry
+  const rateWithoutQuarry = E.eventResourceRate(s, d, 'stone')
+  ok('事件产能选可用配方的最佳供料路线，不计入未解锁路线', rateWithQuarry > rateWithoutQuarry && close(rateWithoutQuarry, 3 / 45 * 2))
+  s.realm = 10
+  for (const b of BUILDINGS) s.buildings[b.id] = { count: 10, on: true }
+  for (const u of ALL_UPGRADES) s.upgrades[u.id] = true
+  E.recompute(s, d)
+  d.net = Object.fromEntries(RESOURCES.map(r => [r.id, 0]))
+  Object.assign(d.net, { qi: 150, rock: 100, herb: 100, ore: 100, wood: 100, faith: 500 })
+  ok('灵宝的多级加工等待可沿九转丹、仙草、灵液追溯到灵气', Number.isFinite(E.timeToAfford(s, d, 'spiritTreasure', 1)))
+}
+
+section('石矿与点石成灵：凡石砌基，硬通货归灵石')
+// ------------------------------------------------------------
+{
+  const rock = RESOURCE_MAP.rock
+  const q = BUILDING_MAP.quarry
+  ok('石矿资源已定义且整块计数', !!rock && rock.integer === true, rock ? JSON.stringify({ id: rock.id, baseMax: rock.baseMax }) : '（缺）')
+  ok(
+    '采石场由伐木场解锁、木料计价：不吃灵气、不吃自己的产出',
+    q.needs?.building?.id === 'lumberYard' && (q.cost?.wood || 0) > 0 && !q.cost?.qi && !q.cost?.rock,
+    JSON.stringify({ cost: q.cost, needs: q.needs }),
+  )
+  ok('采石场稳定产出石矿', (q.effects?.prod?.rock || 0) > 0, JSON.stringify(q.effects))
+  ok('灵石矿造价改吃石矿，不再用硬通货当砌石', (BUILDING_MAP.spiritQuarry.cost?.rock || 0) > 0 && !BUILDING_MAP.spiritQuarry.cost?.stone, JSON.stringify(BUILDING_MAP.spiritQuarry.cost))
+  ok('聚灵大阵灵石需求减少，石矿承接砌筑', BUILDING_MAP.gatheringArray.cost.stone === 150 && BUILDING_MAP.gatheringArray.cost.rock === 400, JSON.stringify(BUILDING_MAP.gatheringArray.cost))
+  ok('库房以石矿砌基并为石矿扩容', (BUILDING_MAP.warehouse.cost?.rock || 0) > 0 && (BUILDING_MAP.warehouse.effects?.storage?.rock || 0) > 0)
+  const r = CRAFT_MAP.infuseStone
+  ok('点石成灵：石矿3+灵气15凝一枚灵石，需采石场', r.cost.rock === 3 && r.cost.qi === 15 && r.out === 'stone' && r.needs?.building?.id === 'quarry', JSON.stringify(r))
+  ok('凝气成石需要石矿1与灵气45，两条制石路并存', CRAFT_MAP.condenseStone.cost.rock === 1 && CRAFT_MAP.condenseStone.cost.qi === 45 && CRAFT_MAP.condenseStone.unlocked === true)
+  ok('茅屋仍以少量灵石为教学锚点（开局可拾取石材）', BUILDING_MAP.hut.cost.stone === 4 && !BUILDING_MAP.hut.cost.rock, JSON.stringify(BUILDING_MAP.hut.cost))
+  {
+    const { state: s, derived: d } = newGame()
+    for (let i = 0; i < 200; i++) E.drawQi(s, d)
+    const qi = s.resources.qi
+    ok('只有灵气不能凭空制作灵石', E.craft(s, d, 'condenseStone') === 0 && s.resources.qi === qi)
+    for (let i = 0; i < 4; i++) E.gatherRock(s, d)
+    ok('开局无采石场也能拾取四块石材', s.resources.rock === 4)
+    E.buyBuilding(s, d, 'spiritField', 1)
+    E.craft(s, d, 'condenseStone', { times: 4 })
+    ok('拾石灌灵可建首间茅屋，开局没有资源循环', E.buyBuilding(s, d, 'hut', 1) === 1 && s.resources.rock === 0)
+    s.resources.rock = d.max.rock
+    ok('石材满仓时手动拾取不再增加', E.gatherRock(s, d) === 0 && s.resources.rock === d.max.rock)
+    s.resources.rock = 0
+    s.resources.stone = 0
+    s.resources.qi = d.max.qi
+    s.upgrades.condenseArt = true
+    E.recompute(s, d)
+    ok('节气凝石缺载体时不扣灵气', !E.runAutoCondense(s, d) && s.resources.qi === d.max.qi)
+    s.resources.rock = 2
+    E.runAutoCondense(s, d)
+    ok('节气凝石受石材限制，按实际份数扣两种原料', s.resources.stone === 2 && s.resources.rock === 0 && s.resources.qi === d.max.qi - 90)
+    s.upgrades.intuition = true
+    s.autoCraft.condenseStone = true
+    E.recompute(s, d)
+    const before = s.resources.qi
+    E.runAutoCraft(s, d, 10)
+    ok('常驻自动缺石材同样暂停', s.resources.qi === before && s.resources.stone === 2)
+    E.gatherRock(s, d)
+    E.recompute(s, d)
+    E.runAutoCraft(s, d, 1)
+    ok('补入石材后常驻自动恢复且真实扣料', s.resources.stone === 3 && s.resources.rock === 0 && s.resources.qi === before - 45)
+  }
+  {
+    const { state: s, derived: d } = newGame()
+    Object.assign(s.resources, { rock: 30, qi: 100 })
+    E.recompute(s, d)
+    ok('没有采石场点不了石', E.craft(s, d, 'infuseStone') === 0)
+    s.buildings.quarry = { count: 1, on: true }
+    E.recompute(s, d)
+    const made = E.craft(s, d, 'infuseStone', { times: 2 })
+    ok('点石成灵按配方产出并扣料', made === 2 && s.resources.stone === 2 && close(s.resources.rock, 24) && close(s.resources.qi, 70), `产 ${made}，余 rock ${(s.resources.rock || 0).toFixed(2)} qi ${(s.resources.qi || 0).toFixed(2)}`)
   }
 }
 
@@ -2420,7 +2583,7 @@ section('角色倾向：玄钢与灵符偏建材')
 }
 
 // ------------------------------------------------------------
-section('第二种驱动：阴阳分灵 → 湮灭 → 灵能')
+section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能')
 // ------------------------------------------------------------
 {
   // 灵能会逸散：无产出时应当衰减到 0
@@ -2483,6 +2646,55 @@ section('第二种驱动：阴阳分灵 → 湮灭 → 灵能')
       Math.abs(after.insight - before.insight) < 1e-9,
       '感悟 ' + before.insight.toFixed(4) + ' → ' + after.insight.toFixed(4),
     )
+  }
+
+  // 《灵能应用》（主线第Ⅳ章）：灵能同时进入凝气成石、刨木成板的制作收益
+  {
+    const probe = (learned, energy) => {
+      const { state: s, derived: d } = newGame()
+      if (learned) s.upgrades.energyApplication = true
+      s.resources.qiEnergy = energy
+      E.recompute(s, d)
+      return {
+        stone: E.craftYield(d, CRAFT_MAP.condenseStone),
+        infusedStone: E.craftYield(d, CRAFT_MAP.infuseStone),
+        plank: E.craftYield(d, CRAFT_MAP.sawPlank),
+        pill: E.craftYield(d, CRAFT_MAP.refinePill),
+      }
+    }
+    const before = probe(false, 0)
+    const stockOnly = probe(false, 250)
+    const learned = probe(true, 250)
+    ok(
+      '未参悟《灵能应用》时，灵能不进入凝气成石/刨木成板的制作收益',
+      Math.abs(stockOnly.stone - before.stone) < 1e-9 && Math.abs(stockOnly.plank - before.plank) < 1e-9,
+      `灵石 ${before.stone.toFixed(3)} → ${stockOnly.stone.toFixed(3)}`,
+    )
+    ok(
+      '参悟《灵能应用》后，凝气成石与刨木成板的收益随灵能提高',
+      learned.stone > stockOnly.stone && learned.plank > stockOnly.plank,
+      `灵石 ${stockOnly.stone.toFixed(3)} → ${learned.stone.toFixed(3)}`,
+    )
+    ok('灵能应用不外溢到名单之外的配方（采药制丹不变）', Math.abs(learned.pill - before.pill) < 1e-9)
+    ok('两条灵石配方都得到灵能应用加成', learned.infusedStone > stockOnly.infusedStone && close(learned.infusedStone, learned.stone))
+  }
+
+  // 灵气六阶阶梯（RESEARCH.md）：气 → 液 → 晶 → 灵气分子 → 正负灵子 → 灵能；灵石是含灵矿物，不在阶梯上
+  {
+    const liq = CRAFT_MAP.condenseLiquid
+    const cry = CRAFT_MAP.condenseCrystal
+    ok('凝气成液由凝液法放行，150 灵气一瓶', liq.needs?.upgrades?.includes('liquidArt') && liq.cost.qi === 150 && liq.out === 'spiritLiquid')
+    ok('凝液法挂在筑基、接在凝灵诀之后', E.UPGRADE_MAP.liquidArt.needs.realm === 3 && E.UPGRADE_MAP.liquidArt.needs.upgrades.includes('condenseArt'))
+    ok('凝晶原理以凝液法为前置（第Ⅱ章成链）', E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('liquidArt'))
+    ok('凝气结晶改用灵液与符箓，不再直接吃灵气', cry.cost.spiritLiquid === 3 && cry.cost.talisman === 10 && !cry.cost.qi)
+    ok('培育仙草以灵液浇灌', CRAFT_MAP.growImmortalHerb.cost.spiritLiquid === 2 && !CRAFT_MAP.growImmortalHerb.cost.qi)
+    ok('灵石是含灵矿物：灵石矿产出与凝气成石并存', BUILDING_MAP.spiritQuarry.effects.prod.stone > 0 && CRAFT_MAP.condenseStone.unlocked)
+    const split = BUILDING_MAP.splitArray
+    const polar = BUILDING_MAP.polarizeArray
+    ok('灵子论在合体开放分灵阵，产出灵气分子', E.UPGRADE_MAP.particleTheory.needs.realm === 8 && split.needs.upgrades.includes('particleTheory') && split.effects.prod.qiParticle > 0 && !split.effects.prod.yangParticle)
+    ok('阴阳分灵改开偏极阵：吃灵气分子、出正负灵子', polar.needs.upgrades.includes('yinyangSplit') && polar.upkeep.qiParticle > 0 && polar.effects.prod.yangParticle > 0 && polar.effects.prod.yinParticle > 0)
+    ok('粒子链质量守恒：一分灵阵恰好喂一偏极阵、一偏极阵恰好喂一湮灭炉', close(split.effects.prod.qiParticle, polar.upkeep.qiParticle) && close(polar.effects.prod.yangParticle + polar.effects.prod.yinParticle, BUILDING_MAP.annihilationFurnace.upkeep.yangParticle + BUILDING_MAP.annihilationFurnace.upkeep.yinParticle))
+    ok('阴阳分灵仍以灵子论为前置，湮灭链保持连通', E.UPGRADE_MAP.yinyangSplit.needs.upgrades.includes('particleTheory') && E.UPGRADE_MAP.annihilationArt.needs.upgrades.includes('yinyangSplit'))
   }
 
   // 分灵阵烧灵气：它是本作最大的灵气去处，且停用即停费
@@ -2783,6 +2995,7 @@ section('缺料、长期断粮与首颗道果')
   E.recompute(a, ad)
   ok('首颗道果永久解锁自动炼制，无需重新研究', ad.daoAutomation && ad.autoCraftUnlocked && !a.upgrades.intuition)
   a.resources.qi = 140
+  a.resources.rock = ad.max.rock
   a.autoCraft.condenseStone = true
   E.runAutoCraft(a, ad, 1)
   ok('自动炼制保留材料底线', a.resources.qi === 140 && a.resources.stone === 0)
@@ -2844,6 +3057,7 @@ section('金丹工艺：阵基与库存目标')
 
   s.upgrades.intuition = true
   s.resources.qi = 450
+  s.resources.rock = 30
   s.resources.stone = 0
   s.autoCraft.condenseStone = true
   E.recompute(s, d)
@@ -2874,14 +3088,50 @@ section('金丹工艺：阵基与库存目标')
   ok('转世清空本世库存目标与阵基', Object.keys(s.craftTargets).length === 0 && s.resources.arrayBase === 0)
 }
 
+section('灵能枢供能与早期空间技艺移除')
+{
+  const { state: s, derived: d } = newGame()
+  s.upgrades.energyCore = true
+  E.recompute(s, d)
+  ok('灵能枢炼成但无供能时停效，不虚构灵能消耗', d.upgradeSupply.energyCore === 0 && !(d.ratio.qi || 0) && !(d.ratio.insight || 0) && !(d.maintenance.qiEnergy || 0))
+  s.resources.qiEnergy = 10
+  E.recompute(s, d)
+  ok('满供灵能枢兑现基础效果和每秒耗能', close(d.ratio.qi, 0.5) && close(d.ratio.insight, 0.25) && close(d.maintenance.qiEnergy, 1))
+  ok('灵能消耗账目列出灵能枢', d.expenseSources.qiEnergy.some(x => x.id === 'energyCore' && close(x.value, -1)))
+  E.tick(s, d, 1, { events: false })
+  ok('灵能枢实际扣费且继续计入逸散', close(s.resources.qiEnergy, 9 * (1 - CONFIG.QI_ENERGY_DECAY)))
+  s.resources.qiEnergy = 0.25
+  E.recompute(s, d)
+  ok('不足一秒供能按库存预算缩减效果和耗能', close(d.upgradeSupply.energyCore, 0.25) && close(d.ratio.qi, 0.125) && close(d.ratio.insight, 0.0625) && close(d.maintenance.qiEnergy, 0.25))
+  s.treasureLevels.energyCore = 2
+  s.resources.qiEnergy = 10
+  E.recompute(s, d)
+  ok('祭炼同比增加灵能枢效果与持续消耗', close(d.ratio.qi, 0.8) && close(d.ratio.insight, 0.4) && close(d.maintenance.qiEnergy, 1.6))
+  s.resources.qiEnergy = 0
+  s.buildings.annihilationFurnace = { count: 1, on: true }
+  s.resources.yangParticle = 10
+  s.resources.yinParticle = 10
+  E.recompute(s, d)
+  ok('空库存时可使用湮灭炉的实时供能，效果受供料约束', d.upgradeSupply.energyCore > 0 && d.upgradeSupply.energyCore < 1 && close(d.maintenance.qiEnergy, d.rates.qiEnergy))
+  s.buildings.annihilationFurnace.on = false
+  E.recompute(s, d)
+  ok('断料或停炉且无库存时灵能枢停效', d.upgradeSupply.energyCore === 0 && !(d.ratio.qi || 0))
+  s.resources.qiEnergy = 0.5
+  E.tick(s, d, 10, { events: false })
+  ok('长时间结算不会透支灵能，耗尽后停效', s.resources.qiEnergy === 0 && d.upgradeSupply.energyCore === 0)
+  ok('删除的空间技艺不再出现在研究表，叠匣术只依赖普通库房', !UPGRADE_MAP.storageBag && !UPGRADE_MAP.voidPouch && !UPGRADE_MAP.caseStackArt.needs.upgrades && UPGRADE_MAP.caseStackArt.needs.building.id === 'warehouse')
+  const old = normalizeState({ upgrades: { storageBag: true, voidPouch: true, caseStackArt: true } })
+  ok('旧档移除废弃空间记录，保留已学普通仓储技艺', !old.upgrades.storageBag && !old.upgrades.voidPouch && old.upgrades.caseStackArt)
+}
+
 section('分层仓储、点击与进阶祭炼')
 {
   const { state: s, derived: d } = newGame()
   s.buildings.mansion = { count: 6, on: true }
   s.buildings.depot = { count: 2, on: true }
-  s.upgrades.storageBag = true
+  s.upgrades.caseStackArt = true
   E.recompute(s, d)
-  ok('基础物资通用扩仓仍全额计入', d.max.wood === RESOURCE_MAP.wood.baseMax + 6 * 200 + 2 * BUILDING_MAP.depot.effects.storage.wood + 400)
+  ok('基础物资通用扩仓仍全额计入', d.max.wood === RESOURCE_MAP.wood.baseMax + 6 * 200 + 2 * BUILDING_MAP.depot.effects.storage.wood + 1200)
   ok('工艺与稀有材料容量有层级差异', d.max.plank > d.max.arrayBase && d.max.arrayBase > d.max.spiritArtifact && d.max.spiritArtifact > d.max.spiritTreasure)
   const pillBefore = d.max.pill
   s.buildings.alchemyRoom = { count: 1, on: true }
@@ -2966,7 +3216,7 @@ section('仙缘仓储永久加成')
   const { state: s, derived: d } = newGame()
   s.buildings.medicineVault = { count: 2, on: true }
   s.buildings.arcaneVault = { count: 1, on: true }
-  s.upgrades.storageBag = true
+  s.upgrades.caseStackArt = true
   E.recompute(s, d)
   const initial = { ...d.max }
   ok('无仙缘时仓储倍率为1', d.karmaStorageMult === 1)
@@ -2974,7 +3224,7 @@ section('仙缘仓储永久加成')
   E.recompute(s, d)
   ok('202仙缘增加30.3%仓储', close(d.karmaStorageMult, 1.303, 1e-9))
   ok('仙缘统一放大基础、通用及专属容量，最后才整件取整', RESOURCES.filter(r => Number.isFinite(initial[r.id])).every(r => {
-    const raw = r.baseMax + 400 * (r.storageWeight ?? 1) + 2 * (BUILDING_MAP.medicineVault.effects.storage[r.id] || 0) + (BUILDING_MAP.arcaneVault.effects.storage[r.id] || 0)
+    const raw = r.baseMax + 1200 * (r.storageWeight ?? 1) + 2 * (BUILDING_MAP.medicineVault.effects.storage[r.id] || 0) + (BUILDING_MAP.arcaneVault.effects.storage[r.id] || 0)
     return close(d.max[r.id], r.integer ? Math.floor(raw * 1.303 + 1e-9) : raw * 1.303, 1e-8)
   }))
   ok('仙缘及道果自身容量仍为无限', d.max.karma === Infinity && d.max.dao === Infinity)
@@ -3183,10 +3433,10 @@ section('金丹：修真、工艺、材料与建设闭环')
 {
   const { state: s, derived: d } = newGame()
   s.realm = 3
-  for (const id of ['qiOrigin', 'qiGazing', 'earthArt', 'woodworking', 'talismanArt', 'forgeArt']) s.upgrades[id] = true
+  for (const id of ['qiOrigin', 'qiGazing', 'condenseArt', 'liquidArt', 'earthArt', 'woodworking', 'talismanArt', 'forgeArt']) s.upgrades[id] = true
   s.buildings.talismanHall = { count: 1, on: true }
   s.buildings.forge = { count: 1, on: true }
-  Object.assign(s.resources, { insight: 2000, qi: 8000, talisman: 1900, ore: 2000, plank: 640, artifact: 10 })
+  Object.assign(s.resources, { insight: 2000, qi: 8000, spiritLiquid: 300, talisman: 1900, ore: 2000, plank: 640, artifact: 10 })
   E.recompute(s, d)
   ok('金丹前不能研究凝晶或掌握淬玄工艺', !E.research(s, d, 'crystalTheory') && !E.research(s, d, 'steelWorking'))
   s.realm = 4
@@ -3197,12 +3447,13 @@ section('金丹：修真、工艺、材料与建设闭环')
   ok('三条工艺用旧材料即可起步', ['arrayAssembly', 'steelWorking', 'crystalCraft'].every(id => E.research(s, d, id)))
   ok('工艺条目显示它实际开放的配方', unlockGroups('crystalCraft').crafts.includes('凝气结晶') && unlockGroups('arrayAssembly').crafts.includes('组装阵基'))
   const qiBefore = s.resources.qi
+  const liquidBefore = s.resources.spiritLiquid
   const talismanBefore = s.resources.talisman
   const stoneBefore = s.resources.stone
   const crystalNeed = BUILDING_MAP.crystalArray.cost.crystal
   const arrayNeed = BUILDING_MAP.crystalArray.cost.arrayBase
   const crystalMade = E.craft(s, d, 'condenseCrystal', { times: crystalNeed })
-  ok('灵晶确实由灵气与符箓加工，独立于灵石', crystalMade === crystalNeed && s.resources.qi === qiBefore - CRAFT_MAP.condenseCrystal.cost.qi * crystalNeed && s.resources.talisman === talismanBefore - CRAFT_MAP.condenseCrystal.cost.talisman * crystalNeed && s.resources.stone === stoneBefore)
+  ok('灵晶确实由灵液与符箓加工，不动灵气与灵石', crystalMade === crystalNeed && s.resources.spiritLiquid === liquidBefore - CRAFT_MAP.condenseCrystal.cost.spiritLiquid * crystalNeed && s.resources.talisman === talismanBefore - CRAFT_MAP.condenseCrystal.cost.talisman * crystalNeed && s.resources.qi === qiBefore && s.resources.stone === stoneBefore)
   ok('学工艺后能加工阵基并完成第一座晶核阵', E.craft(s, d, 'assembleArrayBase', { times: arrayNeed }) === arrayNeed && E.buyBuilding(s, d, 'crystalArray', 1) === 1)
   ok('晶核阵消费成品并扩充灵晶仓储', s.resources.crystal === 0 && s.resources.arrayBase === 0 && d.max.crystal === 45)
   const recipe = CRAFT_MAP.condenseCrystal

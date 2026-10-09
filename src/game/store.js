@@ -266,6 +266,12 @@ export const actions = {
     return total
   },
 
+  gatherRock() {
+    const gained = E.gatherRock(state, derived)
+    E.recompute(state, derived)
+    return gained
+  },
+
   /** 祭炼法宝：每级效果 +30%，花费 ×1.7 递增 */
   refineTreasure(id) {
     const lv = E.refineTreasure(state, derived, id)
@@ -283,6 +289,15 @@ export const actions = {
       E.recompute(state, derived)
       saveNow()
     }
+  },
+  setAllAutoCraft(enabled) {
+    if (!E.setAllAutoCraft(state, derived, enabled)) {
+      toast('需参悟《心有灵犀》或取得首颗道果', 'bad')
+      return false
+    }
+    E.recompute(state, derived)
+    saveNow()
+    return true
   },
   breakthrough() {
     const ok = E.breakthrough(state, derived)

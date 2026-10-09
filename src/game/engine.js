@@ -43,6 +43,7 @@ export function createDerived() {
     expenseSources: {},
     /** 此刻正在跑的自动制作对材料的每秒消耗（res -> 出项条目）。不计入 expense —— tick 按 expense 结算，自动制作另按份实付，并进去会双扣 */
     autoCraftDrain: {},
+    upgradeSupply: {},
     prodRaw: {},
     upkeep: 0,
     rawUpkeep: 0,
@@ -341,28 +342,28 @@ export function nextArrivalIn(state, derived) {
  *   2. **没有产出、但有制作配方的成品**（灵石/丹药/符箓/法器）走「现印」那条路：
  *      先递归算凑齐配方材料要多久，再加上制作这些份数的耗时 ——
  *      只有该配方勾了「自动」才算制作时间，手动点「制作」是瞬发的。
- * 灵石尤其需要这条路：它没有产出，全靠凝气成石（灵气 45 → 1 枚），
- * 所以以前所有灵石花费都显示不出「还差多久」。
+ * 同一成品的直接生产与多个加工配方分别估算，选择等待最短的路线。
+ * 这是供料估算，不模拟多种材料共享上游原料时的并发竞争。
  */
-export function timeToAfford(state, derived, resId, need, depth = 0) {
+export function timeToAfford(state, derived, resId, need, depth = 0, path = new Set()) {
   const have = state.resources[resId] || 0
   if (have >= need) return 0
   const rate = derived.net?.[resId] ?? derived.rates[resId] ?? 0
-  if (rate > 0) return (need - have) / rate
-  if (depth >= 2) return Infinity // 防「配方互相喂」导致的死循环
-  const recipe = CRAFTS.find((c) => c.out === resId && isCraftUnlocked(state, c) && !c.cost[resId])
-  if (!recipe) return Infinity
-  const per = recipe.amount || 1
-  const copies = Math.ceil((need - have) / per)
-  let wait = 0
-  for (const res in recipe.cost) {
-    if (res === resId) continue
-    const sub = timeToAfford(state, derived, res, recipe.cost[res] * copies, depth + 1)
-    if (!Number.isFinite(sub)) return Infinity
-    if (sub > wait) wait = sub
+  let best = rate > 0 ? (need - have) / rate : Infinity
+  if (path.has(resId) || depth >= RESOURCES.length) return best
+  const next = new Set(path).add(resId)
+  for (const recipe of CRAFTS) {
+    if (recipe.out !== resId || !isCraftUnlocked(state, recipe) || recipe.cost[resId]) continue
+    const copies = Math.ceil((need - have) / craftYield(derived, recipe))
+    let wait = 0
+    for (const res in recipe.cost) {
+      const sub = timeToAfford(state, derived, res, recipe.cost[res] * copies, depth + 1, next)
+      wait = Math.max(wait, sub)
+    }
+    if (isAutoCrafting(state, derived, recipe.id)) wait += copies * craftTime(recipe, derived)
+    best = Math.min(best, wait)
   }
-  if (isAutoCrafting(state, derived, recipe.id)) wait += copies * craftTime(recipe, derived)
-  return wait
+  return best
 }
 
 /** 全部境界的当前花费（含折扣），供 UI 展示 */
@@ -421,6 +422,7 @@ function applyEffects(ef, mult, targets, src) {
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
   if (ef.autoCraft) acc.autoCraftUnlocked = true
   if (ef.autoCondense) acc.autoCondenseUnlocked = true
+  if (ef.energyCraft) acc.energyCraftUnlocked = true
   if (ef.prod) {
     for (const k in ef.prod) prod[k] = (prod[k] || 0) + ef.prod[k] * mult
   }
@@ -547,7 +549,7 @@ function recomputeRaw(state, derived, supply) {
   // 修真 / 技艺 / 法宝（法宝按祭炼等级放大效果）
   for (const up of ALL_UPGRADES) {
     if (!state.upgrades[up.id]) continue
-    const mult = treasureMult(state, up)
+    const mult = treasureMult(state, up) * (supply[up.id] ?? 1)
     applyEffects(up.effects, mult, targets, { kind: 'upgrade', id: up.id, label: up.name, count: 1 })
     if (up.effects?.prod) {
       for (const k in up.effects.prod) {
@@ -558,6 +560,14 @@ function recomputeRaw(state, derived, supply) {
           count: 1,
           raw: up.effects.prod[k] * mult,
         })
+      }
+    }
+    if (up.upkeep && mult > 0) {
+      for (const [res, unit] of Object.entries(up.upkeep)) {
+        const amount = unit * mult
+        maint[res] = (maint[res] || 0) + amount
+        if (!expenseRaw[res]) expenseRaw[res] = []
+        expenseRaw[res].push({ kind: 'upkeep', id: up.id, label: up.name, count: 1, value: -amount })
       }
     }
   }
@@ -640,6 +650,16 @@ function recomputeRaw(state, derived, supply) {
       ratio[res] = (ratio[res] || 0) + energyBonus
       if (!bonus.ratio[res]) bonus.ratio[res] = []
       bonus.ratio[res].push({ kind: 'energy', id: 'qiEnergy', label: '灵能', value: energyBonus })
+    }
+  }
+  /**
+   * 《灵能应用》（主线第Ⅳ章）：灵能同时写进灵石与木板的全部配方制作收益。
+   * QI_ENERGY_BASIC 里的木板、灵石主要靠加工获得，普通产出倍率吃不到 ——
+   * 这里把同一份 energyBonus 记到对应成品的 craftBonusByResource，受益宣称与实际作用一致。
+   */
+  if (energyBonus > 0 && acc.energyCraftUnlocked) {
+    for (const res of CONFIG.QI_ENERGY_CRAFT) {
+      acc.craftBonusByResource[res] = (acc.craftBonusByResource[res] || 0) + energyBonus
     }
   }
   derived.energyBonus = energyBonus
@@ -792,7 +812,9 @@ function recomputeRaw(state, derived, supply) {
 export function recompute(state, derived, seconds = 1) {
   const dt = Math.max(0.001, seconds)
   const supply = {}
-  const consumers = BUILDINGS.filter((b) => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
+  const buildingConsumers = BUILDINGS.filter((b) => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
+  const upgradeConsumers = ALL_UPGRADES.filter((u) => u.upkeep && state.upgrades[u.id])
+  const consumers = [...buildingConsumers, ...upgradeConsumers]
   for (const b of consumers) supply[b.id] = 1
   recomputeRaw(state, derived, supply)
   for (let pass = 0; pass < 40; pass++) {
@@ -814,7 +836,8 @@ export function recompute(state, derived, seconds = 1) {
     if (!changed) break
     recomputeRaw(state, derived, supply)
   }
-  derived.buildingSupply = supply
+  derived.buildingSupply = Object.fromEntries(buildingConsumers.map(b => [b.id, supply[b.id]]))
+  derived.upgradeSupply = Object.fromEntries(upgradeConsumers.map(u => [u.id, supply[u.id]]))
   return derived
 }
 
@@ -1200,6 +1223,13 @@ export function drawQi(state, derived) {
   return gain
 }
 
+/** 开局拾取普通石材；采石场接替长期供料，满仓时不再采集。 */
+export function gatherRock(state, derived) {
+  const gain = Math.max(0, Math.min(1, (derived.max.rock || 0) - (state.resources.rock || 0)))
+  addResource(state, 'rock', gain)
+  return gain
+}
+
 export function craft(state, derived, recipeId, { silent = false, times = 1 } = {}) {
   const recipe = CRAFTS.find((c) => c.id === recipeId)
   if (!recipe || !isCraftUnlocked(state, recipe)) return 0
@@ -1287,6 +1317,20 @@ export function refineTreasure(state, derived, id) {
     'good',
   )
   return state.treasureLevels[id]
+}
+
+/** 批量切换全部已解锁配方，不受界面筛选影响，总开关保持不变。 */
+export function setAllAutoCraft(state, derived, enabled) {
+  if (enabled && !derived.autoCraftUnlocked) return false
+  if (enabled) {
+    for (const recipe of CRAFTS) {
+      if (isCraftUnlocked(state, recipe)) state.autoCraft[recipe.id] = true
+    }
+  } else {
+    for (const id of Object.keys(state.autoCraft)) state.autoCraft[id] = false
+  }
+  pushLog(state, enabled ? '全部已解锁配方自动制作已开启' : '全部自动制作已取消', 'info')
+  return true
 }
 
 export function toggleAutoCraft(state, derived, recipeId) {
@@ -1404,14 +1448,17 @@ function pickEvent(state) {
 export function eventResourceRate(state, derived, res, path = new Set()) {
   const direct = Math.max(0, derived.rates[res] || 0)
   if (path.has(res)) return direct
-  const recipe = CRAFTS.find(c => c.out === res && isCraftUnlocked(state, c))
-  if (!recipe) return direct
   const next = new Set(path).add(res)
-  let batches = 1 / craftTime(recipe, derived)
-  for (const [input, amount] of Object.entries(recipe.cost)) {
-    batches = Math.min(batches, eventResourceRate(state, derived, input, next) / amount)
+  let best = direct
+  for (const recipe of CRAFTS) {
+    if (recipe.out !== res || !isCraftUnlocked(state, recipe)) continue
+    let batches = 1 / craftTime(recipe, derived)
+    for (const [input, amount] of Object.entries(recipe.cost)) {
+      batches = Math.min(batches, eventResourceRate(state, derived, input, next) / amount)
+    }
+    best = Math.max(best, batches * craftYield(derived, recipe))
   }
-  return Math.max(direct, batches * craftYield(derived, recipe))
+  return best
 }
 
 /** 预览与结算共用应对规则，设施与库存变化后重新计算。 */

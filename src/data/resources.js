@@ -51,13 +51,32 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'rock',
+    name: '石矿',
+    glyph: '岩',
+    color: '#b0a99f',
+    baseMax: 250,
+    desc: '山上凿下的普通岩石。垒墙砌基用它，灌入灵气便成灵石。',
+    integer: true, // 整块计数：价格向上取整、数量不出现小数
+  },
+  {
     id: 'stone',
     name: '灵石',
     glyph: '石',
     color: '#9fc7ff',
     baseMax: 150,
-    desc: '由灵气凝成的硬通货，山下市集与阵道皆认它。',
+    desc: '含灵气的矿物。可从灵石矿开采，也可向石材灌入灵气制作；山下市集与阵道皆认它。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'spiritLiquid',
+    name: '灵液',
+    glyph: '液',
+    color: '#8cd6e8',
+    baseMax: 80,
+    storageWeight: 0.04,
+    desc: '灵气凝成的液态精华，压在玉瓶里十年不散。凝晶与育仙草都以它为引。',
+    integer: true, // 整瓶计数：价格向上取整、数量不出现小数
   },
   {
     id: 'crystal',
@@ -67,7 +86,7 @@ export const RESOURCES = [
     baseMax: 30,
     storageWeight: 0.02,
     integer: true,
-    desc: '以符纹约束灵气凝成的稳定晶核。金丹后用于聚灵设施、观星与高级阵法。',
+    desc: '以符纹约束灵液凝成的稳定晶核。金丹后用于聚灵设施、观星与高级阵法。',
   },
   {
     id: 'ore',
@@ -167,13 +186,21 @@ export const RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'qiParticle',
+    name: '灵气分子',
+    glyph: '分',
+    color: '#c9b8ff',
+    baseMax: 100,
+    desc: '从灵气中离析、集中收集的稳定分子：正负两枚灵子束缚而成，整体灵荷为零。过偏极阵输入解离能，才分出自由正负灵子。',
+    // 刻意不设 integer：灵气分子是"物理量"，本来就该连续
+  },
+  {
     id: 'yangParticle',
     name: '正灵子',
     glyph: '阳',
     color: '#ffd0a8',
     baseMax: 50,
-    desc: '把灵气分子拆开，得其一端正灵子 —— 轻而外扬。',
-    // 刻意不设 integer：粒子是"物理量"，本来就该连续
+    desc: '灵气分子解离后携带正灵荷的一端，常用于外放、生发与光热场模；既可疗伤，也可造成灼伤。',
   },
   {
     id: 'yinParticle',
@@ -181,7 +208,7 @@ export const RESOURCES = [
     glyph: '阴',
     color: '#a8c8ff',
     baseMax: 50,
-    desc: '拆分灵气分子得到的另一端，沉而内敛。与正灵子相遇便会湮灭。',
+    desc: '灵气分子解离后携带负灵荷的一端，常用于收敛、封护与保存。普通相遇可复合，满足受控场形与转换门槛才会湮灭。',
   },
   {
     id: 'qiEnergy',
@@ -189,7 +216,7 @@ export const RESOURCES = [
     glyph: '能',
     color: '#fff2a8',
     baseMax: 1000,
-    desc: '正负灵子湮灭时释放的能量。极不稳定，会自己逸散 —— 所以只能靠持续湮灭维持。',
+    desc: '正负灵子湮灭时释放的至纯灵力。极不稳定，会自己逸散 —— 所以只能靠持续湮灭维持。',
   },
   {
     id: 'insight',

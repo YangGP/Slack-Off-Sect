@@ -12,10 +12,34 @@ export const CRAFTS = [
     name: '凝气成石',
     out: 'stone',
     amount: 1,
-    cost: { qi: 45 },
+    cost: { rock: 1, qi: 45 },
     time: 0.5,
-    desc: '把稀薄灵气压成一枚灵石。宗门早期的硬通货全靠它。',
+    desc: '将灵气灌入一块石材，使矿物承载灵气，制成一枚灵石。开局可先拾取石材，之后由采石场供料。',
     unlocked: true,
+  },
+  {
+    id: 'infuseStone',
+    name: '点石成灵',
+    out: 'stone',
+    amount: 1,
+    tier: 1,
+    primary: ['rock'],
+    cost: { rock: 3, qi: 15 },
+    time: 3,
+    desc: '从三块石材中筛选、切出易于存气的矿料，再灌入灵气制成一枚灵石。比直接凝气成石省气，但消耗更多石材。',
+    needs: { building: { id: 'quarry', count: 1 } },
+  },
+  {
+    id: 'condenseLiquid',
+    name: '凝气成液',
+    out: 'spiritLiquid',
+    amount: 1,
+    tier: 1,
+    primary: ['qi'],
+    cost: { qi: 150 },
+    time: 3,
+    desc: '灵气受压凝成灵液，压在玉瓶里十年不散 —— 这是灵气第一种存得住的形态。',
+    needs: { upgrades: ['liquidArt'] },
   },
   {
     id: 'refinePill',
@@ -96,10 +120,10 @@ export const CRAFTS = [
     out: 'crystal',
     amount: 1,
     tier: 1,
-    primary: ['qi'],
-    cost: { qi: 500, talisman: 10 },
+    primary: ['spiritLiquid'],
+    cost: { spiritLiquid: 3, talisman: 10 },
     time: 5,
-    desc: '以十张符箓定住气机，将五百份灵气压成稳定晶核。用于晶核聚灵阵、观星台与高级阵法。',
+    desc: '以十张符箓定住气机，三瓶灵液凝成稳定晶核。用于晶核聚灵阵、观星台与高级阵法。',
     needs: { realm: 4, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -109,9 +133,9 @@ export const CRAFTS = [
     amount: 1,
     tier: 1,
     primary: ['herb'],
-    cost: { herb: 100, qi: 200 },
+    cost: { herb: 100, spiritLiquid: 2 },
     time: 5,
-    desc: '引灵泉灌溉，一株灵草要养到叶上凝露才算是仙草。',
+    desc: '以灵液浇灌，一株灵草要养到叶上凝露才算是仙草。',
     needs: { building: { id: 'herbGarden', count: 3 } },
   },
   {
@@ -168,7 +192,7 @@ export const CRAFTS = [
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const DEFAULT_QUICK_CRAFTS = ['condenseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
+export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]

@@ -131,7 +131,8 @@ emit('炼成后基础效果生效；祭炼 n 级效果 ×(1 + 0.3n)，费用按�
 emit('| 法宝 | id | 炼成花费 | 祭炼基础感悟 | 效果 | 解锁 |')
 emit('| --- | --- | --- | --- | --- | --- |')
 for (const t of TECHNIQUES.filter((x) => x.kind === 'treasure')) {
-  emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${t.refine?.insight || 0} | ${effects(t.effects)} | ${needs(t.needs)} |`)
+  const upkeep = t.upkeep ? '；满供消耗 ' + Object.entries(t.upkeep).map(([r, n]) => `${res(r)} ${n}/s`).join('、') + '（随祭炼增长，缺供按比例停效）' : ''
+  emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${t.refine?.insight || 0} | ${effects(t.effects)}${upkeep} | ${needs(t.needs)} |`)
 }
 emit('\n进阶祭炼附加材料：达到指定层数后开始支付，按1.7倍逐层递增，基础祭炼费用照常支付。\n')
 emit('| 法宝 | 第几次祭炼起 | 起始附加材料 |')

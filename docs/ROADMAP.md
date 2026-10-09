@@ -2,9 +2,13 @@
 
 更新：2026-10-09。本文只记录尚待决定或完成的工作。当前实现见 [DESIGN.md](DESIGN.md)，历史实施见 [BALANCE.md](BALANCE.md)。
 
-## 1. 修真与工艺体系审视
+## 1. 修真两线重组
 
-按 [CULTIVATION-REVIEW.md](CULTIVATION-REVIEW.md) 检查定位、五段分类、跨层依赖和每境新能力。需确认候时法、大乘心经的实际前置境界，以及三项产业强化究竟安排在化神还是炼虚；当前代码三项均从化神开放。灵能对加工品的作用范围也需明确。
+方案已实施（2026-10-09），框架、决策与实施记录见 [RESEARCH.md](RESEARCH.md)，现状清单见 [CULTIVATION-REVIEW.md](CULTIVATION-REVIEW.md)。剩余工作：
+
+1. **补主线第 2 章候选**：灵气测定、灵气纯化是否补入、效果如何，费用按筑基至金丹段感悟产线重测。
+2. **需求链微调评估**：讲经法、静心诀、心有灵犀对木作器械的同页跨线前置是否改为建筑造价卡进度；阵法初解是否前移。
+3. **完整验证补跑**：当前环境 node_modules 安装失败，render/DOM 检查待 `npm install && npm run check` 补跑；补跑后按章重测停留时长并更新 [BALANCE.md](BALANCE.md) 记录。
 
 ## 2. 中期经营与周边事务
 
