@@ -1,41 +1,57 @@
 <script setup>
 import { ref } from 'vue'
 import { state, derived, actions, ui, saveNow } from '@/game/store'
-import { SAVE_KEY } from '@/game/save'
 import { fmtClock, fmtTime, fmt } from '@/game/format'
 import { CONFIG } from '@/data/config'
 
-const importText = ref('')
+const fileInput = ref(null)
+const importing = ref(false)
 const importError = ref('')
-const exportedText = ref('')
 
 function doExport() {
-  exportedText.value = actions.exportText()
-  importError.value = ''
-}
-
-function copyExport() {
-  if (!exportedText.value) doExport()
-  navigator.clipboard
-    ?.writeText(exportedText.value)
-    .then(() => (importError.value = '已复制到剪贴板'))
-    .catch(() => (importError.value = '复制失败，请手动选中文本复制'))
-}
-
-function doImport() {
   try {
-    actions.importText(importText.value)
+    const blob = new Blob([actions.exportText()], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `摸鱼宗门存档-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    importError.value = ''
+  } catch (err) {
+    importError.value = '导出失败：' + (err?.message || '无法下载文件')
+  }
+}
+
+async function doImport(event) {
+  const input = event.target
+  const file = input.files?.[0]
+  if (!file) return
+  importing.value = true
+  importError.value = ''
+  try {
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('无法读取文件'))
+      reader.onabort = () => reject(new Error('文件读取已取消'))
+      reader.readAsText(file, 'utf-8')
+    })
+    actions.importText(text)
     importError.value = '读档成功'
-    importText.value = ''
   } catch (err) {
     importError.value = '导入失败：' + (err?.message || '格式不正确')
+  } finally {
+    input.value = ''
+    importing.value = false
   }
 }
 
 function doReset() {
   if (window.confirm('确定要重新开山立派吗？当前进度会被清空（成就与仙缘也一并清空）。')) {
     actions.resetGame()
-    exportedText.value = ''
     importError.value = ''
   }
 }
@@ -53,23 +69,12 @@ function doReset() {
       <div class="btn-row">
         <button class="btn primary" @click="saveNow()">立即存档</button>
         <button class="btn" @click="doExport">导出存档</button>
-        <button class="btn" @click="copyExport">复制到剪贴板</button>
-        <button class="btn danger" @click="doReset">重新开山（清档）</button>
+        <button class="btn" :disabled="importing" @click="fileInput.click()">{{ importing ? '读取中…' : '读取存档' }}</button>
+        <button class="btn danger" :disabled="importing" @click="doReset">重新开山（清档）</button>
       </div>
-
-      <div class="small dim" style="padding: 6px 0 2px">存档文本（可复制备份）</div>
-      <textarea
-        v-model="exportedText"
-        placeholder="点击「导出存档」后会在这里生成一串可复制的文本"
-      ></textarea>
-
-      <div class="small dim" style="padding: 6px 0 2px">导入存档（粘贴后点「读取」）</div>
-      <textarea v-model="importText" placeholder="把导出的存档文本粘贴到这里"></textarea>
-      <div class="btn-row" style="padding-top: 6px">
-        <button class="btn" @click="doImport">读取</button>
-        <span class="small warn">{{ importError }}</span>
-        <span class="small dim">存档键名 {{ SAVE_KEY }}</span>
-      </div>
+      <input ref="fileInput" type="file" accept=".txt,.json,text/plain,application/json" aria-label="上传存档文件" hidden @change="doImport">
+      <div class="small dim" style="padding-top: 6px">导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持旧版文本存档和 JSON 存档。</div>
+      <div v-if="importError" class="small warn" role="status" style="padding-top: 6px">{{ importError }}</div>
     </div>
   </div>
 
@@ -107,7 +112,7 @@ function doReset() {
     </div>
   </div>
 
-  <div class="box">
+  <div v-if="ui.debug" class="box">
     <div class="box-head">
       山中趣事<span class="hint">手动触发一次随机奇遇（调试用）</span>
     </div>

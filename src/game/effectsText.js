@@ -19,7 +19,7 @@ function resName(id) {
 export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
   if (!ef) return null
   const out = {}
-  const byCount = upkeep ? ['storage', 'storageAll', 'maxDisciples'] : ['storage', 'storageAll', 'maxDisciples', 'morale', 'disasterGuard', 'ascendBonus']
+  const byCount = upkeep ? ['storage', 'storageRatio', 'storageAll', 'maxDisciples'] : ['storage', 'storageAll', 'maxDisciples', 'morale', 'disasterGuard', 'ascendBonus']
   const byActive = [
     'prod',
     'ratio',
@@ -91,6 +91,9 @@ export function describeEffects(ef) {
   if (ef.storage) {
     for (const k in ef.storage) push(`${resName(k)} 上限`, `+${fmt(ef.storage[k])}`, 'muted')
   }
+  if (ef.storageRatio) {
+    for (const k in ef.storageRatio) push(`${resName(k)} 上限`, `+${fmtPercent(ef.storageRatio[k])}`, 'muted')
+  }
   if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（成品按层级折算）`, 'muted')
   if (ef.maxDisciples) push('弟子上限', `+${ef.maxDisciples}`, 'good')
   if (ef.morale) push('士气', `+${ef.morale}`, 'good')
@@ -108,7 +111,7 @@ export function describeEffects(ef) {
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
-  if (ef.autoCondense) push('节气满仓自凝灵石', '', 'good')
+  if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝液法》', 'good')
   if (ef.energyCraft) push('灵能应用', '灵能同时提高灵石（点石成灵）与木板的制作产出', 'good')
   if (ef.unlockBuildings) {
     for (const id of ef.unlockBuildings) {

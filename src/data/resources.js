@@ -21,43 +21,12 @@ export const RESOURCES = [
     desc: '后山灵木，可作屋梁、符纸与阵材。',
   },
   {
-    id: 'plank',
-    name: '木板',
-    glyph: '板',
-    color: '#c9a87c',
-    baseMax: 50,
-    storageWeight: 0.15,
-    desc: '灵木刨出的精料。原木只配搭棚，正经殿宇的梁柱斗拱都要它。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
-  },
-  {
-    id: 'arrayBase',
-    name: '阵基',
-    glyph: '基',
-    color: '#c9a87c',
-    baseMax: 20,
-    storageWeight: 0.03,
-    integer: true,
-    desc: '木板搭骨、符箓刻纹、玄铁固结。金丹期宗门设施共用的阵法构件。',
-  },
-  {
-    id: 'steel',
-    name: '玄钢',
-    glyph: '钢',
-    color: '#b8c4d0',
-    baseMax: 30,
-    storageWeight: 0.04,
-    desc: '玄铁反复折叠锻打，杂质尽去 —— 一剑之锋，从此有了骨。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
-  },
-  {
     id: 'rock',
-    name: '石矿',
+    name: '矿石',
     glyph: '岩',
     color: '#b0a99f',
     baseMax: 250,
-    desc: '山上凿下的普通岩石。垒墙砌基用它，灌入灵气便成灵石。',
-    integer: true, // 整块计数：价格向上取整、数量不出现小数
+    desc: '山上凿下的普通矿石。垒墙砌基用它，灌入灵气便成灵石。采掘与炉料都按小数结算。',
   },
   {
     id: 'stone',
@@ -103,6 +72,36 @@ export const RESOURCES = [
     color: '#a8e07a',
     baseMax: 150,
     desc: '药圃所产，炼丹必需。',
+  },
+  {
+    id: 'plank',
+    name: '木板',
+    glyph: '板',
+    color: '#c9a87c',
+    baseMax: 50,
+    storageWeight: 0.15,
+    desc: '灵木刨出的精料。原木只配搭棚，正经殿宇的梁柱斗拱都要它。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'steel',
+    name: '玄钢',
+    glyph: '钢',
+    color: '#b8c4d0',
+    baseMax: 30,
+    storageWeight: 0.04,
+    desc: '玄铁反复折叠锻打，杂质尽去 —— 一剑之锋，从此有了骨。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'arrayBase',
+    name: '阵基',
+    glyph: '基',
+    color: '#c9a87c',
+    baseMax: 20,
+    storageWeight: 0.03,
+    integer: true,
+    desc: '木板搭骨、符箓刻纹、玄铁固结。金丹期宗门设施共用的阵法构件。',
   },
   {
     id: 'immortalHerb',
@@ -220,11 +219,14 @@ export const RESOURCES = [
   },
   {
     id: 'insight',
-    name: '感悟',
-    glyph: '悟',
+    // 改名（原「灵机」）：灵机 = 悟道所得的"机制" —— 一字兼顾"顿悟"与"可推演的机理"，
+    // 与灵质（灵气/灵液/灵晶）、粒子（灵气分子/正负灵子）、能量（灵能）同一套科学修真的口径。
+    // id 保持 insight 不变，旧存档不受影响。
+    name: '灵机',
+    glyph: '机',
     color: '#8ab4ff',
     baseMax: 200,
-    desc: '弟子悟道所得，用以推演功法、参悟境界。',
+    desc: '弟子悟道所得的灵机。可推演功法、参悟境界，也可用于祭炼法宝。',
   },
   {
     id: 'faith',

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { fmtClock, fmtAmount, fmtTime } from '@/game/format'
-import { EVENT_MAP, EVENT_LEVELS, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
+import { EVENT_MAP, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
 import { RESOURCE_MAP } from '@/data/resources'
 import { eventOutcome, eventEffect } from '@/game/engine'
 
@@ -15,14 +15,12 @@ const FILTERS = [
   { id: 'realm', name: '境界' },
 ]
 const filter = ref('all')
-const levelFilter = ref(0)
 const keyword = ref('')
 const log = computed(() => state.log)
 const filteredLog = computed(() => {
   const query = keyword.value.trim().toLocaleLowerCase()
   return log.value.filter((item) =>
     (filter.value === 'all' || (item.kind || 'info') === filter.value)
-    && (!levelFilter.value || item.eventLevel === levelFilter.value)
     && (!query || item.text.toLocaleLowerCase().includes(query)),
   )
 })
@@ -76,10 +74,7 @@ function preview(effect) {
         @click="filter = f.id"
       >{{ f.name }}</button>
       <input v-model="keyword" class="log-search" type="search" aria-label="搜索纪事" placeholder="搜索纪事">
-      <button v-if="filter !== 'all' || keyword || levelFilter" class="filter" @click="filter = 'all'; keyword = ''; levelFilter = 0">重置</button>
-    </div>
-    <div class="filters log-filters" aria-label="事件等级筛选">
-      <button v-for="level in EVENT_LEVELS" :key="level.id" class="filter" :class="{ on: levelFilter === level.id }" :aria-pressed="levelFilter === level.id" @click="levelFilter = levelFilter === level.id ? 0 : level.id">{{ level.label }}</button>
+      <button v-if="filter !== 'all' || keyword" class="filter" @click="filter = 'all'; keyword = ''">重置</button>
     </div>
     <div v-if="peaceTime > 0" class="small good">药圃安宁 · 还有 {{ fmtTime(peaceTime) }}，妖兽暂不再来。</div>
     <!-- 普通来访可谢绝；已有威胁按期限默认防守。 -->

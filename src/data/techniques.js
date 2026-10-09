@@ -2,13 +2,13 @@
  * 技艺与法宝 —— 通用增益层，对标猫国的「工坊升级」（workshop.js）。
  *
  * 2026-10 两线重组（方案见 docs/RESEARCH.md）后，本页只保留两类条目：
- *   技艺（kind 省略）      ：自己练出来的手艺 —— 通用产量、仓储、感悟、防灾等增益，
+ *   技艺（kind 省略）      ：自己练出来的手艺 —— 通用产量、仓储、灵机、防灾等增益，
  *                           门禁看建筑（藏经阁、药圃…），彼此串成链；
  *                           配方开放与专业制作增益已随材料族迁入修真页（upgrades.js）
  *   法宝（kind: 'treasure'）：炼成的器物，**门禁看修真**（`needs.upgrades` 指向修真节点），
  *                            每件给一条明确的加成，是「研究出成果 → 炼成器物」的闭环
  *
- * 两者共用「感悟」货币；技艺之间也会串成链（引气诀 → 阵法精要 → 灵泉灌溉），
+ * 两者共用「灵机」货币；技艺之间也会串成链（引气诀 → 阵法精要 → 灵泉灌溉），
  * 这棵树就是猫国工坊升级那种「一层层推」的推进感。
  */
 export const TECHNIQUES = [
@@ -38,8 +38,8 @@ export const TECHNIQUES = [
     cost: { insight: 45, ore: 120, wood: 300 },
     desc: '看石色便知矿脉走向。玄铁产出 +20%。',
     effects: { ratio: { ore: 0.2 } },
-    // 修真页另有「探矿术」（开放玄铁矿），这里改名避免同名混淆
-    needs: { building: { id: 'mine', count: 3 } },
+    // 修真页另有「探矿术」（开放炼铁炉），这里改名避免同名混淆
+    needs: { building: { id: 'ironFurnace', count: 3 } },
   },
   {
     id: 'herbLore',
@@ -55,7 +55,7 @@ export const TECHNIQUES = [
     name: '凿石要诀',
     glyph: '凿',
     cost: { insight: 30, rock: 120, wood: 220 },
-    desc: '顺纹下凿、量山取料，整块石料运下山也不碎一角。石矿产出 +30%。',
+    desc: '顺纹下凿、量山取料，整块石料运下山也不碎一角。矿石产出 +30%。',
     effects: { ratio: { rock: 0.3 } },
     needs: { building: { id: 'quarry', count: 2 } },
   },
@@ -77,7 +77,7 @@ export const TECHNIQUES = [
     cost: { insight: 90, wood: 900, ore: 120 },
     desc: '用玄铁加固斧柄锯条，伐木快得不像话。灵木产出 +25%。',
     effects: { ratio: { wood: 0.25 } },
-    needs: { upgrades: ['forestryArt'], building: { id: 'mine', count: 1 } },
+    needs: { upgrades: ['forestryArt'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'mountainChant',
@@ -95,7 +95,7 @@ export const TECHNIQUES = [
     cost: { insight: 190, ore: 700, wood: 300 },
     desc: '顺着矿脉往深处打，玄铁自己往外冒。玄铁产出 +25%。',
     effects: { ratio: { ore: 0.25 } },
-    needs: { upgrades: ['prospectArt'], building: { id: 'mine', count: 6 } },
+    needs: { upgrades: ['prospectArt'], building: { id: 'ironFurnace', count: 6 } },
   },
   {
     id: 'herbRotation',
@@ -132,7 +132,8 @@ export const TECHNIQUES = [
     glyph: '叠',
     cost: { insight: 420, stone: 1500, wood: 900, talisman: 3 },
     desc: '分格装箱、依尺寸码放，减少空隙与搬运损耗。通用仓储 +1200，成品按层级折算。',
-    effects: { storageAll: 1200 },
+    // 灵机仓容的百分比一律由技艺提供：定额给建筑，比例给技艺，两者分工明确。
+    effects: { storageAll: 1200, storageRatio: { insight: 0.3 } },
     needs: { building: { id: 'warehouse', count: 1 } },
   },
 
@@ -176,14 +177,14 @@ export const TECHNIQUES = [
     needs: { building: { id: 'logHouse', count: 3 } },
   },
 
-  // ---------- 感悟 ----------
+  // ---------- 灵机 ----------
   {
     id: 'oralTeaching',
     name: '口传心授',
     glyph: '授',
     cost: { insight: 35, wood: 400 },
-    desc: '不立文字，当面点破。感悟产出 +10%。',
-    effects: { ratio: { insight: 0.1 } },
+    desc: '不立文字，当面点破。灵机产出 +10%。',
+    effects: { ratio: { insight: 0.1 }, storageRatio: { insight: 0.4 } },
     needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
   },
   {
@@ -191,8 +192,8 @@ export const TECHNIQUES = [
     name: '星象推演',
     glyph: '象',
     cost: { insight: 110, talisman: 8, herb: 300 },
-    desc: '把星轨当算筹，推得比抄书快。感悟产出 +15%。',
-    effects: { ratio: { insight: 0.15 } },
+    desc: '把星轨当算筹，推得比抄书快。灵机产出 +15%。',
+    effects: { ratio: { insight: 0.15 }, storageRatio: { insight: 0.5 } },
     needs: { upgrades: ['oralTeaching'], building: { id: 'academy', count: 1 } },
   },
   {
@@ -201,7 +202,7 @@ export const TECHNIQUES = [
     glyph: '忘',
     cost: { insight: 150, wood: 600, stone: 300 },
     desc: '坐忘则神凝，悟道者一坐便是一昼夜。悟道者产出 +35%。',
-    effects: { jobRatio: { scholar: 0.35 } },
+    effects: { jobRatio: { scholar: 0.35 }, storageRatio: { insight: 0.6 } },
     needs: { upgrades: ['starReading'], building: { id: 'library', count: 5 } },
   },
 
@@ -228,26 +229,17 @@ export const TECHNIQUES = [
   // ============================================================
   // 法宝（kind: 'treasure'）—— 由修真研究解锁，炼成后给一条加成
   // ============================================================
-  {
-    id: 'spiritPearl',
-    name: '聚灵珠',
-    glyph: '珠',
-    kind: 'treasure',
-    cost: { insight: 20, stone: 90, wood: 200 },
-    refine: { insight: 60 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '《灵源考》的成果：一枚能自己拢住游散灵气的珠子。灵气产出 +15%。',
-    effects: { ratio: { qi: 0.15 } },
-    needs: { upgrades: ['qiOrigin'] },
-  },
+
   {
     id: 'spiritBanner',
     name: '聚灵幡',
     glyph: '幡',
     kind: 'treasure',
     cost: { insight: 45, wood: 600, stone: 200 },
-    refine: { insight: 150 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 150 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '按灵源考的图样缝成的幡，为气田与药圃引来灵气。灵气与灵草产出 +10%。',
-    effects: { ratio: { qi: 0.1, herb: 0.1 } },
+    // 原「聚灵幡」的灵气 +15% 并入此处（法宝收窄，效果不丢）
+    effects: { ratio: { qi: 0.25, herb: 0.1 } },
     needs: { upgrades: ['qiOrigin'] },
   },
   {
@@ -256,62 +248,34 @@ export const TECHNIQUES = [
     glyph: '炉',
     kind: 'treasure',
     cost: { insight: 150, pill: 10, herb: 600, stone: 400 },
-    refine: { insight: 500, materials: { nineTurnPill: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 500, materials: { immortalHerb: 5,  nineTurnPill: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '炼丹术推演出的炉子，火候不必再靠手感。丹药与九转丹制作产出 +8%。',
-    effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 } },
+    // 原「凝露瓶」的效果并入此处：灵液制作 +15%（法宝数量收窄，效果不丢）
+    // 原「凝露瓶」的灵液 +15% 与原「百草葫芦」的灵草 +30% 都并入此处（法宝收窄，效果不丢）
+    effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08, spiritLiquid: 0.15 }, ratio: { herb: 0.3 } },
     needs: { upgrades: ['alchemyArt'] },
   },
-  {
-    id: 'herbGourd',
-    name: '百草葫芦',
-    glyph: '葫',
-    kind: 'treasure',
-    cost: { insight: 90, herb: 700, stone: 260 },
-    refine: { insight: 300, materials: { immortalHerb: 2 }, materialFromLevel: 0 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '葫芦内的育苗格稳住湿度与养分，减少采收损耗、改善药圃育苗。灵草产出 +30%。',
-    effects: { ratio: { herb: 0.3 } },
-    needs: { upgrades: ['alchemyArt'] },
-  },
+
   {
     id: 'flyingSword',
     name: '飞剑',
     glyph: '剑',
     kind: 'treasure',
     cost: { insight: 450, artifact: 14, ore: 2000, stone: 1500 },
-    refine: { insight: 1500, materials: { steel: 2, spiritArtifact: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 1500, materials: { steel: 2, spiritArtifact: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '剑光穿林破岩，也可分割器胚。灵木与玄铁产出 +40%，法器与灵器制作产出 +15%。',
     effects: { ratio: { wood: 0.4, ore: 0.4 }, craftBonusByResource: { artifact: 0.15, spiritArtifact: 0.15 } },
     needs: { upgrades: ['forgeArt'] },
   },
-  {
-    id: 'greenwoodAxe',
-    name: '青木斧',
-    glyph: '斧',
-    kind: 'treasure',
-    cost: { insight: 95, wood: 1400, stone: 300 },
-    refine: { insight: 320 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '斧刃上刻着聚灵纹，砍树时树自己往刃上靠。灵木产出 +30%。',
-    effects: { ratio: { wood: 0.3 } },
-    needs: { upgrades: ['forgeArt'] },
-  },
-  {
-    id: 'mountainPick',
-    name: '穿山凿',
-    glyph: '凿',
-    kind: 'treasure',
-    cost: { insight: 140, ore: 900, stone: 400 },
-    refine: { insight: 480 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '凿头一点，石脉自己裂开。玄铁产出 +30%。',
-    effects: { ratio: { ore: 0.3 } },
-    needs: { upgrades: ['forgeArt'] },
-  },
+
+
   {
     id: 'wardTalisman',
     name: '镇岳符',
     glyph: '镇',
     kind: 'treasure',
     cost: { insight: 180, talisman: 12, wood: 1000, stone: 500 },
-    refine: { insight: 600 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 600 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '符箓一道的镇山之作，妖兽见了绕道走。天灾损失 −8%。',
     effects: { disasterGuard: 0.08 },
     needs: { upgrades: ['talismanArt', 'talismanLore'] },
@@ -322,8 +286,8 @@ export const TECHNIQUES = [
     glyph: '简',
     kind: 'treasure',
     cost: { insight: 180, stone: 800, talisman: 6 },
-    refine: { insight: 600 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '把讲经堂的道理刻进玉里，弟子各自回去听。感悟产出 +15%。',
+    refine: { insight: 600 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
+    desc: '把讲经堂的道理刻进玉里，弟子各自回去听。灵机产出 +15%。',
     effects: { ratio: { insight: 0.15 } },
     needs: { upgrades: ['preachArt'] },
   },
@@ -333,8 +297,8 @@ export const TECHNIQUES = [
     glyph: '盘',
     kind: 'treasure',
     cost: { insight: 330, stone: 1500, artifact: 6 },
-    refine: { insight: 1100 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '照着星轨铸成的盘，推演天时不用再抬头。感悟产出 +20%。',
+    refine: { insight: 1100 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
+    desc: '照着星轨铸成的盘，推演天时不用再抬头。灵机产出 +20%。',
     effects: { ratio: { insight: 0.2 } },
     needs: { upgrades: ['astrologyArt'] },
   },
@@ -344,7 +308,7 @@ export const TECHNIQUES = [
     glyph: '蒲',
     kind: 'treasure',
     cost: { insight: 270, herb: 1400, wood: 1200, stone: 800 },
-    refine: { insight: 900 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 900 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '坐在上面杂念自消，弟子也不那么爱闹了。士气 +5。',
     effects: { morale: 5 },
     needs: { upgrades: ['calmMind'] },
@@ -355,7 +319,7 @@ export const TECHNIQUES = [
     glyph: '铃',
     kind: 'treasure',
     cost: { insight: 1200, herb: 5000, pill: 20, stone: 4000 },
-    refine: { insight: 4000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 4000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '铃一响，园里的灵兽自己去采药、刨矿。采药人与矿工产出 +30%。',
     effects: { jobRatio: { herbalist: 0.3, miner: 0.3 } },
     needs: { upgrades: ['beastTaming'] },
@@ -377,7 +341,7 @@ export const TECHNIQUES = [
     glyph: '鼎',
     kind: 'treasure',
     cost: { insight: 720, faith: 2000, talisman: 12, stone: 2000 },
-    refine: { insight: 2400 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 2400 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '祖师殿里那口鼎，把香客的愿力收得更干净。香火产出 +40%。',
     effects: { ratio: { faith: 0.4 } },
     needs: { upgrades: ['ancestorArt'] },
@@ -388,7 +352,7 @@ export const TECHNIQUES = [
     glyph: '戒',
     kind: 'treasure',
     cost: { insight: 1800, stone: 7000, artifact: 25, wood: 4000 },
-    refine: { insight: 6000, materials: { spiritTreasure: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 6000, materials: { spiritTreasure: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '洞天福地的小成之作：以纳物戒补足各类仓储。每层通用仓储 +500，成品按层级折算。',
     effects: { storageAll: 500 },
     needs: { upgrades: ['grottoArt'] },
@@ -399,7 +363,7 @@ export const TECHNIQUES = [
     glyph: '印',
     kind: 'treasure',
     cost: { insight: 3600, talisman: 50, artifact: 35, ore: 8000, stone: 11000 },
-    refine: { insight: 12000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 12000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '镇住山脉气眼与矿纹。灵气产出 +80%，玄铁与灵石产出 +60%，阵基与灵符制作产出 +40%。',
     effects: { ratio: { qi: 0.8, ore: 0.6, stone: 0.6 }, craftBonusByResource: { arrayBase: 0.4, spiritTalisman: 0.4 } },
     needs: { upgrades: ['arrayMastery'] },
@@ -409,24 +373,14 @@ export const TECHNIQUES = [
   // v0.16 扩充 —— 凝聚／精研的成果器物 + 粒子链法宝
   //（主线「拆解」一章首次有可祭炼器物，解锁段自筑基铺到大乘）
   // ============================================================
-  {
-    id: 'dewBottle',
-    name: '凝露瓶',
-    glyph: '瓶',
-    kind: 'treasure',
-    cost: { insight: 350, stone: 900, wood: 600 },
-    refine: { insight: 1100 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '按《凝液法》烧制的玉瓶，瓶口常年凝着一层露 —— 灵液压得更纯。灵液制作产出 +15%。',
-    effects: { craftBonusByResource: { spiritLiquid: 0.15 } },
-    needs: { upgrades: ['liquidArt'] },
-  },
+
   {
     id: 'crystalLamp',
     name: '七宝晶灯',
     glyph: '灯',
     kind: 'treasure',
     cost: { insight: 600, crystal: 4, talisman: 12 },
-    refine: { insight: 1800 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 1800 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '晶纹精修的成品：七枚灵晶为芯，灯焰不摇，晶核成色更匀。灵晶制作产出 +20%。',
     effects: { craftBonusByResource: { crystal: 0.2 } },
     needs: { upgrades: ['crystalPolishing'] },
@@ -437,7 +391,7 @@ export const TECHNIQUES = [
     glyph: '钟',
     kind: 'treasure',
     cost: { insight: 950, artifact: 6, steel: 3 },
-    refine: { insight: 2900 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 2900 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '试炼塔的晨钟：钟声一响，闻声而起，塔里塔外士气回稳。士气 +8。',
     effects: { morale: 8 },
     needs: { upgrades: ['trialArt'] },
@@ -448,7 +402,7 @@ export const TECHNIQUES = [
     glyph: '锤',
     kind: 'treasure',
     cost: { insight: 1300, ore: 3000, steel: 6, artifact: 12 },
-    refine: { insight: 4200 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 4200 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '器道精微的产物：锤面星纹密布，玄钢折叠九次不起一层杂质。玄钢制作产出 +20%，灵器制作产出 +10%。',
     effects: { craftBonusByResource: { steel: 0.2, spiritArtifact: 0.1 } },
     needs: { upgrades: ['artifactLore'] },
@@ -459,7 +413,7 @@ export const TECHNIQUES = [
     glyph: '匣',
     kind: 'treasure',
     cost: { insight: 1500, crystal: 20, arrayBase: 5 },
-    refine: { insight: 5000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
+    refine: { insight: 5000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '《灵子论》的成果：匣中纹路收集离析出的灵气分子，减少输送逸散、提高有效回收量。灵气分子产出 +25%。',
     effects: { ratio: { qiParticle: 0.25 } },
     needs: { upgrades: ['particleTheory'] },
@@ -492,10 +446,46 @@ export const TECHNIQUES = [
     glyph: '枢',
     kind: 'treasure',
     cost: { insight: 2600, steel: 12, crystal: 25, spiritArtifact: 3 },
-    refine: { insight: 8000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花感悟
-    desc: '持续消耗灵能驱动聚灵与参悟设施。满供时灵气产出 +50%、感悟产出 +25%；每秒消耗灵能 1，效果与耗能随祭炼同比增长，供能不足时按比例运行，无供能则停效。',
+    refine: { insight: 8000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
+    desc: '持续消耗灵能驱动聚灵与参悟设施。满供时灵气产出 +50%、灵机产出 +25%；每秒消耗灵能 1，效果与耗能随祭炼同比增长，供能不足时按比例运行，无供能则停效。',
     effects: { ratio: { qi: 0.5, insight: 0.25 } },
     upkeep: { qiEnergy: 1 },
     needs: { upgrades: ['energyApplication'] },
+  },
+  {
+    // 玄铁工具一套三件：斧（伐木）、镐（采矿）、百炼（合璧）。
+    // 斧与百炼工具使用岗位加成；玄铁镐只增加矿石，避免放大玄铁与天然灵石。
+    // 造价里必须有玄铁 —— 于是"烧铁 → 打工具 → 更好的铁"这条环自己转起来。
+    id: 'ironAxe',
+    name: '玄铁斧',
+    glyph: '斧',
+    kind: 'treasure',
+    cost: { insight: 90, ore: 60, wood: 400 },
+    refine: { insight: 300, materials: { ore: 40 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
+    desc: '玄铁锻的斧头，刃口淬过灵泉，落斧时木纹自己让路。樵夫每人 +30% 灵木。',
+    effects: { jobRatio: { woodcutter: 0.3 } },
+    needs: { upgrades: ['woodworking'] },
+  },
+  {
+    id: 'ironPick',
+    name: '玄铁镐',
+    glyph: '镐',
+    kind: 'treasure',
+    cost: { insight: 90, ore: 80, wood: 200 },
+    refine: { insight: 300, materials: { ore: 50 }, materialFromLevel: 2 },
+    desc: '镐头是整块玄铁打出来的，一镐下去石屑自己裂。矿石产出 +30%。',
+    effects: { ratio: { rock: 0.3 } },
+    needs: { upgrades: ['prospectStudy'] },
+  },
+  {
+    id: 'temperedTools',
+    name: '百炼工具',
+    glyph: '具',
+    kind: 'treasure',
+    cost: { insight: 600, ore: 300, steel: 3 },
+    refine: { insight: 900, materials: { steel: 2, ore: 100 }, materialFromLevel: 2 },
+    desc: '斧、镐、锯、凿各一件，按同一炉火反复锻打，彼此咬合得严丝合缝。樵夫与矿工各 +25%。',
+    effects: { jobRatio: { woodcutter: 0.25, miner: 0.25 } },
+    needs: { upgrades: ['steelWorking'] },
   },
 ]

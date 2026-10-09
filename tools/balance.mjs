@@ -69,6 +69,6 @@ for (let t = 1; t <= TOTAL; t++) {
 console.log('\n最终状态：')
 snapshot(TOTAL)
 console.log(`成就：${Object.keys(state.achievements).length} 条`)
-console.log(`累计灵气：${Math.round(state.stats.totalQi)}，累计感悟：${Math.round(state.stats.totalInsight)}`)
+console.log(`累计灵气：${Math.round(state.stats.totalQi)}，累计灵机：${Math.round(state.stats.totalInsight)}`)
 console.log(`遭遇天灾：${state.stats.disasters} 次，奇遇：${state.stats.eventsSeen} 次`)
 console.log(`飞升可得仙缘：${E.ascensionGain(state, derived)}`)

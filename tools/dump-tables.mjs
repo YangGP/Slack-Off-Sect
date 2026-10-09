@@ -73,7 +73,7 @@ const effects = (e) => {
   if (e.offlineHours) out.push(`离线 +${e.offlineHours}h`)
   if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')
-  if (e.autoCondense) out.push('节气满仓自动凝石')
+  if (e.autoCondenseLiquid) out.push('节气满仓自动凝液（需凝液法）')
   if (e.unlockBuildings?.length) out.push('解锁 ' + e.unlockBuildings.map(bname).join('/'))
   return out.join('；')
 }
@@ -93,7 +93,7 @@ emit('| --- | --- | --- | --- | --- |')
 for (const j of JOBS) {
   const outputs = [{ resource: j.resource, base: j.base, building: j.building }, ...(j.additionalOutputs || []), ...(j.secondary ? [j.secondary] : [])]
   const output = outputs.map(o => res(o.resource)).join(' + ')
-  const rate = outputs.map(o => `${o.building ? bname(o.building) + '启用时' : ''}${o.base}${res(o.resource)}`).join('；')
+  const rate = outputs.map(o => `${o.building ? (o.perBuilding ? '每座启用的' + bname(o.building) + '增加' : bname(o.building) + '启用时') : ''}${o.base}${res(o.resource)}`).join('；')
   emit(`| ${j.name} | \`${j.id}\` | ${output} | ${rate} | ${j.unlocked ? '初始' : needs(j.needs)} |`)
 }
 
@@ -129,8 +129,8 @@ for (const t of TECHNIQUES.filter((x) => x.kind !== 'treasure')) {
 }
 
 emit('\n## A.6 法宝（由修真解锁的器物）\n')
-emit('炼成后基础效果生效；祭炼 n 级效果 ×(1 + 0.3n)，费用按当前等级以 1.7 倍递增。非感悟材料沿用炼成费用，感悟使用下表祭炼基价，无等级硬上限。\n')
-emit('| 法宝 | id | 炼成花费 | 祭炼基础感悟 | 效果 | 解锁 |')
+emit('炼成后基础效果生效；祭炼 n 级效果 ×(1 + 0.3n)，费用按当前等级以 1.7 倍递增。非灵机材料沿用炼成费用，灵机使用下表祭炼基价，无等级硬上限。\n')
+emit('| 法宝 | id | 炼成花费 | 祭炼基础灵机 | 效果 | 解锁 |')
 emit('| --- | --- | --- | --- | --- | --- |')
 for (const t of TECHNIQUES.filter((x) => x.kind === 'treasure')) {
   const upkeep = t.upkeep ? '；满供消耗 ' + Object.entries(t.upkeep).map(([r, n]) => `${res(r)} ${n}/s`).join('、') + '（随祭炼增长，缺供按比例停效）' : ''

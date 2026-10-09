@@ -26,14 +26,16 @@ export const JOBS = [
     id: 'miner',
     name: '矿工',
     glyph: '矿',
-    desc: '统一开采宗门矿产：采矿场启用时采石矿，玄铁矿启用时采玄铁，灵石矿启用时另采少量灵石。同一批矿工同时提供已开放矿场的产出。',
+    desc: '统一开采宗门矿产：采矿场启用时采矿石，学会探矿术后同时采出玄铁，每座启用的灵石矿让每名矿工额外采出 0.0015 灵石/秒。同一批矿工同时提供已开放矿场的产出。',
     resource: 'rock',
     base: 0.15,
     building: 'quarry',
-    additionalOutputs: [{ resource: 'ore', base: 0.08, building: 'mine' }],
-    // 灵石是修炼硬通货，副产出仅为玄铁的 1/100；矿井数量不重复放大人力。
-    secondary: { resource: 'stone', base: 0.0008, building: 'spiritQuarry' },
-    needs: { anyBuildings: [{ id: 'quarry', count: 1 }, { id: 'mine', count: 1 }] },
+    // 玄铁是前中期资源：探矿术之后，矿工在主产矿石之外一并采出玄铁（不需要另建矿场）。
+    // 单座灵石矿时的基础产出：矿石 0.15 → 玄铁 0.015 → 灵石 0.0015。
+    additionalOutputs: [{ resource: 'ore', base: 0.015, upgrade: 'prospectStudy' }],
+    // 每座启用的灵石矿叠加固定灵石产量，只增加灵石，不增加矿石或玄铁。
+    secondary: { resource: 'stone', base: 0.0015, building: 'spiritQuarry', perBuilding: true },
+    needs: { building: { id: 'quarry', count: 1 } },
   },
   {
     id: 'herbalist',
@@ -48,7 +50,7 @@ export const JOBS = [
     id: 'scholar',
     name: '悟道者',
     glyph: '悟',
-    desc: '静坐藏经阁，把万千念头熬成一点感悟。',
+    desc: '静坐藏经阁，把万千念头熬成一点灵机。',
     resource: 'insight',
     base: 0.02,
     needs: { building: { id: 'library', count: 1 } },

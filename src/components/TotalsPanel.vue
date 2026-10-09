@@ -37,7 +37,7 @@ const assigned = computed(() =>
           <span class="v">{{ fmtAmount(state.stats.totalQi) }}</span>
         </div>
         <div class="kv">
-          <span class="k">累计感悟</span>
+          <span class="k">累计灵机</span>
           <span class="v">{{ fmtAmount(state.stats.totalInsight) }}</span>
         </div>
         <div class="kv">

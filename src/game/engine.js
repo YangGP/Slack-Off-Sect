@@ -70,7 +70,7 @@ export function createDerived() {
     breakthroughDiscount: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     autoCraftUnlocked: false,
-    autoCondenseUnlocked: false,
+    autoCondenseLiquidUnlocked: false,
     daoAutomation: false,
     craftTargetsUnlocked: false,
     buildingSupply: {},
@@ -111,9 +111,17 @@ export function activeOf(state, id) {
 export function jobOutputs(state, job) {
   const outputs = !job.building || activeOf(state, job.building) > 0 ? [{ resource: job.resource, base: job.base }] : []
   for (const output of job.additionalOutputs || []) {
+    // 副产出可以由建筑开启，也可以由研究节点开启（例如矿工的玄铁挂在「探矿术」上）
+    if (output.upgrade && !state.upgrades[output.upgrade]) continue
     if (!output.building || activeOf(state, output.building) > 0) outputs.push(output)
   }
-  if (job.secondary && activeOf(state, job.secondary.building) > 0) outputs.push(job.secondary)
+  if (job.secondary) {
+    const active = activeOf(state, job.secondary.building)
+    if (active > 0) outputs.push({
+      ...job.secondary,
+      base: job.secondary.base * (job.secondary.perBuilding ? active : 1),
+    })
+  }
   return outputs
 }
 
@@ -359,7 +367,7 @@ export function nextArrivalIn(state, derived) {
  * （界面就不显示时间）。
  *
  * 两条路：
- *   1. 有产出的资源（灵气/灵木/玄铁/灵草/感悟/香火）按净额算；
+ *   1. 有产出的资源（灵气/灵木/玄铁/灵草/灵机/香火）按净额算；
  *   2. **没有产出、但有制作配方的成品**（灵石/丹药/符箓/法器）走「现印」那条路：
  *      先递归算凑齐配方材料要多久，再加上制作这些份数的耗时 ——
  *      只有该配方勾了「自动」才算制作时间，手动点「制作」是瞬发的。
@@ -423,6 +431,12 @@ function applyEffects(ef, mult, targets, src) {
   if (ef.storage) {
     for (const k in ef.storage) max[k] = (max[k] || 0) + ef.storage[k] * mult
   }
+  // 比例加仓：这里只累计百分比，等所有定额加仓都算完、在 recompute 收尾处统一放大。
+  // 若不这样分两步，上限会随"效果遍历顺序"变化（先加的定额被放大、后加的不被放大）。
+  if (ef.storageRatio) {
+    if (!acc.storageRatio) acc.storageRatio = {}
+    for (const k in ef.storageRatio) acc.storageRatio[k] = (acc.storageRatio[k] || 0) + ef.storageRatio[k] * mult
+  }
   if (ef.storageAll) {
     for (const r of RESOURCES) max[r.id] = (max[r.id] || 0) + ef.storageAll * mult * (r.storageWeight ?? 1)
   }
@@ -442,7 +456,7 @@ function applyEffects(ef, mult, targets, src) {
   if (ef.offlineHours) acc.offlineHours += ef.offlineHours * mult
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
   if (ef.autoCraft) acc.autoCraftUnlocked = true
-  if (ef.autoCondense) acc.autoCondenseUnlocked = true
+  if (ef.autoCondenseLiquid) acc.autoCondenseLiquidUnlocked = true
   if (ef.energyCraft) acc.energyCraftUnlocked = true
   if (ef.prod) {
     for (const k in ef.prod) prod[k] = (prod[k] || 0) + ef.prod[k] * mult
@@ -509,7 +523,7 @@ function recomputeRaw(state, derived, supply) {
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     karmaRatio: 0,
     autoCraftUnlocked: false,
-    autoCondenseUnlocked: false,
+    autoCondenseLiquidUnlocked: false,
     ratioAll: 0,
   }
   // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目] }
@@ -529,6 +543,7 @@ function recomputeRaw(state, derived, supply) {
     const counted = !!meta.upkeep
     const countOnly = {}
     if (ef.storage) countOnly.storage = ef.storage
+    if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
     if (ef.storageAll) countOnly.storageAll = ef.storageAll
     if (ef.maxDisciples) countOnly.maxDisciples = ef.maxDisciples
     if (ef.morale && !counted) countOnly.morale = ef.morale
@@ -537,6 +552,7 @@ function recomputeRaw(state, derived, supply) {
     if (Object.keys(countOnly).length) applyEffects(countOnly, e.count, targets)
     const activeOnly = { ...ef }
     delete activeOnly.storage
+    delete activeOnly.storageRatio
     delete activeOnly.storageAll
     delete activeOnly.maxDisciples
     if (!counted) {
@@ -661,7 +677,7 @@ function recomputeRaw(state, derived, supply) {
   /**
    * 第二种驱动：灵能（会逸散）→ **基础物资**产出倍率。
    * 只作用于 CONFIG.QI_ENERGY_BASIC（灵木/灵石/玄铁/灵草/木板）：
-   * 丹药以上的成品、感悟、香火都不吃 —— 否则后期会变成"一条倍率通吃"。
+   * 丹药以上的成品、灵机、香火都不吃 —— 否则后期会变成"一条倍率通吃"。
    */
   const energyStock = Math.max(0, state.resources.qiEnergy || 0)
   const energyBonus =
@@ -762,6 +778,12 @@ function recomputeRaw(state, derived, supply) {
     if (r.integer) max[r.id] = Math.floor(max[r.id] + EPS)
   }
   derived.karmaStorageMult = karmaStorageMult
+  // 比例加仓在此统一生效：上限 =（基础 + 定额）×（1 + 比例）
+  if (acc.storageRatio) {
+    for (const k in acc.storageRatio) {
+      if (acc.storageRatio[k] > 0) max[k] = (max[k] || 0) * (1 + acc.storageRatio[k])
+    }
+  }
   derived.max = max
   state.__max = max // 供 addResource 使用（不参与存档序列化，仅内存）
   derived.rates = rates
@@ -808,9 +830,9 @@ function recomputeRaw(state, derived, supply) {
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = (state.dao || 0) >= 1
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
-  derived.autoCondenseUnlocked = acc.autoCondenseUnlocked
-  // 满仓凝石与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
-  derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseUnlocked
+  derived.autoCondenseLiquidUnlocked = acc.autoCondenseLiquidUnlocked
+  // 满仓凝液与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
+  derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseLiquidUnlocked
   derived.ratio = ratio
   derived.jobRatio = jobRatio
   // 此刻正在跑的自动制作对材料的每秒消耗（悬停明细的出项口径，见 computeAutoCraftDrain 的说明）
@@ -1143,17 +1165,17 @@ export function runAutoCraft(state, derived, dt) {
 
 /**
  * 《凝灵诀》：每逢节气，若灵气满仓，把仓内一定比例（AUTO_CONDENSE_RATIO）的灵气
- * 一次凝成灵石；仓库没满时不动手，不要求整节气收支累计。
+ * 一次凝成灵液；需先掌握《凝液法》，仓库没满时不动手，不要求整节气收支累计。
  * 由 tick 的历法推进在节气变化的那一刻调用（离线模拟同样逐步过 tick，所以离线也照做）。
  * 与《心有灵犀》的常驻自动制作互不冲突：那是照节奏一直做，这只在节气收盈余。
  */
 export function runAutoCondense(state, derived) {
-  if (!derived.autoCondenseUnlocked || !state.settings.autoCraftOn) return false
+  if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
   const qiMax = derived.max.qi || 0
   const qi = state.resources.qi || 0
   if (qi < qiMax - EPS) return false
   const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
-  const recipe = CRAFT_MAP.infuseStone
+  const recipe = CRAFT_MAP.condenseLiquid
   if (!isCraftUnlocked(state, recipe)) return false
   const times = Math.floor((qi * ratio) / recipe.cost.qi)
   let made = false
@@ -1250,24 +1272,6 @@ export function drawQi(state, derived) {
   return gain
 }
 
-/** 每次催生按剩余容量缩减收益与费用，避免满仓或临近满仓浪费灵气。 */
-export function woodGrowth(state, derived) {
-  const room = Math.max(0, (derived.max.wood || 0) - (state.resources.wood || 0))
-  const gain = Math.min(CONFIG.GROW_WOOD_GAIN, room)
-  const cost = { qi: CONFIG.GROW_WOOD_QI_COST * gain / CONFIG.GROW_WOOD_GAIN }
-  return { gain, cost, affordable: gain > EPS && canAfford(state, cost) }
-}
-
-export function growWood(state, derived) {
-  const growth = woodGrowth(state, derived)
-  if (!growth.affordable) return 0
-  const gained = addResource(state, 'wood', growth.gain)
-  if (gained <= 0) return 0
-  payCost(state, { qi: CONFIG.GROW_WOOD_QI_COST * gained / CONFIG.GROW_WOOD_GAIN })
-  trackPeak(state)
-  return gained
-}
-
 export function craft(state, derived, recipeId, { silent = false, times = 1 } = {}) {
   const recipe = CRAFTS.find((c) => c.id === recipeId)
   if (!recipe || !isCraftUnlocked(state, recipe)) return 0
@@ -1305,11 +1309,11 @@ export function treasureMult(state, entry) {
 
 /** 这件法宝下一次祭炼要花多少（基础花费 × 1.7^当前等级） */
 /**
- * 法宝祭炼的花费：**材料价 × 1.7^k + 感悟 × 1.7^k**。
+ * 法宝祭炼的花费：**材料价 × 1.7^k + 灵机 × 1.7^k**。
  *
- * 技艺层的炼成花费里只有「打了三折的感悟」（手艺主要靠材料练，§12.12），
- * 而**祭炼仍然按原来的感悟量收**（`refine.insight`）—— 它本来就是「打坐参悟、把法宝温养出灵性」，
- * 也是后期感悟的主要去处。炼成价里那点感悟**不重复计入**祭炼，所以祭炼的感悟部分 =
+ * 技艺层的炼成花费里只有「打了三折的灵机」（手艺主要靠材料练，§12.12），
+ * 而**祭炼仍然按原来的灵机量收**（`refine.insight`）—— 它本来就是「打坐参悟、把法宝温养出灵性」，
+ * 也是后期灵机的主要去处。炼成价里那点灵机**不重复计入**祭炼，所以祭炼的灵机部分 =
  * `refine.insight × 1.7^k`，与 §12.6 那张累计表一致。
  */
 export function refineCost(state, id) {
@@ -1318,7 +1322,7 @@ export function refineCost(state, id) {
   const k = Math.pow(CONFIG.TREASURE_REFINE_RATIO, treasureLevel(state, id))
   const out = {}
   for (const res in meta.cost) {
-    if (res === 'insight') continue // 炼成价里的感悟不参与祭炼，改用下面的 refine.insight
+    if (res === 'insight') continue // 炼成价里的灵机不参与祭炼，改用下面的 refine.insight
     out[res] = meta.cost[res] * k
   }
   const insight = meta.refine?.insight || 0
@@ -1400,7 +1404,7 @@ export function breakthrough(state, derived) {
   return true
 }
 
-/** 本世**存下**的感悟（走 addResource，会被仓储上限截断；仙缘公式用的是它） */
+/** 本世**存下**的灵机（走 addResource，会被仓储上限截断；仙缘公式用的是它） */
 export function lifeInsightOf(state) {
   return Math.max(0, state.stats?.lifeInsight || 0)
 }
@@ -1428,7 +1432,7 @@ export function canReincarnate(state) {
 
 /**
  * 仙缘结算公式（转世与飞升共用）：
- *   sqrt(本世累计感悟 ÷ 2000) × (1 + 境界 × 0.3) × (1 + 飞升加成)
+ *   sqrt(本世累计灵机 ÷ 2000) × (1 + 境界 × 0.3) × (1 + 飞升加成)
  * 于是「越晚结算越值钱」是自动的：化神期约 22 点、渡劫期约 197 点。
  */
 function settleKarma(state, derived, allowed) {
@@ -1811,7 +1815,7 @@ export function tick(state, derived, dt, opts = {}) {
   state.totalDays = (state.totalDays || 0) + cap / CALENDAR.DAY_SECONDS
   const cal = calendarAt(state.totalDays)
   if (cal.termIndex !== calBefore.termIndex) {
-    // 凝灵诀：节气一到，满仓的灵气按比例凝成灵石（不满仓不动手，离线也照做）
+    // 凝灵诀：节气一到，满仓的灵气按比例凝成灵液（不满仓不动手，离线也照做）
     runAutoCondense(state, derived)
     if (!offline && cal.seasonIndex !== calBefore.seasonIndex) {
       pushLog(

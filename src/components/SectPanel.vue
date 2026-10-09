@@ -13,12 +13,31 @@ import {
   buildingCost,
   countOf,
   clickGain,
-  woodGrowth,
+  craftYield,
+  maxCraftable,
 } from '@/game/engine'
+import { CRAFT_MAP } from '@/data/crafts'
 import { CONFIG } from '@/data/config'
 import { fmt } from '@/game/format'
 import BuildingButton from './BuildingButton.vue'
 import HoverTip from './HoverTip.vue'
+
+/**
+ * 催生灵木的入口数据：与炼制页取的是同一配方、同一套判据。
+ * 它既在炼制页里（可自动、可批量），也在建筑列表这里（开局顺手点）。
+ */
+const grow = computed(() => {
+  const meta = CRAFT_MAP.growWood
+  const canMake = maxCraftable(state, derived, 'growWood')
+  return {
+    meta,
+    canMake,
+    affordable: canMake >= 1,
+    yield: craftYield(derived, meta),
+    have: state.resources.wood || 0,
+    max: derived.max.wood || 0,
+  }
+})
 
 const FILTERS = [
   { id: 'all', name: '全部' },
@@ -35,8 +54,6 @@ const buildingOrder = new Map(BUILDING_DISPLAY_ORDER.map((id, index) => [id, ind
 const showCore = computed(() => filter.value === 'all' || filter.value === 'affordable')
 
 const gain = computed(() => clickGain(state, derived))
-const growth = computed(() => woodGrowth(state, derived))
-
 /** 已解锁的建筑（未解锁的还没露面） */
 const unlocked = computed(() => BUILDINGS.filter((b) => isBuildingUnlocked(state, b.id)))
 
@@ -102,29 +119,35 @@ const tabs = computed(() => [
       </HoverTip>
     </div>
 
+    <!-- 核心按钮 2：催生灵木（与炼制页同一配方，这里给一个开局顺手的入口） -->
     <div v-if="showCore" class="build-item">
       <HoverTip :width="300">
-        <button class="build-btn" :class="{ poor: !growth.affordable }" :disabled="!growth.affordable" @click="actions.growWood()">
+        <button
+          class="build-btn"
+          :class="{ poor: !grow.affordable }"
+          :disabled="!grow.affordable"
+          @click="actions.craft('growWood')"
+        >
           催生灵木
         </button>
         <template #tip>
           <div class="tip-body">
             <div class="tip-title">催生灵木</div>
-            <div class="tip-desc">以灵气催动山中木芽，取得营造所需的灵木。开局即可使用。</div>
+            <div class="tip-desc">{{ grow.meta.desc }}</div>
             <div class="tip-section">价格与收益</div>
             <div class="tip-row">
-              <span class="k">每次兑换</span>
-              <span class="v">灵气 {{ fmt(CONFIG.GROW_WOOD_QI_COST) }} → 灵木 {{ fmt(CONFIG.GROW_WOOD_GAIN) }}</span>
+              <span class="k">每份</span>
+              <span class="v">灵气 {{ fmt(grow.meta.cost.qi) }} → 灵木 {{ fmt(grow.yield) }}</span>
             </div>
             <div class="tip-row">
-              <span class="k">本次费用</span>
-              <span class="v" :class="{ bad: !growth.affordable && growth.gain > 0 }">灵气 {{ fmt(growth.cost.qi) }}</span>
+              <span class="k">本次可做</span>
+              <span class="v" :class="{ bad: !grow.affordable }">{{ grow.canMake }} 份</span>
             </div>
             <div class="tip-row">
-              <span class="k">本次收益</span>
-              <span class="v good">灵木 +{{ fmt(growth.gain) }}</span>
+              <span class="k">灵木现有</span>
+              <span class="v">{{ fmt(grow.have) }} / {{ fmt(grow.max) }}</span>
             </div>
-            <div class="tip-flavor">满仓时停止；剩余容量不足时同比减少费用与收益。</div>
+            <div class="tip-flavor">点一下立刻出一份；满仓自然停下。炼制页里也能连续或自动催生。</div>
           </div>
         </template>
       </HoverTip>

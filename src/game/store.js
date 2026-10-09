@@ -28,6 +28,7 @@ export const derived = reactive(E.createDerived())
 
 /** 临时 UI 状态（不存档） */
 export const ui = reactive({
+  debug: false,
   offlineReport: null,
   toast: null,
   message: null,
@@ -39,6 +40,17 @@ export const ui = reactive({
    */
   highlight: { need: [], lack: [] },
 })
+
+// 控制台执行 DEBUG 开启本次页面的调试入口；刷新后恢复隐藏，不写入存档。
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'DEBUG', {
+    configurable: true,
+    get() {
+      ui.debug = true
+      return '调试模式已开启'
+    },
+  })
+}
 
 /** 悬停某个花费时高亮对应资源；cost 形如 { qi: 100, wood: 20 } */
 export function highlightCost(cost) {
@@ -265,11 +277,6 @@ export const actions = {
     E.recompute(state, derived)
     return total
   },
-  growWood() {
-    const gained = E.growWood(state, derived)
-    E.recompute(state, derived)
-    return gained
-  },
 
   /** 祭炼法宝：每级效果 +30%，花费 ×1.7 递增 */
   refineTreasure(id) {
@@ -344,6 +351,7 @@ export const actions = {
     return true
   },
   triggerEvent() {
+    if (!ui.debug) return false
     E.fireEvent(state, derived)
     afterAction('', '')
   },

@@ -75,7 +75,7 @@ export const REALMS = [
     mult: 40,
     desc: '体内正负失衡在即，天雷 —— 天地正灵子的极化打击 —— 在头顶盘旋，只等一个正负归一、飞升而去的时机。',
     cost: {
-      insight: 200000,
+      insight: 150000,
       stone: 150000,
       pill: 600,
       artifact: 180,

@@ -3,7 +3,7 @@
  *
  * **三类**（`type` 字段）：
  *   nature  自然环境类 —— 主要影响**全局产出**，有正有负，持续一段时间（`buff`）
- *   sudden  突发事件类 —— 立刻结算：发现遗迹资源 / 顿悟得感悟 / 丢失物资（`lootRate` / `disaster` / `recruit`）
+ *   sudden  突发事件类 —— 立刻结算：发现遗迹资源 / 顿悟得灵机 / 丢失物资（`lootRate` / `disaster` / `recruit`）
  *   choice  选择类     —— 权衡收益与代价，或暂不介入
  *
  * `level` 按金丹、炼虚两个分界标注阶段（1金丹前 / 2金丹至化神 / 3炼虚起）。
@@ -276,7 +276,7 @@ export const EVENTS = [
     options: [
       {
         label: '举宗探洞',
-        desc: '洞中石窟颇丰：得法器与感悟；但惊动守洞之物，折损一批灵木。',
+        desc: '洞中石窟颇丰：得法器与灵机；但惊动守洞之物，折损一批灵木。',
         effect: {
           lootRate: { artifact: 24, insight: 900 },
           floor: { artifact: 2, insight: 200 },
@@ -302,12 +302,12 @@ export const EVENTS = [
     options: [
       {
         label: '收为客卿',
-        desc: '得一位好手（弟子 +1）与感悟；但客卿嘴刁，要备一批丹药。',
+        desc: '得一位好手（弟子 +1）与灵机；但客卿嘴刁，要备一批丹药。',
         effect: { recruit: 1, lootRate: { insight: 200 }, floor: { insight: 80 }, tradeCost: { pill: { seconds: 90, floor: 2 } } },
       },
       {
         label: '婉言谢过',
-        desc: '不留人，只求他讲一段见闻：得感悟；临别赠灵石作路费。',
+        desc: '不留人，只求他讲一段见闻：得灵机；临别赠灵石作路费。',
         effect: { lootRate: { insight: 400 }, floor: { insight: 400 }, tradeCost: { stone: { seconds: 48, floor: 5 } } },
       },
     ],
@@ -354,7 +354,7 @@ export const EVENTS = [
     options: [
       {
         label: '闭门参悟',
-        desc: '大有领悟（感悟 +大）；但参悟时耗掉一批符箓试阵。',
+        desc: '大有领悟（灵机 +大）；但参悟时耗掉一批符箓试阵。',
         effect: {
           lootRate: { insight: 1200 },
           floor: { insight: 400 },
@@ -363,7 +363,7 @@ export const EVENTS = [
       },
       {
         label: '拓印存录',
-        desc: '把碑文拓下藏进经阁：得符箓、木板与阵基；但拓印要耗感悟。',
+        desc: '把碑文拓下藏进经阁：得符箓、木板与阵基；但拓印要耗灵机。',
         effect: { lootRate: { talisman: 20, plank: 6, arrayBase: 8 }, floor: { talisman: 6, plank: 3, arrayBase: 1 }, tradeCost: { insight: { seconds: 36, floor: 10 } } },
       },
     ],
@@ -385,7 +385,7 @@ export const EVENTS = [
       },
       {
         label: '放归山林',
-        desc: '不强留：幼兽衔来一株老药作谢（灵草 +小、感悟 +）；但它踏坏了半畦药圃。',
+        desc: '不强留：幼兽衔来一株老药作谢（灵草 +小、灵机 +）；但它踏坏了半畦药圃。',
         effect: {
           lootRate: { herb: 60, insight: 300 },
           floor: { herb: 20, insight: 100 },
@@ -458,7 +458,7 @@ export const EVENTS = [
     options: [
       {
         label: '引雷淬体',
-        desc: '得大量感悟与法器；但淬体要烧丹药补损，香火也要散出去安抚人心。',
+        desc: '得大量灵机与法器；但淬体要烧丹药补损，香火也要散出去安抚人心。',
         effect: {
           lootRate: { insight: 3000, artifact: 120 },
           floor: { insight: 1500, artifact: 20 },
@@ -497,7 +497,7 @@ export const EVENTS = [
       },
       {
         label: '退让换和',
-        desc: '让出三里，换邻宗一批法器与香火；但弟子们心里憋屈（感悟小损）。',
+        desc: '让出三里，换邻宗一批法器与香火；但弟子们心里憋屈（灵机小损）。',
         effect: {
           lootRate: { artifact: 100, faith: 2500 },
           floor: { artifact: 20, faith: 800 },
@@ -527,7 +527,7 @@ export const EVENTS = [
       },
       {
         label: '原地封存',
-        desc: '不拆，只把阵纹拓回经阁：得大量感悟与符箓；但拓印耗去不少丹药。',
+        desc: '不拆，只把阵纹拓回经阁：得大量灵机与符箓；但拓印耗去不少丹药。',
         effect: {
           lootRate: { insight: 6000, talisman: 200 },
           floor: { insight: 3000, talisman: 30 },
@@ -557,7 +557,7 @@ export const EVENTS = [
       },
       {
         label: '引水入圃',
-        desc: '把寒潭水引进药圃：灵草与灵木疯长；但寒气伤了弟子心神（感悟小损）。',
+        desc: '把寒潭水引进药圃：灵草与灵木疯长；但寒气伤了弟子心神（灵机小损）。',
         effect: {
           lootRate: { herb: 2000, wood: 2500 },
           floor: { herb: 600, wood: 800 },
@@ -587,7 +587,7 @@ export const EVENTS = [
       },
       {
         label: '婉拒此局',
-        desc: '不赌：只与他对坐论道，得大量感悟；临别以符箓相赠。',
+        desc: '不赌：只与他对坐论道，得大量灵机；临别以符箓相赠。',
         effect: {
           lootRate: { insight: 12000 },
           floor: { insight: 6000 },
@@ -608,7 +608,7 @@ export const EVENTS = [
     options: [
       {
         label: '入池试劫',
-        desc: '提前尝过天威：感悟暴涨、香火大盛；但雷池一开，灵石与符箓都要垫进去。',
+        desc: '提前尝过天威：灵机暴涨、香火大盛；但雷池一开，灵石与符箓都要垫进去。',
         effect: {
           lootRate: { insight: 20000, faith: 6000 },
           floor: { insight: 10000, faith: 2000 },
@@ -661,7 +661,7 @@ export function isEventInRealm(event, realm) {
 /** 三类事件的展示名与说明（界面与文档共用一份口径） */
 export const EVENT_TYPES = [
   { id: 'nature', name: '自然环境', hint: '天时地气，主要影响全局产出，有正有负' },
-  { id: 'sudden', name: '突发事件', hint: '立刻结算：发现遗迹资源、顿悟得感悟，也可能丢失物资' },
+  { id: 'sudden', name: '突发事件', hint: '立刻结算：发现遗迹资源、顿悟得灵机，也可能丢失物资' },
   { id: 'choice', name: '选择', hint: '选一个：有所得，也要接受另一面的代价' },
 
 ]

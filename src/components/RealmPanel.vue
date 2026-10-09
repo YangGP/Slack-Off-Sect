@@ -78,7 +78,7 @@ function reincarnate() {
             <td class="num good">{{ view.realmName.value }}</td>
             <td class="dim nowrap">境界倍率</td>
             <td class="num">×{{ derived.realmMult.toFixed(2) }}</td>
-            <td class="dim nowrap">本世感悟</td>
+            <td class="dim nowrap">本世灵机</td>
             <td class="num">{{ fmtAmount(state.stats.lifeInsight || 0) }}</td>
           </tr>
           <tr>

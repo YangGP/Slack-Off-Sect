@@ -58,6 +58,7 @@ for (const key of [
   'Event',
   'MouseEvent',
   'KeyboardEvent',
+  'FileReader',
   'requestAnimationFrame',
   'cancelAnimationFrame',
   'getComputedStyle',
@@ -93,7 +94,7 @@ console.warn = (...args) => warnings.push(args.map(String).join(' '))
 // ---------- 2. 加载客户端 bundle 并挂载 ----------
 const bundlePath = fileURLToPath(new URL('../.smoke-dom-client/dom-check-app.js', import.meta.url))
 const mod = await import(pathToFileURL(bundlePath).href)
-const { state, derived, actions, startLoop, stopLoop, saveNow, engine } = mod
+const { state, derived, ui, actions, startLoop, stopLoop, saveNow, engine } = mod
 
 console.log('== 挂载 ==')
 let mountError = null
@@ -402,7 +403,7 @@ state.resources.qi = affordabilityQi
       rows.join(' ｜ '),
     )
     ok('一行里不带逗号顿号堆叠（每行只有一项）', effectRows.every((r) => !r.includes('，') && !r.includes('、')), effectRows.join(' ｜ '))
-    ok('库房不再给灵气 / 感悟 / 丹药 / 符箓 / 香火 / 法器 加上限', !/灵气 上限|感悟 上限|丹药 上限|符箓 上限|香火 上限|法器 上限/.test(tip.textContent), tip.textContent.replace(/\s+/g, ' ').slice(-120))
+    ok('库房不再给灵气 / 灵机 / 丹药 / 符箓 / 香火 / 法器 加上限', !/灵气 上限|灵机 上限|丹药 上限|符箓 上限|香火 上限|法器 上限/.test(tip.textContent), tip.textContent.replace(/\s+/g, ' ').slice(-120))
     ok('合计写在同一条里', effectRows.some((r) => r.includes('（合计')), effectRows.join(' ｜ '))
     ok('悬停时高亮的正是这座建筑的造价（灵木 / 玄铁）', (() => {
       const lit = [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim())
@@ -710,7 +711,7 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
   state.log = snapshot
 }
 
-// 等级和纪事类型、关键词独立组合；旧纪事不凭文案猜等级。
+// 保留事件等级标签，筛选只使用纪事类型和关键词。
 {
   const snapshot = state.log
   state.log = [
@@ -723,22 +724,13 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
   const lines = () => [...doc.querySelectorAll('.log .log-text')].map(el => el.textContent)
   const button = (name) => [...doc.querySelectorAll('.log-filters button')].find(b => b.textContent.trim() === name)
   ok('纪事显示三级标签，旧纪事照常展示', lines().length === 4 && lines()[0].includes('一级·金丹前') && lines()[3] === '旧纪事')
-  button('二级·金丹至化神').click()
-  await new Promise(r => setTimeout(r, 50))
-  ok('等级筛选只显示相应事件', lines().length === 1 && lines()[0].includes('妖兽'))
+  ok('纪事移除事件等级筛选', !doc.querySelector('[aria-label="事件等级筛选"]') && !button('一级·金丹前') && !button('二级·金丹至化神') && !button('三级·炼虚起'))
   button('进展').click()
   await new Promise(r => setTimeout(r, 50))
-  ok('等级与纪事类型可以组合筛选', lines().length === 0)
+  ok('类型筛选包含不同等级的纪事', lines().length === 2 && lines()[0].includes('灵雨') && lines()[1].includes('天门'))
   button('重置').click()
   await new Promise(r => setTimeout(r, 50))
-  ok('重置同时恢复等级和类型', lines().length === 4)
-  button('三级·炼虚起').click()
-  await new Promise(r => setTimeout(r, 50))
-  ok('天地级可单独筛选且按钮表达选中状态', lines().length === 1 && lines()[0].includes('天门') && button('三级·炼虚起').getAttribute('aria-pressed') === 'true')
-  ok('纪事移除全部等级按钮', !button('全部等级'))
-  button('三级·炼虚起').click()
-  await new Promise(r => setTimeout(r, 50))
-  ok('再次点击已选等级取消筛选并显示全部纪事', lines().length === 4 && button('三级·炼虚起').getAttribute('aria-pressed') === 'false')
+  ok('重置类型筛选恢复全部纪事', lines().length === 4)
   state.log = snapshot
   await new Promise(r => setTimeout(r, 50))
 }
@@ -746,7 +738,7 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
 state.ui.tab = 'cultivation'
 await new Promise((r) => setTimeout(r, 50))
 ok('修真页渲染出来了', html().includes('研究本源'))
-ok('修真页不列技艺·法宝层的条目', ![...doc.querySelectorAll('.main table.grid tbody tr')].some(tr => ['引气诀', '聚灵珠'].includes(tr.cells[0]?.textContent.trim())))
+ok('修真页不列技艺·法宝层的条目', ![...doc.querySelectorAll('.main table.grid tbody tr')].some(tr => ['引气诀', '聚灵幡'].includes(tr.cells[0]?.textContent.trim())))
 
 // 修真 / 技艺页的花费列只写「需要多少」，现有与还差多久都进悬停提示
 {
@@ -772,7 +764,7 @@ const cells = dataRows.map((tr) => ({
     cells.length > 0 && cells.every((c) => !c.cost.includes('/') && !c.cost.includes('（')),
     cells.slice(0, 3).map((c) => `${c.name}:${c.cost}`).join(' ｜ '),
   )
-  ok('需求值仍然按资源逐项写出', /^感悟\s*\d+/.test(cells[0]?.cost || ''), cells[0]?.cost || '')
+  ok('需求值仍然按资源逐项写出', /^灵机\s*\d+/.test(cells[0]?.cost || ''), cells[0]?.cost || '')
   const target = dataRows.find((tr) => tr.cells[0]?.textContent.trim() === '观气法')
   const trigger = target?.querySelector('.cost .tip-trigger')
   ok('花费单元格是 tooltip 触发器', !!trigger)
@@ -798,7 +790,7 @@ const cells = dataRows.map((tr) => ({
     )
     ok(
       '不够的花费写成「现有 / 需要（还差多久）」',
-      /感悟\s*120 \/ 150（还差 .+）/.test(tip),
+      /灵机\s*120 \/ 150（还差 .+）/.test(tip),
       costRows.join(' ｜ '),
     )
     ok('够的花费只写需求值', /灵木\s*300(?!\s*\/)/.test(tip), costRows.join(' ｜ '))
@@ -807,21 +799,21 @@ const cells = dataRows.map((tr) => ({
   }
 }
 
-// 技艺页的筛选：全部 / 技艺 / 法宝（灵源考已完成，聚灵珠已经开放）
+// 技艺页的筛选：全部 / 技艺 / 法宝（灵源考已完成，聚灵幡已经开放）
 state.ui.tab = 'skills'
 state.ui.skillFilter = 'treasure'
 await new Promise((r) => setTimeout(r, 60))
 ok(
   '筛选「法宝」后只剩法宝（技艺条目不再出现）',
-  html().includes('聚灵珠') && !html().includes('引气诀'),
+  html().includes('聚灵幡') && !html().includes('引气诀'),
 )
-ok('研究灵源考后聚灵珠不再显示缺失前置', !doc.querySelector('.main details.fold')?.textContent.includes('聚灵珠'))
+ok('研究灵源考后聚灵幡不再显示缺失前置', !doc.querySelector('.main details.fold')?.textContent.includes('聚灵幡'))
 state.ui.skillFilter = 'skill'
 await new Promise((r) => setTimeout(r, 60))
-ok('筛选「技艺」后不出现法宝', !html().includes('聚灵珠') && html().includes('引气诀'))
+ok('筛选「技艺」后不出现法宝', !html().includes('聚灵幡') && html().includes('引气诀'))
 state.ui.skillFilter = 'all'
 await new Promise((r) => setTimeout(r, 40))
-ok('筛选「全部」时两类都在', html().includes('聚灵珠') && html().includes('引气诀'))
+ok('筛选「全部」时两类都在', html().includes('聚灵幡') && html().includes('引气诀'))
 
 // 法宝祭炼：炼成之后出现「已炼成的法宝」表，点祭炼会升级、效果与花费都往上走
 {
@@ -829,11 +821,11 @@ ok('筛选「全部」时两类都在', html().includes('聚灵珠') && html().i
   state.ui.skillFilter = 'treasure'
   state.resources.insight = 20000
   state.resources.stone = 100
-  // 直接给上修真前置，专心测祭炼（不然聚灵珠还锁在《灵源考》后面）
+  // 直接给上修真前置，专心测祭炼（不然聚灵幡还锁在《灵源考》后面）
   state.upgrades.qiOrigin = true
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 60))
-  // 炼成与祭炼都要「材料 + 感悟」，按当前花费把两种都给足（花费形状以后变了也不会假失败）
+  // 炼成与祭炼都要「材料 + 灵机」，按当前花费把两种都给足（花费形状以后变了也不会假失败）
   const affordRefine = (id, times = 4) => {
     const c = engine.refineCost(state, id) || {}
     const research = engine.UPGRADE_MAP[id]?.cost || {}
@@ -843,26 +835,26 @@ ok('筛选「全部」时两类都在', html().includes('聚灵珠') && html().i
     }
     engine.recompute(state, derived)
   }
-  affordRefine('spiritPearl')
-  actions.research('spiritPearl')
+  affordRefine('spiritBanner')
+  actions.research('spiritBanner')
   await new Promise((r) => setTimeout(r, 60))
   ok('炼成后出现「已炼成的法宝」表', html().includes('已炼成的法宝') && html().includes('Lv.0'))
 
   const refineBtn = () =>
     [...doc.querySelectorAll('.box-body > table.grid .btn')].find((b) => b.textContent.trim() === '祭炼')
-  const costBefore = engine.refineCost(state, 'spiritPearl').insight
+  const costBefore = engine.refineCost(state, 'spiritBanner').insight
   const qiRateBefore = derived.rates.qi
-  affordRefine('spiritPearl')
+  affordRefine('spiritBanner')
   await new Promise((r) => setTimeout(r, 60))
   refineBtn()?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   await new Promise((r) => setTimeout(r, 60))
-  ok('点祭炼升到 Lv.1', engine.treasureLevel(state, 'spiritPearl') === 1)
+  ok('点祭炼升到 Lv.1', engine.treasureLevel(state, 'spiritBanner') === 1)
   ok('行里显示等级与倍率', /Lv\.1/.test(html()) && /×1\.30/.test(html()))
   ok('祭炼后产出变高', derived.rates.qi > qiRateBefore, `${qiRateBefore.toFixed(2)} → ${derived.rates.qi.toFixed(2)}`)
   ok(
     '下次祭炼更贵（×1.7）',
-    Math.abs(engine.refineCost(state, 'spiritPearl').insight - costBefore * 1.7) < 1e-6,
-    `${costBefore} → ${engine.refineCost(state, 'spiritPearl').insight}`,
+    Math.abs(engine.refineCost(state, 'spiritBanner').insight - costBefore * 1.7) < 1e-6,
+    `${costBefore} → ${engine.refineCost(state, 'spiritBanner').insight}`,
   )
   state.ui.skillFilter = 'all'
 }
@@ -893,6 +885,9 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
 
   const rowBtns = () => [...doc.querySelectorAll('.main .craft-row .btn')]
   const btn = (label) => rowBtns().find((b) => b.textContent.trim() === label)
+  // 配方顺序会变（催生灵木已排在最前），所以这几个点击一律限定在「点石成灵」那一行
+  const infuseRow = () => [...doc.querySelectorAll('.main .craft-row')].find((r) => /点石成灵/.test(r.textContent))
+  const ibtn = (label) => [...(infuseRow()?.querySelectorAll('.btn') || [])].find((b) => b.textContent.trim() === label)
   ok('每个配方一行四个按钮：制作 / ¼料 / ½料 / 全部', ['制作', '¼料', '½料', '全部'].every((l) => !!btn(l)), rowBtns().map((b) => b.textContent.trim()).join(' '))
 
   // 炼制的悬停提示：不再写「制作怎么点」的说明，只留价格 / 产出（含这批能做多少）/ 自动制作
@@ -913,7 +908,7 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
   // 制作：固定 1 份
   const before1 = state.resources.stone || 0
   const qi1 = state.resources.qi || 0
-  btn('制作')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  ibtn('制作')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   ok(
     '点「制作」正好做 1 份',
     (state.resources.stone || 0) - before1 === 1 && Math.abs(qi1 - (state.resources.qi || 0) - 15) < 1e-6,
@@ -929,7 +924,7 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
   await new Promise((r) => setTimeout(r, 60))
   const canMake = engine.maxCraftable(state, derived, 'infuseStone')
   const beforeHalf = state.resources.stone || 0
-  btn('½料')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  ibtn('½料')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   ok(
     `点「½料」做掉一半（${canMake} → ${Math.floor(canMake / 2)} 份）`,
     (state.resources.stone || 0) - beforeHalf === Math.floor(canMake / 2),
@@ -943,7 +938,7 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 60))
   const beforeQ = state.resources.stone || 0
-  btn('¼料')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  ibtn('¼料')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   ok(
     '点「¼料」做掉四分之一（20 → 5 份）',
     (state.resources.stone || 0) - beforeQ === 5,
@@ -956,11 +951,11 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
   state.resources.stone = 0
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 60))
-  ok('材料只够 3 份时「¼料」置灰（取整为 0）', btn('¼料')?.disabled === true)
-  ok('此时「½料」还能用（3 → 1 份）', btn('½料')?.disabled === false)
+  ok('材料只够 3 份时「¼料」置灰（取整为 0）', ibtn('¼料')?.disabled === true)
+  ok('此时「½料」还能用（3 → 1 份）', ibtn('½料')?.disabled === false)
 
   // 自动：没参悟《心有灵犀》时是禁用的
-  const autoBox = () => doc.querySelector('.main .craft-row .sw input[type=checkbox]')
+  const autoBox = () => doc.querySelector('.main [data-craft="infuseStone"] .sw input[type=checkbox]')
   ok('未参悟《心有灵犀》时「自动」复选框禁用', !!autoBox()?.disabled)
 
   // 参悟后：勾上自动 = 一份一份定时做（不是瞬间刷满）
@@ -976,7 +971,7 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
   autoBox()?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   ok('勾上自动这一瞬间还没产出（它是一份一份做的）', (state.resources.stone || 0) === stoneAtStart)
   await new Promise((r) => setTimeout(r, 60))
-  ok('行里显示自动进度', /自动中/.test(doc.querySelector('.main .craft-row')?.textContent || ''))
+  ok('行里显示自动进度', /自动中/.test(doc.querySelector('.main [data-craft="infuseStone"]')?.textContent || ''))
 
   // 真跑一会儿：0.5 秒一份，1.2 秒只该多出几份（主循环前面已 stopLoop，这里临时再开一段）
   startLoop()
@@ -991,7 +986,7 @@ ok('制作生效', (state.resources.stone || 0) > stoneBefore)
   ok('取消勾选后不再自动做', engine.isAutoCrafting(state, derived, 'infuseStone') === false)
   ok(
     '取消后行里的「自动中」消失',
-    !/自动中/.test(doc.querySelector('.main .craft-row')?.textContent || ''),
+    !/自动中/.test(doc.querySelector('.main [data-craft="infuseStone"]')?.textContent || ''),
   )
 }
 state.ui.tab = 'realm'
@@ -1062,7 +1057,7 @@ ok('境界面板渲染', html().includes('飞升'))
   state.realm = 6
   state.upgrades.qiOrigin = true
   state.upgrades.qiArt = true
-  state.treasureLevels.spiritPearl = 2
+  state.treasureLevels.spiritBanner = 2
   state.buildings.hut = { count: 4, on: true }
   state.resources.qi = 999
   state.karma = 7
@@ -1160,7 +1155,7 @@ ok('境界面板渲染', html().includes('飞升'))
   const realmCostText = doc.querySelector('.main .cost')?.textContent.replace(/\s+/g, ' ').trim() || ''
   ok(
     '破境表的花费列只有需求值',
-    realmCostText.includes('感悟') && !realmCostText.includes('/') && !realmCostText.includes('（'),
+    realmCostText.includes('灵机') && !realmCostText.includes('/') && !realmCostText.includes('（'),
     realmCostText.slice(0, 70),
   )
   const realmCostCell = doc.querySelector('.main .cost .tip-trigger')
@@ -1186,6 +1181,16 @@ ok('境界面板渲染', html().includes('飞升'))
 state.ui.tab = 'settings'
 await new Promise((r) => setTimeout(r, 50))
 ok('设置面板渲染', html().includes('存档'))
+ok('默认隐藏手动奇遇入口', !text().includes('来一次奇遇'))
+const eventsBeforeDebug = state.stats.eventsSeen
+ok('未开启调试时禁止手动奇遇', actions.triggerEvent() === false && state.stats.eventsSeen === eventsBeforeDebug)
+window.DEBUG
+await new Promise((r) => setTimeout(r, 50))
+ok('控制台 DEBUG 显示手动奇遇入口', text().includes('来一次奇遇'))
+const debugEventButton = [...doc.querySelectorAll('button')].find(b => b.textContent.includes('来一次奇遇'))
+debugEventButton.click()
+ok('调试入口点击触发奇遇', state.stats.eventsSeen === eventsBeforeDebug + 1)
+ui.debug = false
 
 // ---------- 5. 存档 ----------
 console.log('\n== 存档 ==')
@@ -1199,6 +1204,45 @@ actions.importText(exported)
 ok('导入后数据被还原', state.buildings.hut.count === hutCount)
 const raw = JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1'))
 ok('存档结构完整', !!(raw.resources && raw.disciples && raw.stats && raw.buildings))
+ok('调试开关不写入存档', !('debug' in raw) && !('debug' in raw.ui))
+
+{
+  const settingsButton = name => [...doc.querySelectorAll('.main button')].find(b => b.textContent.trim() === name)
+  ok('存档使用文件入口并移除文本框和复制按钮', !!doc.querySelector('.main input[type="file"]') && !doc.querySelector('.main textarea') && !settingsButton('复制到剪贴板'))
+  const originalCreate = URL.createObjectURL
+  const originalRevoke = URL.revokeObjectURL
+  const originalClick = window.HTMLAnchorElement.prototype.click
+  let downloadedBlob, downloadedName, revoked = false
+  try {
+    URL.createObjectURL = blob => { downloadedBlob = blob; return 'blob:save-download' }
+    URL.revokeObjectURL = url => { revoked = url === 'blob:save-download' }
+    window.HTMLAnchorElement.prototype.click = function () { downloadedName = this.download }
+    settingsButton('导出存档').click()
+    const content = await downloadedBlob.text()
+    const backup = JSON.parse(decodeURIComponent(Buffer.from(content, 'base64').toString('utf8')))
+    ok('导出按钮下载可读取的存档文件', downloadedName.endsWith('.txt') && backup.buildings.hut.count === hutCount)
+    await new Promise(r => setTimeout(r, 1100))
+    ok('下载后释放文件地址', revoked && !doc.querySelector('a[download]'))
+    const input = doc.querySelector('.main input[type="file"]')
+    const upload = async (content, name) => {
+      Object.defineProperty(input, 'files', { value: [new window.File([content], name, { type: 'text/plain' })], configurable: true })
+      input.dispatchEvent(new window.Event('change', { bubbles: true }))
+      await new Promise(r => setTimeout(r, 80))
+    }
+    state.buildings.hut.count = 1
+    await upload(content, 'backup.txt')
+    ok('上传旧格式文本存档恢复进度并保存', state.buildings.hut.count === hutCount && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).buildings.hut.count === hutCount && text().includes('读档成功') && input.value === '')
+    state.buildings.hut.count = 1
+    await upload(JSON.stringify(backup), 'backup.json')
+    ok('上传 JSON 存档恢复进度', state.buildings.hut.count === hutCount && text().includes('读档成功'))
+    await upload('invalid save', 'broken.txt')
+    ok('无效文件提示错误且保留当前进度', state.buildings.hut.count === hutCount && text().includes('导入失败') && !!settingsButton('读取存档') && !settingsButton('读取存档').disabled)
+  } finally {
+    URL.createObjectURL = originalCreate
+    URL.revokeObjectURL = originalRevoke
+    window.HTMLAnchorElement.prototype.click = originalClick
+  }
+}
 
 // ---------- 6. 报错检查 ----------
 console.log('\n== 统一资源净额 ==')
@@ -1233,7 +1277,7 @@ console.log('\n== 凝灵诀状态 ==')
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 50))
   const buildingNames = [...doc.querySelectorAll('.main .build-btn')].map(el => el.textContent.trim().replace(/\s*·\s*缺料$/, '').replace(/\s*\(\d+\)$/, ''))
-  ok('全解锁时基础居所在矿业前、药藏在精舍前、因果池最后', buildingNames.indexOf('茅屋') < buildingNames.indexOf('玄铁矿') && buildingNames.indexOf('药藏') < buildingNames.indexOf('精舍') && buildingNames.at(-1) === '因果池')
+  ok('全解锁时基础居所在矿业前、药藏在精舍前、因果池最后', buildingNames.indexOf('茅屋') < buildingNames.indexOf('炼铁炉') && buildingNames.indexOf('药藏') < buildingNames.indexOf('精舍') && buildingNames.at(-1) === '因果池')
   doc.querySelector('.left .craft-open')?.click()
   await new Promise((r) => setTimeout(r, 50))
   ok('快捷入口能打开完整炼制页', state.ui.tab === 'craft' && !!doc.querySelector('.main .craft-full'))
@@ -1359,24 +1403,30 @@ state.ui.tab = 'craft'
 state.upgrades.condenseArt = true
 state.upgrades.intuition = false
 state.dao = 0
+state.upgrades.liquidArt = false
+state.settings.autoCraftOn = true
+engine.recompute(state, derived)
+await new Promise(r => setTimeout(r, 50))
+ok('凝液法解锁前显示等待条件', text().includes('凝灵诀 · 需金丹期凝液法'))
+state.upgrades.liquidArt = true
 state.settings.autoCraftOn = false
-state.resources.stone = 0
+state.resources.spiritLiquid = 0
 engine.recompute(state, derived)
 await new Promise((r) => setTimeout(r, 50))
-ok('凝灵诀在常驻自动解锁前提供库存目标', !derived.autoCraftUnlocked && !!window.document.querySelector('input[aria-label="点石成灵库存目标"]'))
+ok('凝灵诀在常驻自动解锁前提供库存目标', !derived.autoCraftUnlocked && !!window.document.querySelector('input[aria-label="凝气成液库存目标"]'))
 ok('自动炼制未解锁时全部自动复选框禁用', doc.querySelector('.main input[aria-label="全部自动"]')?.disabled)
 ok('凝灵诀展示总开关暂停状态', text().includes('凝灵诀 · 总开关已暂停'))
 state.settings.autoCraftOn = true
-actions.setCraftTarget('infuseStone', 2)
-state.resources.stone = 2
+actions.setCraftTarget('condenseLiquid', 2)
+state.resources.spiritLiquid = 2
 engine.recompute(state, derived)
 await new Promise((r) => setTimeout(r, 50))
 ok('凝灵诀展示库存目标已达状态', text().includes('凝灵诀 · 目标已达'))
-state.resources.stone = 0
-state.resources.rock = 0
+state.resources.spiritLiquid = 0
+state.resources.qi = 0
 engine.recompute(state, derived)
 await new Promise(r => setTimeout(r, 50))
-ok('凝灵诀向玩家显示缺石材暂停', text().includes('凝灵诀 · 缺石材暂停'))
+ok('凝灵诀向玩家显示缺灵气暂停', text().includes('凝灵诀 · 缺灵气暂停'))
 actions.importText(beforeCondense)
 await new Promise((r) => setTimeout(r, 50))
 

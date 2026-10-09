@@ -12,9 +12,9 @@
  * 与 /技艺·法宝/ 的分工：
  *   修真（本文件）：两条研究线 + 宗门经营；主线与经营节点仍只做解锁与系统开关，
  *                   材料研究线携带专业制作与产业增益
- *   技艺           ：通用产量、仓储、感悟等增益；法宝（kind: 'treasure'）由修真解锁后炼成
+ *   技艺           ：通用产量、仓储、灵机等增益；法宝（kind: 'treasure'）由修真解锁后炼成
  *
- * 两者共用「感悟」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
+ * 两者共用「灵机」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
  */
 import { TECHNIQUES } from './techniques.js'
 
@@ -49,9 +49,10 @@ export const CULTIVATION = [
     name: '凝灵诀',
     glyph: '凝',
     cost: { insight: 120, wood: 150, stone: 20 },
-    desc: '观清气脉后，掌握向石材稳定灌灵的方法。节气一至，将满仓盈余灵气灌入备好的石材，制成灵石。',
-    effectDesc: '每逢节气，灵气满仓且石材充足时自动制作灵石；缺石材则暂停，遵守库存目标与材料保留量。',
-    effects: { autoCondense: true },
+    desc: '观清气脉后，掌握把灵气压成液态的门径。节气一至，将满仓盈余灵气自行压入玉瓶。',
+    effectDesc: '掌握金丹期《凝液法》后，每逢节气，灵气满仓时自动凝聚灵液；灵气不足则暂停，遵守库存目标与材料保留量。',
+    // 效果由"自动制作灵石"改为"自动凝聚灵液"：灵石可由点石成灵手动补，灵液才是真的耗灵气。
+    effects: { autoCondenseLiquid: true },
     needs: { upgrades: ['qiGazing'], building: { id: 'quarry', count: 1 } },
   },
   {
@@ -62,7 +63,7 @@ export const CULTIVATION = [
     desc: '破境时少走弯路，花费降低 15%。',
     effectDesc: '因此破境时省下一成半材料，冲关更从容。',
     effects: { breakthroughDiscount: 0.15 },
-    needs: { realm: 3, upgrades: ['qiGazing', 'alchemyArt'] },
+    needs: { realm: 3, upgrades: ['qiGazing', 'alchemyArt', 'alchemyFire', 'earthArt'] },
   },
 
   // ---------- Ⅱ 凝聚（筑基→金丹）：怎么把灵气存住、存好 ----------
@@ -75,7 +76,9 @@ export const CULTIVATION = [
     effectDesc: '因此掌握《凝气成液》：灵气自此有了存得住的形态。',
     effects: { unlockBuildings: [] },
     note: '开启配方：凝气成液',
-    needs: { realm: 3, upgrades: ['condenseArt'] },
+    // 后移：凝灵诀现在给的就是"自动凝聚灵液"，凝液法本身挪到金丹期，
+    // 只动这一条，下游（灵植术→探矿术/炼丹术…）保持原位。
+    needs: { realm: 4, upgrades: ['condenseArt'] },
   },
   {
     id: 'crystalTheory',
@@ -182,7 +185,7 @@ export const CULTIVATION = [
     name: '大乘心经',
     glyph: '经',
     cost: { insight: 9000, artifact: 60, talisman: 60, pill: 60, faith: 6000 },
-    desc: '以心养药，以愿证道。感悟与香火产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。',
+    desc: '以心养药，以愿证道。灵机与香火产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。',
     effects: { ratio: { insight: 1.2, faith: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
     // 前置大乘心印到大乘才开，境界标注与实际门槛对齐（旧档写合体）
     needs: { realm: 9, upgrades: ['greatVehicleSeal'] },
@@ -202,7 +205,7 @@ export const CULTIVATION = [
     id: 'annihilationArt',
     name: '湮灭法',
     glyph: '湮',
-    // 研究花费同样要落在可达上限内：早先写 30 万感悟，而参照玩家的感悟上限约 26.8 万，
+    // 研究花费同样要落在可达上限内：早先写 30 万灵机，而参照玩家的灵机上限约 26.8 万，
     // 于是《湮灭法》永远参悟不了 —— 分灵阵盖了、粒子堆着、灵能始终为 0。
     cost: { insight: 60000, nineTurnPill: 20, spiritTalisman: 20 },
     desc: '控制供料、相位与场形，让正负灵子越过湮灭门槛，成对消耗为可回收的灵能，并排出废热。',
@@ -290,7 +293,7 @@ export const CULTIVATION = [
     effects: { craftBonusByResource: { plank: 0.05 } },
     // 它是木料链的第二环：伐木场出原木 → 器械解板 → 木板才是百工坊的料。
     // 所以它**不能**要百工坊，也不能要木板（否则与"百工坊用木板下料"闭环）。
-    needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 2 }, { id: 'mine', count: 1 }] },
+    needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 2 }, { id: 'ironFurnace', count: 1 }] },
   },
   // 自技艺页迁入（工艺）
   {
@@ -300,7 +303,7 @@ export const CULTIVATION = [
     cost: { insight: 900, plank: 30, ore: 600 },
     desc: '引山泉推水轮，锯木成板昼夜不停。木板与阵基制作产出 +8%。',
     effects: { craftBonusByResource: { plank: 0.08, arrayBase: 0.08 } },
-    needs: { upgrades: ['woodworking'] },
+    needs: { upgrades: ['woodworking', 'intuition'] },
   },
   // 自技艺页迁入（精研）：化神产业强化之一
   {
@@ -329,11 +332,13 @@ export const CULTIVATION = [
     name: '探矿术',
     glyph: '探',
     cost: { insight: 60, wood: 200 },
-    desc: '考察灵植根系与土层后，沿山势、水脉与岩层追索矿脉，找出玄铁所在。',
-    effects: { unlockBuildings: ['mine'] },
-    note: '解锁建筑：玄铁矿',
-    effectDesc: '因此循脉找矿：玄铁矿挖得下去了。',
-    needs: { upgrades: ['herbStudy'] },
+    desc: '考察灵植根系与土层后，沿山势、水脉与岩层追索矿脉，找出玄铁所在；再以矿石与灵木起炉，把矿石烧成玄铁。',
+    effects: { unlockBuildings: ['ironFurnace'] },
+    note: '解锁建筑：炼铁炉；矿工同时采出玄铁',
+    effectDesc: '因此循脉找矿：起一座炼铁炉，矿工采石之余也带出玄铁。',
+    // 后移：原来是《灵植术》之后（约 145 分），现在挂到《炼丹术》之后（约 190 分），
+    // 并且玄铁不再是"再开一座矿"，而是矿石+灵木烧出来的前中期料。
+    needs: { upgrades: ['alchemyArt'] },
   },
   {
     id: 'forgeArt',
@@ -343,7 +348,7 @@ export const CULTIVATION = [
     desc: '丹火既通，转入炉锤。解锁炼器坊与「淬炼法器」。',
     effectDesc: '因此淬得出器，法器不再只是纸上谈兵。',
     effects: { unlockBuildings: ['forge'] },
-    needs: { upgrades: ['alchemyArt', 'woodworking'], building: { id: 'mine', count: 1 } },
+    needs: { upgrades: ['alchemyArt', 'woodworking', 'earthArt'], building: { id: 'ironFurnace', count: 1 } },
   },
   // 自技艺页迁入（工艺）：开放淬玄成钢
   {
@@ -363,7 +368,7 @@ export const CULTIVATION = [
     cost: { insight: 780, ore: 4000, artifact: 18, steel: 6 },
     desc: '御剑运木探矿，剑火淬炼器胚。灵木与玄铁产出 +20%，法器、灵器与灵宝制作产出 +10%。',
     effects: { ratio: { wood: 0.2, ore: 0.2 }, craftBonusByResource: { artifact: 0.1, spiritArtifact: 0.1, spiritTreasure: 0.1 } },
-    needs: { upgrades: ['deepShaft'], building: { id: 'forge', count: 3 } },
+    needs: { realm: 4, upgrades: ['deepShaft', 'steelWorking'], building: { id: 'forge', count: 3 } },
   },
   // 自技艺页迁入（精研）：化神产业强化之一
   {
@@ -396,7 +401,7 @@ export const CULTIVATION = [
     desc: '观气识纹、炼器定形之后，学会将引气纹路落在符纸上。解锁符箓堂与「朱砂符箓」。',
     effectDesc: '因此画得出符，镇妖避劫有了凭据。',
     effects: { unlockBuildings: ['talismanHall'] },
-    needs: { upgrades: ['forgeArt', 'qiGazing'] },
+    needs: { upgrades: ['forgeArt', 'qiGazing'], building: { id: 'forge', count: 1 } },
   },
   // 自技艺页迁入（工艺）：开放组装阵基
   {
@@ -459,7 +464,7 @@ export const CULTIVATION = [
     cost: { insight: 270, herb: 900, pill: 6 },
     desc: '火候拿捏到分毫不差，出炉的成色都不一样。丹药与九转丹制作产出 +5%。',
     effects: { craftBonusByResource: { pill: 0.05, nineTurnPill: 0.05 } },
-    needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
+    needs: { upgrades: ['alchemyArt', 'forgeArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
 
   // ---------- 香火族 ----------
@@ -468,11 +473,11 @@ export const CULTIVATION = [
     name: '香火愿',
     glyph: '愿',
     cost: { insight: 200, wood: 400 },
-    desc: '立下山门，许下一桩愿，香客自会寻来。',
+    desc: '营造与工艺渐成，以符箓立愿、设下山门，香客自会寻来。',
     effects: { unlockBuildings: ['gate'] },
     note: '解锁建筑：山门',
     effectDesc: '因此立得起山门，香客自会寻来。',
-    needs: { upgrades: ['earthArt'] },
+    needs: { upgrades: ['earthArt', 'talismanArt'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'incenseStudy',
@@ -497,7 +502,9 @@ export const CULTIVATION = [
     note: '解锁建筑：库房',
     effectDesc: '因此垒得起库房：基础物资存得住，才谈得上囤积。',
     // 先取得矿料并掌握木作器械，再研究石基木架的营造与扩仓。
-    needs: { upgrades: ['prospectStudy', 'woodworking'], building: { id: 'mine', count: 3 } },
+    // 门槛从 ×3 降到 ×1：炼铁炉按 1.3 涨价，第 3 座要 304 矿石，而这一阶段矿石上限只有
+    // 250（要库房才能抬），库房又在本术之下 —— ×3 等于把土木术锁死。
+    needs: { upgrades: ['prospectStudy', 'woodworking'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'earthEssence',
@@ -529,7 +536,7 @@ export const CULTIVATION = [
     glyph: '讲',
     cost: { insight: 320 },
     desc: '把玄之又玄的道理，讲成弟子听得懂的人话。解锁讲经堂。',
-    effectDesc: '因此长老可以登坛讲经，感悟的来源不再只有藏书。',
+    effectDesc: '因此长老可以登坛讲经，灵机的来源不再只有藏书。',
     effects: { unlockBuildings: ['academy'] },
     needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt', 'woodworking'], realm: 4 },
   },
@@ -551,18 +558,18 @@ export const CULTIVATION = [
     desc: '下山贴榜、沿途施粥。弟子前来的间隔缩短 30%。',
     effectDesc: '因此山门名声在外，愿意上山的弟子更勤。',
     effects: { arrivalBonus: 0.3 },
-    needs: { building: { id: 'gate', count: 3 } },
+    needs: { upgrades: ['incenseVow'], building: { id: 'gate', count: 3 } },
   },
   {
     id: 'intuition',
     name: '心有灵犀',
     glyph: '犀',
     cost: { insight: 900, stone: 600, pill: 10 },
-    desc: '丹炉火候、符纸厚薄，不必盯着也知道。解锁自动制作。',
+    desc: '丹炉火候、木料下刀，不必盯着也知道。解锁自动制作。',
     effectDesc: '因此配方可以自动连做，双手从重复劳动里解放。',
     effects: { autoCraft: true },
-    // 自动制作不该被某一座建筑卡住：器械齐了、手上有一批丹药，就能标准化流程
-    needs: { upgrades: ['woodworking'] },
+    // 器械齐备并掌握丹火后再标准化流程，避免与营造、炼器和流水作坊一起铺开。
+    needs: { upgrades: ['woodworking', 'alchemyFire'] },
   },
   {
     id: 'ancestorArt',

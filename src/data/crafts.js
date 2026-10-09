@@ -8,6 +8,23 @@
  */
 export const CRAFTS = [
   {
+    // 搬迁自宗门页的手动按钮：现在它就是炼制页里的一条普通配方，
+    // 于是"点一下立刻出一份"（制作是瞬发的）、满仓自动停下、连同自动炼制一并免费得到。
+    id: 'growWood',
+    name: '催生灵木',
+    out: 'wood',
+    amount: 1,
+    tier: 1,
+    primary: ['qi'],
+    cost: { qi: 5 },
+    time: 1,
+    // 定价口径：樵夫 0.15 灵木/秒 vs 阵徒 0.6 灵气/秒 → 劳动平价是 4 灵气/灵木。
+    // 与「点石成灵」取同一条溢价（1.25×）→ 收 5 灵气。早期写过 10，等于 2.5 倍溢价，
+    // 比雇樵夫贵一倍多，会让这个入口变成陷阱（见文档的汇率表）。
+    desc: '以灵气催动山中木芽，开局即可使用：每份消耗灵气 5，得灵木 1；仓满时自然停下。',
+  },
+
+  {
     id: 'infuseStone',
     name: '点石成灵',
     out: 'stone',
@@ -16,7 +33,7 @@ export const CRAFTS = [
     primary: ['rock'],
     cost: { rock: 3, qi: 15 },
     time: 3,
-    desc: '从三块石材中筛选、切出易于存气的矿料，再灌入灵气制成一枚灵石。需采矿场提供石材，每份消耗石矿3与灵气15。',
+    desc: '从三块石材中筛选、切出易于存气的矿料，再灌入灵气制成一枚灵石。需采矿场提供石材，每份消耗矿石3与灵气15。',
     needs: { building: { id: 'quarry', count: 1 } },
   },
   {
@@ -177,6 +194,7 @@ export const CRAFTS = [
     desc: '灵器为骨、九转丹为髓、灵符为纹。三样齐备，才算一件灵宝。',
     needs: { upgrades: ['artifactLore'] },
   },
+
 ]
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))

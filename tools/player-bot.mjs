@@ -6,6 +6,7 @@
  * 目的是给出一个**稳定可复现**的参照玩家，而不是最优打法。
  */
 import * as E from '../src/game/engine.js'
+import { JOB_MAP } from '../src/data/jobs.js'
 import { CONFIG } from '../src/data/config.js'
 import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
 import { CRAFTS } from '../src/data/crafts.js'
@@ -19,15 +20,15 @@ export const PRIORITY = [
   'library',
   'granary',
   'logHouse',
-  'mine',
-  // 普通石料来源：采矿场喂灵石矿/聚灵大阵/库房的石矿造价，也供「点石成灵」
-  // （参照玩家必须知道它，否则建筑永远卡在石矿上）
+  'ironFurnace',
+  // 普通石料来源：采矿场喂灵石矿/聚灵大阵/库房的矿石造价，也供「点石成灵」
+  // （参照玩家必须知道它，否则建筑永远卡在矿石上）
   'quarry',
-  // 天然灵石来源：与玄铁矿同一条寻脉线，排在旁边（参照玩家必须知道它，
+  // 天然灵石来源：与炼铁炉同一条寻脉线，排在旁边（参照玩家必须知道它，
   // 否则新建筑永远不出现在推演里 —— 实测加进去之前，10 小时曲线一字不差）
   'spiritQuarry',
   'herbGarden',
-  'warehouse',
+'warehouse',
   'gate',
   'spiritVein',
   'gatheringArray',
@@ -67,8 +68,19 @@ export const PRIORITY = [
  * 24 小时从合体期直接掉到筑基期（灵石与玄铁被抽干）。
  * 这里模拟玩家会做的事：基础材料留够才炼，成品也囤到够用就停。
  */
+/**
+ * 「救急」配方：把全局第一资源（灵气）换成基础材料的兑换。
+ *
+ * 它们开局就可用，若混进"所有可用配方一律批量制作"的循环，参照玩家会把灵气抽干
+ * （实测：参悟 0 条、前 30 分钟灵木有一成时间贴顶 —— 整局被这一条配方拖垮）。
+ * 所以这里按玩家会做的事处理：**只在材料见底时才用**。
+ */
+export const RESCUE_CRAFTS = {
+  growWood: { watch: 'wood', below: 0.2 },
+}
+
 export const ADVANCED_CRAFTS = {
-  // 点石成灵吃石矿：矿要留够盖房砌阵（600 起）。
+  // 点石成灵吃矿石：矿要留够盖房砌阵（600 起）。
   // 灵石是硬通货，囤货上限交给需求侧（craftDemand 含破境/奇观费用），cap 只做保底 ——
   // 因果池单笔要 100 万灵石，cap 低于它就会卡参照玩家（冒烟断言守着这条）。
   infuseStone: { base: 'rock', floor: 10, cap: 1000000 },
@@ -130,30 +142,31 @@ export function createBot(state, derived) {
       E.setJob(state, derived, 'farmer', Math.min(farmer + idle, needFarmers))
     }
 
-    // 剩下的按「感悟优先」分配：三成去悟道，其余平摊给产资源的职位
+    // 剩下的按「谁最缺」分配：每次把一个人派给"存量 ÷ 上限"最低的职位，直到人手用完。
+    //
+    // 早先这里是"三成悟道、其余平摊"，结果在 v0.2 的世界里直接卡死：
+    // 灵气与灵机各自顶格（占比接近 1），灵木却只剩 1/3840，而平摊只给樵夫 1 个人 ——
+    // 灵木断供，灵石矿/炼器坊/符箓堂全都建不起来，推演 24 小时后就完全不动了。
+    // 稀缺度口径与"境界/加成"无关，所以同一套策略在改动前后仍然是同一个玩家。
     const order = ['scholar', 'woodcutter', 'miner', 'herbalist', 'incenseKeeper'].filter((id) =>
       derived.unlockedJobs.includes(id),
     )
-    let rest = E.idleDisciples(state)
-    if (rest <= 0 || !order.length) return
-
-    if (order.includes('scholar')) {
-      const scholars = Math.max(1, Math.floor(rest / 3))
-      E.setJob(state, derived, 'scholar', (state.disciples.jobs.scholar || 0) + scholars)
-    }
-    rest = E.idleDisciples(state)
-    const others = order.filter((id) => id !== 'scholar')
-    if (rest > 0 && others.length) {
-      const share = Math.floor(rest / others.length)
-      for (const jobId of others) {
-        if (share <= 0) break
-        E.setJob(state, derived, jobId, (state.disciples.jobs[jobId] || 0) + share)
+    for (let guard = 0; guard < 200 && E.idleDisciples(state) > 0; guard++) {
+      let best = null
+      let bestScore = Infinity
+      for (const id of order) {
+        const job = JOB_MAP[id]
+        if (!job) continue
+        const res = job.resource
+        const cap = derived.max[res] || 1
+        const score = (state.resources[res] || 0) / cap
+        if (score < bestScore - 1e-9) {
+          bestScore = score
+          best = id
+        }
       }
-      const left = E.idleDisciples(state)
-      if (left > 0) {
-        const jobId = others[0]
-        E.setJob(state, derived, jobId, (state.disciples.jobs[jobId] || 0) + left)
-      }
+      if (!best) break
+      E.setJob(state, derived, best, (state.disciples.jobs[best] || 0) + 1)
     }
   }
 
@@ -166,9 +179,27 @@ export function createBot(state, derived) {
       const id = PRIORITY[idx]
       if (!derived.unlockedBuildings.includes(id)) continue
       const cost = E.buildingCost(state, id, 1)
-      // 先建伐木场、谷仓，再攒首座采矿场，避免反复扩屋把开局木料花光。
-      if (E.countOf(state, 'hut') > 0 && E.countOf(state, 'quarry') === 0 && cost.wood &&
-          id !== (E.countOf(state, 'lumberYard') === 0 ? 'lumberYard' : E.countOf(state, 'granary') === 0 ? 'granary' : 'quarry')) continue
+      // 开局自举期：先伐木场、后谷仓，再攒首座采矿场 —— 避免反复扩屋把开局木料花光。
+      //
+      // 但这条锁必须留一个例外，否则会死锁：采矿场自己也要木材（前置还得先有谷仓），
+      // 而木材又被制作目标持续吃掉；于是"没采矿场 → 不许买任何吃木材的建筑 → 永远攒不出采矿场"，
+      // 人口住满、房子盖不了，推演能从 24 小时一路平到 96 小时。
+      // 例外 = 人口已住满、且这座建筑正是扩屋时放行：多一个人就多一份产出，扩屋永远是划算的。
+      const bootstrapLocked =
+        E.countOf(state, 'hut') > 0 &&
+        E.countOf(state, 'quarry') === 0 &&
+        !!cost.wood &&
+        id !==
+          (E.countOf(state, 'lumberYard') === 0
+            ? 'lumberYard'
+            : E.countOf(state, 'granary') === 0
+              ? 'granary'
+              : 'quarry')
+      if (bootstrapLocked) {
+        const housingCapped = state.disciples.total >= (derived.maxDisciples || 0)
+        const isHousing = (E.BUILDING_MAP[id]?.effects?.maxDisciples || 0) > 0
+        if (!(housingCapped && isHousing)) continue
+      }
       if ((cost.qi || 0) > qiBudget) continue
       if (!E.canAfford(state, cost)) continue
       const score = idx + E.countOf(state, id) * 0.6
@@ -196,7 +227,9 @@ export function createBot(state, derived) {
       }
       craftDemand = demand
       for (const c of CRAFTS) {
-        if (!['plank', 'pill', 'talisman', 'artifact', 'arrayBase'].includes(c.out)) continue
+        // 灵石（stone）必须在这张名单里：破境与研究都要它，而它的唯一来源就是点石成灵。
+        // 早先漏了它，参照玩家于是把矿石与灵气堆到满仓、却一件灵石都不做（实测卡在筑基期/元婴期）。
+        if (!['plank', 'pill', 'talisman', 'artifact', 'arrayBase', 'stone'].includes(c.out)) continue
         // 阵基的下料也是短期需求；普通成品还预留进阶配方的一份料。
         let inputDemand = 0
         for (const recipe of CRAFTS) {
@@ -235,8 +268,8 @@ export function createBot(state, derived) {
     assignJobs()
 
     // 参悟「最快能凑齐」的那条（修真与技艺·法宝两层合并的口径，所以要用 ALL_UPGRADES 查表）。
-    // 注意不能按某一两种资源的数值排序 —— 技艺层不再吃感悟之后，
-    // 「按感悟排序」会把所有技艺排在修真前面，机器人就永远不去点修真了（实测 8 小时卡在炼气期）。
+    // 注意不能按某一两种资源的数值排序 —— 技艺层不再吃灵机之后，
+    // 「按灵机排序」会把所有技艺排在修真前面，机器人就永远不去点修真了（实测 8 小时卡在炼气期）。
     // 按「这一条最慢的那项资源还要等多久」排序，才是与资源结构无关的口径。
     const waitOf = (u) => {
       let worst = 0
@@ -274,6 +307,14 @@ export function createBot(state, derived) {
       const target = E.craftTarget(state, derived, c.id)
       if (target > 0 && (state.resources[c.out] || 0) >= target) continue
       if (c.id === 'infuseStone' && state.resources.qi < STONE_QI_FLOOR) continue
+      const rescue = RESCUE_CRAFTS[c.id]
+      if (rescue) {
+        // 只在「看的那个资源」低于上限的两成时才催生一次
+        const cap = derived.max[rescue.watch] || 0
+        if ((state.resources[rescue.watch] || 0) > cap * rescue.below) continue
+        if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 1 })
+        continue
+      }
       const adv = ADVANCED_CRAFTS[c.id]
       if (adv) {
         // 进阶品按需炼：料要留够（单料 base/floor，多料 floors），成品囤够就停（一次一份）
@@ -298,9 +339,23 @@ export function createBot(state, derived) {
     // 它按每份耗时一份一份地做，材料不够就先歇着，正好是玩家会做的事
     if (derived.autoCraftUnlocked) {
       state.settings.autoCraftOn = true
+      // 住满又买不起下一座居所时，先别把灵木全加工掉 —— 真人会停一下加工、先把房盖上。
+      //
+      // v0.2 的中段就卡在这：木屋 4/5（精舍的前置是 logHouse ≥ 5），第 5 座要约 1730 灵木，
+      // 而灵木 +24/秒的富余每一跳都被自动制作换成了木板/符箓 —— 永远攒不出来，
+      // 于是 24 到 72 小时一直停在"住满 44 人"。
+      const housingCapped = state.disciples.total >= (derived.maxDisciples || 0)
+      const homeCandidates = ['hut', 'logHouse', 'mansion', 'caveDwelling']
+        .filter((id) => derived.unlockedBuildings.includes(id))
+        .map((id) => ({ id, cost: E.buildingCost(state, id, 1) }))
+        .filter((x) => (x.cost.wood || 0) > 0)
+        .sort((x, y) => x.cost.wood - y.cost.wood)
+      const savingForHome =
+        housingCapped && homeCandidates.length > 0 && (state.resources.wood || 0) < homeCandidates[0].cost.wood
+      const RESERVE_HOUSING = ['sawPlank', 'drawTalisman', 'assembleArrayBase']
       for (const c of CRAFTS) {
-        // 进阶配方不挂自动：它们吃硬通货，挂上就等于一直在抽血
         if (ADVANCED_CRAFTS[c.id]) continue
+        if (savingForHome && RESERVE_HOUSING.includes(c.id)) continue // 攒房期间这几条不挂自动
         if (derived.availableCrafts.includes(c.id)) state.autoCraft[c.id] = true
       }
     }

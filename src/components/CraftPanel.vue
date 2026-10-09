@@ -72,12 +72,12 @@ function updateQuick(id, event) {
 }
 const condenseStatus = computed(() => {
   if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
-  if (!(state.buildings.quarry?.count > 0)) return '凝灵诀 · 需采矿场'
-  const target = autoCraftStatus(state, derived, 'infuseStone').target
-  if (target > 0 && state.resources.stone >= target) return '凝灵诀 · 目标已达'
-  if (state.resources.stone >= derived.max.stone) return '凝灵诀 · 灵石满仓'
-  if ((state.resources.rock || 0) < CRAFTS.find(c => c.id === 'infuseStone').cost.rock) return '凝灵诀 · 缺石材暂停'
-  return '凝灵诀 · 节气满仓自凝'
+  if (!state.upgrades.liquidArt) return '凝灵诀 · 需金丹期凝液法'
+  const target = autoCraftStatus(state, derived, 'condenseLiquid').target
+  if (target > 0 && state.resources.spiritLiquid >= target) return '凝灵诀 · 目标已达'
+  if (state.resources.spiritLiquid >= derived.max.spiritLiquid) return '凝灵诀 · 灵液满仓'
+  if ((state.resources.qi || 0) < CRAFTS.find(c => c.id === 'condenseLiquid').cost.qi) return '凝灵诀 · 缺灵气暂停'
+  return '凝灵诀 · 节气满仓自凝灵液'
 })
 </script>
 
@@ -96,6 +96,7 @@ const condenseStatus = computed(() => {
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
       </div>
       <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
+      <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需金丹期凝液法</div>
       <div v-if="!compact && derived.daoAutomation" class="small craft-settings">
         <div class="good">道果统筹 · 重修时即可自动炼制</div>
         <label>材料保留
@@ -142,12 +143,12 @@ const condenseStatus = computed(() => {
           </span>
           <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
           <span
-            v-else-if="row.meta.id === 'infuseStone' && derived.autoCondenseUnlocked"
+            v-else-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked"
             class="small dim"
           >
             {{ condenseStatus }}
           </span>
-          <span v-if="!row.autoStatus.on && !(row.meta.id === 'infuseStone' && derived.autoCondenseUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
+          <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
           <span v-if="!compact && row.yield > row.meta.amount" class="dim"> · 小数累积 {{ fmtPercent(row.progress) }}</span>
         </div>
         <div class="craft-line">
@@ -228,7 +229,7 @@ const condenseStatus = computed(() => {
             </div>
 
             <div class="tip-section">自动制作</div>
-            <div v-if="row.meta.id === 'infuseStone' && derived.autoCondenseUnlocked" class="tip-row">
+            <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="tip-row">
               <span class="k">凝灵诀</span>
               <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>
             </div>
