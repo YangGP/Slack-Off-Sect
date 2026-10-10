@@ -1,287 +1,97 @@
-# 工程约定（ENGINEERING）
+# 工程约定与工具
 
-这份文件写给**改代码的人**：前端分层与视觉约定、验证策略、扩展指南。
-游戏设计本身（资源 / 建筑 / 弟子 / 两层学术线 / 公式 / 存档格式 / 平衡目标）在 [DESIGN.md](./DESIGN.md)，
-历次平衡改动在 [BALANCE.md](./BALANCE.md)，全量数据表在 [TABLES.md](./TABLES.md)，
-前期发展的审视（与猫国的实测对照、改造方案与结果）在 [EARLY-GAME.md](./EARLY-GAME.md)。
-下一步的可选方案（想做但还没做的）在 [ROADMAP.md](./ROADMAP.md)，
-修真的定位与两线研究结构（灵气研究主线、材料研究辅线）在 [RESEARCH.md](./RESEARCH.md)。
+更新：2026-10-10。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
 
----
-## 前端架构
+## 分层与数据流
 
-### 14.1 分层与版式
-
-```
-src/data/*.js          数据定义与相关辅助函数：资源/职位/建筑/修真/技艺·法宝/配方/成就/境界/事件/风味/常量
-src/game/engine.js     纯函数引擎：recompute / tick / 购买 / 制作 / 破境 / 飞升 / 事件 / 离线结算
-                       （不依赖 Vue、不碰 DOM，通过 Vite SSR 构建后在 Node 测试（解析 @ 别名））
-src/game/store.js      Vue 单例：reactive(state) + reactive(derived) + 主循环 + actions + view(computed)
-                       + 临时 UI 状态 ui（离线报告 / 提示 / 悬停高亮 highlight）
-src/components/*.vue   展示层：只读 state/derived/view，只通过 actions 改状态
-src/App.vue            布局：标题行 / 状态行 → 提示行 → 标签行 → 三列 → 弹窗
-```
-
-数据流：`组件点击 → actions.xxx → engine 改 state → recompute 重算 derived → Vue 响应式刷新
-→ pushLog 写纪事 → 状态行提示`。组件里**没有业务计算**（除了「这个职位每人每秒产出多少」这类
-纯展示派生），规则计算集中在引擎与数据辅助函数里，具体覆盖以测试输出为准。
-
-版式：整页固定在视口内，三列为左 284px / 中自适应 / 右 300px；不足 1280px 时右列下移到内部滚动区，
-不足 880px 时三列纵向排列并在内容区滚动。完整炼制页和左栏快捷区各自内部滚动，资源及其它长面板也可独立滚动。字号：正文 15px、面板小标题与表头 14px、提示次要行 12px、页标题 18px，
-配 46px 高的建筑按钮（照着「长时间盯数字」调的）。
-
-| 列 | 内容 |
+| 位置 | 职责 |
 | --- | --- |
-| 左 `.left` | `ResourcePanel`（资源明细，每行五列）+ `CraftPanel compact`（自选快捷数量不限，内部滚动） |
-| 中 `.main` | 当前标签的面板（宗门页 = 筛选行 + 建筑按钮网格） |
-| 右 `.right` | `BuffBar`（天象，无增益时不占位）+ `CalendarPanel` + `TotalsPanel`（默认折叠）+ `LogPanel` |
+| src/data/*.js | 数据定义、配置与相关纯辅助函数 |
+| src/game/engine.js | 重算、生产、购买、制作、研究、事件、离线与重置 |
+| src/game/state.js、save.js | 初始状态、归一化、序列化与存档 |
+| src/game/store.js | Vue单例、主循环、actions和临时UI状态 |
+| src/game/format.js、pricing.js、effectsText.js | 数量、价格与效果的统一展示 |
+| src/components/*.vue、App.vue | 展示与交互，通过actions改变状态 |
+| src/styles/main.css | 平面文字表格与响应式布局 |
 
-**为什么顶部只有一行状态行**：最频繁的动作是「看一眼左栏资源、再决定中间买哪座建筑」。
-以前把同一批数字做成一条独立的「宗门概况」通栏放在三列之上，等于写了两遍（顶栏本来就有
-弟子/士气/净额，左栏有逐项明细），于是删掉通栏、把缺的两项（下一位弟子、加成总和）并进状态行，
-让左栏资源第一行与中栏网格第一行从**同一条水平线**开始。端到端测试断言
-「`.wrap` 的子元素恰好是 title-line / stat-line / status-line / tabs / cols」守住这个版式。
+组件调用actions，由引擎修改state并重算derived，Vue更新展示。规则计算集中在引擎和数据辅助函数；derived不保存。引擎不依赖Vue或DOM，测试通过Vite SSR解析@别名后在Node运行。
 
-### 14.2 `derived`（派生数据，不存档）
-
-| 字段 | 用途 |
+| 派生字段 | 含义 |
 | --- | --- |
-| `max` | 各资源上限 |
-| `rates` / `netQi` / `upkeep` | 每秒速率、灵气净额、灵气出项 |
-| `morale` / `moraleBonus` | 当前士气与其正向来源合计 |
-| `maxDisciples` | 弟子上限 |
-| `globalMult` / `realmMult` / `karmaMult` / `ratioAll` / `ratio` / `jobRatio` | 倍率分解（状态行给全局倍率与加成总和，境界页给 `realmMult`） |
-| `bonus` | **加成倍率的逐项拆分账**：`{ ratio: {res:[条目]}, ratioAll: [条目], buffRes, buffAll, realmMult, karmaMult, moraleMult, globalMult }`，每条记「谁 + 了多少」，供资源悬停明细逐项列出（见 DESIGN.md `SourceBreakdown`） |
-| `craftBonus` / `disasterGuard` / `ascendBonus` / `consumeReduction` | 各类特殊加成 |
-| `breakthroughDiscount` / `offlineHours` / `arrivalBonus` | 破境折扣、离线上限、弟子前来加速 |
-| `autoCraftUnlocked` | 是否解锁自动制作 |
-| `buildingSupply` | 带维护费设施的实际运行比例（0~1），与出项及倍率明细保持一致 |
-| `daoAutomation` | 首颗道果开放统筹，允许优先配方与材料保留 |
-| `craftTargetsUnlocked` | 凝灵诀、心有灵犀或首颗道果开放成品库存目标；达到暂停，消费后补货 |
-| `autoCondenseUnlocked` | 凝灵诀节气满仓凝石，与常驻自动独立；服从总开关、库存目标及道果保留量，默认 false |
-| `unlockedBuildings` / `unlockedJobs` / `availableUpgrades` / `availableCrafts` | 解锁与可操作列表 |
+| max、maxDisciples | 资源与居所容量 |
+| rates、net、expense、sources、expenseSources | 实际结算的每秒速率与来源 |
+| habitability、habitabilityBonus、housingHabitability | 宜居度及定额、入住来源 |
+| habitabilityMult、discipleMult、leaveChance | 全局增减产、岗位拥挤倍率与离开概率 |
+| globalMult、realmMult、karmaMult、ratio、jobRatio、bonus | 倍率与来源拆分 |
+| buildingSupply | 带维护费设施的运行比例 |
+| craftBonus、craftBonusByResource、craftSpeed | 制作收益及自动节拍 |
+| disasterGuard、disasterGuardByResource | 通用与指定资源防灾 |
+| autoCraftUnlocked、autoCondenseUnlocked、craftTargetsUnlocked、daoAutomation | 自动加工、凝石、库存目标与道果统筹 |
 
-### 14.3 组件清单
+口粮和维护按expense结算，自动加工逐份扣料。展示收支统一调用resourceFlow计入当前自动耗料，不能将它重复并入expense。来源明细相加应与对应速率一致。
 
-| 组件 | 职责 |
-| --- | --- |
-| `App.vue` | 整体框架：标题行、状态行（境界/弟子 X/Y 与下一位弟子倒计时/闲散/士气/灵气进项·出项·净额/全局倍率与加成总和/仙缘/挂机时长）、操作提示行，以及「状态行 + 标签行 + 三列」的版式 |
-| `ResourcePanel` | 左列资源栏：一行一种资源 —— `名称 · 存量 · /上限 · 净额(+/-/s) · [+加成%]`，五行数字用表格列对齐；悬停由 `HoverTip` 弹出收支明细 |
-| `SourceBreakdown` | 某个资源的收支明细卡（排版与其它提示一致：标题 + 描述 + 分节）：进项逐条列出「来源 ×数量 数值」（阵徒 ×4 人 / 聚灵阵 ×6 / 聚灵大阵 ×1…）、出项逐条列出、净额、**加成倍率及其逐项拆分**（资源加成 / 全局加成 / 季节 / 天象增益 / 全局倍率，每项下面一行小字写明是谁贡献的，例如「聚灵珠 +15%、引气诀 +10%」）、制作来源、存量占比、趋势与资源说明 |
-| `HoverTip` | 通用悬停提示组件：默认插槽是触发器，`#tip` 插槽是内容；延迟弹出、Teleport 到 body 做固定定位，以 `visualViewport`、页面客户区与窗口尺寸的最小可见范围限制尺寸，按实测尺寸留出四边 8px 安全距离；内容、缩放或视口尺寸改变后同步重定位，超长提示可在触发器上用滚轮阅读；`pointer-events: none` 不抢鼠标，显隐时抛出 `show` / `hide` 事件（用于联动左栏资源高亮） |
-| `CraftPanel` | 完整炼制页与左栏快捷复用同一组件：完整页显示材料投入、加成产出、存量/容量、状态、四种手动操作、自动与目标；提供基础/进阶/已选自动筛选、统筹设置和未解锁配方。`compact` 模式不限配方数量，提供制作/½料/全部/自动，隐藏目标与统筹。两处内容各自内部滚动。快捷偏好存入 `settings.quickCrafts`，导入去重与过滤无效项但不截断；两处复用悬停明细与实际动作，满仓禁用手动制作 |
-| `TabNav` | 8 个纯文字标签，用 `\|` 分隔，后面缀 `(闲散人数)` / `(可参悟数)` / `(成就进度)` |
-| `SectPanel` | 宗门页：筛选行（全部 / 可建造 / 已建成 / 可切换 / 各分组）+ 两列建筑按钮网格。网格最前面两个是**核心按钮**：`吸取天地灵气`（点一下 +N 灵气）与 `凝气成石`（灵气 45 → 灵石 1），只跟着「全部 / 可建造」出现，不参与分组筛选；**建筑一次一座（批量制作在炼制页与左栏快捷区）**；顺序由 `BUILDING_DISPLAY_ORDER` 固定，聚灵阵、茅屋、伐木场、谷仓、藏经阁等基础营造靠前，后续产业与境界阶段建筑、奇观靠后；未指定顺序的新建筑放在末尾，不随买得起与否或数量重排 |
-| `BuildingButton` | 建筑按钮：按钮上是「名称 (已建数量)」，买不起时整颗置灰；右侧 `售` 小格（带维护费的建筑还多一个 `停/启`，见 §5.4）。悬停提示多一节 `维护`（每座 / 合计 / 说明）。悬停提示照猫国排版：标题 + 描述 → `价格` 逐行显示（够就只写数量，不够写「现有 / 需要（还差多久）」并标红）→ `效果` 分节（每座 / 合计 / 解锁 / 停用状态）→ 底部一行风味小字 |
-| `DisciplePanel` | 职位表（职位 · 人数 · 每人每秒 · 合计每秒 · ±1/±10/输入/满）+ 人员摘要与下一位弟子的到来时间 |
-| `UpgradeTable` | 参悟表（修真页与技艺页共用）：可参悟表 +「条件未达成」折叠 +「已参悟」折叠；技艺页额外多一张「已炼成的法宝」表（等级 Lv.N ×倍率、当前效果、下次祭炼花费、祭炼按钮）。**花费列只写需求值**（`灵机 300`、`灵机 200 + 灵石 120 + 灵草 100`），不够的那一项标红；「现有多少 / 还差多久 / 参悟后效果」放进**花费单元格自己的悬停提示**里，排版与建筑（宗门）完全一致：标题（名称 + 右侧层名 / 法宝等级）→ 描述 → `价格`（够的只写数量、不够的写「现有 / 需要（还差多久）」并标红）→ `效果`（参悟后 / 炼成后，法宝另给「当前 / 祭炼后」两行）；行级悬停联动左栏资源高亮 |
-| `CultivationPanel` | 修真页：`UpgradeTable` 传修真层（研究 / 解锁），按钮写「参悟」 |
-| `SkillPanel` | 技艺页：筛选行（全部 / 技艺 / 法宝）+ `UpgradeTable` 传技艺·法宝层（纯数值加成）；法宝条目标「法宝」字样、按钮写「炼成」 |
-| `RealmPanel` | 境界轨迹一行、境界与仙缘对照表、破境表、飞升表 |
-| `ChangelogModal` | 右下角固定更新日志入口，显示当前版本；弹窗按新到旧列出记录，支持关闭按钮、遮罩、Esc和键盘焦点循环，关闭后焦点返回入口 |
-| `AchievementPanel` | 已达成成就列表 + 未达成折叠块 |
-| `SettingsPanel` | 存档（手动存、导出、复制、导入、清档）、挂机开关、手动触发奇遇、关于 |
-| `LogPanel` | 宗门纪事：`○ 一条一条` 的列表（按类型着色 + 右侧灰色时间戳），标题行带「清空纪事」小链接，最多 220 条 |
-| `CalendarPanel` | 右栏历法：`第 N 年 · 春 · 第 12 天`、当前节气与「还有多久转节气 / 换季」、本季影响（正绿负红）与本季说明 |
-| `TotalsPanel` | 右栏累计：**默认折叠**（`<details>`，标题行给出挂机时长/累计灵气/飞升次数的摘要），展开后是挂机时长、累计灵气/灵机/香火、建造与制作次数、弟子前来、妖兽侵袭、飞升次数、全局倍率，以及各职位人数（原来的「宗门台账」只保留这些；每秒收支在左栏、倍率分解在状态行与境界页、人手在弟子页，都不再重复） |
-| `BuffBar` | 天象一行文字：`天象：灵雨润泽 +35%（1分20秒） · 寒潮 -30%（40秒）` |
-| `OfflineModal` | 闭关归来报告（离开时长、是否触顶、逐项收获） |
+## 展示与交互
 
-玩家更新日志由 `src/data/changelog.js` 维护，按新到旧排列，`CURRENT_VERSION` 取首条版本；当前 v0.01～v0.08，正式版本使用 v1.0。后续更新在数组开头追加版本、日期、标题和玩家可理解的变化，同时同步 README。包版本遵守 SemVer：界面 v0.08 对应 `package.json`、`package-lock.json` 的0.0.8，正式 v1.0 对应1.0.0，避免使用带前导零的数字段。日志 UI 使用临时组件状态，不写入存档。
+白底、细灰线、唯一一层主内容边框；左列资源与快捷炼制，中列标签面板，右列天象、历法、累计和纪事。窄屏进入内部滚动。数字使用tabular-nums，不用卡片、渐变、阴影或装饰图标。
 
-### 14.4 视觉与交互约定
+- 建筑按BUILDING_DISPLAY_ORDER固定排列，筛选不改变相对顺序；核心入口是吸气与催生灵木。
+- 顶栏显示弟子、宜居度点数、灵气收支和全局倍率；宜居度不是百分比。
+- HoverTip统一悬停展示；内容按标题、描述、价格、效果、维护等分节，一种资源一行。按实际视口限制尺寸和位置，长内容可滚动。
+- 价格由pricing.costLabel统一格式化：足够时只列需求，不足时列现有、需要和等待时间。买不起或条件未达时禁用，购买项悬停高亮左栏材料。
+- 连续资源存量用fmtResource两位小数；整件存量取整。需求用fmtCost向上，持有量用fmtStock向下，累计或事件数值用fmtAmount；每秒速率和每份收益保留必要精度。
+- 带维护费建筑才可停用；仓储和人口效果按已建数量保留，运行效果按有效供给计算。
+- 完整炼制和左栏快捷共用CraftPanel，自动选择、库存与制作动作同步；快捷数量不限，偏好随存档及重置保留。
+- 存档通过下载和选择本地文件导入。危险操作按现有交互确认，普通操作写纪事与状态提示。
 
-界面刻意做成**猫国建设者那种观感**，因为放置游戏的乐趣在读数字，装饰越少越好：
+玩家更新日志由src/data/changelog.js维护，在数组开头追加版本、日期、标题和变化，CURRENT_VERSION取首条，同时更新README。界面迭代号、包SemVer和存档结构版本分别维护；不因修改玩家日志而自动改锁文件。
 
-- **白底、细灰线、唯一一层内容边框**：全页只有中列 `.panel` 有一个 1px 边框（对应猫国中间那个大框），
-  左栏与右栏都是纯文字列表，没有卡片、卡片头、底色块。
-- **字号偏大、没有装饰**：正文 15px、建筑按钮 46px 高（长时间盯数字，宁可大一点也不挤小字）；
-  无圆角、无阴影、无渐变、无图标方块、无进度条、无斑马纹 —— 弹窗与 tooltip 也只用 1px 边框分区。
-  标题用小灰字（`--dim`）与更浅的 `--faint`，颜色只用来分主次，不用来分区。
-- **数字对齐**：所有数值 `tabular-nums`，左栏资源用真正的 `<table>`，保证各行小数点对齐。
-- **建筑是按钮网格，而且位置绝不跳动**：两列大按钮（`名称 (数量)`，买不起整颗置灰），上方一行筛选
-  （全部 / 可建造 / 已建成 / 可切换 / 分组）。按钮按 `BUILDING_DISPLAY_ORDER` 的固定发展顺序排列，
-  **不按「买得起 / 数量」重排** —— 资源每秒都在变，一旦重排鼠标底下的按钮就会换位，根本点不准。
-  筛选只做取舍、不改变相对顺序；可见集合随进度变大（§3.5），但已出现过的建筑只会往后挪、不换位，
-  两个核心按钮（吸取天地灵气 / 凝气成石）永远钉在网格最前面。
-- **顶部只留一行状态行**：弟子与下一位倒计时、士气、灵气进项/出项/净额、全局倍率与加成、仙缘、
-  挂机时长挤在标题下面一行，不再单独做「概况」板块 —— 页面从标签行直接进入三列。
-- **资源栏一行一资源**：`名称 · 存量 · /上限 · 净额(带正负号) · [+加成%]`；占比、满仓/耗尽倒计时、
-  加成倍率这些「第二层信息」都在悬停提示里，不占版面。满仓/耗尽倒计时把**此刻正在跑的自动制作**
-  的材料消耗也算进出项（`derived.autoCraftDrain`，只统计没被暂停的配方；不并进结算口径的 `expense`
-  —— tick 按 expense 扣数、自动制作另按份实付，并进去会双扣，冒烟测试有断言）。
-  顶部状态、左栏净额与悬停明细统一调用 `resourceFlow`，按进项减口粮、维护费和自动加工耗料展示；`derived.netQi` 与 `expense` 继续用于实际结算、供料和口粮判断。
-- **悬停提示只有一套排版**（`HoverTip.vue` + `.tip-*` 样式类，全项目共用）：
-  `tip-title`（名称 + 右侧状态：建筑「已建 N」、参悟表给层名 / 法宝等级、资源给「存量 / 上限」）
-  → `tip-desc`（一句话描述）→ `tip-section` 分节（`价格` / `效果` / `产出` / `维护` / `进项` / `出项` / `加成倍率` …）
-  → `tip-row` 的「名称 ↔ 数值」两列 → 可选一行 `tip-flavor` 风味小字。三条硬约定：
-  1. **不用原生 `title`**：定位与显隐交给 `HoverTip`（原生 title 有延迟、不能排版、移动端不显示）。
-  2. **价格一律走 `src/game/pricing.js` 的 `costLabel()`**：够用只写需求值，不够写
-     「现有 / 需要（还差多久）」并标红；「还差多久」由 `engine.timeToAfford` 算（有产出的按净额除，
-     成品走「现印」路径，算不出就不编造）。任何界面都不许自己拼价格文案。
-  3. **效果与维护「一种资源一行」**：多资源建筑（库房、谷仓…）的每项效果各占一行，
-     合计写在同一条的括号里（`灵木 上限 +360（合计 +1080）`），不许挤成一长串。
-- **花费单元格只写需求值，明细进 tooltip**：建筑、修真、技艺·法宝、法宝祭炼、破境的花费格都只列
-  「要多少」（`灵机 300`、`灵机 200 + 灵石 120 + 灵草 100`），够不够 / 还差多久 / 生效后的效果都在
-  该格自己的悬停提示里，不够的那一项在格子里标红。
-- **悬停购买项 → 左栏资源行跟着亮**：购买项（建筑按钮、修真/技艺行、配方行、破境行）在 `HoverTip`
-  的 `show` 事件里把本次花费交给 `store.highlightCost(cost)`，左栏据此给相关行加 `.res-hl`（浅黄底），
-  **当前不够**的再加 `.res-lack`（浅红底 + 数量标红加粗）。移开 / Esc / 滚动 / 卸载都会收掉。
-  高亮只是染色，不改变左栏显示哪些资源（避免悬停时行的增减造成跳动）。
-- **进项要能追到来源**：`derived.sources[res]` / `expenseSources[res]` 逐条记账，逐条相加正好等于
-  进项总额（§11.1，冒烟测试会校验）。
-- **小数只出现在左栏资源表里**：资源栏「当前数值」固定两位小数（`fmtFixed`，`87.5 → 87.50`），
-  整枚计数的资源（灵石/丹药/符箓/法器）在资源栏里也是整数；**左栏以外的所有地方只显示整数**：
-
-  | 场景 | 函数 | 取整方向 | 例 |
-  | --- | --- | --- | --- |
-  | 左栏资源表的存量 | `fmtResource` | 连续资源两位小数 / 整枚资源取整 | `12.35`、`4` |
-  | 需求、价格、上限 | `fmtCost` | **向上**（看到的需求一定够用） | `148.955 → 149` |
-  | 存量、持有量 | `fmtStock` | 向下（不虚报家底） | `1234.56 → 1234` |
-  | 累计量、事件增减 | `fmtAmount` | 四舍五入 | `1234.6 → 1235` |
-
-  一万以内直接写整数，上万才用中文数量级并最多留一位（`12.3万`）。**例外是「每秒速率」与
-  「每次点击 / 每份产出」**（`+0.36/秒`、`灵气 +1.5`）：四舍五入就失真了，保持原精度。
-- **其余小约定**：速率单位统一 `/秒`；收支只用正负号（`+x/s` / `−y/s` / 净额 = 进项 − 出项），
-  不写「已扣除口粮」这类叙述；未达条件的修真与法宝、未解锁配方、未达成成就收进原生 `<details>`；
-  操作结果不弹窗，只写宗门纪事 + 标题下方一行 4 秒状态文字；颜色只表达状态
-  （绿=正向/可买、红=损失/不足、赭金=需注意、蓝=可点链接、灰=次要），配色集中在 `main.css` 的 CSS 变量；
-  资源不足或未解锁时按钮禁用/置灰而不是报错，危险操作（拆除、飞升、清档）二次确认；
-  文案全中文，并尽量用「宗门话术」包裹数值（「居所已满，先扩建居所再多收弟子」）。
-
----
-
-## 构建与部署（GitHub Pages）
-
-发布走 GitHub Actions：`.github/workflows/deploy-pages.yml` 在推到 `main` 时
-**先跑三层测试（`npm run check`），过了才构建并发布** —— 测试不过就不会把坏版本放上线。
-
-| 命令 | 作用 |
-| --- | --- |
-| `npm run dev` | 本地开发（127.0.0.1:5273，热更新） |
-| `npm run build` | 产出静态站点到 `dist/` |
-| `npm run preview` | 本地起服务看 `dist/` 的真实效果 |
-| `npm run check` | 编码检查及引擎、渲染、DOM三层测试 |
-
-**为什么挂在 `/Slack-Off-Sect/` 这种子路径下也不用改配置**：`vite.config.js` 里 `base: './'`
-用的是相对路径，`dist/index.html` 引用的是 `./assets/...`；应用本身没有路由、没有 `fetch`、
-没有 `import.meta.env.BASE_URL` 之类的路径依赖，所以同一份 `dist/` 放在根域或任意子路径都能跑。
-加新功能时请守住这条（不要引入绝对路径资源或依赖 `location.pathname` 的逻辑）。
-
-首次发布需要手动开一次 Pages：仓库 `Settings → Pages → Build and deployment → Source`
-选 **GitHub Actions**。之后每次推 `main` 都会自动更新；也可以在 Actions 页手动 `workflow_dispatch`。
-
-`public/.nojekyll` 是一层保险（万一改成从分支发布，也不会被 Jekyll 处理）。
-
----
-## 验证策略
-
-按改动范围运行适当检查，断言数以本次运行输出为准，不在现行规则文档复制容易过时的计数。
+## 验证命令
 
 | 命令 | 覆盖 |
 | --- | --- |
-| npm run check:encoding | 文本编码、BOM与换行 |
-| npm run smoke | 引擎：数据完整性、门槛、供料、产出、加工、祭炼、重置与存档 |
-| npm run check:render | Vue SSR：面板模板与未定义变量警告 |
-| npm run check:dom | jsdom：真实客户端挂载、主循环与交互 |
-| npm run check | 编码及以上三层检查 |
+| npm run check:encoding | BOM与文本换行 |
+| npm run smoke | 数据、前置、供料、产出、实际操作、存档与离线 |
+| npm run check:render | Vue SSR模板与警告 |
+| npm run check:dom | jsdom真实挂载、主循环、更新日志与交互 |
+| npm run check:tools | 审计参数、临时修改还原与多路线统计 |
+| npm run check | 上述检查 |
 | npm run build | 生产构建 |
-| npm run docs:tables | 重新生成完整数据表 |
+| npm run docs:tables | 重新生成全量数据表 |
+| npm run clean | 清除构建、测试与审计目录 |
 
-jsdom用于可复现的DOM验证，不能替代真实浏览器的布局、触控和视觉检查。UI改动还需按实际需要做浏览器验证。
+断言数量以当次输出为准。jsdom不能替代真实浏览器布局、触控与视觉验证。测试和审计源码保留，运行产物可随时删除再生成。
 
-| 分析命令 | 用途 |
+## 分析工具及口径
+
+| 命令 | 用途与参数 |
 | --- | --- |
-| npm run balance -- 72 0 | 指定时长、初始仙缘的整体节奏推演 |
-| npm run audit -- stone 8 | 资源进项、出项、仓储与门槛 |
-| npm run audit:economy | 整件资源仓储、基础需求与材料去向 |
-| npm run audit:buildings | 真实前置、资源来源与仓储约束下的建筑可达性 |
-| npm run audit:pacing -- 72 0 0 0 rush 0 labor | 阶段耗时、首次生产／建设与主动调配人手的节奏推演 |
-| npm run balance:events -- 24 | 固定种子比较事件样本 |
-| npm run balance:visits -- 24 | 持续与间歇上线比较 |
+| npm run balance -- 24 0 | 固定小时数、初始仙缘；无事件、每5秒决策，资源快照 |
+| npm run audit -- stone 8 | 单资源流量、贴顶时间、门槛与去向；关闭随机事件 |
+| npm run audit:economy -- 6400 | 整件资源需求与去向；可选假设通用仓储，默认0；不含专属容量及仙缘倍率 |
+| npm run audit:crafts -- 24 0 | 加工链及指定研究边际提升；小时数、初始仙缘 |
+| npm run audit:buildings | 真实前置、材料来源和仓储自举；不估算耗时 |
+| npm run audit:pacing -- 72 0 0 0 | 小时数、仙缘、祭炼等级、事件种子；0关闭事件，非0可复现 |
+| npm run audit:pacing -- 72 0 0 1 rush 0 labor | 后续参数为优先破境、道果数、主动分工 |
+| npm run balance:events -- 24 0 | 小时数、仙缘；无事件及固定种子对照 |
+| npm run balance:visits -- 24 | 持续操作、15分钟／1小时／每天三次上线 |
 
-分析工具共用参照玩家策略，但策略、季节、事件、仙缘／道果和决策频率仍影响结论。记录结果时附上版本与条件；历史时间表不代表当前玩家预计进度。
+资源审计临时参数：--craft=50改点石成灵的灵气用量，--cap=250改目标基础容量，--prod=spiritField:qi:0.1覆盖聚灵阵每座灵气产出，--realm=0.5改目标资源破境成本，--upcost=2改目标资源研究成本，--job=0.6改目标资源岗位基础产出（含矿工附产），--autocraft临时开放自动加工。修改只影响本次模拟，异常时也应还原，不写源码。
 
-## 中间产物
+累计持续产能按速率积分，包含满仓被截断的部分，排除制作、点击和事件入库；制作产量另列实际整件入库。独立加工产能是单条配方供料上界，不能视为共享材料下所有配方的并发收入。参照玩家用于比较与找瓶颈，结果不代表真人最优路线。
 
-构建与测试会产生 dist/、.smoke*/、.early/ 等目录，审计日志和临时基准压缩包也可在记录结果后删除。node_modules/ 是本地依赖，默认保留；src/、tools/、public/ 与 docs/ 是项目内容。清理前核对目标位于工作区，按明确路径删除，避免递归通配到源码或存档导出。
+## 扩展与维护
 
----
+1. 新资源加入RESOURCES，设置基础容量、整数规则与storageWeight，并提供来源和去向。
+2. 新建筑加入BUILDINGS和分组、显示顺序；成本与needs共同生效。需要模拟采购时同步player-bot的优先表。
+3. 原理、配方与专业精研加入CULTIVATION；通用技艺和kind:treasure法宝加入TECHNIQUES。法宝应有明确研究前置与祭炼成本。
+4. 配方加入CRAFTS，声明产物、用料、节拍与完整前置。成就写check纯函数，当前奖励为0。境界费用需能由上游产业与仓容承接。
+5. 新效果同时接入引擎累加／缩放、derived与effectsText的描述和合计缩放；必要时同步生成表。仓储按已建数，宜居度等运行效果按有效供给，入住配套按实际覆盖人口。
+6. 新事件显式填写level，EVENT_LEVELS与自身境界取交集；事件预览与实扣共用规则，固定支付不应误用灾损减免。纪事保留eventId、eventLevel。
 
-## 扩展指南
+改数值后生成TABLES，改规则后更新DESIGN及相关专题；平衡测量在BALANCE记录版本、仙缘／道果、事件、决策频率和策略；未决定内容放ROADMAP。避免在多个手写表维护同一份完整造价。
 
-### 16.1 加一种资源
+## 清理与部署
 
-1. 在 `src/data/resources.js` 添加条目（`id` 必须是引擎里到处在用的键名）。
-2. 若它不该有产出，加 `noProduction: true`；若默认隐藏，加 `hidden: true`。
-3. 需要的话在 `buildings.js` / `jobs.js` / `upgrades.js` 里引用它。
-4. 跑 `npm run smoke`，数据完整性检查会告诉你有没有漏引用。
+clean脚本只处理项目根目录的dist、dist-ssr、.smoke*、.early与.vite，删除前确认实际路径仍在项目内，拒绝目录链接。node_modules、源码、正式文档和用户存档不作为产物清理。旧网络驱动器shim命令已移除，日常运行使用npm脚本。
 
-### 16.2 加一座建筑
-
-```js
-{
-  id: 'xxx', name: '某某堂', glyph: '某', group: 'cultivate',
-  cost: { wood: 300, stone: 100 }, priceRatio: 1.25,
-  desc: '一句话说明它在这个宗门里干什么。',
-  effects: { prod: { insight: 0.02 }, ratio: { insight: 0.2 } },
-  needs: { buildings: [{ id: 'library', count: 2 }], realm: 3 },
-}
-```
-
-放进 `BUILDINGS` 即生效（分组名要在 `BUILDING_GROUPS` 里有定义）。
-`needs` 支持 `building / buildings[] / upgrade / upgrades[] / realm` 的任意组合。
-
-### 16.3 加一条修真 / 一件法宝 / 一条技艺
-
-- **修真**（研究 / 解锁层）→ 加进 `upgrades.js` 的 `CULTIVATION`：
-  解锁建筑用 `effects.unlockBuildings: ['xxx']`，开系统用 `autoCraft` / `offlineHours` / …；
-  纯解锁型的节点（自己没有数值效果）可以写 `note: '解锁法宝：…'`，界面会把它显示在「效果」列。
-- **技艺**（自己练的手艺）→ 加进 `techniques.js`，直接是 `TECHNIQUES` 里的一员。
-- **法宝**（由修真解锁的器物）→ 同样加进 `TECHNIQUES`，但**必须**写 `kind: 'treasure'`
-  与 `needs: { upgrades: ['<某个修真节点 id>'] }`；冒烟测试会断言这两点，
-  否则「法宝」会变成一条无主的加成。
-- 效果字段与建筑通用（见本文《扩展指南》的「加一个新效果字段」），门禁写法见 DESIGN.md 的修真与技艺章节。
-
-### 16.4 加一个配方 / 成就 / 境界 / 事件
-
-- 配方 → `CRAFTS`（`out` / `amount` / `cost` / `needs`）。
-- 成就 → `ACHIEVEMENTS`，写一个 `check(state)` 纯函数即可，奖励统一 +2% 全局。
-- 境界 → `REALMS`（`mult` 与 `cost`），`ASCEND_REALM_INDEX` 会自动指向最后一层。
-- 事件 → `EVENTS`，声明 `buff` / `lootRate`+`floor` / `disaster` / `recruit` 中的任意一种。
-
-### 16.5 加一个**新效果字段**（唯一需要改代码的情况）
-
-必须同时改三处，否则会出现「数值生效但界面不显示」或「合计显示错误」：
-
-1. `engine.js` 的 `applyEffects()` —— 决定它怎么累加；
-2. `engine.js` 的 `recompute()` —— 若缩放口径特殊（按已建数还是按启用数），要像
-   `storage/maxDisciples/morale` 那样单独走 `countOnly` 分支；
-3. `effectsText.js` 的 `describeEffects()` 与 `scaleEffectsForTotal()` —— 界面上「每座效果」
-   与「当前合计」的文案。
-
-加完后在 `tools/smoke.mjs` 的「数据完整性」段落里补一条断言会更稳。
-
-### 16.6 调平衡
-
-新增事件在 `src/data/events.js` 显式填写 `level: 1 / 2 / 3`：金丹前、金丹至化神、炼虚起。阶段范围集中在 `EVENT_LEVELS`，随机抽取通过 `isEventInRealm` 将其与事件自身 `minRealm` / `maxRealm` 取交集，突破分界后切换事件池。`type`（环境/突发/选择）与 `kind`（色调）独立。展示与筛选统一使用 `getEventLevel`；结算传递来源事件，纪事保存 `eventId` 和 `eventLevel`，不要在选项效果中重复等级。正式事件漏填等级、门槛与阶段没有交集会被完整性检查发现。更新后运行 `npm run docs:tables` 同步事件等级表。
-
-- 全局常量（tick、弟子口粮与前来间隔、士气、离线、事件间隔、日志上限）→ `src/data/config.js`。
-- 单条内容的强度 → 对应数据文件的 `cost / priceRatio / effects`（修真 / 技艺 / 法宝分居两个文件）。
-- 想验证改动 → `npm run audit -- <资源> <小时数> [假设性改动]` 量流量，
-  `npm run balance -- <小时数>` 看整体节奏。两个工具共用 `tools/player-bot.mjs` 的同一套玩家策略，
-  所以「资源太慢」和「整体节奏」的结论不会互相矛盾。
-- 动了开局或学术线的数值后，记得重跑一遍 `npm run balance -- 12` 并在 BALANCE.md 记录版本、条件与结果。
-
----
-
-## 附：文档地图
-
-- [README.md](../README.md)：这是什么、怎么跑、怎么测。
-- [DESIGN.md](./DESIGN.md)：游戏设计与规则（资源 / 建筑 / 弟子 / 两层学术线 / 公式 / 存档 / 平衡目标）。
-- **ENGINEERING.md**（本文）：前端分层与视觉约定、验证策略、扩展指南。
-- [BALANCE.md](./BALANCE.md)：历次平衡改动的账本（问题 → 改法 → 实测）。
-- [TABLES.md](./TABLES.md)：全量数据表，由 `npm run docs:tables` 生成。
-
-改数值 → 只动 `src/data/*.js` + 跑 `npm run docs:tables`；改规则 → 同步 DESIGN.md；
-改完平衡 → 在 BALANCE.md 记一笔；验证计数以当次命令输出为准。
+GitHub Pages流程在.github/workflows/deploy-pages.yml：main推送后先检查，再构建发布。vite.config.js使用相对base，新增资源避免绝对路径与location.pathname依赖，支持子目录部署。

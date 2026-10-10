@@ -268,6 +268,17 @@ export const RESOURCES = [
     desc: '正负灵子湮灭时释放的至纯灵力。极不稳定，会自己逸散 —— 所以只能靠持续湮灭维持。',
   },
   {
+    id: 'ascensionSeal',
+    name: '飞升阵印',
+    glyph: '印',
+    color: '#fff2a8',
+    baseMax: 400,
+    storageWeight: 0.01,
+    integer: true,
+    noProduction: true,
+    desc: '以湮灭灵能反复固结晶银与灵符，刻成稳定的飞升阵印。不会逸散，用于渡劫准备。',
+  },
+  {
     id: 'insight',
     // 改名（原「灵机」）：灵机 = 悟道所得的"机制" —— 一字兼顾"顿悟"与"可推演的机理"，
     // 与灵质（灵气/灵液/灵晶）、粒子（灵气分子/正负灵子）、能量（灵能）同一套科学修真的口径。

@@ -4,8 +4,7 @@
  * 抓出「模板引用了不存在的变量」「数据缺失导致渲染报错」这类问题。
  *
  * 用法：
- *   node --import <shim> node_modules/vite/bin/vite.js build --ssr tools/render-check.mjs --outDir .smoke-render
- *   node .smoke-render/render-check.js
+ *   npm run check:render
  */
 import { createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'

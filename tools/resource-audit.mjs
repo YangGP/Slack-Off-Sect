@@ -3,8 +3,7 @@
  * 用来回答「XX 感觉太慢了」这类问题。
  *
  * 用法：
- *   node --import <shim> node_modules/vite/bin/vite.js build --ssr tools/resource-audit.mjs --outDir .smoke-audit
- *   node .smoke-audit/resource-audit.js [资源id] [小时数] [假设性改动…]
+ *   npm run audit -- [资源id] [小时数] [假设性改动…]
  *
  * 假设性改动（只影响本次运行，不改项目文件）：
  *   --craft=50                      点石成灵的灵气成本改成 50
@@ -36,7 +35,9 @@ for (const a of args) {
     patches.baseMax = Number(a.split('=')[1])
     patchNotes.push(`基础上限 → ${patches.baseMax}`)
   } else if (a.startsWith('--prod=')) {
-    const [, id, res, val] = a.split('=')[1].split(':')
+    const parts = a.slice('--prod='.length).split(':')
+    if (parts.length !== 3 || parts.some(part => !part)) throw new Error('--prod格式：建筑id:资源id:非负产量')
+    const [id, res, val] = parts
     patches.prods = patches.prods || []
     patches.prods.push({ buildingId: id, res, value: Number(val) })
     const b = BUILDINGS.find((x) => x.id === id)
@@ -53,6 +54,8 @@ for (const a of args) {
   } else if (a === '--autocraft') {
     patches.autoCraft = true
     patchNotes.push('视作已解锁自动制作')
+  } else if (a.startsWith('--')) {
+    throw new Error(`未知审计参数：${a}`)
   }
 }
 
@@ -90,7 +93,8 @@ console.log(
 )
 
 console.log('\n【时间线】')
-console.log(`  ${pad('时间', 10)}${pad('存量', 9)}${pad('上限', 9)}${pad('累计获得', 11)}${pad('区间速率/时', 12)}${pad('贴顶', 6)}${pad('灵气净额', 10)}${pad('境界', 9)}`)
+console.log('  持续产能按速率积分，含满仓截断部分，不含制作、点击与事件入库。')
+console.log(`  ${pad('时间', 10)}${pad('存量', 9)}${pad('上限', 9)}${pad('累计持续产能', 11)}${pad('区间速率/时', 12)}${pad('贴顶', 6)}${pad('灵气净额', 10)}${pad('境界', 9)}`)
 let prev = { t: 0, income: 0 }
 for (const s of r.samples) {
   const dt = s.t - prev.t
@@ -109,15 +113,12 @@ for (const th of r.thresholds) {
 console.log('\n【瓶颈指标】')
 console.log(`  顶到仓储上限的时间占比：${(r.blockedRatio * 100).toFixed(0)}%`)
 console.log(`  参悟进度：${Object.keys(r.state.upgrades).length} / ${ALL_UPGRADES.length} 条`)
-console.log(
-  `  制作消耗的灵气：${Math.round(r.qiSpentOnCrafting)}（占累计灵气收入 ${((r.qiSpentOnCrafting / Math.max(1, r.totalQi)) * 100).toFixed(1)}%）`,
-)
-console.log(`  累计制作 ${r.craftCount} 次，产出 ${Math.round(r.craftedTotal)} ${RES.name}，平均每次 ${(r.craftedTotal / Math.max(1, r.craftCount)).toFixed(2)}`)
+console.log(`  全宗累计制作 ${r.craftCount} 次；目标资源实际制作入库 ${Math.round(r.craftedTotal)} ${RES.name}`)
 
 console.log('\n【出项清单】')
 const demand = []
 for (const b of BUILDINGS) if (b.cost[RES_ID]) demand.push({ 用途: b.name, 类别: '建筑', 单价: b.cost[RES_ID] })
-for (const u of CULTIVATION) if (u.cost[RES_ID]) demand.push({ 用途: u.name, 类别: '修真', 单价: u.cost[RES_ID] })
+for (const u of ALL_UPGRADES) if (u.cost[RES_ID]) demand.push({ 用途: u.name, 类别: u.kind === 'treasure' ? '法宝' : CULTIVATION.includes(u) ? '修真' : '技艺', 单价: u.cost[RES_ID] })
 for (const c of CRAFTS) if (c.cost[RES_ID]) demand.push({ 用途: c.name, 类别: '配方', 单价: c.cost[RES_ID] })
 for (const x of REALMS) if (x.cost && x.cost[RES_ID]) demand.push({ 用途: x.name, 类别: '破境', 单价: x.cost[RES_ID] })
 const byCat = {}

@@ -51,6 +51,7 @@ export function createInitialState() {
     starterHutBuilt: false,
     starterHutStanding: false,
     upgrades: {},
+    upgradeEnabled: {},
     achievements: {},
     craftProgress: {},
     autoCraft: {},
@@ -99,6 +100,7 @@ export function createInitialState() {
       autoCraftOn: true,
       offlineProgress: true,
       craftReservePercent: 20,
+      craftReserves: {},
       autoCraftPriority: 'infuseStone',
       quickCrafts: [...DEFAULT_QUICK_CRAFTS],
     },
@@ -145,6 +147,8 @@ export function normalizeState(state) {
       ['logHouse', 'mansion', 'caveDwelling'].some(id => (merged.buildings[id]?.count || 0) > 0))
   merged.starterHutStanding = !!state.starterHutStanding && merged.starterHutBuilt && (merged.buildings.hut?.count || 0) > 0
   merged.upgrades = { ...(state.upgrades || {}) }
+  merged.upgradeEnabled = Object.fromEntries(Object.entries(state.upgradeEnabled || {})
+    .filter(([id, enabled]) => merged.upgrades[id] && enabled === false))
   // 已移除的早期空间技艺不再参与研究、统计或容量计算。
   delete merged.upgrades.storageBag
   delete merged.upgrades.voidPouch
@@ -191,6 +195,8 @@ export function normalizeState(state) {
   merged.stats = { ...fresh.stats, ...(state.stats || {}) }
   merged.stats.crafted = { ...(state.stats && state.stats.crafted) }
   merged.settings = { ...fresh.settings, ...(state.settings || {}) }
+  merged.settings.craftReserves = Object.fromEntries(Object.entries(state.settings?.craftReserves || {})
+    .filter(([id, value]) => Object.hasOwn(fresh.resources, id) && Number.isFinite(value) && value >= 0))
   for (const key of ['autoCraft', 'craftTargets', 'craftTimers', 'craftProgress']) {
     merged[key] = { ...merged[key] }
     if (Object.hasOwn(merged[key], 'condenseStone') && !Object.hasOwn(merged[key], 'infuseStone')) merged[key].infuseStone = merged[key].condenseStone
@@ -241,6 +247,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.starterHutBuilt = false
   state.starterHutStanding = false
   state.upgrades = {}
+  state.upgradeEnabled = {}
   state.treasureLevels = {}
   state.craftProgress = {}
   state.craftTimers = {}

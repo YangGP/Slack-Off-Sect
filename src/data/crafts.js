@@ -251,12 +251,24 @@ export const CRAFTS = [
     desc: '以秘银承托灵晶结构，稳定晶体与金属的界面，制成精密晶银。',
     needs: { realm: 9, upgrades: ['crystalSilverArt'] },
   },
+  {
+    id: 'condenseAscensionSeal',
+    name: '固结飞升阵印',
+    out: 'ascensionSeal',
+    amount: 1,
+    fixedYield: true,
+    tier: 3,
+    cost: { qiEnergy: 80, crystalSilver: 1, spiritTalisman: 1 },
+    time: 120,
+    desc: '用持续湮灭所得的灵能固结晶银与灵符，每份得到一枚稳定阵印；制作增产不增加阵印数量。可手动或自动炼制。',
+    needs: { realm: 9, upgrades: ['annihilationArt'], building: { id: 'annihilationFurnace', count: 1 } },
+  },
 ]
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver']
+export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]

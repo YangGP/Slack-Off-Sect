@@ -3,8 +3,7 @@
  * 玩家策略在 tools/player-bot.mjs 里（与 tools/resource-audit.mjs 共用，保证两边结论一致）。
  *
  * 用法：
- *   node --import <shim> node_modules/vite/bin/vite.js build --ssr tools/balance.mjs --outDir .smoke-balance
- *   node .smoke-balance/balance.js [小时数]
+ *   npm run balance -- [小时数] [初始仙缘]
  */
 import { createInitialState } from '../src/game/state.js'
 import * as E from '../src/game/engine.js'
@@ -13,6 +12,7 @@ import { REALMS } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
 
 const HOURS = Number(process.argv[2] || 4)
+if (!Number.isFinite(HOURS) || HOURS <= 0 || HOURS > 168) throw new Error('小时数需大于0且不超过168')
 const TOTAL = HOURS * 3600
 const DECISION_EVERY = 5
 
@@ -44,7 +44,7 @@ function snapshot(t) {
       state.stats.buildingsBuilt,
     ).padStart(3)} | 参悟 ${String(Object.keys(state.upgrades).length).padStart(2)} | 宜居度 ${Math.round(
       derived.habitability,
-    )}% | 每人粮 ${derived.discipleUpkeep.toFixed(3)}/s | 出项占比 ${outPct.toFixed(1)}% | 灵气净 ${derived.netQi.toFixed(2)}/s`,
+    )}点 | 每人粮 ${derived.discipleUpkeep.toFixed(3)}/s | 出项占比 ${outPct.toFixed(1)}% | 灵气净 ${derived.netQi.toFixed(2)}/s`,
   )
   console.log(`          ${res}`)
 }

@@ -152,14 +152,6 @@ export function fmtTime(seconds) {
   return `${sec}秒`
 }
 
-/** 相对时间戳（刚刚 / x分钟前） */
-export function fmtAgo(timestamp) {
-  if (!timestamp) return ''
-  const diff = (Date.now() - timestamp) / 1000
-  if (diff < 20) return '刚刚'
-  return fmtTime(diff) + '前'
-}
-
 export function fmtPercent(value, digits = 0) {
   return (value * 100).toFixed(digits) + '%'
 }

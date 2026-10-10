@@ -38,6 +38,13 @@ const researchedIds = computed(() =>
   props.kind === 'technique' ? view.researchedSkills.value : view.researchedCultivation.value,
 )
 
+// 仓容只影响列表分组；已有库存能支付时仍允许参悟。
+const capacityReady = (u) => props.kind !== 'cultivation' ||
+  (u.cost?.insight || 0) <= Math.max(derived.max.insight || 0, state.resources.insight || 0)
+const capacityLocked = computed(() => props.list
+  .filter((u) => availableIds.value.includes(u.id) && !capacityReady(u))
+  .sort((a, b) => a.cost.insight - b.cost.insight))
+
 /**
  * 「效果」列的文本。
  *
@@ -74,6 +81,7 @@ const available = computed(() =>
   availableIds.value
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
+    .filter(capacityReady)
     // 修真页按五段主线排序（同一段内保持数据顺序），界面因此能分组显示
     .sort((a, b) => (stageOf(a.id)?.index ?? 99) - (stageOf(b.id)?.index ?? 99))
     .map((u) => ({
@@ -177,7 +185,7 @@ function kindName(meta) {
             <td class="num nowrap">
               Lv.{{ item.level }}<span class="small dim"> ×{{ item.mult.toFixed(2) }}</span>
             </td>
-            <td class="eff">{{ item.eff }}<span v-if="item.upkeep" class="small dim"> · {{ item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span></td>
+            <td class="eff">{{ item.eff }}<span v-if="item.upkeep" class="small dim"> · {{ state.upgradeEnabled[item.meta.id] === false ? '已停用' : item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span></td>
             <td class="cost nowrap">
               <HoverTip :width="380">
                 <span class="cost-line">
@@ -229,6 +237,9 @@ function kindName(meta) {
               </HoverTip>
             </td>
             <td>
+              <button v-if="item.meta.upkeep" class="btn" :aria-label="`${item.meta.name}启停`" @click="actions.toggleUpkeepUpgrade(item.meta.id)">
+                {{ state.upgradeEnabled[item.meta.id] === false ? '启用' : '停用' }}
+              </button>
               <button class="btn primary" :disabled="!item.affordable" @click="actions.refineTreasure(item.meta.id)">
                 祭炼
               </button>
@@ -317,7 +328,20 @@ function kindName(meta) {
           </template>
         </tbody>
       </table>
-      <div v-else class="empty">暂时没有可参悟的条目，建设对应产业、推进研究后会逐步开放。</div>
+      <div v-else class="empty">暂时没有可参悟的条目，建设对应产业、推进研究或扩充灵机上限后会逐步开放。</div>
+
+      <details class="fold" v-if="capacityLocked.length">
+        <summary>需扩充灵机上限（{{ capacityLocked.length }} 条）</summary>
+        <div class="small dim">扩建藏经阁、讲经堂、观星台等设施，或参悟灵机仓容技艺。</div>
+        <table class="grid">
+          <tbody>
+            <tr v-for="item in capacityLocked" :key="item.id">
+              <td class="nowrap dim">{{ item.name }}</td>
+              <td class="small dim">灵机上限 {{ fmtCost(derived.max.insight) }} / 需要 {{ fmtCost(item.cost.insight) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
 
       <details class="fold" v-if="locked.length">
         <summary>下一步（{{ locked.length }} 条，条件达成后开放）</summary>

@@ -23,75 +23,66 @@ export const REALMS = [
     name: '筑基期',
     mult: 1.6,
     desc: '道基既立，内视经脉：灵压、灵流、灵阻皆可感。已有人猜想「气」里有更细之物，却拿不出凭据。',
-    cost: { insight: 160, qi: 2000, herb: 300, pill: 26, stone: 130 },
+    // 炼气已可炼丹；筑基、金丹、元婴沿用丹药，只递增需求。
+    cost: { insight: 160, qi: 2000, pill: 26, herb: 300, stone: 130 },
   },
   {
     name: '金丹期',
     mult: 2.0,
     desc: '一颗金丹吞入腹，始知我命不由天 —— 结丹高压之下，内观到正负灵荷一闪而逝，第一次「看见」灵气别有构造。',
-    // 金丹是「炼体 → 造物」的分界：灵石退役，开始消耗玄铁、法器等工程件。
-    // 灵液 / 灵晶要到元婴解锁凝液法、凝晶工艺后才可用，故金丹破境不含它们（避免死锁）。
-    // 固定费用按该阶段可达仓储设定，不随玩家当前仓容上涨。
-    cost: { insight: 350, qi: 5500, pill: 90, ore: 700, artifact: 70 },
+    // 丹药仍是主材料，灵石与符箓作为稳定气机的辅助材料。
+    cost: { insight: 350, qi: 5500, pill: 90, stone: 500, talisman: 30 },
   },
   {
     name: '元婴期',
-    mult: 3,
+    mult: 2.6,
     desc: '元婴出窍，神游百里而肉身不动 —— 神识所及，已能分辨并驱使正负灵子。',
-    cost: { insight: 700, qi: 12000, pill: 150, ore: 1600, artifact: 130, steel: 15 },
+    cost: { insight: 700, qi: 12000, pill: 180, stone: 1200, talisman: 80 },
   },
   {
     name: '化神期',
-    mult: 5,
+    mult: 3.4,
     desc: '神识与灵能场合一：灵子云与场线尽收眼底，山门内外如观掌纹。',
-    cost: { insight: 1200, qi: 18000, spiritLiquid: 90, crystal: 35, pill: 260, ore: 3500, artifact: 220, steel: 20 },
+    // 灵晶在元婴开放，先掌握凝聚产业再化神；三境使用同一组材料。
+    cost: { insight: 1200, qi: 18000, spiritLiquid: 90, crystal: 35, artifact: 80, arrayBase: 10 },
   },
   {
     name: '炼虚期',
-    mult: 8,
+    mult: 4.4,
     desc: '炼化虚空，能提取自由灵子、结成灵子束与灵子对 —— 举手投足皆是天地之力。',
-    cost: { insight: 2000, qi: 20000, spiritLiquid: 130, crystal: 55, pill: 450, ore: 7500, artifact: 380, steel: 30 },
+    cost: { insight: 2000, qi: 20000, spiritLiquid: 180, crystal: 100, artifact: 160, arrayBase: 20 },
   },
   {
     name: '合体期',
-    mult: 14,
+    mult: 5.8,
     desc: '与道合真：肉身与天地灵能场共振，人与宗门同呼吸。',
-    cost: { insight: 3200, qi: 30000, spiritLiquid: 180, crystal: 80, pill: 750, ore: 16000, artifact: 650, steel: 50 },
+    cost: { insight: 3200, qi: 30000, spiritLiquid: 360, crystal: 280, artifact: 320, arrayBase: 40 },
   },
   {
     name: '大乘期',
-    mult: 24,
+    mult: 7.5,
     desc: '灵子与灵能场的统一规律已尽在掌中 —— 此界修行之极，再往前便是天。',
     cost: {
       insight: 5000,
       qi: 38000,
-      spiritLiquid: 250,
-      crystal: 120,
-      pill: 1200,
-      ore: 34000,
-      artifact: 1000,
-      steel: 80,
       // 合体已能参悟灵子论并建分灵阵：先掌握离析，再进大乘。
-      qiParticle: 20,
+      qiParticle: 120,
+      // 化神已能铸灵器，合体已能炼玄金；同时验证器物与储灵合金的准备。
+      spiritArtifact: 24,
+      arcaneGold: 20,
     },
   },
   {
     name: '渡劫期',
-    mult: 40,
+    mult: 10,
     desc: '体内正负失衡在即，天雷 —— 天地正灵子的极化打击 —— 在头顶盘旋，只等一个正负归一、飞升而去的时机。',
     cost: {
       insight: 8000,
       qi: 45000,
-      spiritLiquid: 320,
-      crystal: 170,
-      pill: 1900,
-      ore: 70000,
-      artifact: 1400,
-      steel: 120,
-      // 偏极与湮灭均在大乘开放；飞升前必须实际运转整条产业链。
-      yangParticle: 5,
-      yinParticle: 5,
-      qiEnergy: 15,
+      // 稳定阵印为主，灵宝与晶银辅助；不额外要求囤积会逸散的灵能。
+      ascensionSeal: 300,
+      spiritTreasure: 12,
+      crystalSilver: 40,
     },
   },
 ]
@@ -101,7 +92,7 @@ export const REALMS = [
  *
  * 参考猫国的分层：重置（领导力）是早期就能做、可反复做的一层，
  * 更高的飞升（道果）才是终极目标。所以门槛放在化神期 ——
- * 参照玩家约 16 小时到，正好是「一天一轮」的节奏（见 docs/EARLY-GAME.md）。
+ * 阶段耗时需随产业和机器人策略重新测量，历史结果见 docs/BALANCE.md。
  */
 export const REINCARNATE_REALM_INDEX = 6
 

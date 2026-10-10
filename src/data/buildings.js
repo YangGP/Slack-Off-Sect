@@ -540,6 +540,7 @@ export const BUILDINGS = [
   },
   {
     id: 'splitArray',
+    throughput: true,
     name: '分灵阵',
     glyph: '分',
     group: 'wonder',
@@ -554,6 +555,7 @@ export const BUILDINGS = [
   },
   {
     id: 'polarizeArray',
+    throughput: true,
     name: '偏极阵',
     glyph: '偏',
     group: 'wonder',
@@ -567,6 +569,7 @@ export const BUILDINGS = [
   },
   {
     id: 'annihilationFurnace',
+    throughput: true,
     name: '湮灭炉',
     glyph: '湮',
     group: 'wonder',

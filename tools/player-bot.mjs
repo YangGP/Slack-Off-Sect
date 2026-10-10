@@ -104,6 +104,7 @@ export const ADVANCED_CRAFTS = {
   refineNineTurnPill: { base: 'pill', floor: 160, cap: 100 },
   drawSpiritTalisman: { base: 'talisman', floor: 220, cap: 300 },
   forgeSpiritArtifact: { base: 'artifact', floor: 160, cap: 100 },
+  condenseAscensionSeal: { base: 'qiEnergy', floor: 80, cap: 350 },
   // 组合型进阶：三种料都要留够才动手（floors 支持多料，base/floor 是单料的简写）
   forgeSpiritTreasure: {
     floors: { spiritArtifact: 65, nineTurnPill: 45, spiritTalisman: 80 },
@@ -294,6 +295,8 @@ export function createBot(state, derived) {
       if (derived.availableUpgrades.includes(id)) visit(id)
     }
     for (const res of Object.keys(next)) visitResource(res)
+    // 土木精要可在低境界掌握；建库前仍须追踪玄钢及其研究用法器。
+    if (state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) visitBuilding('depot')
     // 扩仓设施的建材也属于破境前置，不能只追踪破境配方。
     // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
     for (const [res, amount] of Object.entries(next)) {
@@ -309,6 +312,13 @@ export function createBot(state, derived) {
   }
 
   function act() {
+    // 固印时先暂停耗能法宝，待渡劫材料备齐再启用；使用玩家同样可用的启停操作。
+    if (state.upgrades.energyCore && state.realm >= 9) {
+      const next = E.realmCost(state, derived, state.realm + 1) || {}
+      const ready = !next.ascensionSeal || ((state.resources.ascensionSeal || 0) >= next.ascensionSeal &&
+        (state.resources.qiEnergy || 0) >= (next.qiEnergy || 0))
+      if ((state.upgradeEnabled.energyCore !== false) !== ready) E.toggleUpkeepUpgrade(state, derived, 'energyCore')
+    }
     let craftDemand = {}
     // 金丹后按近期建筑/研究/破境需求设置加工库存目标，避免把原料无限加工。
     // 这是新目标控件允许玩家执行的策略，手动与自动制作使用同一目标。
@@ -369,10 +379,6 @@ export function createBot(state, derived) {
     const { upgrades: prereq, buildings: requiredBuildings } = breakthroughPrereqs()
     // 入住配套是正常人口发展的基础投资，先学会再持续扩屋。
     if (derived.availableUpgrades.includes('homePlanning')) prereq.add('homePlanning')
-    if (state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) {
-      requiredBuildings.set('warehouse', E.BUILDING_MAP.depot.needs.building.count)
-      requiredBuildings.set('depot', 1)
-    }
     const nextNeed = E.realmCost(state, derived, state.realm + 1) || {}
     const shortRes = Object.keys(nextNeed).filter((r) => (derived.max[r] || 0) < nextNeed[r])
     const storageFixIds = new Set(
@@ -480,8 +486,11 @@ export function createBot(state, derived) {
 
     buildStep(0, reserveCost, shortRes, requiredBuildings)
 
-    const blocksCraft = (c) => reserveCost && Object.keys(c.cost).some((k) =>
-      (reserveCost[k] || 0) > 0) && !((reserveCost[c.out] || 0) > (state.resources[c.out] || 0))
+    // 只暂停会侵占预留量的加工；库存充足时仍可准备突破材料的上游原料。
+    // 四档费用清单更短，若仅凭输入出现在预留表就禁做，会把固印所需晶银一起停掉。
+    const blocksCraft = (c) => reserveCost && Object.entries(c.cost).some(([k, amount]) =>
+      (reserveCost[k] || 0) > 0 && (state.resources[k] || 0) - amount < reserveCost[k]) &&
+      !((reserveCost[c.out] || 0) > (state.resources[c.out] || 0))
 
     // 制作（灵石留一点灵气余量，别把阵徒的口粮也花掉）
     for (const c of CRAFTS) {

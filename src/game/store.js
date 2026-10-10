@@ -394,6 +394,11 @@ export const actions = {
     state.settings[key] = value
     saveNow()
   },
+  toggleUpkeepUpgrade(id) {
+    if (!E.toggleUpkeepUpgrade(state, derived, id)) return false
+    saveNow()
+    return true
+  },
   toggleQuickCraft(id) {
     if (typeof id !== 'string' || !Object.hasOwn(CRAFT_MAP, id) || !E.isCraftUnlocked(state, CRAFT_MAP[id])) return false
     const ids = normalizeQuickCrafts(state.settings.quickCrafts)

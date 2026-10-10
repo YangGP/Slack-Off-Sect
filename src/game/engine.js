@@ -613,7 +613,8 @@ function recomputeRaw(state, derived, supply) {
   // 修真 / 技艺 / 法宝（法宝按祭炼等级放大效果）
   for (const up of ALL_UPGRADES) {
     if (!state.upgrades[up.id]) continue
-    const mult = treasureMult(state, up) * (supply[up.id] ?? 1)
+    const enabled = !up.upkeep || state.upgradeEnabled?.[up.id] !== false
+    const mult = treasureMult(state, up) * (supply[up.id] ?? 1) * Number(enabled)
     applyEffects(up.effects, mult, targets, { kind: 'upgrade', id: up.id, label: up.name, count: 1 })
     if (up.effects?.prod) {
       for (const k in up.effects.prod) {
@@ -697,6 +698,16 @@ function recomputeRaw(state, derived, supply) {
   /** 道果（飞升层）：每颗 +5% 全局产出，不设上限 —— 因为拿到它的成本极高（一次飞升约 90 小时） */
   const daoMult = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_PRODUCTION_BONUS
   const globalMult = realmMult * karmaMult * habitabilityMult * daoMult * (1 + buffAll)
+
+  // 工业提速同时扩大进料与出料；专业资源增益另外提高转化收益。
+  for (const [res, entries] of Object.entries(expenseRaw)) {
+    for (const entry of entries) {
+      if (entry.kind !== 'upkeep' || !BUILDING_MAP[entry.id]?.throughput) continue
+      const extra = -entry.value * (globalMult - 1)
+      entry.value *= globalMult
+      maint[res] += extra
+    }
+  }
 
   // 历法：季节直接乘进对应资源的产出（与建筑 / 修真的 ratio 同一层）
   const calendar = calendarAt(state.totalDays)
@@ -889,7 +900,7 @@ export function recompute(state, derived, seconds = 1) {
   const dt = Math.max(0.001, seconds)
   const supply = {}
   const buildingConsumers = BUILDINGS.filter((b) => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
-  const upgradeConsumers = ALL_UPGRADES.filter((u) => u.upkeep && state.upgrades[u.id])
+  const upgradeConsumers = ALL_UPGRADES.filter((u) => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false)
   const consumers = [...buildingConsumers, ...upgradeConsumers]
   for (const b of consumers) supply[b.id] = 1
   recomputeRaw(state, derived, supply)
@@ -913,7 +924,8 @@ export function recompute(state, derived, seconds = 1) {
     recomputeRaw(state, derived, supply)
   }
   derived.buildingSupply = Object.fromEntries(buildingConsumers.map(b => [b.id, supply[b.id]]))
-  derived.upgradeSupply = Object.fromEntries(upgradeConsumers.map(u => [u.id, supply[u.id]]))
+  derived.upgradeSupply = Object.fromEntries(ALL_UPGRADES.filter(u => u.upkeep && state.upgrades[u.id])
+    .map(u => [u.id, state.upgradeEnabled?.[u.id] === false ? 0 : supply[u.id]]))
   return derived
 }
 
@@ -1056,6 +1068,15 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   return arrived
 }
 
+export function toggleUpkeepUpgrade(state, derived, id) {
+  const up = UPGRADE_MAP[id]
+  if (!up?.upkeep || !state.upgrades[id]) return false
+  state.upgradeEnabled ||= {}
+  state.upgradeEnabled[id] = state.upgradeEnabled[id] === false
+  recompute(state, derived)
+  return true
+}
+
 export function research(state, derived, id) {
   const up = UPGRADE_MAP[id]
   if (!up || state.upgrades[id] || !isUpgradeUnlocked(state, up)) return false
@@ -1072,6 +1093,7 @@ export function research(state, derived, id) {
 
 /** 制作增产随设施和专业技艺叠加，不对加工品设置统一上限。 */
 export function craftYield(derived, recipe) {
+  if (recipe.fixedYield) return recipe.amount
   const bonus = (derived.craftBonus || 0) + (derived.craftBonusByResource?.[recipe.out] || 0)
   return recipe.amount * (1 + bonus)
 }
@@ -1171,7 +1193,7 @@ export function runAutoCraft(state, derived, dt) {
   if (!state.craftTimers) state.craftTimers = {}
   let made = false
   const recipes = [...CRAFTS]
-  if (derived.daoAutomation) {
+  if (derived.autoCraftUnlocked) {
     const priority = state.settings.autoCraftPriority
     recipes.sort((a, b) => Number(b.id === priority) - Number(a.id === priority))
   }
@@ -1227,10 +1249,13 @@ export function canAutoCraft(state, derived, recipe) {
   const target = craftTarget(state, derived, recipe.id)
   if (target > 0 && (state.resources[recipe.out] || 0) >= target) return false
   if (!canAfford(state, recipe.cost)) return false
-  if (!derived.daoAutomation) return true
+  if (!derived.autoCraftUnlocked) return true
   const reserve = clamp(Number(state.settings.craftReservePercent) || 0, 0, 90) / 100
   return Object.entries(recipe.cost).every(([res, cost]) =>
-    (state.resources[res] || 0) - cost >= (derived.max[res] || 0) * reserve - EPS,
+    (state.resources[res] || 0) - cost >= Math.max(
+      derived.daoAutomation ? (derived.max[res] || 0) * reserve : 0,
+      Number(state.settings.craftReserves?.[res]) || 0,
+    ) - EPS,
   )
 }
 

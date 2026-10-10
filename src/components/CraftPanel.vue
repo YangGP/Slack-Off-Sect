@@ -17,6 +17,7 @@ const FILTERS = [{ id: 'all', name: '全部' }, { id: 'basic', name: '基础' },
 const filter = computed(() => state.ui.craftFilter || 'all')
 // 库存每帧刷新；编辑中的草稿不能被尚未提交的库存目标覆盖。
 const targetDrafts = reactive({})
+const reserveDrafts = reactive({})
 
 /** 批量快捷：按「材料能做出的份数」取比例 */
 const BATCHES = [
@@ -43,6 +44,17 @@ const allRows = computed(() =>
 )
 
 const allAuto = computed(() => allRows.value.length > 0 && allRows.value.every(row => row.auto))
+const reserveResources = computed(() => [...new Set(allRows.value.flatMap(row => Object.keys(row.meta.cost)))]
+  .filter(id => state.seen[id]))
+
+function updateReserve(id, event) {
+  const value = Number(event.target.value)
+  if (Number.isFinite(value) && value >= 0) {
+    actions.setSetting('craftReserves', { ...state.settings.craftReserves, [id]: value })
+  }
+  delete reserveDrafts[id]
+  event.target.value = String(state.settings.craftReserves[id] || 0)
+}
 const someAuto = computed(() => allRows.value.some(row => row.auto))
 
 const rows = computed(() => {
@@ -97,19 +109,28 @@ const condenseStatus = computed(() => {
       </div>
       <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需元婴期凝液法</div>
-      <div v-if="!compact && derived.daoAutomation" class="small craft-settings">
-        <div class="good">道果统筹 · 重修时即可自动炼制</div>
-        <label>材料保留
+      <div v-if="!compact && derived.autoCraftUnlocked" class="small craft-settings">
+        <div class="good">{{ derived.daoAutomation ? '道果统筹 · 重修时即可自动炼制' : '百工统筹 · 保留建造用料，优先加工所需配方' }}</div>
+        <label v-if="derived.daoAutomation">材料保留
           <select :value="state.settings.craftReservePercent" @change="actions.setSetting('craftReservePercent', Number($event.target.value))">
             <option v-for="n in [0, 10, 20, 30, 50]" :key="n" :value="n">{{ n }}% 仓储</option>
           </select>
         </label>
         <label>优先
-          <select :value="state.settings.autoCraftPriority" @change="actions.setSetting('autoCraftPriority', $event.target.value)">
+          <select aria-label="优先配方" :value="state.settings.autoCraftPriority" @change="actions.setSetting('autoCraftPriority', $event.target.value)">
             <option v-for="row in allRows" :key="row.meta.id" :value="row.meta.id">{{ row.meta.name }}</option>
           </select>
         </label>
-        <div class="dim">保留比例按每种材料的仓储上限计算，仅约束自动炼制。</div>
+        <div v-if="derived.daoAutomation" class="dim">保留比例按仓储上限计算，与逐项保留取较高值，仅约束自动炼制。</div>
+        <details>
+          <summary>逐项保留材料</summary>
+          <label v-for="id in reserveResources" :key="id">{{ resName(id) }}
+            <input type="number" min="0" step="any" :aria-label="`${resName(id)}保留数量`"
+              :value="reserveDrafts[id] ?? (state.settings.craftReserves[id] || 0)"
+              @input="reserveDrafts[id] = $event.target.value" @change="updateReserve(id, $event)" />
+          </label>
+          <div class="dim">自动加工保留指定数量；扩仓不会改变保留量。0 表示不保留，手动制作可动用保留材料。</div>
+        </details>
       </div>
       <div v-if="!compact" class="filters">
         <button v-for="f in FILTERS" :key="f.id" class="filter" :class="{ on: filter === f.id }" @click="state.ui.craftFilter = f.id">{{ f.name }}</button>

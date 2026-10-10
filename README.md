@@ -1,195 +1,76 @@
 # 摸鱼宗门 · Slack Off Sect
 
-一个用 **Vue 3 + Vite（纯 JavaScript）** 写的修仙宗门挂机放置游戏。
+用 Vue 3 + Vite（纯 JavaScript）实现的修仙宗门挂机放置游戏，参考猫国的资源池、劳动力、叠加建筑与研究加工体系。
 
-**在线试玩**：https://YangGP.github.io/Slack-Off-Sect/ （推到 main 后由 GitHub Actions 自动发布）
-当前版本 **v0.2**；页面右下角“更新日志”可查看从 v0.01 开始的近期更新记录。
-玩法结构参考了 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（猫国建设者）的放置玩法与数据组织方式：
-资源池 + 职位分配 + 可叠加建筑 + 修真（学术）+ 技艺·法宝（工坊）+ 制作配方 + 成就 + 随机事件 + 转世（飞升）。
+**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前版本 **v0.23**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
 
-> **文档入口**（按你关心的东西挑一份看）：
->
-> | 文件 | 内容 |
-> | --- | --- |
-> | [docs/MIDGAME-EVENTS.md](docs/MIDGAME-EVENTS.md) | 金丹防务已实现规则与周边事务扩展草案 |
-> | [docs/ECONOMY-AUDIT.md](docs/ECONOMY-AUDIT.md) | 点击、仓储与成品用途的数据审计、修改依据及改前/改后实测 |
-> | [docs/DESIGN.md](docs/DESIGN.md) | 当前实现：资源、人口、建筑、加工、境界、产量公式与存档 |
-> | [docs/ENGINEERING.md](docs/ENGINEERING.md) | 工程约定：前端分层与视觉约定、三层验证策略、扩展指南（加资源 / 建筑 / 条目 / 效果字段 / 调平衡） |
-> | [docs/EARLY-GAME.md](docs/EARLY-GAME.md) | 前期与猫国的实测对照、改造方案与结果（第 1 分钟只给一座建筑的理由） |
-> | [docs/BALANCE.md](docs/BALANCE.md) | 历次平衡改动的账本：每次「问题 → 改法 → 改前/改后实测」 |
-> | [docs/RESEARCH.md](docs/RESEARCH.md) | 修真线研究：体系定位与尚未实施的可选机制 |
-> | [docs/CULTIVATION-REVIEW.md](docs/CULTIVATION-REVIEW.md) | 当前修真与工艺体系审视：完整前置、费用、效果、加工链与设计疑点（以 v0.16 代码为准） |
-> | [docs/ROADMAP.md](docs/ROADMAP.md) | 未排期方向：体系审视、阶段节奏、周边事务、成就与弟子成长 |
-> | [docs/TABLES.md](docs/TABLES.md) | 全量数据表（资源 / 职位 / 建筑 / 修真 / 技艺 / 法宝 / 配方 / 境界 / 成就 / 事件），由 `npm run docs:tables` 生成 |
-> | [docs/CRAFT-PROGRESSION.md](docs/CRAFT-PROGRESSION.md) | v0.11 金丹工艺改动历史；当前配方见数据表 |
-> | [docs/RESOURCE-TIERS.md](docs/RESOURCE-TIERS.md) | v0.12～v0.13 加工层级、营造与仓储审计 |
-> | [docs/RESOURCE-BONUSES.md](docs/RESOURCE-BONUSES.md) | v0.14 专业产业增益及对应测量 |
-> | [docs/DISCIPLE-PROGRESSION.md](docs/DISCIPLE-PROGRESSION.md) | 尚未实施的弟子修炼、灵根与天赋草案 |
->
-> 界面风格参照猫国建设者：白底、细灰线、全页只有一层内容边框；左栏一行一资源的数字表，
-> 中栏是筛选行 + 建筑按钮网格，右栏是纯列表纪事。没有卡片、圆角、渐变、进度条和弹窗气泡。
+## 开发与检查
 
-## 快速开始
-
-```bash
-cd slack-off-sect
+~~~bash
 npm install
-npm run dev      # 开发预览（默认 http://127.0.0.1:5273）
-npm run build    # 产出 dist/
-npm run preview  # 预览构建结果
-```
-
-> 若在受限沙箱 / 网络驱动器环境下启动时报 `spawn EPERM` 或 `net use` 失败，
-> 属于 Vite 探测网络驱动器时的环境问题，与项目代码无关（正常桌面环境不会遇到）。
+npm run dev          # 开发预览 http://127.0.0.1:5273
+npm run check        # 编码、引擎、SSR、DOM检查
+npm run build        # 生产构建到 dist/
+npm run preview      # 预览构建结果
+npm run docs:tables  # 从数据文件重新生成全量表
+npm run clean        # 删除构建、测试与审计产物
+~~~
 
 ## 玩法
 
-| 系统 | 说明 |
+开局吸取天地灵气，建设聚灵阵，再以80灵气建首间茅屋。弟子有空房时自动前来，分配到阵徒、樵夫、矿工、采药人、悟道者和香使，取得原料与灵机，再推进研究、加工、营造扩仓和破境。首屋之后需要灵木；采矿场开放矿石供给，点石成灵以矿石和灵气制作灵石。
+
+宜居度管理人口负担：负值全局减产，富余增产，最高增减50%；拥挤时弟子岗位减半，严重拥挤可能流失并暂停收徒。居所营造补足已入住配套，生活建筑、工艺和法宝提供富余宜居度，前期以10%～20%增产为目标，中后期可达到50%。
+
+修真研究灵气、材料与经营，技艺和法宝提供增益。符文是技术，灵木和金属是载体；金丹发展阵基与玄钢，元婴发展灵液、灵晶与混灵土，后续以玄铁混灵土、秘银、玄金和晶银营造高阶设施。炼制页管理批量制作、自动加工及库存目标，左栏可自选快捷配方。
+
+带维护费的设施可以停用，缺料时收益按实际供给缩放；分灵、偏极与湮灭的进料和出料随全局倍率同步提速。建筑成本指数增长，可拆除返还一半材料；法宝可重复祭炼。心有灵犀开放自动加工、优先配方与逐项材料保留。突破主材料分四档：筑基至元婴用丹药，化神至合体用灵液与灵晶，大乘用灵气分子，渡劫用飞升阵印。化神起可转世取得永久仙缘，大乘通过湮灭产线固结稳定的飞升阵印，渡劫可飞升并取得道果；首颗道果永久开放重修自动加工与按仓储比例保留。成就保留行为记录，当前不提供产出奖励。
+
+主循环与离线补算共用引擎。设置页支持下载和导入存档文件；存档位于浏览器 localStorage，按同源隔离。
+
+## 文档
+
+| 文档 | 用途 |
 | --- | --- |
-| **资源** | 灵气、灵木、灵石、玄铁、灵草与各类加工品，金丹起可用灵气和符箓凝成灵晶，转世或飞升结算仙缘，飞升另得道果。标为 `integer: true` 的资源整件计数：价格向上取整、数量不出现小数 |
-| **开局** | 什么都没有：0 灵气、0 弟子、建筑列表也是空的。先点**吸取天地灵气**攒够 12 建**聚灵阵**，再**凝气成石**换出一枚灵石，才能盖起第一间**茅屋** —— 有了空房，第一名弟子 15 秒后自己来（对标猫国的「采集猫薄荷 → 炼制猫薄荷 → 小屋」） |
-| **渐进露出** | 建筑要「条件满足 + 花费见过三成」才出现在列表里（对标猫国的 `unlockRatio`）；用历史最高水位判定，所以花光资源也不会又消失 |
-| **弟子** | 不用招募：有空房就会自己来（默认每 15 秒一名，《广开山门》可加速）；每名弟子每秒消耗 `0.25 × 境界倍率` 灵气（**破境之后养人更贵** —— 见 [BALANCE.md](docs/BALANCE.md)《弟子口粮随境界上涨》），灵气断供会掉士气，长期断供或士气低于45%都会导致流失 |
-| **职位** | 阵徒 / 樵夫 / 矿工 / 采药人 / 悟道者 / 香使，人数可自由分配，产出受士气、加成与全局倍率影响 |
-| **建筑** | 8 大类共 37 种，价格按 `priceRatio` 指数递增；可拆除返还一半材料。普通营造以灵木、玄铁、木板为主，金丹晶核聚灵阵与高级设施使用工艺加工品；法藏兼存灵晶，材料库扩营造储备 |
-| **维护费与停用** | 只有「自己要吃资源」的建筑才带维护费（聚灵大阵吃灵气、灵兽园吃灵草、护山大阵吃灵气、试炼塔吃玄铁、通天塔吃灵木玄铁、因果池吃感悟、香火鼎吃灵木），**也只有它们能停用** —— 停用停止维护及运行收益，仓储与人口容量保留。维护费用于持续生产与加工供料，缺料时按供给比例运行；左栏出项明细里会单列「阵眼维护」 |
-| **法宝祭炼** | 修真研究出法宝后可以**反复祭炼**：效果为基础 ×(1 + 0.3×等级)，下一次费用按当前等级以1.7倍递增、不设上限 —— 后期感悟的主要去处，也是「先炼哪件、炼到几层」的取舍 |
-| **加成来源可追** | 资源悬停明细里的「加成倍率」会拆成逐项：资源加成 / 全局加成 / 季节 / 天象增益 / 全局倍率，每项都写明是谁贡献了多少（例如「聚灵珠 +15%、引气诀 +10%」） |
-| **修真** | 39 条，研究原理，负责解锁建筑方向、系统与法宝；金丹可参悟凝晶原理，再学习凝晶工艺。修真之间串成链，建筑和研究前置与境界条件同时生效 |
-| **技艺与法宝** | 29 条技艺 + 16 件法宝。技艺掌握配方并强化专业加工：木作器械 → 木板、阵基装配 → 阵基、淬玄工艺 → 玄钢、凝晶工艺 → 灵晶；法宝由修真解锁并可祭炼。专业工坊只增加对应成品的制作收益，百工坊提供通用加成 |
-| **炼制** | 独立炼制页集中展示全部配方、材料消耗、成品容量、制作加成、批量操作、自动与库存目标；支持基础 / 进阶 / 已选自动筛选。左栏自选快捷数量不限，默认凝石、制丹和木板，提供制作 / ½料 / 全部 / 自动；完整页与快捷区分别内部滚动，偏好随存档及转世保留 |
-| **金丹工艺链** | 木板25 + 符箓25 + 玄铁100组装阵基，营造讲经堂、静心池与护山大阵；凝灵诀、心有灵犀或首颗道果开放炼制库存目标，炼够暂停、使用后补货，0表示不限 |
-| **凝灵诀** | 前期参悟后，每45秒检查灵气是否满仓，最多取半仓按配方凝石；遵守自动制作总开关、灵石库存目标和材料保留量，离线同样执行 |
-| **境界** | 凡体 → 引气入体 → 炼气期 → 筑基期 → 金丹期 → 元婴期 → 化神期 → 炼虚期 → 合体期 → 大乘期 → 渡劫期，每境全局产出永久提升 |
-| **飞升** | 修到渡劫期即可飞升：重置资源/弟子/建筑/修真/技艺·法宝/境界，换取永久 **仙缘**（每点 +2% 全局产出、+0.15% 仓储，分别渐近 +200% / +50%），成就与统计保留 |
-| **成就** | 25 条，记录你做过什么，飞升与转世都不清空（奖励正在重新设计，暂不提供全局加成） |
-| **奇遇 / 天灾** | 每 2.5~7 分钟随机发生（灵雨、祖师显灵、香客云集、妖兽侵袭、丹炉炸炉……），护山大阵可减免天灾损失 |
-| **历法** | **1 天 = 3 秒**，1 节气 = 15 天 = 45 秒，1 季 = 90 天 = 4.5 分钟，1 年 = 24 节气 = 360 天 = 18 分钟；四季强度成阶梯（春正向 / 夏正向为主 / 秋中立 / 冬负向为主，且每种资源四季平均都在 ±5% 内 —— 历法不送净加成），入季写一条纪事，节气只在右栏历法面板里滚动 |
-| **挂机** | 主循环 100ms 一次；离线回归按 1 秒步长补算（默认上限8小时，《龟息功》《定息法》各+8小时）；每 20 秒自动存档到 localStorage，支持导出 / 导入存档 |
+| [DESIGN](docs/DESIGN.md) | 当前系统规则、结算公式与存档 |
+| [ENGINEERING](docs/ENGINEERING.md) | 工程分层、交互约定、扩展与工具命令 |
+| [TABLES](docs/TABLES.md) | 从源码生成的全部条目、造价、前置与效果 |
+| [RESEARCH](docs/RESEARCH.md) | 研究结构、依赖原则与评估边界 |
+| [CRAFT-PROGRESSION](docs/CRAFT-PROGRESSION.md) | 符文载体、晶核阵、防护分工与后期建材 |
+| [HABITABILITY](docs/HABITABILITY.md) | 宜居度公式、风险与供给 |
+| [BALANCE](docs/BALANCE.md) | 平衡改动及历史审计结果 |
+| [ROADMAP](docs/ROADMAP.md) | 尚未实施、待评估的方向 |
+| [SPIRIT-ENERGY](docs/SPIRIT-ENERGY.md) | 灵子与灵能场世界观，区分设定和实现 |
+| [MIDGAME-EVENTS](docs/MIDGAME-EVENTS.md) | 已实现药圃防务与后续事务草案 |
+| [DISCIPLE-PROGRESSION](docs/DISCIPLE-PROGRESSION.md) | 尚未实施的个体养成草案 |
 
-### 参考猫国的地方
+现行数值只在源码和生成表维护，历史结果集中在平衡账本；规则文档不复制完整条目表。
 
-- 管理器的数据表组织方式（`resources / jobs / buildings / upgrades / craft / achievements` 各自独立的数据文件）
-- 建筑「按数量指数涨价 + 效果与数量/启用数挂钩」的模型（`priceRatio`、`on` 开关、仓储类看数量、产出类看启用数）
-- 制作配方的产出加成 + 小数累积机制
-- 随机事件 / 天灾对资源池的增减与 buff 机制
-- 转世（飞升）保留部分进度换取永久倍率的循环
+## 目录与分析工具
 
-## 目录结构
+src/data/ 定义资源、建筑、研究与配方；src/game/ 负责规则、状态、存档和格式化；src/components/ 与 src/styles/ 负责界面。tools/ 包含引擎、渲染与DOM检查，及共用 player-bot 的节奏和资源审计。
 
-```
-slack-off-sect/
-├── index.html
-├── vite.config.js
-├── package.json
-├── docs/
-│   ├── DESIGN.md               # 游戏设计与规则（系统、公式、平衡目标与实测）
-│   ├── ENGINEERING.md          # 工程约定（前端分层与视觉、验证策略、扩展指南）
-│   ├── BALANCE.md              # 历次平衡改动的账本（问题 → 改法 → 实测）
-│   └── TABLES.md               # 全量数据表（npm run docs:tables 生成）
-├── src/
-│   ├── main.js                 # 挂载 + 启动主循环
-│   ├── App.vue                 # 整体布局：标题与状态行 / 标签行 / 三列
-│   ├── data/                   # 纯数据层（改数值只需要动这里）
-│   │   ├── config.js           # 平衡性常量（tick、弟子前来间隔、士气、离线、事件间隔…）
-│   │   ├── resources.js        # 资源定义
-│   │   ├── jobs.js             # 弟子职位
-│   │   ├── buildings.js        # 建筑（8 组 37 种）
-│   │   ├── upgrades.js         # 修真（研究/解锁层：建筑、系统与法宝）
-│   │   ├── techniques.js       # 技艺与法宝（数值修饰层）
-│   │   ├── crafts.js           # 制作配方
-│   │   ├── achievements.js     # 成就
-│   │   ├── realms.js           # 境界
-│   │   ├── events.js           # 随机奇遇 / 天灾
-│   │   ├── calendar.js         # 历法：24 节气与四季影响
-│   │   └── flavor.js           # 建筑风味文案（悬停提示底部那行小字）
-│   ├── game/
-│   │   ├── state.js            # 初始存档结构、兼容旧档、飞升重置
-│   │   ├── engine.js           # 纯函数引擎：recompute / tick / 购买 / 制作 / 破境 / 事件 / 离线结算
-│   │   ├── store.js            # Vue 单例：响应式状态 + 主循环 + actions
-│   │   ├── save.js             # localStorage 存档、导出导入
-│   │   ├── format.js           # 中文数量级 / 速率 / 时长格式化
-│   │   └── effectsText.js      # 效果与解锁条件的中文文案
-│   ├── components/             # 展示组件（左资源栏 + 收支 tooltip、左栏炼制块、修真页、技艺·法宝页、历法、累计…）
-│   └── styles/main.css         # 白底浅色 + 平面文字表格风格（无圆角/渐变）
-└── tools/
-    ├── smoke.mjs               # 引擎冒烟测试
-    ├── render-check.mjs        # 用 SSR 把每个面板真实渲染一遍，抓模板错误
-    ├── dom-check.mjs           # 用 jsdom 加载客户端 bundle，真挂载 + 真跑主循环 + 模拟点击
-    ├── dom-entry.js            # dom-check 的客户端入口
-    ├── vite.domcheck.config.js # 专供 dom-check 的客户端构建配置
-    ├── player-bot.mjs          # 模拟玩家策略（balance 与 audit 共用，保证结论一致）
-    ├── audit-lib.mjs           # 流量审计的公共实现（进项来源、逐时段速率、贴顶比例、参悟进度）
-    ├── resource-audit.mjs      # 资源流量审计：某资源的进项/出项/存量/门槛到达时间（npm run audit）
-    ├── building-reachability.mjs # 真实前置、资源来源与仓储约束下的建筑可达性
-    ├── pacing-audit.mjs        # 首次生产／建设、阶段耗时、事件与分工策略对照
-    ├── dump-tables.mjs         # 从数据文件生成 docs/TABLES.md（npm run docs:tables）
-    └── balance.mjs             # 挂机节奏推演（模拟一个勤快玩家跑 N 小时）
-```
+~~~bash
+npm run audit -- stone 8                   # 资源流量与容量
+npm run audit -- stone 8 --craft=50        # 临时改变点石成灵成本
+npm run audit -- qi 8 --prod=spiritField:qi:0.1
+npm run audit:economy                      # 成品容量、基础需求与去向
+npm run audit:crafts -- 24 0               # 加工链与边际增益
+npm run audit:buildings                    # 前置、来源与容量可达性
+npm run audit:pacing -- 72 0 0 0           # 首次生产、建设与各境耗时
+npm run balance -- 24 0                    # 固定时长的资源快照
+npm run balance:events -- 24               # 固定种子事件对照
+npm run balance:visits -- 24               # 持续操作与间歇上线
+~~~
 
-## 调平衡
+模拟结果依赖策略、操作频率和初始永久加成，不能当成真实玩家的通关时间。工具参数与统计口径见工程文档。
 
-怀疑某个资源太快 / 太慢时，用流量审计量一把（可以带「假设性改动」参数，只在本次运行生效、不改项目文件）：
+## 部署与产物
 
-```bash
-npm run audit -- stone 8                        # 灵石 8 小时的进项/出项/门槛到达时间
-npm run audit -- stone 8 --craft=50             # 假设点石成灵改成 50 灵气
-npm run audit -- stone 8 --prod=mine:stone:0.1  # 假设玄铁矿产灵石 0.1/秒
-npm run audit -- stone 8 --realm=0.5            # 假设破境灵石花费减半
-npm run audit -- insight 8 --upcost=2           # 假设所有参悟花费翻倍
-npm run audit -- insight 8 --job=0.6            # 假设职位产出降到 60%
-```
+推送 main 后，GitHub Actions 先检查，再构建发布到 Pages。首次在仓库 Settings → Pages 中选择 GitHub Actions；流程见 .github/workflows/deploy-pages.yml。Vite使用相对路径，可在子目录部署。
 
-## 自检
-
-```bash
-npm run smoke         # 引擎：数据完整性、产出、进项来源、购买、制作、事件、存档、离线、长时挂机
-npm run check:render  # 渲染：8 个标签页 + 弹窗全部真实渲染，且不允许出现模板警告
-npm run check:dom     # 端到端：jsdom 里真挂载客户端 bundle、主循环跑 2 秒、悬停 tooltip、模拟建造/派活/停用/参悟/制作/存读档
-npm run check         # 编码及三个测试都跑
-```
-
-`tools/balance.mjs` 可以看节奏（模拟一个勤快玩家跑 N 小时）：
-
-```bash
-npm run balance -- 24     # 模拟 24 小时
-npm run balance:visits -- 24 # 比较持续操作、每15分钟、每小时、每天三次上线
-```
-
-## 中间产物
-
-构建与测试会生成 `dist/`、`.smoke*/`、`.early/`；审计日志与临时基准压缩包可在记录结果后删除。`node_modules/` 为本地依赖，默认保留。文档数据表是正式资料，重新生成后保留在仓库。
-
-## 想改数值？
-
-- 调整节奏：`src/data/config.js`
-- 增删资源 / 建筑 / 修真 / 技艺·法宝 / 配方 / 成就 / 境界 / 事件：直接改 `src/data/` 对应文件，
-  引擎会自动识别（解锁条件支持 `building / buildings[] / upgrade / upgrades[] / realm`）
-- 效果字段的含义写在 `src/data/buildings.js` 顶部注释里，`engine.recompute` 是唯一的解释入口
-- 开局与点击收益：`src/data/config.js` 的 `CLICK_QI_BASE / CLICK_QI_PER_FIELD`，
-  以及 `buildings.js` 里前两座建筑（聚灵阵、茅屋）的花费
-
-## 存档
-
-- localStorage 键名：`slack-off-sect.save.v1`
-- 「设置」页可导出 base64 存档文本、粘贴导入、清档重开
-- 导入时会自动补齐缺失字段（`normalizeState`），旧档可以继续玩
-
-## 部署（GitHub Pages）
-
-推到 `main` 会自动跑测试、构建并发布：`.github/workflows/deploy-pages.yml`。
-
-**首次需要手动开一次**：仓库 `Settings → Pages → Build and deployment → Source` 选 **GitHub Actions**，
-然后推一次（或手动跑一次这个 workflow）即可访问 https://YangGP.github.io/Slack-Off-Sect/ 。
-
-- 构建产物是纯静态文件，无后端、无外部请求；
-- `vite.config.js` 里 `base: './'` 用的是**相对路径**，所以同一份 `dist/` 放在任何子路径下都能跑
-  （挂在 `/Slack-Off-Sect/` 这种项目页下不需要改配置）；应用本身也没有路由与 `fetch`，与部署路径无关；
-- 想本地看发布效果：`npm run build && npm run preview`；
-- 存档在浏览器 `localStorage`（键名 `slack-off-sect.save.v1`），按同源隔离；仅改同源路径可继续访问，换协议、域名或端口需先导出再导入。
+npm run clean 清理 dist/、dist-ssr/、.smoke*/、.early/ 和 .vite/。本地依赖 node_modules/、源码和正式数据表保留。导出的存档由用户选择保管，清理脚本不扫描存档文件。
 
 ## 许可
 
-[MIT](LICENSE) © 2026 YangGP
-
-数据与文案为本项目原创；玩法结构参考 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame)（MIT），未使用其任何代码或素材。
+[MIT](LICENSE) © 2026 YangGP。数据与文案为本项目原创；参考 [Kittens Game](https://github.com/nuclear-unicorn/kittensgame) 的玩法，未使用其代码或素材。

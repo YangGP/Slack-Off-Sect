@@ -2,10 +2,7 @@
  * 真·DOM 端到端验证：用 jsdom 造浏览器环境，加载**客户端 bundle**，
  * 把 App 真正挂载起来并让主循环跑几秒，然后模拟玩家点击。
  *
- * 前提：先构建客户端 bundle
- *   node --import <shim> node_modules/vite/bin/vite.js build --config tools/vite.domcheck.config.js
- * 再运行：
- *   node tools/dom-check.mjs
+ * 用法：npm run check:dom（先构建客户端 bundle，再运行交互检查）
  */
 import { JSDOM } from 'jsdom'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -775,7 +772,7 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
 
 state.ui.tab = 'cultivation'
 await new Promise((r) => setTimeout(r, 50))
-ok('修真页渲染出来了', html().includes('研究本源'))
+ok('修真页渲染出来了', html().includes('扩充灵机上限'))
 ok('修真页不列技艺·法宝层的条目', ![...doc.querySelectorAll('.main table.grid tbody tr')].some(tr => ['引气诀', '聚灵幡'].includes(tr.cells[0]?.textContent.trim())))
 
 // 修真 / 技艺页的花费列只写「需要多少」，现有与还差多久都进悬停提示
@@ -1174,22 +1171,24 @@ ok('境界面板渲染', html().includes('飞升'))
   await new Promise((r) => setTimeout(r, 40))
 }
 
-// 灵石缺口也要有计时器：它没有产出，但能靠点石成灵现印（见 engine.timeToAfford）
+// 阶段主材料丹药没有直接产出，破境提示仍需递归估算供料时间。
 {
   state.ui.tab = 'realm'
-  state.realm = 2 // 炼气期 → 筑基期（灵石在筑基档）
-  state.resources.stone = 0
+  state.realm = 2 // 炼气期 → 筑基期（丹药档）
+  state.resources.pill = 0
+  state.resources.herb = 0
   state.resources.qi = 100
   state.buildings.spiritField = { count: 20, on: true }
-  state.buildings.quarry = { count: 2, on: true }
+  state.buildings.herbGarden = { count: 2, on: true }
+  state.buildings.alchemyRoom = { count: 1, on: true }
   state.disciples.total = Math.max(state.disciples.total, 1)
-  state.disciples.jobs = { miner: 1 }
+  state.disciples.jobs = { herbalist: 1 }
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 80))
-  const stoneNeeded = engine.realmCost(state, derived, state.realm + 1).stone
-  const etas = engine.timeToAfford(state, derived, 'stone', stoneNeeded)
+  const pillNeeded = engine.realmCost(state, derived, state.realm + 1).pill
+  const etas = engine.timeToAfford(state, derived, 'pill', pillNeeded)
   const realmText = html()
-  ok('灵石缺口能算出等待时间（现印路径）', Number.isFinite(etas) && etas > 0, `${etas}`)
+  ok('丹药缺口能算出等待时间（加工路径）', Number.isFinite(etas) && etas > 0, `${etas}`)
   // 破境表的花费列同样只写需求值，倒计时在它自己的悬停提示里
   const realmCostText = doc.querySelector('.main .cost')?.textContent.replace(/\s+/g, ' ').trim() || ''
   ok(
@@ -1204,7 +1203,7 @@ ok('境界面板渲染', html().includes('飞升'))
     await new Promise((r) => setTimeout(r, 340))
     const tip = doc.querySelector('.tip')?.textContent.replace(/\s+/g, ' ').trim() || ''
     ok('破境提示沿用宗门排版（价格 / 效果分节）', tip.includes('价格') && tip.includes('效果'), tip.slice(0, 70))
-    ok('破境提示里灵石带倒计时', new RegExp(`灵石\\s*0 / ${stoneNeeded}（还差 .+）`).test(tip), tip.slice(0, 120))
+    ok('破境提示里丹药带倒计时', new RegExp(`丹药\\s*0 / ${pillNeeded}（还差 .+）`).test(tip), tip.slice(0, 120))
     // 口粮随境界上涨（DESIGN §5.4）：破境提示要写明「养人也要涨价」，
     // 否则玩家会在破境那一刻突然发现灵气净额变负，却不知道是谁涨的
     ok(
@@ -1520,7 +1519,7 @@ console.log('\n== 凝晶工艺与专业收益界面 ==')
   const previous = actions.exportText()
   actions.importText(JSON.stringify({
     realm: 5,
-    resources: { insight: 2000, qi: 3000, spiritLiquid: 10, talisman: 100, ore: 500, wood: 500, plank: 20 },
+    resources: { insight: 20000, qi: 3000, spiritLiquid: 10, talisman: 100, ore: 500, wood: 500, plank: 20 },
     upgrades: { qiOrigin: true, qiGazing: true, condenseArt: true, liquidArt: true, talismanArt: true, shapeRune: true },
     buildings: { talismanHall: { count: 1, on: true }, workshop: { count: 1, on: true } },
   }))
@@ -1586,6 +1585,85 @@ console.log('\n== 灵能枢实时供能与早期空间技艺移除 ==')
   row?.querySelector('.btn.primary')?.click()
   await new Promise(r => setTimeout(r, 50))
   ok('界面制作混灵土实际扣料并取得整数建材', state.resources.spiritMortar === 1 && state.resources.stone === 40 && state.resources.spiritLiquid === 4)
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
+console.log('\n== 修真灵机仓容分组 ==')
+{
+  const previous = actions.exportText()
+  actions.importText(JSON.stringify({
+    realm: 0,
+    buildings: { library: { count: 2, on: true } },
+    resources: { insight: 600, qi: 1000 },
+    upgrades: { talismanArt: true },
+    ui: { tab: 'cultivation' },
+  }))
+  await new Promise(r => setTimeout(r, 50))
+  const capacityFold = () => [...doc.querySelectorAll('.main details')].find(d => d.querySelector('summary')?.textContent.includes('需扩充灵机上限'))
+  const activeRow = () => [...doc.querySelectorAll('.box-body > table.grid tr')].find(r => r.textContent.includes('聚气纹') && r.querySelector('button'))
+  ok('仓容不足的符文研究归入扩仓折叠区', capacityFold()?.textContent.includes('聚气纹') && !activeRow())
+  ok('折叠区说明当前上限及研究需求', /600/.test(capacityFold()?.textContent) && /800/.test(capacityFold()?.textContent))
+  state.buildings.library.count = 3
+  state.resources.insight = 800
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('凡体扩仓后研究进入可参悟列表', !!activeRow() && !activeRow()?.querySelector('button')?.disabled)
+  activeRow()?.querySelector('button')?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('凡体界面可参悟并实际扣除灵机', state.upgrades.qiRune && state.resources.insight === 0)
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
+console.log('\n== 首飞前加工统筹 ==')
+{
+  const previous = actions.exportText()
+  state.dao = 0
+  state.upgrades.intuition = true
+  state.upgrades.woodworking = true
+  state.ui.tab = 'craft'
+  state.seen.wood = true
+  state.settings.craftReserves = {}
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  const input = document.querySelector('input[aria-label="灵木保留数量"]')
+  ok('首飞前展示逐项保留与优先配方', !!input && !!document.querySelector('select[aria-label="优先配方"]') && document.body.textContent.includes('百工统筹'))
+  if (input) {
+    input.value = '1250'
+    input.dispatchEvent(new window.Event('input', { bubbles: true }))
+    engine.recompute(state, derived)
+    await new Promise(r => setTimeout(r, 50))
+    ok('保留数量草稿不会被游戏刷新覆盖', input.value === '1250' && !state.settings.craftReserves.wood)
+    input.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 50))
+    ok('首飞前保留数量提交并保存', state.settings.craftReserves.wood === 1250)
+    input.value = '-1'
+    input.dispatchEvent(new window.Event('change', { bubbles: true }))
+    ok('无效保留数量恢复上次设置', state.settings.craftReserves.wood === 1250 && input.value === '1250')
+  }
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
+console.log('\n== 耗能法宝启停 ==')
+{
+  const previous = actions.exportText()
+  state.upgrades.energyCore = true
+  state.resources.qiEnergy = 100
+  state.upgradeEnabled = {}
+  state.ui.tab = 'skills'
+  state.ui.skillFilter = 'all'
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  const button = document.querySelector('button[aria-label="灵能枢启停"]')
+  ok('已炼成的耗能法宝提供启停按钮', !!button)
+  button?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('暂停灵能枢停止耗能且显示启用操作', state.upgradeEnabled.energyCore === false && !derived.maintenance.qiEnergy && button?.textContent.includes('启用'))
+  button?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('启用灵能枢恢复耗能', state.upgradeEnabled.energyCore === true && derived.maintenance.qiEnergy > 0)
   actions.importText(previous)
   await new Promise(r => setTimeout(r, 50))
 }

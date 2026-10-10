@@ -8,7 +8,7 @@ import { createInitialState } from '../src/game/state.js'
 import * as E from '../src/game/engine.js'
 import { createBot } from './player-bot.mjs'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
-import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
+import { CRAFT_MAP } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
 import { BUILDINGS } from '../src/data/buildings.js'
 import { ALL_UPGRADES } from '../src/data/upgrades.js'
@@ -31,68 +31,80 @@ import { JOBS } from '../src/data/jobs.js'
 export function auditResource({ resId = 'stone', hours = 8, patches = {}, thresholds = [150, 600, 900, 1500, 2500, 6000, 14000, 35000] } = {}) {
   const RES = RESOURCES.find((r) => r.id === resId)
   if (!RES) throw new Error('未知资源：' + resId)
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 168) throw new Error('小时数需大于0且不超过168')
+  for (const key of ['craftQi', 'baseMax', 'realmFactor', 'upgradeFactor', 'jobFactor']) {
+    if (patches[key] != null && (!Number.isFinite(patches[key]) || patches[key] < 0)) throw new Error(`无效审计数值：${key}`)
+  }
+  for (const p of patches.prods || []) {
+    if (!BUILDINGS.some(b => b.id === p.buildingId) || !RESOURCE_MAP[p.res] || !Number.isFinite(p.value) || p.value < 0) {
+      throw new Error('无效建筑产出参数：需有效建筑、资源及非负产量')
+    }
+  }
 
   // ---- 套用假设性改动，并记下还原动作 ----
   const restores = []
-  if (patches.craftQi != null) {
-    const old = CRAFT_MAP.infuseStone.cost.qi
-    CRAFT_MAP.infuseStone.cost.qi = patches.craftQi
-    restores.push(() => (CRAFT_MAP.infuseStone.cost.qi = old))
-  }
-  if (patches.baseMax != null) {
-    const old = RESOURCE_MAP[resId].baseMax
-    RESOURCE_MAP[resId].baseMax = patches.baseMax
-    restores.push(() => (RESOURCE_MAP[resId].baseMax = old))
-  }
-  for (const p of patches.prods || []) {
-    const b = BUILDINGS.find((x) => x.id === p.buildingId)
-    b.effects.prod = b.effects.prod || {}
-    const had = Object.prototype.hasOwnProperty.call(b.effects.prod, p.res)
-    const old = b.effects.prod[p.res]
-    b.effects.prod[p.res] = p.value
-    restores.push(() => {
-      if (had) b.effects.prod[p.res] = old
-      else delete b.effects.prod[p.res]
-    })
-  }
-  if (patches.upgradeFactor != null) {
-    const olds = []
-    for (const u of ALL_UPGRADES) {
-      if (u.cost && u.cost[resId]) {
-        olds.push([u, u.cost[resId]])
-        u.cost[resId] = Math.round(u.cost[resId] * patches.upgradeFactor)
-      }
-    }
-    restores.push(() => {
-      for (const [u, v] of olds) u.cost[resId] = v
-    })
-  }
-  if (patches.jobFactor != null) {
-    const olds = []
-    for (const j of JOBS) {
-      if (j.resource === resId) {
-        olds.push([j, j.base])
-        j.base = j.base * patches.jobFactor
-      }
-    }
-    restores.push(() => {
-      for (const [j, v] of olds) j.base = v
-    })
-  }
-  if (patches.realmFactor != null) {
-    const olds = []
-    for (const r of REALMS) {
-      if (r.cost && r.cost[resId]) {
-        olds.push([r, r.cost[resId]])
-        r.cost[resId] = Math.round(r.cost[resId] * patches.realmFactor)
-      }
-    }
-    restores.push(() => {
-      for (const [r, v] of olds) r.cost[resId] = v
-    })
-  }
-
   try {
+    if (patches.craftQi != null) {
+      const old = CRAFT_MAP.infuseStone.cost.qi
+      CRAFT_MAP.infuseStone.cost.qi = patches.craftQi
+      restores.push(() => (CRAFT_MAP.infuseStone.cost.qi = old))
+    }
+    if (patches.baseMax != null) {
+      const old = RESOURCE_MAP[resId].baseMax
+      RESOURCE_MAP[resId].baseMax = patches.baseMax
+      restores.push(() => (RESOURCE_MAP[resId].baseMax = old))
+    }
+    for (const p of patches.prods || []) {
+      const b = BUILDINGS.find((x) => x.id === p.buildingId)
+      const hadProd = Object.prototype.hasOwnProperty.call(b.effects, 'prod')
+      b.effects.prod = b.effects.prod || {}
+      const had = Object.prototype.hasOwnProperty.call(b.effects.prod, p.res)
+      const old = b.effects.prod[p.res]
+      b.effects.prod[p.res] = p.value
+      restores.push(() => {
+        if (had) b.effects.prod[p.res] = old
+        else delete b.effects.prod[p.res]
+        if (!hadProd) delete b.effects.prod
+      })
+    }
+    if (patches.upgradeFactor != null) {
+      const olds = []
+      for (const u of ALL_UPGRADES) {
+        if (u.cost && u.cost[resId]) {
+          olds.push([u, u.cost[resId]])
+          u.cost[resId] = Math.round(u.cost[resId] * patches.upgradeFactor)
+        }
+      }
+      restores.push(() => {
+        for (const [u, v] of olds) u.cost[resId] = v
+      })
+    }
+    if (patches.jobFactor != null) {
+      const olds = []
+      for (const j of JOBS) {
+        for (const output of [j, ...(j.additionalOutputs || []), ...(j.secondary ? [j.secondary] : [])]) {
+          if (output.resource !== resId) continue
+          olds.push([output, output.base])
+          output.base *= patches.jobFactor
+        }
+      }
+      restores.push(() => {
+        for (const [j, v] of olds) j.base = v
+      })
+    }
+    if (patches.realmFactor != null) {
+      const olds = []
+      for (const r of REALMS) {
+        if (r.cost && r.cost[resId]) {
+          olds.push([r, r.cost[resId]])
+          r.cost[resId] = Math.round(r.cost[resId] * patches.realmFactor)
+        }
+      }
+      restores.push(() => {
+        for (const [r, v] of olds) r.cost[resId] = v
+      })
+    }
+
     return run({ resId, hours, thresholds, forceAutoCraft: !!patches.autoCraft })
   } finally {
     for (const undo of restores.reverse()) undo()
@@ -112,22 +124,18 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
 
   const sampleEvery = Math.max(60, Math.floor(TOTAL / 40))
   const samples = []
-  const craftCostQi = CRAFTS.filter((c) => c.out === resId).reduce((s, c) => s + (c.cost.qi || 0), 0)
   const reached = new Map()
-  let qiSpentOnCrafting = 0
   let blocked = 0
   let ticked = 0
-  // 累计获得（产出 + 制作）：产出型靠速率累加，制作型靠 crafted 计数
+  // 持续产能积分，含满仓截断；实际制作入库另行统计。
   let income = 0
 
   for (let t = 1; t <= TOTAL; t++) {
-    const before = state.stats.crafted[resId] || 0
-    E.tick(state, derived, 1, { events: true })
+    E.tick(state, derived, 1, { events: false })
     income += Math.max(0, derived.rates[resId] || 0)
     if (t % DECISION_EVERY === 0) bot.act()
     if (t % 300 === 0) E.recompute(state, derived)
     const after = state.stats.crafted[resId] || 0
-    if (after > before) qiSpentOnCrafting += (after - before) * craftCostQi
 
     const cap = derived.max[resId]
     if (Number.isFinite(cap)) {
@@ -167,7 +175,6 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
     reached,
     thresholds,
     blockedRatio: ticked ? blocked / ticked : 0,
-    qiSpentOnCrafting,
     income,
     craftCount: state.stats.craftCount,
     craftedTotal: state.stats.crafted[resId] || 0,

@@ -61,7 +61,7 @@ const upkeepRows = computed(() =>
     key: res,
     label: RESOURCE_MAP[res]?.name || res,
     unit: fmtRate(-v),
-    total: enabled.value > 0 ? fmtRate(-v * active.value) : '',
+    total: enabled.value > 0 ? fmtRate(-v * active.value * (props.meta.throughput ? derived.globalMult : 1)) : '',
   })),
 )
 
@@ -110,6 +110,7 @@ onBeforeUnmount(clearHighlight)
             <span class="tip-right">已建 {{ count }}</span>
           </div>
           <div class="tip-desc">{{ meta.desc }}</div>
+          <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
 
           <div class="tip-section">价格</div>
           <div v-for="(amount, res) in price" :key="res" class="tip-row">
