@@ -15,7 +15,7 @@ const rows = computed(() =>
     const unlocked = derived.unlockedJobs.includes(job.id)
     const count = state.disciples.jobs[job.id] || 0
     const outputs = jobOutputs(state, job).map(({ resource, base }) => {
-      const perDisciple = base * (1 + (derived.jobRatio?.[job.id] || 0)) * (derived.sourceFactor[resource] ?? 1)
+      const perDisciple = base * (1 + (derived.jobRatio?.[job.id] || 0)) * derived.discipleMult * (derived.sourceFactor[resource] ?? 1)
       return { resource, name: RESOURCE_MAP[resource].name, perDisciple, total: perDisciple * count }
     })
     return {
@@ -104,11 +104,23 @@ function setJob(jobId, value) {
 
       <div class="small dim">
         弟子总数 {{ state.disciples.total }} / {{ derived.maxDisciples }}，闲散 {{ idle }}；
-        每人 灵气 -{{ fmt(derived.upkeep / Math.max(1, state.disciples.total)) }}/秒，士气
-        {{ fmt(derived.morale) }}%（建筑 / 修真 +{{ fmt(derived.moraleBonus) }}）。
+        每人 灵气 -{{ fmt(derived.upkeep / Math.max(1, state.disciples.total)) }}/秒，宜居度
+        {{ fmt(derived.habitability) }}（基础20，建筑 / 修真 +{{ fmt(derived.habitabilityBonus) }}，断供惩罚 {{ fmt(state.habitabilityPenalty) }}）。
+        <template v-if="derived.housingHabitability > 0">其中入住配套 +{{ fmt(derived.housingHabitability) }}。</template>
       </div>
       <div class="small dim">
-        <template v-if="waitNext === null">居所已满，扩建居所才会再有人来。</template>
+        宜居度全局倍率 ×{{ derived.habitabilityMult.toFixed(2) }}，弟子岗位倍率 ×{{ derived.discipleMult.toFixed(2) }}。
+        低于0每点全局减产1%；超过弟子数+20后每点全局增产0.5%，两者最多50%。
+        弟子不少于20人且宜居度低于弟子数−20时，岗位产出减半。
+        前期宜居度维持在弟子数+40～60，可获得10%～20%的全局增产；清风小院和膳养堂可改善起居。中后期可继续建设，最高增产50%。
+      </div>
+      <div class="small dim">
+        弟子不少于50人且宜居度低于弟子数−50时，每60秒按缺口×2%的概率离开1人（最高50%），期间暂停来人。长期断供仍会独立导致离开。
+        <span v-if="derived.leaveChance > 0" class="bad">当前每次检查离开概率 {{ fmt(derived.leaveChance * 100) }}%。</span>
+      </div>
+      <div class="small dim">
+        <template v-if="derived.leaveChance > 0">宜居度不足，改善居住环境后恢复弟子前来。</template>
+        <template v-else-if="waitNext === null">居所已满，扩建居所才会再有人来。</template>
         <template v-else>下一位弟子约 {{ fmtTime(waitNext) }}后到。</template>
       </div>
     </div>

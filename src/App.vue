@@ -63,8 +63,10 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
       <template v-if="idle > 0">
         <span class="sep">·</span>闲散 <b class="warn">{{ idle }}</b>
       </template>
-      <span class="sep">·</span>士气
-      <b :class="derived.morale < 60 ? 'bad' : ''">{{ fmt(derived.morale) }}%</b>
+      <span class="sep">·</span>宜居度
+      <b :class="derived.habitabilityMult < 1 || derived.discipleMult < 1 ? 'bad' : derived.habitabilityMult > 1 ? 'good' : ''">{{ fmt(derived.habitability) }}</b>
+      <span v-if="derived.discipleMult < 1" class="bad">（弟子产出减半）</span>
+      <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
       <span class="sep">·</span>灵气进项 <b class="good">{{ fmtRate(qiFlow.income) }}</b>
       <span class="sep">·</span>出项
       <b class="bad">{{ fmtRate(-qiFlow.expense) }}</b>

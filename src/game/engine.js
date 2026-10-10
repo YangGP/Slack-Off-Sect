@@ -16,6 +16,20 @@ export function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v
 }
 
+/** 宜居度的三个独立边界：环境、岗位拥挤和人口流失。 */
+export function habitabilityEffects(habitability, population) {
+  const globalMult = habitability < 0
+    ? 1 - Math.min(CONFIG.HABITABILITY_GLOBAL_CAP, -habitability * CONFIG.HABITABILITY_LOSS_PER_POINT)
+    : 1 + Math.min(CONFIG.HABITABILITY_GLOBAL_CAP,
+      Math.max(0, habitability - population - CONFIG.HABITABILITY_BONUS_MARGIN) * CONFIG.HABITABILITY_GAIN_PER_POINT)
+  const discipleMult = population >= CONFIG.HABITABILITY_JOB_MARGIN &&
+    habitability < population - CONFIG.HABITABILITY_JOB_MARGIN ? 0.5 : 1
+  const leaveDeficit = population - CONFIG.HABITABILITY_LEAVE_MARGIN - habitability
+  const leaveChance = population >= CONFIG.HABITABILITY_LEAVE_MARGIN && leaveDeficit > 0
+    ? Math.min(CONFIG.HABITABILITY_LEAVE_CHANCE_CAP, leaveDeficit * CONFIG.HABITABILITY_LEAVE_CHANCE_PER_POINT) : 0
+  return { globalMult, discipleMult, leaveChance }
+}
+
 /** 派生数据的初始结构（不存档，每帧重算） */
 /**
  * 软上限（通用 idler 形状）：前 75% 原样给，剩下的渐近到 limit 但永远不到。
@@ -50,8 +64,12 @@ export function createDerived() {
     /** 每名弟子每秒的口粮（已含境界倍率，未含减耗） */
     discipleUpkeep: 0,
     netQi: 0,
-    morale: 100,
-    moraleBonus: 0,
+    habitability: CONFIG.HABITABILITY_BASE,
+    habitabilityBonus: 0,
+    housingHabitability: 0,
+    habitabilityMult: 1,
+    discipleMult: 1,
+    leaveChance: 0,
     maxDisciples: 0,
     globalMult: 1,
     realmMult: 1,
@@ -64,6 +82,7 @@ export function createDerived() {
     craftSpeed: 1,
     craftBonusByResource: {},
     disasterGuard: 0,
+    disasterGuardByResource: {},
     ascendBonus: 0,
     consumeReduction: 0,
     arrivalBonus: 0,
@@ -358,7 +377,7 @@ export function calendarAt(totalDays) {
 
 /** 距离下一名弟子的到来还有多少秒（没有空房时返回 null） */
 export function nextArrivalIn(state, derived) {
-  if (state.disciples.total >= derived.maxDisciples) return null
+  if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) return null
   return Math.max(0, arrivalInterval(derived) - (state.arrivalTimer || 0))
 }
 
@@ -441,7 +460,8 @@ function applyEffects(ef, mult, targets, src) {
     for (const r of RESOURCES) max[r.id] = (max[r.id] || 0) + ef.storageAll * mult * (r.storageWeight ?? 1)
   }
   if (ef.maxDisciples) acc.maxDisciples += ef.maxDisciples * mult
-  if (ef.morale) acc.moraleBonus += ef.morale * mult
+  if (ef.habitability) acc.habitabilityBonus += ef.habitability * mult
+  if (ef.habitabilityPerHousing) acc.habitabilityPerHousing += ef.habitabilityPerHousing * mult
   if (ef.consumeRatio) acc.consumeReduction += ef.consumeRatio * mult
   if (ef.craftBonus) acc.craftBonus += ef.craftBonus * mult
   if (ef.craftBonusByResource) {
@@ -450,6 +470,11 @@ function applyEffects(ef, mult, targets, src) {
     }
   }
   if (ef.disasterGuard) acc.disasterGuard += ef.disasterGuard * mult
+  if (ef.disasterGuardByResource) {
+    for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {
+      acc.disasterGuardByResource[res] = (acc.disasterGuardByResource[res] || 0) + value * mult
+    }
+  }
   if (ef.ascendBonus) acc.ascendBonus += ef.ascendBonus * mult
   if (ef.arrivalBonus) acc.arrivalBonus += ef.arrivalBonus * mult
   if (ef.breakthroughDiscount) acc.breakthroughDiscount += ef.breakthroughDiscount * mult
@@ -488,7 +513,7 @@ function applyEffects(ef, mult, targets, src) {
 }
 
 /**
- * 重算所有派生数据：仓储上限、每秒产出、士气、解锁列表、价格折扣等。
+ * 重算所有派生数据：仓储上限、每秒产出、宜居度、解锁列表、价格折扣等。
  * 任何会改变数值的操作之后都应该调用一次。
  */
 function recomputeRaw(state, derived, supply) {
@@ -512,11 +537,13 @@ function recomputeRaw(state, derived, supply) {
   const acc = {
     // 开局没有任何居所 —— 弟子上限完全由建筑给（茅屋 +2 起）
     maxDisciples: 0,
-    moraleBonus: 0,
+    habitabilityBonus: 0,
+    habitabilityPerHousing: 0,
     consumeReduction: 0,
     craftBonus: 0,
     craftBonusByResource: {},
     disasterGuard: 0,
+    disasterGuardByResource: {},
     ascendBonus: 0,
     arrivalBonus: 0,
     breakthroughDiscount: 0,
@@ -546,7 +573,7 @@ function recomputeRaw(state, derived, supply) {
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
     if (ef.storageAll) countOnly.storageAll = ef.storageAll
     if (ef.maxDisciples) countOnly.maxDisciples = ef.maxDisciples
-    if (ef.morale && !counted) countOnly.morale = ef.morale
+    if (ef.habitability && !counted) countOnly.habitability = ef.habitability
     if (ef.disasterGuard && !counted) countOnly.disasterGuard = ef.disasterGuard
     if (ef.ascendBonus && !counted) countOnly.ascendBonus = ef.ascendBonus
     if (Object.keys(countOnly).length) applyEffects(countOnly, e.count, targets)
@@ -556,7 +583,7 @@ function recomputeRaw(state, derived, supply) {
     delete activeOnly.storageAll
     delete activeOnly.maxDisciples
     if (!counted) {
-      delete activeOnly.morale
+      delete activeOnly.habitability
       delete activeOnly.disasterGuard
       delete activeOnly.ascendBonus
     }
@@ -622,21 +649,22 @@ function recomputeRaw(state, derived, supply) {
     })
   }
 
-  // 弟子职位产出
+  const housingHabitability = Math.min(state.disciples.total, Math.floor(acc.maxDisciples)) * acc.habitabilityPerHousing
+  const habitabilityBonus = acc.habitabilityBonus + housingHabitability
+  const habitability = CONFIG.HABITABILITY_BASE + habitabilityBonus + (state.habitabilityPenalty || 0)
+  const { globalMult: habitabilityMult, discipleMult, leaveChance } = habitabilityEffects(habitability, state.disciples.total)
+
+  // 宜居度拥挤惩罚只作用于弟子岗位，建筑和法宝的基础产出不受此项影响。
   for (const job of JOBS) {
     const n = state.disciples.jobs[job.id] || 0
     if (n > 0) {
       for (const output of jobOutputs(state, job)) {
-        const raw = output.base * n * (1 + (jobRatio[job.id] || 0))
+        const raw = output.base * n * (1 + (jobRatio[job.id] || 0)) * discipleMult
         prod[output.resource] = (prod[output.resource] || 0) + raw
         addSource(output.resource, { kind: 'job', id: job.id, label: job.name, count: n, raw })
       }
     }
   }
-
-  // 士气
-  const morale = clamp(100 + acc.moraleBonus + state.moralePenalty, CONFIG.MORALE_MIN, CONFIG.MORALE_MAX)
-  const moraleMult = morale / 100
 
   // 增益 / 减益（也记进拆分账，悬停提示要能逐项列出）
   let buffAll = 0
@@ -668,7 +696,7 @@ function recomputeRaw(state, derived, supply) {
   const karmaStorageMult = 1 + softCap(Math.max(0, state.karma || 0) * CONFIG.KARMA_STORAGE_PER_POINT, CONFIG.KARMA_STORAGE_CAP)
   /** 道果（飞升层）：每颗 +5% 全局产出，不设上限 —— 因为拿到它的成本极高（一次飞升约 90 小时） */
   const daoMult = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_PRODUCTION_BONUS
-  const globalMult = realmMult * karmaMult * moraleMult * daoMult * (1 + buffAll)
+  const globalMult = realmMult * karmaMult * habitabilityMult * daoMult * (1 + buffAll)
 
   // 历法：季节直接乘进对应资源的产出（与建筑 / 修真的 ratio 同一层）
   const calendar = calendarAt(state.totalDays)
@@ -797,7 +825,7 @@ function recomputeRaw(state, derived, supply) {
     buffRes: bonusBuffRes,
     realmMult,
     karmaMult,
-    moraleMult,
+    habitabilityMult,
     buffAllTotal: buffAll,
     globalMult,
   }
@@ -812,8 +840,12 @@ function recomputeRaw(state, derived, supply) {
   derived.rawUpkeep = rawUpkeep
   derived.discipleUpkeep = discipleUpkeep
   derived.netQi = net.qi
-  derived.morale = morale
-  derived.moraleBonus = acc.moraleBonus
+  derived.habitability = habitability
+  derived.habitabilityBonus = habitabilityBonus
+  derived.housingHabitability = housingHabitability
+  derived.habitabilityMult = habitabilityMult
+  derived.discipleMult = discipleMult
+  derived.leaveChance = leaveChance
   derived.maxDisciples = Math.floor(acc.maxDisciples)
   derived.globalMult = globalMult
   derived.realmMult = realmMult
@@ -823,6 +855,7 @@ function recomputeRaw(state, derived, supply) {
   derived.craftBonus = acc.craftBonus
   derived.craftBonusByResource = acc.craftBonusByResource
   derived.disasterGuard = Math.min(0.8, acc.disasterGuard)
+  derived.disasterGuardByResource = acc.disasterGuardByResource
   derived.ascendBonus = acc.ascendBonus
   derived.consumeReduction = acc.consumeReduction
   derived.arrivalBonus = acc.arrivalBonus
@@ -998,18 +1031,19 @@ export function fillJob(state, derived, jobId) {
  */
 export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   if (dt <= 0) return 0
-  if (state.disciples.total >= derived.maxDisciples) {
+  if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) {
     state.arrivalTimer = 0
     return 0
   }
   state.arrivalTimer = (state.arrivalTimer || 0) + dt
   const interval = arrivalInterval(derived)
   let arrived = 0
-  while (state.arrivalTimer >= interval && state.disciples.total < derived.maxDisciples) {
+  while (state.arrivalTimer >= interval && state.disciples.total < derived.maxDisciples && derived.leaveChance === 0) {
     state.arrivalTimer -= interval
     state.disciples.total += 1
     state.stats.recruits += 1
     arrived += 1
+    recompute(state, derived)
   }
   if (arrived > 0) {
     if (!silent) {
@@ -1018,7 +1052,7 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
     recompute(state, derived)
   }
   // 住满了就把计时清零：扩建之后重新开始算，不会立刻蹦出一个人
-  if (state.disciples.total >= derived.maxDisciples) state.arrivalTimer = 0
+  if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) state.arrivalTimer = 0
   return arrived
 }
 
@@ -1545,9 +1579,10 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     const fixed = Math.min(have, whole((spec.cost?.[res] || 0) + (required[res] || 0)))
     const share = whole((have - fixed) * (spec.costShare?.[res] || 0))
     const remaining = have - fixed - share
+    const guard = clamp((derived.disasterGuard || 0) + (derived.disasterGuardByResource?.[res] || 0), 0, 0.8)
     const disaster = spec.disaster?.resources.includes(res)
-      ? whole(remaining * disasterPercent * (1 - (derived.disasterGuard || 0))) : 0
-    const bounded = whole(Math.min(remaining, (spec.boundedLoss?.[res] || 0) * (1 - clamp(derived.disasterGuard || 0, 0, 1))))
+      ? whole(remaining * disasterPercent * (1 - guard)) : 0
+    const bounded = whole(Math.min(remaining, (spec.boundedLoss?.[res] || 0) * (1 - guard)))
     const lost = fixed + share + disaster + bounded
     const offered = spec.lootRate?.[res] != null
       ? whole(Math.max(spec.floor?.[res] || 0, eventResourceRate(state, derived, res) * spec.lootRate[res])) : 0
@@ -1574,6 +1609,13 @@ function settleEventOutcome(state, derived, spec, text, kind, source) {
   if (spec.disaster || spec.boundedLoss) {
     state.stats.disasters += 1
     if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
+    for (const row of outcome.rows) {
+      const extra = derived.disasterGuardByResource?.[row.res] || 0
+      if (extra > 0 && (spec.disaster?.resources.includes(row.res) || spec.boundedLoss?.[row.res])) {
+        const total = clamp((derived.disasterGuard || 0) + extra, 0, 0.8)
+        parts.push(`${RESOURCE_MAP[row.res].name}符阵护持合计 ${Math.round(total * 100)}%`)
+      }
+    }
   }
   if (outcome.recruits > 0) {
     state.disciples.total += outcome.recruits
@@ -1762,40 +1804,44 @@ export function tick(state, derived, dt, opts = {}) {
     state.resources.qiEnergy = left < 1e-9 ? 0 : left
   }
 
-  // 2) 士气：灵气断供则下滑，供应正常则回升
+  // 2) 宜居度：灵气断供则下滑，供应正常则回升
+  const previousPenalty = state.habitabilityPenalty
   const starving = (state.resources.qi || 0) <= 1 && derived.netQi < 0
   if (starving) {
-    state.moralePenalty = clamp(
-      state.moralePenalty - CONFIG.MORALE_STARVE_RATE * cap,
+    state.habitabilityPenalty = clamp(
+      state.habitabilityPenalty - CONFIG.HABITABILITY_STARVE_RATE * cap,
       -60,
       0,
     )
   } else {
-    state.moralePenalty = clamp(
-      state.moralePenalty + CONFIG.MORALE_RECOVER_RATE * cap,
+    state.habitabilityPenalty = clamp(
+      state.habitabilityPenalty + CONFIG.HABITABILITY_RECOVER_RATE * cap,
       -60,
       0,
     )
   }
 
-  // 3) 长期断粮独立于舒适度；旧存档缺失计时器时从零开始。
+  // 惩罚恢复或断供下滑后立即刷新风险，在线与离线使用相同的60秒检查周期。
+  if (state.habitabilityPenalty !== previousPenalty) recompute(state, derived, cap)
+  // 3) 长期断粮独立于宜居度；宜居度不足则按固定周期抽取离开概率。
   state.starvationTimer = starving ? (state.starvationTimer || 0) + cap : 0
-  if ((state.starvationTimer >= CONFIG.LEAVE_INTERVAL || derived.morale < 45) && state.disciples.total > 0) {
-    state.leaveTimer = (state.leaveTimer || 0) + cap
-    if (state.starvationTimer >= CONFIG.LEAVE_INTERVAL || state.leaveTimer >= CONFIG.LEAVE_INTERVAL) {
-      state.leaveTimer = 0
-      state.starvationTimer = 0
-      const jobs = state.disciples.jobs
-      const jobId = idleDisciples(state) > 0 ? null :
-        [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
-          .find((job) => (jobs[job.id] || 0) > 0)?.id
-      if (jobId) jobs[jobId] -= 1
-      state.disciples.total -= 1
-      pushLog(state, `${starving ? '灵气长期断供' : '士气低落'}，一名弟子收拾行囊下山了。`, 'bad')
-      recompute(state, derived)
-    }
-  } else {
-    state.leaveTimer = 0
+  state.leaveTimer = derived.leaveChance > 0 ? (state.leaveTimer || 0) + cap : 0
+  const hungerLeave = state.starvationTimer >= CONFIG.LEAVE_INTERVAL
+  let crowdingLeave = false
+  if (state.leaveTimer >= CONFIG.HABITABILITY_LEAVE_INTERVAL) {
+    state.leaveTimer %= CONFIG.HABITABILITY_LEAVE_INTERVAL
+    crowdingLeave = Math.random() < derived.leaveChance
+  }
+  if ((hungerLeave || crowdingLeave) && state.disciples.total > 0) {
+    if (hungerLeave) state.starvationTimer = 0
+    const jobs = state.disciples.jobs
+    const jobId = idleDisciples(state) > 0 ? null :
+      [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
+        .find((job) => (jobs[job.id] || 0) > 0)?.id
+    if (jobId) jobs[jobId] -= 1
+    state.disciples.total -= 1
+    pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')
+    recompute(state, derived)
   }
 
   // 4) 增益到期
@@ -1828,7 +1874,7 @@ export function tick(state, derived, dt, opts = {}) {
   }
 
   // 7) 弟子自动前来（有空房就来人，不用手动招募）
-  if (!starving) recruitArrivals(state, derived, cap, { silent: offline })
+  if (!starving && derived.leaveChance === 0) recruitArrivals(state, derived, cap, { silent: offline })
   else state.arrivalTimer = 0
 
   // 8) 成就

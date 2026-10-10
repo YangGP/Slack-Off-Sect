@@ -74,7 +74,7 @@ function makeRichState() {
   state.autoCraft = { infuseStone: true }
   state.realm = 8
   state.karma = 30
-  state.moralePenalty = -10
+  state.habitabilityPenalty = -10
   state.buffs = [
     { id: 'spiritRain', name: '灵雨润泽', mult: 0.35, target: null, until: Date.now() + 60000 },
     { id: 'coldWave', name: '寒潮', mult: -0.3, target: null, until: Date.now() + 30000 },

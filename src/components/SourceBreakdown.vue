@@ -112,7 +112,7 @@ const bonusRows = computed(() => {
       detail: detailOf(all),
     })
   }
-  // 全局倍率：境界 × 仙缘 × 士气 × 增益
+  // 全局倍率：境界 × 仙缘 × 宜居度 × 增益
   if (Math.abs(b.globalMult - 1) > 0.0005) {
     rows.push({
       key: 'global',
@@ -121,11 +121,14 @@ const bonusRows = computed(() => {
       detail: [
         `境界 ×${b.realmMult.toFixed(2)}`,
         `仙缘 ×${b.karmaMult.toFixed(2)}`,
-        `士气 ×${b.moraleMult.toFixed(2)}`,
+        `宜居度 ×${b.habitabilityMult.toFixed(2)}`,
       ]
         .concat(Math.abs(b.buffAllTotal || 0) > 0.0005 ? [`天象 ×${(1 + b.buffAllTotal).toFixed(2)}`] : [])
         .join(' · '),
     })
+  }
+  if (derived.discipleMult < 1 && sources.value.some(s => s.kind === 'job')) {
+    rows.push({ key: 'crowding', label: '岗位拥挤', text: `×${derived.discipleMult.toFixed(2)}`, detail: '仅弟子岗位产出，已计入各职位进项' })
   }
   return rows
 })

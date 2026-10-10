@@ -42,8 +42,8 @@ function snapshot(t) {
       state.disciples.total,
     ).padStart(3)}/${String(derived.maxDisciples).padStart(3)} | 建筑 ${String(
       state.stats.buildingsBuilt,
-    ).padStart(3)} | 参悟 ${String(Object.keys(state.upgrades).length).padStart(2)} | 士气 ${Math.round(
-      derived.morale,
+    ).padStart(3)} | 参悟 ${String(Object.keys(state.upgrades).length).padStart(2)} | 宜居度 ${Math.round(
+      derived.habitability,
     )}% | 每人粮 ${derived.discipleUpkeep.toFixed(3)}/s | 出项占比 ${outPct.toFixed(1)}% | 灵气净 ${derived.netQi.toFixed(2)}/s`,
   )
   console.log(`          ${res}`)

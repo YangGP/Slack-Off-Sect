@@ -21,7 +21,7 @@ export const CONFIG = {
    * 弟子越到后期越接近免费，人口只剩下「盖房子」这一道闸门
    * （实测见 docs/BALANCE.md《弟子口粮随境界上涨》）。
    * 指数取 1 之后，口粮占毛产出的比例在**任何境界都固定在 0.25/0.6 ≈ 42%**，
-   * 破境带来的产出增益不再顺带把人口变便宜。士气 / 全局加成仍然能改善它，
+   * 破境带来的产出增益不再顺带把人口变便宜。宜居度 / 全局加成仍然能改善它，
    * 但那是玩家自己挣来的，不是白送的。
    *
    * 调小（如 0.5）＝温和版；调大（如 1.5）＝后期养人更贵。
@@ -86,13 +86,21 @@ export const CONFIG = {
   CLICK_QI_FULL_FIELDS: 20,
   // 弟子不用招募：有空房就每这么多秒自己来一名（可被《广开山门》缩短）
   DISCIPLE_ARRIVAL_SECONDS: 15,
-  // 士气（民心）区间：士气/100 直接乘在弟子产出上
-  MORALE_MIN: 15,
-  MORALE_MAX: 200,
-  // 灵气断供时每秒钟掉多少士气，以及恢复时的回升速度
-  MORALE_STARVE_RATE: 6,
-  MORALE_RECOVER_RATE: 2,
-  // 士气过低时弟子流失：每多少秒走一人
+  // 宜居度是点数；只限制产量倍率，不限制宜居度本身。
+  HABITABILITY_BASE: 20,
+  HABITABILITY_LOSS_PER_POINT: 0.01,
+  HABITABILITY_GAIN_PER_POINT: 0.005,
+  HABITABILITY_GLOBAL_CAP: 0.5,
+  HABITABILITY_BONUS_MARGIN: 20,
+  HABITABILITY_JOB_MARGIN: 20,
+  HABITABILITY_LEAVE_MARGIN: 50,
+  HABITABILITY_LEAVE_INTERVAL: 60,
+  HABITABILITY_LEAVE_CHANCE_PER_POINT: 0.02,
+  HABITABILITY_LEAVE_CHANCE_CAP: 0.5,
+  // 灵气断供时每秒钟掉多少宜居度，以及恢复时的回升速度
+  HABITABILITY_STARVE_RATE: 6,
+  HABITABILITY_RECOVER_RATE: 2,
+  // 长期断供独立导致弟子流失：每多少秒走一人
   LEAVE_INTERVAL: 25,
   // 隐藏成就/随机奇遇的检查间隔（秒）
   EVENT_MIN_GAP: 150,

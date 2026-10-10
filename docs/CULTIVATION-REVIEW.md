@@ -1,3 +1,5 @@
+> 符文科技线已于 2026-10-10 调整。当前符文设计与配方以 [RUNE-DESIGN.md](RUNE-DESIGN.md) 和自动生成的 [TABLES.md](TABLES.md) 为准；本文其余内容保留为体系评估记录。
+
 # 当前修真与工艺体系审视（2026-10-09）
 
 以当前工作区 v0.16 数据和引擎为准，反映 2026-10-09 的两线重组（方案与决策见 [RESEARCH.md](RESEARCH.md)）、灵能设定校准（[SPIRIT-ENERGY.md](SPIRIT-ENERGY.md)）以及技艺和法宝扩充。旧五段分类的历史结构见 [BALANCE.md](BALANCE.md)。本轮评估及验证结果见 [BUNDLE-REVIEW.md](BUNDLE-REVIEW.md)。

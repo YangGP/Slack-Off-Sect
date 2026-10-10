@@ -59,7 +59,7 @@ export function createInitialState() {
     realm: 0,
     karma: 0,
     dao: 0,
-    moralePenalty: 0,
+    habitabilityPenalty: 0,
     starvationTimer: 0,
     leaveTimer: 0,
     buffs: [],
@@ -250,7 +250,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.karma = state.karma + karmaGain
   // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
   if (kind === 'ascension') state.dao = (state.dao || 0) + 1
-  state.moralePenalty = 0
+  state.habitabilityPenalty = 0
   state.starvationTimer = 0
   state.leaveTimer = 0
   state.buffs = []

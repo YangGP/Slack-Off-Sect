@@ -1,3 +1,5 @@
+> 2026-10-10 符文线更新：符文成为独立原理研究，阵基与灵晶不再消耗符箓，灵符与灵器分别在元婴、化神开放。详细规则见 [RUNE-DESIGN.md](RUNE-DESIGN.md)，当前数值见 [TABLES.md](TABLES.md)。下文早期方案与测量作为设计历史保留。
+
 # 修真研究方向
 
 更新：2026-10-09。本文记录「两线重组」的框架、决策与剩余待定项。**方案已实施**；当前规则与全部节点的完整清单见 [CULTIVATION-REVIEW.md](CULTIVATION-REVIEW.md)，生成数据表见 [TABLES.md](TABLES.md)。改动历史见 [BALANCE.md](BALANCE.md)。

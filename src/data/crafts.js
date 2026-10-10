@@ -75,15 +75,15 @@ export const CRAFTS = [
   },
   {
     id: 'drawTalisman',
-    name: '绘制符箓',
+    name: '刻制符箓',
     out: 'talisman',
     amount: 1,
     tier: 1,
     primary: ['wood'],
-    // 符箓的本质是「符文」：以灵木等材料承托、灵气为墨绘成，绘在不同材料上便是不同品阶（见描灵符）。
+    // 符文是技术，符箓刻在灵木载体上；高阶灵符采用金属载体。
     cost: { wood: 125, qi: 60 },
     time: 2,
-    desc: '以灵木为纸、灵气为墨，绘下一道符文。符文不变，换个材料承托便是更高阶的符。',
+    desc: '将灵木削成符牌，刻入简单符文，再注入灵气定形，成为可携带的符箓。',
     needs: { building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -104,10 +104,10 @@ export const CRAFTS = [
     out: 'arrayBase',
     amount: 1,
     tier: 2,
-    primary: ['plank', 'talisman'],
-    cost: { plank: 25, talisman: 25, ore: 100 },
+    primary: ['plank', 'ore'],
+    cost: { plank: 10, ore: 100, qi: 300 },
     time: 4,
-    desc: '二十五方木板搭骨、二十五张符箓定纹，百份玄铁铆合成一座阵基。用于讲经堂、静心池与护山大阵。',
+    desc: '十方木板搭骨、百份玄铁固结，直接刻入导灵纹与固形纹，再注入三百灵气成一座阵基。用于讲经堂、静心池与护山大阵。',
     needs: { realm: 4, upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -129,9 +129,9 @@ export const CRAFTS = [
     amount: 1,
     tier: 1,
     primary: ['spiritLiquid'],
-    cost: { spiritLiquid: 3, talisman: 10 },
+    cost: { spiritLiquid: 3, qi: 300 },
     time: 5,
-    desc: '以十张符箓定住气机，三瓶灵液凝成稳定晶核。用于晶核聚灵阵、观星台与高级阵法。',
+    desc: '以固形纹约束结晶边界，三瓶灵液与三百灵气凝成稳定晶核。用于晶核凝炼阵、观星台与高级阵法。',
     needs: { realm: 5, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -160,15 +160,15 @@ export const CRAFTS = [
   },
   {
     id: 'drawSpiritTalisman',
-    name: '描灵符',
+    name: '铭刻灵符',
     out: 'spiritTalisman',
     amount: 1,
     tier: 2,
-    primary: ['talisman'],
-    cost: { talisman: 100, faith: 500 },
+    primary: ['steel', 'spiritLiquid'],
+    cost: { steel: 2, spiritLiquid: 2, qi: 300, faith: 200 },
     time: 5,
-    desc: '同一道符文，改绘在香火凝成的灵墨上，便成了灵符 —— 符文不变，材料升级。',
-    needs: { building: { id: 'talismanHall', count: 1 } },
+    desc: '将纳灵纹铭刻在玄钢符牌上，以灵液注灵，承托更强气机；香火中的稳定意念辅助定纹，成就灵符。',
+    needs: { realm: 5, upgrades: ['capacityRune'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'forgeSpiritArtifact',
@@ -179,8 +179,8 @@ export const CRAFTS = [
     primary: ['artifact'],
     cost: { artifact: 100, steel: 25 },
     time: 8,
-    desc: '玄钢为骨、法器为魂 —— 铸成之日，器物自己会鸣。',
-    needs: { building: { id: 'forge', count: 1 } },
+    desc: '玄钢加固器身，将导灵与纳灵组成的复合符文刻入法器内部，铸成能自行运转气机的灵器。',
+    needs: { realm: 6, upgrades: ['compositeRune'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'forgeSpiritTreasure',
@@ -196,12 +196,67 @@ export const CRAFTS = [
     needs: { upgrades: ['artifactLore'] },
   },
 
+  {
+    id: 'mixSpiritMortar',
+    name: '拌制混灵土',
+    out: 'spiritMortar',
+    amount: 1,
+    tier: 2,
+    cost: { stone: 20, spiritLiquid: 2 },
+    time: 4,
+    desc: '将灵石现场磨成粉末，与灵液拌合固化，制成一份混灵土。',
+    needs: { realm: 5, upgrades: ['spiritMortarArt'] },
+  },
+  {
+    id: 'reinforceSpiritMortar',
+    name: '浇筑玄铁混灵土',
+    out: 'ironMortar',
+    amount: 1,
+    tier: 2,
+    cost: { spiritMortar: 2, ore: 50 },
+    time: 5,
+    desc: '将玄铁骨架埋入混灵土，浇筑成能承受大型建筑负荷的结构件。',
+    needs: { realm: 6, upgrades: ['ironMortarArt'] },
+  },
+  {
+    id: 'refineMithril',
+    name: '提炼秘银',
+    out: 'mithril',
+    amount: 1,
+    tier: 2,
+    cost: { rock: 150, qi: 150 },
+    time: 6,
+    desc: '从矿石中分离储灵金属，以灵气检验和精炼，取得秘银。',
+    needs: { realm: 7, upgrades: ['mithrilArt'] },
+  },
+  {
+    id: 'smeltArcaneGold',
+    name: '熔炼玄金',
+    out: 'arcaneGold',
+    amount: 1,
+    tier: 2,
+    cost: { spiritLiquid: 8, ore: 100, mithril: 4 },
+    time: 8,
+    desc: '以灵液浸炼玄铁与秘银，稳定合金内部的气机通路，得到玄金。',
+    needs: { realm: 8, upgrades: ['arcaneGoldArt'] },
+  },
+  {
+    id: 'fuseCrystalSilver',
+    name: '复合晶银',
+    out: 'crystalSilver',
+    amount: 1,
+    tier: 2,
+    cost: { crystal: 8, mithril: 4 },
+    time: 10,
+    desc: '以秘银承托灵晶结构，稳定晶体与金属的界面，制成精密晶银。',
+    needs: { realm: 9, upgrades: ['crystalSilverArt'] },
+  },
 ]
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure']
+export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]

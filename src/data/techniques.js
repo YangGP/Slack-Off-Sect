@@ -172,7 +172,7 @@ export const TECHNIQUES = [
         steel: 1, plank: 1, crystal: 1, spiritLiquid: 1, arrayBase: 1, talisman: 1, artifact: 1, pill: 1,
       },
     },
-    needs: { realm: 7, upgrades: ['storeStoneArt'] },
+    needs: { realm: 7, upgrades: ['storeStoneArt', 'capacityRune'] },
   },
 
   // ---------- 香火 ----------
@@ -204,14 +204,41 @@ export const TECHNIQUES = [
     needs: { upgrades: ['incensePower'], building: { id: 'gate', count: 3 } },
   },
 
-  // ---------- 士气 ----------
+  // ---------- 宜居度 ----------
+  {
+    id: 'homePlanning',
+    name: '居所营造',
+    glyph: '居',
+    cost: { insight: 25, wood: 120, rock: 40 },
+    desc: '按入住人数布置通风、采光与排水。居所每个已入住名额提供1点宜居度，空房不计；超出居所容量的弟子不受益。',
+    effects: { habitabilityPerHousing: 1 },
+    needs: { buildings: [{ id: 'hut', count: 2 }, { id: 'library', count: 1 }, { id: 'quarry', count: 1 }] },
+  },
+  {
+    id: 'waterSanitation',
+    name: '引泉净水',
+    glyph: '净',
+    cost: { insight: 180, wood: 300, ore: 40 },
+    desc: '引泉分流，净水与污水各循其道。宜居度 +6，元婴掌握混灵土后可营造净身灵池。',
+    effects: { habitability: 6 },
+    needs: { realm: 3, upgrades: ['homePlanning', 'prospectStudy'] },
+  },
+  {
+    id: 'gardenDesign',
+    name: '园林营造',
+    glyph: '园',
+    cost: { insight: 1200, spiritMortar: 4, plank: 10, crystal: 4 },
+    desc: '顺山势划分静修与劳作区域，配合灵纹隔声。宜居度 +8，掌握玄铁混灵土后可营造清幽园林。',
+    effects: { habitability: 8 },
+    needs: { realm: 6, upgrades: ['waterSanitation', 'calmMind'] },
+  },
   {
     id: 'bondKnot',
     name: '同心结',
     glyph: '结',
     cost: { insight: 90, wood: 400, faith: 100 },
-    desc: '同门腰间都佩一枚结，人心齐了，干活也带劲。士气 +4。',
-    effects: { morale: 4 },
+    desc: '同门腰间都佩一枚结，人心齐了，干活也带劲。宜居度 +4。',
+    effects: { habitability: 4 },
     needs: { building: { id: 'logHouse', count: 3 } },
   },
 
@@ -242,26 +269,6 @@ export const TECHNIQUES = [
     desc: '坐忘则神凝，悟道者一坐便是一昼夜。悟道者产出 +35%。',
     effects: { jobRatio: { scholar: 0.35 }, storageRatio: { insight: 0.6 } },
     needs: { upgrades: ['starReading'], building: { id: 'library', count: 5 } },
-  },
-
-  // ---------- 防灾（阵道成果的防护应用） ----------
-  {
-    id: 'arrayPatterns',
-    name: '护山阵纹',
-    glyph: '纹',
-    cost: { insight: 540, ore: 1800, talisman: 8, crystal: 6 },
-    desc: '在阵眼处补上三层锁纹，妖兽撞上来更吃亏。天灾损失 −5%。',
-    effects: { disasterGuard: 0.05 },
-    needs: { upgrades: ['arrayBasics'] },
-  },
-  {
-    id: 'arrayCompendium',
-    name: '护阵纲目',
-    glyph: '纲',
-    cost: { insight: 900, ore: 3000, talisman: 10, crystal: 8 },
-    desc: '护山阵纹之上再立纲目：一处受撞，处处来援。天灾损失 −6%。',
-    effects: { disasterGuard: 0.06 },
-    needs: { upgrades: ['arrayPatterns'], building: { id: 'mountainArray', count: 1 } },
   },
 
   // ============================================================
@@ -314,8 +321,8 @@ export const TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 180, talisman: 12, wood: 1000, stone: 500 },
     refine: { insight: 600 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '符箓一道的镇山之作，妖兽见了绕道走。天灾损失 −8%。',
-    effects: { disasterGuard: 0.08 },
+    desc: '以镇守纹稳住林木与药圃的气机。灵木、灵草灾损额外减免各15%，与护山大阵合计最多减免80%。',
+    effects: { disasterGuardByResource: { wood: 0.15, herb: 0.15 } },
     needs: { upgrades: ['talismanArt', 'talismanLore'] },
   },
   {
@@ -347,9 +354,31 @@ export const TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 270, herb: 1400, wood: 1200, stone: 800 },
     refine: { insight: 900 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '坐在上面杂念自消，弟子也不那么爱闹了。士气 +5。',
-    effects: { morale: 5 },
+    desc: '坐在上面杂念自消，弟子也不那么爱闹了。宜居度 +5。',
+    effects: { habitability: 5 },
     needs: { upgrades: ['calmMind'] },
+  },
+  {
+    id: 'dustBell',
+    name: '清尘铃',
+    glyph: '尘',
+    kind: 'treasure',
+    cost: { insight: 120, wood: 300, ore: 80, talisman: 2 },
+    refine: { insight: 400, materials: { ore: 25 }, materialFromLevel: 1 },
+    desc: '玄铁铃铭刻固形纹，引导尘埃沉降，让居所保持洁净。宜居度 +6，祭炼可提高效果。',
+    effects: { habitability: 6 },
+    needs: { realm: 4, upgrades: ['forgeArt', 'shapeRune'] },
+  },
+  {
+    id: 'peaceBanner',
+    name: '安居灵幡',
+    glyph: '安',
+    kind: 'treasure',
+    cost: { insight: 900, plank: 8, spiritTalisman: 3, spiritLiquid: 6 },
+    refine: { insight: 3000, materials: { spiritTalisman: 1 }, materialFromLevel: 1 },
+    desc: '灵木幡杆承载复合符文，灵符调节居所气机，静修与日常起居互不相扰。宜居度 +10，祭炼可提高效果。',
+    effects: { habitability: 10 },
+    needs: { realm: 6, upgrades: ['compositeRune', 'calmMind'] },
   },
   {
     id: 'beastBell',
@@ -369,8 +398,8 @@ export const TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 660, ore: 2500, talisman: 10, stone: 2200 },
     refine: { insight: 2200, materials: { arrayBase: 2, spiritTalisman: 1 }, materialFromLevel: 1 },
-    desc: '阵法初解的实物：一块刻满纹路的石盘，埋在阵眼上。天灾损失 −5%。',
-    effects: { disasterGuard: 0.05 },
+    desc: '统筹刻纹时的气机流向，让阵材制作更少损耗。阵基制作产出 +20%，灵符制作产出 +15%。',
+    effects: { craftBonusByResource: { arrayBase: 0.2, spiritTalisman: 0.15 } },
     needs: { upgrades: ['arrayBasics', 'artifactLore'] },
   },
   {
@@ -430,8 +459,8 @@ export const TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 950, artifact: 6, steel: 3 },
     refine: { insight: 2900 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '试炼塔的晨钟：钟声一响，闻声而起，塔里塔外士气回稳。士气 +8。',
-    effects: { morale: 8 },
+    desc: '试炼塔的晨钟：钟声一响，闻声而起，塔里塔外宜居度回稳。宜居度 +8。',
+    effects: { habitability: 8 },
     needs: { upgrades: ['trialArt'] },
   },
   {

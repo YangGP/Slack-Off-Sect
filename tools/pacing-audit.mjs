@@ -42,6 +42,7 @@ let elapsed = 0
 let at24h = null
 const firstBuildings = {}, firstProduction = {}, firstResearch = {}
 const checkpoints = []
+const comfortTime = { total: 0, below: 0, target: 0, above: 0, crowded: 0 }
 
 function snapshot() {
   const cost = E.realmCost(state, derived, state.realm + 1)
@@ -50,7 +51,8 @@ function snapshot() {
     disciples: state.disciples.total, globalMult: +derived.globalMult.toFixed(2),
     discount: derived.breakthroughDiscount,
     jobs: { ...state.disciples.jobs }, idle: E.idleDisciples(state),
-    morale: +derived.morale.toFixed(1), netQi: +derived.netQi.toFixed(2),
+    habitability: +derived.habitability.toFixed(1), habitabilityMult: derived.habitabilityMult,
+    discipleMult: derived.discipleMult, leaveChance: derived.leaveChance, netQi: +derived.netQi.toFixed(2),
     materials: Object.fromEntries(['wood', 'rock', 'ore', 'herb', 'insight', 'faith'].map(id => [id, {
       stock: +(state.resources[id] || 0).toFixed(2), cap: derived.max[id],
       production: +(derived.rates[id] || 0).toFixed(3), net: +(derived.net[id] || 0).toFixed(3),
@@ -90,7 +92,7 @@ function allocateLabor() {
   const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
   for (const job of E.JOBS) E.setJob(state, derived, job.id, 0)
   const farmer = E.JOBS.find(job => job.id === 'farmer')
-  const perFarmer = farmer.base * (1 + (derived.jobRatio.farmer || 0)) * derived.sourceFactor.qi
+  const perFarmer = farmer.base * (1 + (derived.jobRatio.farmer || 0)) * derived.discipleMult * derived.sourceFactor.qi
   const farmers = Math.min(state.disciples.total, Math.ceil(Math.max(0, -derived.netQi + derived.upkeep * 0.1) / perFarmer))
   E.setJob(state, derived, 'farmer', farmers)
   const jobs = Object.entries(weights).filter(([id]) => derived.unlockedJobs.includes(id))
@@ -134,7 +136,8 @@ for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
     }
   }
   if (state.realm !== previousRealm) {
-    milestones.push({ realm: E.REALMS[state.realm].name, hours: +(elapsed / 3600).toFixed(2) })
+    milestones.push({ realm: E.REALMS[state.realm].name, hours: +(elapsed / 3600).toFixed(2), disciples: state.disciples.total,
+      habitability: derived.habitability, habitabilityMult: derived.habitabilityMult, discipleMult: derived.discipleMult })
     previousRealm = state.realm
   }
   for (const [id, entry] of Object.entries(state.buildings)) {
@@ -148,10 +151,15 @@ for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
   }
   if ([3600, 7200, 14400, 28800, 43200, 86400, 172800, 259200].includes(elapsed)) checkpoints.push(snapshot())
   if (elapsed === 86400) at24h = snapshot()
+  if (state.upgrades.homePlanning && state.disciples.total > 0) {
+    comfortTime.total += 1
+    comfortTime[derived.habitabilityMult < 1.1 - 1e-9 ? 'below' : derived.habitabilityMult > 1.2 + 1e-9 ? 'above' : 'target'] += 1
+    if (derived.discipleMult < 1) comfortTime.crowded += 1
+  }
   if (E.canAscend(state)) break
 }
 elapsed = Math.min(elapsed, hours * 3600)
 console.log(JSON.stringify({ karma, dao, labor, refineLevel, eventSeed, rush, events: !!eventSeed, eventsSeen: state.stats.eventsSeen,
   ascensionHours: E.canAscend(state) ? +(elapsed / 3600).toFixed(2) : null,
-  milestones, firstBuildingsMinutes: firstBuildings, firstProductionMinutes: firstProduction,
+  milestones, comfortTime, firstBuildingsMinutes: firstBuildings, firstProductionMinutes: firstProduction,
   firstResearchMinutes: firstResearch, checkpoints, at24h, final: snapshot() }, null, 2))

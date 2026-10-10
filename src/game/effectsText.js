@@ -19,7 +19,7 @@ function resName(id) {
 export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
   if (!ef) return null
   const out = {}
-  const byCount = upkeep ? ['storage', 'storageRatio', 'storageAll', 'maxDisciples'] : ['storage', 'storageAll', 'maxDisciples', 'morale', 'disasterGuard', 'ascendBonus']
+  const byCount = upkeep ? ['storage', 'storageRatio', 'storageAll', 'maxDisciples'] : ['storage', 'storageAll', 'maxDisciples', 'habitability', 'disasterGuard', 'ascendBonus']
   const byActive = [
     'prod',
     'ratio',
@@ -27,12 +27,14 @@ export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
     'jobRatio',
     'consumeRatio',
     'craftBonus',
+    'habitabilityPerHousing',
     'craftBonusByResource',
+    'disasterGuardByResource',
     'arrivalBonus',
     'breakthroughDiscount',
     'offlineHours',
     'karmaRatio',
-    ...(upkeep ? ['morale', 'disasterGuard', 'ascendBonus'] : []),
+    ...(upkeep ? ['habitability', 'disasterGuard', 'ascendBonus'] : []),
   ]
   for (const key in ef) {
     const value = ef[key]
@@ -96,7 +98,8 @@ export function describeEffects(ef) {
   }
   if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（成品按层级折算）`, 'muted')
   if (ef.maxDisciples) push('弟子上限', `+${ef.maxDisciples}`, 'good')
-  if (ef.morale) push('士气', `+${ef.morale}`, 'good')
+  if (ef.habitability) push('宜居度', `+${ef.habitability}`, 'good')
+  if (ef.habitabilityPerHousing) push('宜居度 / 已入住名额', `+${ef.habitabilityPerHousing}`, 'good')
   if (ef.consumeRatio) push('弟子灵气消耗', `-${fmtPercent(ef.consumeRatio)}`, 'good')
   if (ef.craftBonus) push('制作产出', `+${fmtPercent(ef.craftBonus)}`, 'good')
   if (ef.craftBonusByResource) {
@@ -104,7 +107,12 @@ export function describeEffects(ef) {
       push(`${resName(res)} 制作产出`, `+${fmtPercent(value)}`, 'good')
     }
   }
-  if (ef.disasterGuard) push('妖兽侵袭损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
+  if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
+  if (ef.disasterGuardByResource) {
+    for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {
+      push(`${resName(res)} 灾损额外减免`, `${fmtPercent(value)}（合计上限80%）`, 'good')
+    }
+  }
   if (ef.ascendBonus) push('飞升仙缘', `+${fmtPercent(ef.ascendBonus)}`, 'good')
   if (ef.arrivalBonus) push('弟子前来速度', `+${fmtPercent(ef.arrivalBonus)}`, 'good')
   if (ef.breakthroughDiscount) push('破境花费', `-${fmtPercent(ef.breakthroughDiscount)}`, 'good')

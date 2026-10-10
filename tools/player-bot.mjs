@@ -24,6 +24,9 @@ export const PRIORITY = [
   // 普通石料来源：采矿场喂灵石矿/聚灵大阵/库房的矿石造价，也供「点石成灵」
   // （参照玩家必须知道它，否则建筑永远卡在矿石上）
   'quarry',
+  'workshop',
+  'livingCourt',
+  'communalHall',
   // 天然灵石来源：与炼铁炉同一条寻脉线，排在旁边（参照玩家必须知道它，
   // 否则新建筑永远不出现在推演里 —— 实测加进去之前，10 小时曲线一字不差）
   'spiritQuarry',
@@ -38,8 +41,9 @@ export const PRIORITY = [
   'talismanHall',
   'incenseCauldron',
   'meditationPool',
+  'cleansingBath',
+  'quietGarden',
   'observatory',
-  'workshop',
   'mansion',
   'depot',
   'mysticVault',
@@ -80,6 +84,11 @@ export const RESCUE_CRAFTS = {
 }
 
 export const ADVANCED_CRAFTS = {
+  mixSpiritMortar: { floors: {}, cap: 800 },
+  reinforceSpiritMortar: { floors: {}, cap: 400 },
+  refineMithril: { floors: {}, cap: 200 },
+  smeltArcaneGold: { floors: {}, cap: 120 },
+  fuseCrystalSilver: { floors: {}, cap: 100 },
   // 点石成灵吃矿石：矿要留够盖房砌阵（600 起）。
   // 灵石是硬通货，囤货上限交给需求侧（craftDemand 含破境/奇观费用），cap 只做保底 ——
   // 因果池单笔要 100 万灵石，cap 低于它就会卡参照玩家（冒烟断言守着这条）。
@@ -106,6 +115,15 @@ export const ADVANCED_CRAFTS = {
 export const STONE_QI_FLOOR = 400
 
 export function createBot(state, derived) {
+  const normalHabitability = () => derived.habitability - (state.habitabilityPenalty || 0)
+  const comfortFloor = () => state.disciples.total + (state.realm >= 5 ? 100 : 40)
+  const comfortCeiling = () => state.disciples.total + (state.realm >= 5 ? 120 : 60)
+  const comfortOnly = (meta) => Object.keys(meta.effects || {}).length > 0 &&
+    Object.keys(meta.effects).every(key => ['habitability', 'habitabilityPerHousing'].includes(key))
+  const wantsComfortUpgrade = (meta) => !comfortOnly(meta) || meta.effects.habitabilityPerHousing > 0 ||
+    normalHabitability() + (meta.effects.habitability || 0) <= comfortCeiling()
+  const wantsComfortBuilding = (meta) => !comfortOnly(meta) || normalHabitability() < comfortFloor()
+
   function assignJobs() {
     // 新设施只开放职位，不再自带原料。即使人口住满，也为新开放产业调配一人。
     for (const id of ['scholar', 'woodcutter', 'miner', 'herbalist', 'incenseKeeper']) {
@@ -129,8 +147,8 @@ export function createBot(state, derived) {
     // 反过来，若按「实际边际产出」估（除以 0.6 × 共用乘区），派的人会随乘区一起缩水，
     // 参照玩家就随数值改动漂移了 —— 那样两次推演没法比。
     // 现在的口径两头都不沾：农民占比只跟「口粮 ÷ 产出」的基准值有关，
-    // 与境界/士气/加成无关，所以**同一套策略在改动前后是同一个玩家**。
-    // 实际产出因乘区 ≥ 基准，所以这份人手总是够覆盖账单的（还有富余去买楼）。
+    // 与境界/宜居度/加成无关，所以**同一套策略在改动前后是同一个玩家**。
+    // 宜居度试行后拥挤可让岗位减半；此处保留原基准分工策略，用于观察同一参照玩家受到的影响。
     const realmUpkeepMult = Math.max(
       1e-9,
       Math.pow(derived.realmMult || 1, CONFIG.DISCIPLE_UPKEEP_REALM_EXP),
@@ -181,6 +199,7 @@ export function createBot(state, derived) {
       const cost = E.buildingCost(state, id, 1)
       // 攒破境前置研究期间：先别买吃这些资源的建筑，把手头那份攒够再去点研究。
       const required = E.countOf(state, id) < (requiredBuildings.get(id) || 0)
+      if (!required && !wantsComfortBuilding(E.BUILDING_MAP[id])) continue
       const storageFix = shortRes.some((r) => (E.BUILDING_MAP[id]?.effects?.storage?.[r] || 0) > 0)
       if (reserveCost && !required && !storageFix && Object.keys(cost).some((k) =>
         (state.resources[k] || 0) - cost[k] < (reserveCost[k] || 0))) continue
@@ -208,6 +227,7 @@ export function createBot(state, derived) {
       if ((cost.qi || 0) > qiBudget) continue
       if (!E.canAfford(state, cost)) continue
       let score = idx + E.countOf(state, id) * 0.6
+      if (comfortOnly(E.BUILDING_MAP[id]) && normalHabitability() < comfortFloor()) score -= 500
       if (required) score -= 2000
       // 下一境要的资源超过当前上限时，优先盖能扩这块仓储的建筑，否则会永久卡在仓储上限。
       if (shortRes.length) {
@@ -274,6 +294,17 @@ export function createBot(state, derived) {
       if (derived.availableUpgrades.includes(id)) visit(id)
     }
     for (const res of Object.keys(next)) visitResource(res)
+    // 扩仓设施的建材也属于破境前置，不能只追踪破境配方。
+    // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
+    for (const [res, amount] of Object.entries(next)) {
+      if (amount <= (derived.max[res] || 0)) continue
+      const expansion = E.BUILDINGS.filter(b => E.checkNeeds(state, b.needs) &&
+        ((b.effects?.storage?.[res] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
+        .map(b => ({ id: b.id, cost: E.buildingCost(state, b.id, 1) }))
+        .filter(b => Object.entries(b.cost).every(([r, v]) => v <= derived.max[r]))
+        .sort((a, b) => Object.values(a.cost).reduce((sum, v) => sum + v, 0) - Object.values(b.cost).reduce((sum, v) => sum + v, 0))[0]
+      if (expansion) visitBuilding(expansion.id, E.countOf(state, expansion.id) + 1)
+    }
     return { upgrades: chain, buildings }
   }
 
@@ -284,9 +315,11 @@ export function createBot(state, derived) {
     if (derived.craftTargetsUnlocked) {
       const demand = { ...(E.realmCost(state, derived, state.realm + 1) || {}) }
       for (const id of derived.availableUpgrades) {
+        if (!wantsComfortUpgrade(E.UPGRADE_MAP[id])) continue
         for (const [res, amount] of Object.entries(E.UPGRADE_MAP[id].cost)) demand[res] = Math.max(demand[res] || 0, amount)
       }
       for (const id of derived.unlockedBuildings) {
+        if (!wantsComfortBuilding(E.BUILDING_MAP[id])) continue
         for (const [res, amount] of Object.entries(E.buildingCost(state, id, 1))) demand[res] = Math.max(demand[res] || 0, amount)
       }
       craftDemand = demand
@@ -334,6 +367,8 @@ export function createBot(state, derived) {
     // 破境相关的「优先研究」两类：①链上前置（凝液法…）②补仓储上限（storageRatio 那类）。
     // 若暂时买不起，就进入「攒料」状态（暂停吃这些资源的建筑与配方），先把料攒够。
     const { upgrades: prereq, buildings: requiredBuildings } = breakthroughPrereqs()
+    // 入住配套是正常人口发展的基础投资，先学会再持续扩屋。
+    if (derived.availableUpgrades.includes('homePlanning')) prereq.add('homePlanning')
     if (state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) {
       requiredBuildings.set('warehouse', E.BUILDING_MAP.depot.needs.building.count)
       requiredBuildings.set('depot', 1)
@@ -347,7 +382,7 @@ export function createBot(state, derived) {
       }),
     )
     let reserveCost = null
-    const investmentOrder = [...new Set(['flowField', 'earthEssence', ...derived.availableUpgrades])]
+    const investmentOrder = [...new Set(['homePlanning', 'flowField', 'earthEssence', ...derived.availableUpgrades])]
       .filter(id => derived.availableUpgrades.includes(id))
     for (const id of investmentOrder) {
       if (!prereq.has(id) && !storageFixIds.has(id)) continue
@@ -416,6 +451,7 @@ export function createBot(state, derived) {
     const ups = derived.availableUpgrades
       .map((id) => ALL_UPGRADES.find((u) => u.id === id))
       .filter(Boolean)
+      .filter(u => prereq.has(u.id) || wantsComfortUpgrade(u))
       // 并列时不能退化成「数组顺序」—— 否则改一次数据顺序，推演结果就跟着变
     // （实测：只把修真表按五段重排，12 小时弟子就从 42 变成 70）。
     // 所以并列时用「总花费 → id」做稳定的第二、第三关键字，让参照玩家与数据顺序无关。
@@ -430,10 +466,12 @@ export function createBot(state, derived) {
     if (ups.length) {
       // 优先：破境链上的前置研究、以及补仓储上限的研究；其余仍只点队首那条以免过度参悟。
       const u =
+        ups.find((x) => x.id === 'homePlanning' && E.canAfford(state, x.cost)) ||
         ups.find((x) => x.id === 'flowField' && E.canAfford(state, x.cost)) ||
         ups.find((x) => x.id === 'earthEssence' && E.canAfford(state, x.cost)) ||
         ups.find((x) => prereq.has(x.id) && E.canAfford(state, x.cost)) ||
         ups.find((x) => storageFixIds.has(x.id) && E.canAfford(state, x.cost)) ||
+        ups.find((x) => comfortOnly(x) && normalHabitability() < comfortFloor() && E.canAfford(state, x.cost)) ||
         ups[0]
       const spendsReserve = reserveCost && !prereq.has(u.id) && !storageFixIds.has(u.id) &&
         Object.entries(u.cost).some(([r, v]) => (state.resources[r] || 0) - v < (reserveCost[r] || 0))

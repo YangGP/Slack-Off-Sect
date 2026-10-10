@@ -122,6 +122,7 @@ ok('标题渲染出来了', text().includes('摸鱼宗门'))
 }
 ok('资源栏渲染出来了', text().includes('灵气') && text().includes('灵木'))
 ok('顶栏状态行带弟子与灵气账目', /弟子 \d+\/\d+/.test(text()) && text().includes('净额'))
+ok('顶栏宜居度使用点数而非士气百分比', /宜居度\s*-?\d+(?![\d.%])/.test(window.document.querySelector('.stat-line')?.textContent || '') && !window.document.querySelector('.stat-line')?.textContent.includes('士气'))
 ok(
   '宗门概况通栏已移除',
   !window.document.querySelector('.band') && !text().includes('宗门概况'),
@@ -574,6 +575,7 @@ ok(
 state.ui.tab = 'disciples'
 await new Promise((r) => setTimeout(r, 50))
 ok('切换到弟子面板', html().includes('职位分配'))
+ok('弟子页提示日常10%至20%增产及前期宜居设施', text().includes('弟子数+40～60') && text().includes('清风小院和膳养堂'))
 
 // 注意：顶部通栏里也有一张 table.grid，所以这里要限定到中列（.main）里找职位表
 const jobRows = doc.querySelectorAll('.main table.grid tbody tr').length
@@ -606,6 +608,42 @@ ok(
 actions.setJob('farmer', 0)
 actions.shiftJob('farmer', 2)
 ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.jobs.farmer}`)
+{
+  const previousPopulation = state.disciples.total
+  const previousPenalty = state.habitabilityPenalty
+  state.habitabilityPenalty = -derived.habitabilityBonus
+  state.disciples.total = 41
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  const farmerSource = derived.sources.qi.find(row => row.kind === 'job' && row.id === 'farmer')
+  const cells = doc.querySelector('.main table.grid tbody tr')?.querySelectorAll('td')
+  ok('岗位表显示减半后的实际单人产出', derived.discipleMult === 0.5 && Math.abs(parseFloat(cells?.[2].textContent.trim()) - farmerSource.value / 2) < 0.005)
+  ok('弟子页说明宜居度阈值和当前岗位倍率', text().includes('弟子岗位倍率 ×0.50') && text().includes('每60秒'))
+  state.disciples.total = 71
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('离开风险显示概率并说明暂停来人', text().includes('当前每次检查离开概率 2%') && text().includes('改善居住环境后恢复弟子前来') && !doc.querySelector('.stat-line')?.textContent.includes('下一位'))
+  state.disciples.total = previousPopulation
+  state.habitabilityPenalty = previousPenalty
+  engine.recompute(state, derived)
+}
+{
+  const previousPopulation = state.disciples.total
+  const previousHut = state.buildings.hut ? { ...state.buildings.hut } : null
+  const previousPlanning = state.upgrades.homePlanning
+  state.disciples.total = 4
+  state.buildings.hut = { count: 2, on: true }
+  state.upgrades.homePlanning = true
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('宜居度面板显示已入住配套的实际贡献', derived.housingHabitability === 4 && text().includes('其中入住配套 +4'))
+  state.disciples.total = previousPopulation
+  if (previousHut) state.buildings.hut = previousHut
+  else delete state.buildings.hut
+  if (previousPlanning) state.upgrades.homePlanning = previousPlanning
+  else delete state.upgrades.homePlanning
+  engine.recompute(state, derived)
+}
 
 // 弟子不用手动招募：有空房就会自动来人
 state.buildings.hut = { count: 5, on: true }
@@ -1483,7 +1521,7 @@ console.log('\n== 凝晶工艺与专业收益界面 ==')
   actions.importText(JSON.stringify({
     realm: 5,
     resources: { insight: 2000, qi: 3000, spiritLiquid: 10, talisman: 100, ore: 500, wood: 500, plank: 20 },
-    upgrades: { qiOrigin: true, qiGazing: true, condenseArt: true, liquidArt: true, talismanArt: true },
+    upgrades: { qiOrigin: true, qiGazing: true, condenseArt: true, liquidArt: true, talismanArt: true, shapeRune: true },
     buildings: { talismanHall: { count: 1, on: true }, workshop: { count: 1, on: true } },
   }))
   actions.research('crystalTheory')
@@ -1496,11 +1534,11 @@ console.log('\n== 凝晶工艺与专业收益界面 ==')
   actions.research('crystalCraft')
   await new Promise(r => setTimeout(r, 50))
   const row = doc.querySelector('.main [data-craft="condenseCrystal"]')
-  ok('掌握工艺后出现灵晶配方及专业加成', !!row && /灵液\s*3/.test(row.textContent) && /符箓\s*10/.test(row.textContent) && /专业加成\s*\+5%/.test(row.textContent))
+  ok('掌握工艺后出现灵晶配方及专业加成', !!row && /灵液\s*3/.test(row.textContent) && /灵气\s*300/.test(row.textContent) && /专业加成\s*\+5%/.test(row.textContent))
   ok('配方展示通用加成与专业加成合计产出', /灵晶\s*1\.11/.test(row?.querySelector('.craft-cost')?.textContent || ''))
   row?.querySelector('.btn.primary')?.click()
   await new Promise(r => setTimeout(r, 50))
-  ok('灵晶制作按钮实际扣料且整数入库', state.resources.crystal === 1 && state.resources.talisman === 84 && state.resources.spiritLiquid === 7 && Math.abs(state.resources.qi - 3000) < 1e-6)
+  ok('灵晶制作按钮实际扣料且整数入库', state.resources.crystal === 1 && state.resources.talisman === 94 && state.resources.spiritLiquid === 7 && Math.abs(state.resources.qi - 2700) < 1e-6)
   row?.dispatchEvent(new window.MouseEvent('mouseenter'))
   await new Promise(r => setTimeout(r, 340))
   ok('配方悬停明确专业收益及小数结转', doc.querySelector('.tip')?.textContent.includes('专业制作加成') && doc.querySelector('.tip')?.textContent.includes('小数累积'))
@@ -1529,6 +1567,25 @@ console.log('\n== 灵能枢实时供能与早期空间技艺移除 ==')
   await new Promise(r => setTimeout(r, 340))
   ok('法宝提示显示持续耗能和缺供规则', doc.querySelector('.tip')?.textContent.includes('满供消耗') && doc.querySelector('.tip')?.textContent.includes('供能不足按比例运行'))
   coreRow()?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
+{
+  const previous = actions.exportText()
+  actions.importText(JSON.stringify({
+    realm: 5,
+    resources: { stone: 60, spiritLiquid: 6 },
+    upgrades: { spiritMortarArt: true },
+    ui: { tab: 'craft', craftFilter: 'advanced' },
+  }))
+  await new Promise(r => setTimeout(r, 50))
+  const row = doc.querySelector('.main [data-craft="mixSpiritMortar"]')
+  ok('进阶炼制展示混灵土配方及灵石灵液用料', !!row && /灵石\s*20/.test(row.textContent) && /灵液\s*2/.test(row.textContent))
+  ok('混灵土开放时不提前展示高阶建材配方', !doc.querySelector('.main [data-craft="smeltArcaneGold"]') && !doc.querySelector('.main [data-craft="fuseCrystalSilver"]'))
+  row?.querySelector('.btn.primary')?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('界面制作混灵土实际扣料并取得整数建材', state.resources.spiritMortar === 1 && state.resources.stone === 40 && state.resources.spiritLiquid === 4)
   actions.importText(previous)
   await new Promise(r => setTimeout(r, 50))
 }
