@@ -27,10 +27,10 @@ export const CULTIVATION = [
     name: '灵源考',
     glyph: '源',
     cost: { insight: 60 },
-    desc: '考究灵气从何而来、如何凝结 —— 懂了地脉走向，才谈得上打井引气。',
-    effects: { unlockBuildings: ['spiritVein'] },
-    note: '解锁建筑：灵脉井',
-    effectDesc: '因此知道该在哪里下锄：灵脉井引的是地脉之气。',
+    desc: '考究灵气从何而来、如何流转，为观气与吐纳立下根基。',
+    effects: { unlockBuildings: [] },
+    note: '开启参悟：观气法、引气诀',
+    effectDesc: '因此懂得气脉的来路，才能继续观气、练习吐纳。',
     needs: { building: { id: 'library', count: 2 } },
   },
   {
@@ -76,9 +76,9 @@ export const CULTIVATION = [
     effectDesc: '因此掌握《凝气成液》：灵气自此有了存得住的形态。',
     effects: { unlockBuildings: [] },
     note: '开启配方：凝气成液',
-    // 后移：凝灵诀现在给的就是"自动凝聚灵液"，凝液法本身挪到金丹期，
-    // 只动这一条，下游（灵植术→探矿术/炼丹术…）保持原位。
-    needs: { realm: 4, upgrades: ['condenseArt'] },
+    // 2026-10-10 金丹重排：灵液/灵晶链从金丹挪到元婴 ——
+    // 金丹改为「基础产能 + 仓储」的爆发档，凝聚链整体后移一档（见 docs/BALANCE.md）。
+    needs: { realm: 5, upgrades: ['condenseArt'] },
   },
   {
     id: 'crystalTheory',
@@ -88,7 +88,7 @@ export const CULTIVATION = [
     desc: '金丹气机已稳，开始研究用符纹约束灵液，凝成可长期保存的晶核。',
     effectDesc: '开启凝晶工艺与晶核聚灵阵；学会加工灵晶后才能完成建设。',
     effects: { unlockBuildings: ['crystalArray'] },
-    needs: { realm: 4, upgrades: ['qiGazing', 'talismanArt', 'liquidArt'] },
+    needs: { realm: 5, upgrades: ['qiGazing', 'talismanArt', 'liquidArt'] },
   },
 
   // ---------- Ⅲ 调控（金丹→合体）：怎么引导、约束灵气 ----------
@@ -358,6 +358,7 @@ export const CULTIVATION = [
     cost: { insight: 180, ore: 160, artifact: 2 },
     desc: '借丹火淬去玄铁杂质，掌握《淬玄成钢》。玄钢用于材料库、试炼塔与高级营造。',
     effects: { craftBonusByResource: { steel: 0.05 } },
+    // 材料库前移到金丹、造价吃玄钢 —— 淬玄工艺必须留在同档，否则仓储链死锁
     needs: { realm: 4, upgrades: ['forgeArt'], building: { id: 'forge', count: 1 } },
   },
   // 自技艺页迁入（精研）
@@ -368,7 +369,8 @@ export const CULTIVATION = [
     cost: { insight: 780, ore: 4000, artifact: 18, steel: 6 },
     desc: '御剑运木探矿，剑火淬炼器胚。灵木与玄铁产出 +20%，法器、灵器与灵宝制作产出 +10%。',
     effects: { ratio: { wood: 0.2, ore: 0.2 }, craftBonusByResource: { artifact: 0.1, spiritArtifact: 0.1, spiritTreasure: 0.1 } },
-    needs: { realm: 4, upgrades: ['deepShaft', 'steelWorking'], building: { id: 'forge', count: 3 } },
+    // 金丹重排：御剑术从金丹挪到元婴，产能位由新增《灵流要诀》（+30% 木/草/铁）顶替
+    needs: { realm: 5, upgrades: ['deepShaft', 'steelWorking'], building: { id: 'forge', count: 3 } },
   },
   // 自技艺页迁入（精研）：化神产业强化之一
   {
@@ -421,7 +423,7 @@ export const CULTIVATION = [
     cost: { insight: 200, talisman: 6, ore: 80 },
     desc: '以符纹固定结晶边界，掌握《凝气结晶》。灵液与符箓合成灵晶，灵晶制作产出 +5%。',
     effects: { craftBonusByResource: { crystal: 0.05 } },
-    needs: { realm: 4, upgrades: ['crystalTheory'], building: { id: 'talismanHall', count: 1 } },
+    needs: { realm: 5, upgrades: ['crystalTheory'], building: { id: 'talismanHall', count: 1 } },
   },
   // 自技艺页迁入（精研）
   {
@@ -510,12 +512,14 @@ export const CULTIVATION = [
     id: 'earthEssence',
     name: '土木精要',
     glyph: '精',
-    cost: { insight: 800, wood: 1200, plank: 12 },
+    cost: { insight: 400, wood: 600, plank: 8 },
     desc: '掏空山腹而不塌，靠的不是蛮力，是懂得岩层怎么受力。',
     effectDesc: '因此挖得出材料库：石殿分格存放营造原料与阵材。',
     effects: { unlockBuildings: ['depot'] },
     note: '解锁建筑：材料库',
-    needs: { upgrades: ['earthArt'], realm: 5 },
+    // 2026-10-10 金丹重排：材料库从元婴前移到金丹 —— 爆发档要囤的营造料
+    // （木板/阵基/玄铁）正好是它存的，金丹仓储由它承接
+    needs: { upgrades: ['earthArt'], realm: 4 },
   },
   {
     id: 'buildingCode',
@@ -548,7 +552,20 @@ export const CULTIVATION = [
     desc: '心静则灵气自聚。解锁静心池。',
     effectDesc: '因此弟子坐得住：静心池让心神与仓储都稳下来。',
     effects: { unlockBuildings: ['meditationPool'] },
-    needs: { building: { id: 'herbGarden', count: 3 }, upgrades: ['talismanArt', 'woodworking'], realm: 4 },
+    // 静心池需要仙草 10：仙草链随凝液法后移到元婴，静心池同档跟走
+    needs: { building: { id: 'herbGarden', count: 3 }, upgrades: ['talismanArt', 'woodworking'], realm: 5 },
+  },
+  {
+    // 2026-10-10 金丹重排：金丹档的产能爆发由它接棒 —— 原本同期开放的
+    // 御剑术（+20% 木/铁）后移到元婴；这里给基础原料一条
+    // 更宽的增长（灵木/灵草/玄铁各 +30%），配合材料库前移形成「产能+仓储」双爆发。
+    id: 'flowField',
+    name: '灵流要诀',
+    glyph: '流',
+    cost: { insight: 160, wood: 200, ore: 120 },
+    desc: '把山间灵流理成沟渠，樵夫、采药人与矿工顺着流势干活，原料自己多出一截。灵木、灵草与玄铁产出各 +30%。',
+    effects: { ratio: { wood: 0.3, herb: 0.3, ore: 0.3 } },
+    needs: { realm: 4, upgrades: ['woodworking', 'herbStudy'] },
   },
   {
     id: 'recruitDrive',
@@ -664,7 +681,7 @@ export const CULTIVATION_STAGES = [
   {
     key: 'qiCondense',
     label: '灵气研究 Ⅱ 凝聚',
-    hint: '怎么把灵气存住、存好（筑基→金丹）',
+    hint: '怎么把灵气存住、存好（金丹→元婴）',
     ids: ['liquidArt', 'crystalTheory'],
   },
   {
@@ -728,6 +745,7 @@ export const CULTIVATION_STAGES = [
     ids: [
       'preachArt',
       'calmMind',
+      'flowField',
       'recruitDrive',
       'intuition',
       'ancestorArt',

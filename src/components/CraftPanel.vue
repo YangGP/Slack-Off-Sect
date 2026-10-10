@@ -72,7 +72,7 @@ function updateQuick(id, event) {
 }
 const condenseStatus = computed(() => {
   if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
-  if (!state.upgrades.liquidArt) return '凝灵诀 · 需金丹期凝液法'
+  if (!state.upgrades.liquidArt) return '凝灵诀 · 需元婴期凝液法'
   const target = autoCraftStatus(state, derived, 'condenseLiquid').target
   if (target > 0 && state.resources.spiritLiquid >= target) return '凝灵诀 · 目标已达'
   if (state.resources.spiritLiquid >= derived.max.spiritLiquid) return '凝灵诀 · 灵液满仓'
@@ -96,7 +96,7 @@ const condenseStatus = computed(() => {
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
       </div>
       <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
-      <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需金丹期凝液法</div>
+      <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需元婴期凝液法</div>
       <div v-if="!compact && derived.daoAutomation" class="small craft-settings">
         <div class="good">道果统筹 · 重修时即可自动炼制</div>
         <label>材料保留

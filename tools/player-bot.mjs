@@ -30,7 +30,6 @@ export const PRIORITY = [
   'herbGarden',
 'warehouse',
   'gate',
-  'spiritVein',
   'gatheringArray',
   'crystalArray',
   'academy',
@@ -43,6 +42,7 @@ export const PRIORITY = [
   'workshop',
   'mansion',
   'depot',
+  'mysticVault',
   'medicineVault',
   'arcaneVault',
   'trialTower',
@@ -85,7 +85,7 @@ export const ADVANCED_CRAFTS = {
   // 因果池单笔要 100 万灵石，cap 低于它就会卡参照玩家（冒烟断言守着这条）。
   infuseStone: { base: 'rock', floor: 10, cap: 1000000 },
   // 灵液吃硬通货（灵气），按需炼：灵气富余才凝液，囤到上限就停
-  condenseLiquid: { base: 'qi', floor: 600, cap: 60 },
+  condenseLiquid: { base: 'qi', floor: 600, cap: 360 },
   condenseCrystal: { floors: { spiritLiquid: 12, talisman: 10 }, cap: 600 },
   // 上限必须**高于游戏里的最大单笔需求**，否则参照玩家会卡在自己设的门槛上：
   // 早先玄钢上限 40、而渡劫期破境要 120，推演就永远停在 大乘期（96 小时都不动）。
@@ -171,7 +171,7 @@ export function createBot(state, derived) {
   }
 
   // 按「优先级 + 已有数量」打分买分数最低的那座，避免把钱全砸在最便宜的上面
-  function buildStep(reserveQi = 0) {
+  function buildStep(reserveQi = 0, reserveCost = null, shortRes = [], requiredBuildings = new Map()) {
     const qiBudget = Math.max(0, (state.resources.qi || 0) - reserveQi)
     let bestId = null
     let bestScore = Infinity
@@ -179,6 +179,11 @@ export function createBot(state, derived) {
       const id = PRIORITY[idx]
       if (!derived.unlockedBuildings.includes(id)) continue
       const cost = E.buildingCost(state, id, 1)
+      // 攒破境前置研究期间：先别买吃这些资源的建筑，把手头那份攒够再去点研究。
+      const required = E.countOf(state, id) < (requiredBuildings.get(id) || 0)
+      const storageFix = shortRes.some((r) => (E.BUILDING_MAP[id]?.effects?.storage?.[r] || 0) > 0)
+      if (reserveCost && !required && !storageFix && Object.keys(cost).some((k) =>
+        (state.resources[k] || 0) - cost[k] < (reserveCost[k] || 0))) continue
       // 开局自举期：先伐木场、后谷仓，再攒首座采矿场 —— 避免反复扩屋把开局木料花光。
       //
       // 但这条锁必须留一个例外，否则会死锁：采矿场自己也要木材（前置还得先有谷仓），
@@ -202,7 +207,13 @@ export function createBot(state, derived) {
       }
       if ((cost.qi || 0) > qiBudget) continue
       if (!E.canAfford(state, cost)) continue
-      const score = idx + E.countOf(state, id) * 0.6
+      let score = idx + E.countOf(state, id) * 0.6
+      if (required) score -= 2000
+      // 下一境要的资源超过当前上限时，优先盖能扩这块仓储的建筑，否则会永久卡在仓储上限。
+      if (shortRes.length) {
+        const st = E.BUILDING_MAP[id]?.effects?.storage
+        if (st && shortRes.some((r) => (st[r] || 0) > 0)) score -= 1000
+      }
       if (score < bestScore) {
         bestScore = score
         bestId = id
@@ -211,6 +222,59 @@ export function createBot(state, derived) {
     if (!bestId) return false
     E.buyBuilding(state, derived, bestId, 1)
     return true
+  }
+
+  /**
+   * 追踪下一境材料的研究、加工、生产建筑与供料前置。
+   * 返回待研究 id 与必需建筑数量；循环依赖通过访问集合终止。
+   */
+  function breakthroughPrereqs() {
+    const next = E.realmCost(state, derived, state.realm + 1)
+    const buildings = new Map()
+    if (!next) return { upgrades: new Set(), buildings }
+    const chain = new Set()
+    const resources = new Set()
+    const visitNeeds = (needs) => {
+      for (const dep of [...(needs?.upgrades || []), ...(needs?.upgrade ? [needs.upgrade] : [])]) visit(dep)
+      for (const b of [needs?.building, ...(needs?.buildings || [])].filter(Boolean)) visitBuilding(b.id, b.count)
+    }
+    const visitBuilding = (id, count = 1) => {
+      if (E.countOf(state, id) >= count || (buildings.get(id) || 0) >= count) return
+      const b = E.BUILDING_MAP[id]
+      if (!b) return
+      buildings.set(id, count)
+      visitNeeds(b.needs)
+      for (const res of Object.keys(b.cost)) visitResource(res)
+    }
+    const visitResource = (res) => {
+      if (resources.has(res)) return
+      resources.add(res)
+      const recipe = CRAFTS.find(c => c.out === res)
+      if (recipe) {
+        visitNeeds(recipe.needs)
+        for (const input of Object.keys(recipe.cost)) visitResource(input)
+      } else {
+        const producer = E.BUILDINGS.find(b => (b.effects?.prod?.[res] || 0) > 0)
+        if (producer) {
+          visitBuilding(producer.id)
+          for (const input of Object.keys(producer.upkeep || {})) visitResource(input)
+        }
+      }
+    }
+    const visit = (id) => {
+      if (chain.has(id) || state.upgrades[id]) return
+      const u = E.UPGRADE_MAP[id]
+      if (!u) return
+      chain.add(id)
+      visitNeeds(u.needs)
+      for (const res of Object.keys(u.cost || {})) visitResource(res)
+    }
+    // 金丹投资本身的材料前置也必须追踪，例如土木精要需要木板工艺。
+    for (const id of ['flowField', 'earthEssence']) {
+      if (derived.availableUpgrades.includes(id)) visit(id)
+    }
+    for (const res of Object.keys(next)) visitResource(res)
+    return { upgrades: chain, buildings }
   }
 
   function act() {
@@ -267,6 +331,75 @@ export function createBot(state, derived) {
 
     assignJobs()
 
+    // 破境相关的「优先研究」两类：①链上前置（凝液法…）②补仓储上限（storageRatio 那类）。
+    // 若暂时买不起，就进入「攒料」状态（暂停吃这些资源的建筑与配方），先把料攒够。
+    const { upgrades: prereq, buildings: requiredBuildings } = breakthroughPrereqs()
+    if (state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) {
+      requiredBuildings.set('warehouse', E.BUILDING_MAP.depot.needs.building.count)
+      requiredBuildings.set('depot', 1)
+    }
+    const nextNeed = E.realmCost(state, derived, state.realm + 1) || {}
+    const shortRes = Object.keys(nextNeed).filter((r) => (derived.max[r] || 0) < nextNeed[r])
+    const storageFixIds = new Set(
+      derived.availableUpgrades.filter((id) => {
+        const sr = E.UPGRADE_MAP[id]?.effects?.storageRatio
+        return !!sr && shortRes.some((r) => (sr[r] || 0) > 0)
+      }),
+    )
+    let reserveCost = null
+    const investmentOrder = [...new Set(['flowField', 'earthEssence', ...derived.availableUpgrades])]
+      .filter(id => derived.availableUpgrades.includes(id))
+    for (const id of investmentOrder) {
+      if (!prereq.has(id) && !storageFixIds.has(id)) continue
+      const u = E.UPGRADE_MAP[id]
+      // 仓容不足时先扩仓；不能一边攒永远装不下的费用，一边禁止买仓库。
+      if (u && Object.entries(u.cost).every(([r, v]) => v <= derived.max[r]) && !E.canAfford(state, u.cost)) {
+        reserveCost = u.cost
+        break
+      }
+    }
+    // 必需设施也要攒首座费用；否则持续买普通建筑会把灵石等用料花光。
+    if (!reserveCost) {
+      for (const [id, count] of requiredBuildings) {
+        const b = E.BUILDING_MAP[id]
+        if (E.countOf(state, id) >= count || !E.checkNeeds(state, b.needs)) continue
+        const cost = E.buildingCost(state, id, 1)
+        if (Object.entries(cost).every(([r, v]) => v <= derived.max[r]) && !E.canAfford(state, cost)) {
+          reserveCost = cost
+          break
+        }
+      }
+    }
+    // 下一境仓容不足时先攒扩仓建筑的用料，避免木材一直被加工成木板。
+    if (!reserveCost && shortRes.length) {
+      const expansion = E.BUILDINGS.filter(b => E.checkNeeds(state, b.needs) &&
+        shortRes.some(r => (b.effects?.storage?.[r] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
+        .map(b => E.buildingCost(state, b.id, 1))
+        .filter(cost => Object.entries(cost).every(([r, v]) => v <= derived.max[r]))
+        .sort((a, b) => Object.values(a).reduce((sum, v) => sum + v, 0) - Object.values(b).reduce((sum, v) => sum + v, 0))[0]
+      if (expansion && !E.canAfford(state, expansion)) reserveCost = expansion
+    }
+    // 材料只差少数几项时攒一次完整破境费用，并预留缺失加工品的一份投入。
+    // 金丹以前仅由加工品触发，以免开局攒基础资源时把自举建筑一起停掉。
+    if (!reserveCost) {
+      const PRIMARY = new Set(['qi', 'wood', 'rock', 'stone', 'herb', 'ore', 'insight', 'faith'])
+      const need = E.realmCost(state, derived, state.realm + 1) || {}
+      const missing = Object.entries(need).filter(([r, v]) => (state.resources[r] || 0) < v)
+      const craftedMissing = missing.filter(([r]) => !PRIMARY.has(r))
+      if (missing.length > 0 && missing.length <= 3 && (craftedMissing.length > 0 || state.realm >= 4)) {
+        const reserve = Object.fromEntries(Object.entries(need).filter(([r, v]) => v <= derived.max[r]))
+        for (const [r, v] of craftedMissing) {
+          if (v > derived.max[r]) continue
+          reserve[r] = v
+          for (const recipe of CRAFTS) {
+            if (recipe.out !== r || !E.isCraftUnlocked(state, recipe)) continue
+            for (const [k, val] of Object.entries(recipe.cost)) reserve[k] = Math.max(reserve[k] || 0, val)
+          }
+        }
+        if (Object.keys(reserve).length) reserveCost = reserve
+      }
+    }
+
     // 参悟「最快能凑齐」的那条（修真与技艺·法宝两层合并的口径，所以要用 ALL_UPGRADES 查表）。
     // 注意不能按某一两种资源的数值排序 —— 技艺层不再吃灵机之后，
     // 「按灵机排序」会把所有技艺排在修真前面，机器人就永远不去点修真了（实测 8 小时卡在炼气期）。
@@ -295,15 +428,28 @@ export function createBot(state, derived) {
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
     })
     if (ups.length) {
-      const u = ups[0]
-      if (E.canAfford(state, u.cost)) E.research(state, derived, u.id)
+      // 优先：破境链上的前置研究、以及补仓储上限的研究；其余仍只点队首那条以免过度参悟。
+      const u =
+        ups.find((x) => x.id === 'flowField' && E.canAfford(state, x.cost)) ||
+        ups.find((x) => x.id === 'earthEssence' && E.canAfford(state, x.cost)) ||
+        ups.find((x) => prereq.has(x.id) && E.canAfford(state, x.cost)) ||
+        ups.find((x) => storageFixIds.has(x.id) && E.canAfford(state, x.cost)) ||
+        ups[0]
+      const spendsReserve = reserveCost && !prereq.has(u.id) && !storageFixIds.has(u.id) &&
+        Object.entries(u.cost).some(([r, v]) => (state.resources[r] || 0) - v < (reserveCost[r] || 0))
+      if (!spendsReserve && E.canAfford(state, u.cost)) E.research(state, derived, u.id)
     }
 
-    buildStep(0)
+    buildStep(0, reserveCost, shortRes, requiredBuildings)
+
+    const blocksCraft = (c) => reserveCost && Object.keys(c.cost).some((k) =>
+      (reserveCost[k] || 0) > 0) && !((reserveCost[c.out] || 0) > (state.resources[c.out] || 0))
 
     // 制作（灵石留一点灵气余量，别把阵徒的口粮也花掉）
     for (const c of CRAFTS) {
       if (!derived.availableCrafts.includes(c.id)) continue
+      // 攒破境前置期间：跳过会吃掉这些资源的配方（但它本身若产的就是要攒的资源，则放行）。
+      if (blocksCraft(c)) continue
       const target = E.craftTarget(state, derived, c.id)
       if (target > 0 && (state.resources[c.out] || 0) >= target) continue
       if (c.id === 'infuseStone' && state.resources.qi < STONE_QI_FLOOR) continue
@@ -354,9 +500,12 @@ export function createBot(state, derived) {
         housingCapped && homeCandidates.length > 0 && (state.resources.wood || 0) < homeCandidates[0].cost.wood
       const RESERVE_HOUSING = ['sawPlank', 'drawTalisman', 'assembleArrayBase']
       for (const c of CRAFTS) {
-        if (ADVANCED_CRAFTS[c.id]) continue
-        if (savingForHome && RESERVE_HOUSING.includes(c.id)) continue // 攒房期间这几条不挂自动
-        if (derived.availableCrafts.includes(c.id)) state.autoCraft[c.id] = true
+        if (ADVANCED_CRAFTS[c.id]) {
+          state.autoCraft[c.id] = false // 进阶配方按需手动制作，不能绕过库存与预留规则
+          continue
+        }
+        state.autoCraft[c.id] = derived.availableCrafts.includes(c.id) &&
+          !blocksCraft(c) && !(savingForHome && RESERVE_HOUSING.includes(c.id))
       }
     }
 

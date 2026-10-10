@@ -327,7 +327,7 @@ export const EVENTS = [
         desc: '灵气暴涨一大截；但引脉要垫灵石，且震塌了几处仓房。',
         effect: {
           lootRate: { qi: 600 },
-          floor: { qi: 2000 },
+          floor: { qi: 200 },
           disaster: { resources: ['stone'], lossPercent: [0.15, 0.15] },
         },
       },
@@ -491,7 +491,7 @@ export const EVENTS = [
         desc: '争回灵脉：灵气与灵石大进；但两家撕破脸，灵木与灵草在争执中被毁去不少。',
         effect: {
           lootRate: { qi: 4000, stone: 1500 },
-          floor: { qi: 8000, stone: 400 },
+          floor: { qi: 800, stone: 400 },
           tradeCost: { wood: { seconds: 150, floor: 40 }, herb: { seconds: 150, floor: 40 } },
         },
       },

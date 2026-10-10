@@ -1139,7 +1139,7 @@ ok('境界面板渲染', html().includes('飞升'))
 // 灵石缺口也要有计时器：它没有产出，但能靠点石成灵现印（见 engine.timeToAfford）
 {
   state.ui.tab = 'realm'
-  state.realm = 3 // 筑基期 → 金丹期
+  state.realm = 2 // 炼气期 → 筑基期（灵石在筑基档）
   state.resources.stone = 0
   state.resources.qi = 100
   state.buildings.spiritField = { count: 20, on: true }
@@ -1408,7 +1408,7 @@ state.upgrades.liquidArt = false
 state.settings.autoCraftOn = true
 engine.recompute(state, derived)
 await new Promise(r => setTimeout(r, 50))
-ok('凝液法解锁前显示等待条件', text().includes('凝灵诀 · 需金丹期凝液法'))
+ok('凝液法解锁前显示等待条件', text().includes('凝灵诀 · 需元婴期凝液法'))
 state.upgrades.liquidArt = true
 state.settings.autoCraftOn = false
 state.resources.spiritLiquid = 0
@@ -1481,7 +1481,7 @@ console.log('\n== 凝晶工艺与专业收益界面 ==')
 {
   const previous = actions.exportText()
   actions.importText(JSON.stringify({
-    realm: 4,
+    realm: 5,
     resources: { insight: 2000, qi: 3000, spiritLiquid: 10, talisman: 100, ore: 500, wood: 500, plank: 20 },
     upgrades: { qiOrigin: true, qiGazing: true, condenseArt: true, liquidArt: true, talismanArt: true },
     buildings: { talismanHall: { count: 1, on: true }, workshop: { count: 1, on: true } },

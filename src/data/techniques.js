@@ -120,9 +120,9 @@ export const TECHNIQUES = [
     name: '灵泉灌溉',
     glyph: '泉',
     cost: { insight: 270, stone: 500, wood: 1200 },
-    desc: '把灵脉井的水引到每一块田里。灵气产出 +15%。',
+    desc: '沿聚灵大阵梳理田间气脉，让引气与灌溉相互滋养。灵气产出 +15%。',
     effects: { ratio: { qi: 0.15 } },
-    needs: { upgrades: ['fieldTillage'], building: { id: 'spiritVein', count: 1 } },
+    needs: { upgrades: ['fieldTillage'], building: { id: 'gatheringArray', count: 1 } },
   },
 
   // ---------- 仓储 ----------
@@ -135,6 +135,44 @@ export const TECHNIQUES = [
     // 灵机仓容的百分比一律由技艺提供：定额给建筑，比例给技艺，两者分工明确。
     effects: { storageAll: 1200, storageRatio: { insight: 0.3 } },
     needs: { building: { id: 'warehouse', count: 1 } },
+  },
+
+  // 仓储·加固线（对标猫国 Reinforced/Titanium/Alloy Warehouse 一条线）：
+  // 对**已建成的仓储**再乘一遍上限 —— 同样几座库房，越到后期存得越多，
+  // 不必靠盖几十座谷仓去顶破境要的那笔灵气。定额给建筑，比例给技艺（见 caseStackArt 注）。
+  {
+    id: 'storeFrameArt',
+    name: '加固仓架',
+    glyph: '固',
+    cost: { insight: 260, wood: 400, rock: 300 },
+    desc: '横梁加铁箍、立柱下石础，同样一间仓房能多堆两成。灵气与基础物资上限 +20%。',
+    effects: { storageRatio: { qi: 0.2, wood: 0.2, rock: 0.2, stone: 0.2, ore: 0.2, herb: 0.2 } },
+    needs: { realm: 3 },
+  },
+  {
+    id: 'storeStoneArt',
+    name: '叠石固本',
+    glyph: '叠',
+    cost: { insight: 1400, stone: 4000, ore: 2000 },
+    desc: '以灵石垒基、玄铁锁边。灵气与基础物资上限再 +35%，玄钢、木板、灵液、灵晶另 +50%。',
+    effects: {
+      storageRatio: { qi: 0.35, wood: 0.35, rock: 0.35, stone: 0.35, ore: 0.35, herb: 0.35, steel: 0.5, plank: 0.5, crystal: 0.5, spiritLiquid: 0.5 },
+    },
+    needs: { realm: 5, upgrades: ['storeFrameArt'] },
+  },
+  {
+    id: 'storeVoidArt',
+    name: '须弥纳芥',
+    glyph: '芥',
+    cost: { insight: 6000, stone: 12000, plank: 60, crystal: 20 },
+    desc: '一芥子可纳须弥。灵气与基础物资上限再 +60%，玄钢/木板/灵液/灵晶/阵基/符箓/法器翻倍。',
+    effects: {
+      storageRatio: {
+        qi: 0.6, wood: 0.6, rock: 0.6, stone: 0.6, ore: 0.6, herb: 0.6,
+        steel: 1, plank: 1, crystal: 1, spiritLiquid: 1, arrayBase: 1, talisman: 1, artifact: 1, pill: 1,
+      },
+    },
+    needs: { realm: 7, upgrades: ['storeStoneArt'] },
   },
 
   // ---------- 香火 ----------

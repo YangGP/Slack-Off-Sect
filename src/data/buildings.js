@@ -97,19 +97,6 @@ export const BUILDINGS = [
     needs: { upgrades: ['herbStudy'] },
   },
   {
-    id: 'spiritVein',
-    name: '灵脉井',
-    glyph: '脉',
-    group: 'produce',
-    cost: { stone: 1200, qi: 5000 },
-    priceRatio: 1.35,
-    desc: '在灵脉上打一口井，整个宗门的呼吸都顺畅了。',
-    effects: { ratio: { qi: 0.1, wood: 0.05 } },
-    // 先懂「灵气从哪来」，才谈得上打井引脉（修真 · 灵源考）
-    // 先懂「灵气从哪来」，才谈得上打井引脉（修真 · 灵源考）
-    needs: { upgrades: ['qiOrigin'], building: { id: 'spiritField', count: 6 } },
-  },
-  {
     id: 'gatheringArray',
     name: '聚灵大阵',
     glyph: '叠',
@@ -138,10 +125,10 @@ export const BUILDINGS = [
     cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
     unlockRatio: 0,
-    desc: '阵基定形、晶核聚气。金丹后以凝晶工艺建成，提高灵气产出并保存备用晶核。',
+    desc: '阵基定形、晶核聚气。元婴后以凝晶工艺建成，提高灵气产出并保存备用晶核。',
     effects: { ratio: { qi: 0.02 }, storage: { crystal: 15 } },
     upkeep: { qi: 1 },
-    needs: { realm: 4, upgrades: ['crystalTheory'] },
+    needs: { realm: 5, upgrades: ['crystalTheory'] },
   },
   {
     id: 'beastGarden',
@@ -249,11 +236,26 @@ export const BUILDINGS = [
     name: '材料库',
     glyph: '殿',
     group: 'store',
-    cost: { plank: 20, ore: 1500, steel: 10 },
+    cost: { plank: 12, ore: 700, steel: 4 },
     priceRatio: 1.25,
     desc: '石殿分设料架与阵材格，专存营造原料、木板、玄钢和阵基。',
     effects: { storage: { wood: 10000, stone: 8000, rock: 6000, ore: 6000, plank: 1500, steel: 120, arrayBase: 100 } },
-    needs: { building: { id: 'warehouse', count: 5 }, upgrades: ['earthEssence'] },
+    needs: { building: { id: 'warehouse', count: 3 }, upgrades: ['earthEssence'] },
+  },
+  {
+    // 中场仓储：填「材料库（金丹）↔ 洞天（合体）」之间的空档。
+    // 洞天要合体才开，而炼虚/合体破境要一大笔灵气与玄钢，光靠谷仓/材料库顶不住。
+    id: 'mysticVault',
+    name: '玄库',
+    glyph: '玄',
+    group: 'store',
+    cost: { stone: 8000, plank: 40, ore: 2000, insight: 2000 },
+    priceRatio: 1.3,
+    desc: '石殿分格、铁箍封边，专存大宗营造料与铸造件，兼收灵气 —— 洞天之前的主力仓。',
+    effects: {
+      storage: { qi: 15000, wood: 15000, rock: 15000, stone: 15000, ore: 15000, herb: 8000, steel: 400, plank: 1500, arrayBase: 200, talisman: 300, artifact: 300 },
+    },
+    needs: { realm: 5, upgrades: ['earthEssence'] },
   },
   {
     id: 'medicineVault',
@@ -264,7 +266,8 @@ export const BUILDINGS = [
     priceRatio: 1.22,
     desc: '药架通风、玉匣封灵，灵草与丹药分格收存。普通药材多存，仙草与九转丹少量精藏。',
     effects: { storage: { herb: 2000, immortalHerb: 80, pill: 1000, nineTurnPill: 100 } },
-    needs: { realm: 4, upgrades: ['alchemyArt', 'woodworking'] },
+    // 金丹重排：仙草随凝链后移到元婴，药藏同档开放（金丹档的仓储由材料库前移承接）
+    needs: { realm: 5, upgrades: ['alchemyArt', 'woodworking'] },
   },
   {
     id: 'arcaneVault',
@@ -352,7 +355,8 @@ export const BUILDINGS = [
     effects: { ratio: { insight: 0.15, ore: 0.1 }, morale: 3 },
     upkeep: { ore: 0.6 }, // 试炼要修机关、耗玄铁
 
-    needs: { realm: 4, upgrades: ['trialArt'] },
+    // 试炼法挂在营造法式（realm 6）下，境界标注与实际门槛对齐
+    needs: { realm: 6, upgrades: ['trialArt'] },
   },
 
   // ============ 炼造 ============
@@ -388,7 +392,7 @@ export const BUILDINGS = [
     group: 'craft',
     cost: { wood: 700, herb: 300 },
     priceRatio: 1.25,
-    desc: '朱砂、黄纸、凝神一笔，符成则妖退。',
+    desc: '引气落纹、凝神一笔，符文便落在符纸上。',
     effects: { craftBonusByResource: { talisman: 0.05, spiritTalisman: 0.05 }, storage: { talisman: 200 } },
     upkeep: { wood: 0.2 }, // 抄符耗纸
     needs: { upgrades: ['talismanArt'] },
@@ -490,7 +494,8 @@ export const BUILDINGS = [
     effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000 } },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
 
-    needs: { realm: 6, upgrades: ['towerPlan'] },
+    // 塔院图在 realm 9，境界标注与实际门槛对齐
+    needs: { realm: 9, upgrades: ['towerPlan'] },
   },
   {
     id: 'splitArray',
@@ -498,8 +503,8 @@ export const BUILDINGS = [
     glyph: '分',
     group: 'wonder',
     // 阵要一直烧灵气：把灵气离析成灵气分子，是粒子链的第一步（灵气分子 → 偏极解离 → 正负灵子 → 湮灭）
-    // 终局造价由洞天与通天塔承接容量，并由长期推演检查实际可达。
-    cost: { stone: 200000, insight: 100000, artifact: 150, crystal: 100, arrayBase: 25 },
+    // 首座承担大乘破境的产业入门，容量由元婴玄库承接；重复扩建仍按比例涨价。
+    cost: { stone: 40000, insight: 16000, artifact: 80, crystal: 50, arrayBase: 12 },
     priceRatio: 1.5,
     desc: '阵法从灵气中离析出相抱的灵气分子 —— 拆得越久，越像在跟天地借火。',
     effects: { prod: { qiParticle: 0.04 } },
@@ -512,7 +517,7 @@ export const BUILDINGS = [
     glyph: '偏',
     group: 'wonder',
     // 粒子链第二步：输入解离能，处理分子；一对一供料仅指基础数据的归一化流量。
-    cost: { stone: 180000, insight: 80000, artifact: 80, crystal: 120, arrayBase: 20, qiParticle: 10 },
+    cost: { stone: 60000, insight: 24000, artifact: 80, crystal: 80, arrayBase: 16, qiParticle: 10 },
     priceRatio: 1.5,
     desc: '输入灵气作为解离能，打开分子束缚；双极场让正负灵子分流，避免重新复合。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
@@ -524,7 +529,7 @@ export const BUILDINGS = [
     name: '湮灭炉',
     glyph: '湮',
     group: 'wonder',
-    cost: { wood: 250000, stone: 300000, artifact: 150, steel: 100, spiritArtifact: 10 },
+    cost: { wood: 80000, stone: 100000, artifact: 100, steel: 60, spiritArtifact: 6 },
     priceRatio: 1.6,
     desc: '炉心控制供料、相位与场形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。',
     effects: { prod: { qiEnergy: 0.06 } },
@@ -554,10 +559,10 @@ export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 /** 宗门列表的发展顺序：基础营造先出现，后续按产业与境界阶段排列。 */
 export const BUILDING_DISPLAY_ORDER = [
   'spiritField', 'hut', 'lumberYard', 'quarry', 'granary', 'library', 'logHouse',
-  'materialYard', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'warehouse', 'spiritVein', 'gatheringArray',
+  'materialYard', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'warehouse', 'gatheringArray',
   'alchemyRoom', 'forge', 'talismanHall', 'workshop', 'gate',
   'crystalArray', 'academy', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
-  'depot', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
+  'depot', 'mysticVault', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
   'beastGarden', 'caveDwelling', 'grotto', 'spiritLockArray',
   'heavenTower', 'splitArray', 'polarizeArray', 'annihilationFurnace', 'karmaPool',
 ]

@@ -128,7 +128,7 @@ export function effectRows(meta, describe) {
  *
  * 这条函数是从组件里抽出来的，目的有两个：
  *   1. 界面上同一件事只说一遍（曾经因为 describeEffects、unlockText、手写 note 三处都渲染，
- *      出现"解锁建筑 灵脉井；解锁建筑：灵脉井；…；解锁建筑：灵脉井"）；
+ *      出现"解锁建筑 聚灵大阵；解锁建筑：聚灵大阵；…；解锁建筑：聚灵大阵"）；
  *   2. 让冒烟测试能直接断言这段文本（见 tools/smoke.mjs 的「效果文本」一节）。
  */
 export function effectLine(meta, describe) {

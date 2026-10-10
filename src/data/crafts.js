@@ -75,14 +75,15 @@ export const CRAFTS = [
   },
   {
     id: 'drawTalisman',
-    name: '朱砂符箓',
+    name: '绘制符箓',
     out: 'talisman',
     amount: 1,
     tier: 1,
     primary: ['wood'],
+    // 符箓的本质是「符文」：以灵木等材料承托、灵气为墨绘成，绘在不同材料上便是不同品阶（见描灵符）。
     cost: { wood: 125, qi: 60 },
     time: 2,
-    desc: '以灵木为纸、朱砂为墨，画一张能镇妖的符。',
+    desc: '以灵木为纸、灵气为墨，绘下一道符文。符文不变，换个材料承托便是更高阶的符。',
     needs: { building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -131,7 +132,7 @@ export const CRAFTS = [
     cost: { spiritLiquid: 3, talisman: 10 },
     time: 5,
     desc: '以十张符箓定住气机，三瓶灵液凝成稳定晶核。用于晶核聚灵阵、观星台与高级阵法。',
-    needs: { realm: 4, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
+    needs: { realm: 5, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'growImmortalHerb',
@@ -166,7 +167,7 @@ export const CRAFTS = [
     primary: ['talisman'],
     cost: { talisman: 100, faith: 500 },
     time: 5,
-    desc: '以香火研墨、朱砂立骨，落笔时那一线气机不能断。',
+    desc: '同一道符文，改绘在香火凝成的灵墨上，便成了灵符 —— 符文不变，材料升级。',
     needs: { building: { id: 'talismanHall', count: 1 } },
   },
   {

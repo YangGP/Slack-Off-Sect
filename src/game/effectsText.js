@@ -4,7 +4,7 @@
 import { RESOURCE_MAP } from '@/data/resources'
 import { BUILDING_MAP } from '@/data/buildings'
 import { UPGRADE_MAP } from '@/data/upgrades'
-import { JOB_MAP } from '@/data/jobs'
+import { JOBS, JOB_MAP } from '@/data/jobs'
 import { REALMS } from '@/data/realms'
 import { fmt, fmtPercent } from './format'
 
@@ -116,6 +116,38 @@ export function describeEffects(ef) {
   if (ef.unlockBuildings) {
     for (const id of ef.unlockBuildings) {
       push('解锁建筑', BUILDING_MAP[id]?.name || id, 'unlock')
+    }
+  }
+  return out
+}
+
+/**
+ * 建筑「职位效果」：产出挂在职位上的建筑（采矿场 / 灵石矿 / 药圃 / 山门 / 藏经阁…）
+ * 自身 effects 往往是空的，这里从 jobs 数据补出「开放哪个职位 / 让职位多产什么」，
+ * 与 `describeEffects` 同格式，供建筑 tooltip 的「效果」分节合并显示。
+ *
+ * count 用于「每座叠加」的副产出（如灵石矿让矿工产灵石）：传已启用数量即可得到合计值。
+ */
+export function describeJobEffects(buildingId, count = 1) {
+  const out = []
+  if (!buildingId) return out
+  const push = (label, value, tone) => out.push({ label, value, text: `${label} ${value}`.trim(), tone })
+  for (const job of JOBS) {
+    // 这栋建筑开放（或开启基础产出）的职位
+    if (job.building === buildingId || job.needs?.building?.id === buildingId) {
+      push('开放职位', job.name, 'unlock')
+    }
+    // 由本建筑开启的额外产出（按人数结算，不随建筑座数叠加）
+    for (const output of job.additionalOutputs || []) {
+      if (output.building === buildingId) {
+        push(`${job.name} 额外产出`, `${resName(output.resource)} +${fmt(output.base)}/秒·人`, 'good')
+      }
+    }
+    // 本建筑让该职位多加的副产出（灵石矿 → 矿工产灵石，可多座叠加）
+    const sec = job.secondary
+    if (sec && sec.building === buildingId) {
+      const base = sec.base * (sec.perBuilding ? count : 1)
+      push(`${job.name} 额外产出`, `${resName(sec.resource)} +${fmt(base)}/秒·人`, 'good')
     }
   }
   return out

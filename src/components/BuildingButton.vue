@@ -7,7 +7,7 @@
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { buildingCost, canAfford, maxAffordable } from '@/game/engine'
-import { describeEffects, scaleEffectsForTotal, describeNeeds } from '@/game/effectsText'
+import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
 import { costLabel, enough as enoughOf } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -34,10 +34,15 @@ const maxCount = computed(() => maxAffordable(state, props.meta.id))
  * 两列分别是「每座的值」和「合计值」（合计由 `scaleEffectsForTotal` 按已建 / 启用数算出）。
  */
 const effectRows = computed(() => {
-  const unit = describeEffects(props.meta.effects)
+  // 建筑自身效果 + 职位效果：像采矿场 / 灵石矿这种「产出挂在职位上」的建筑，
+  // effects 是空的，靠 describeJobEffects 从 jobs 数据补出「开放职位 / 职位副产」。
+  const unit = [...describeEffects(props.meta.effects), ...describeJobEffects(props.meta.id, 1)]
   const total =
     count.value > 0
-      ? describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value, !!props.meta.upkeep))
+      ? [
+          ...describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value, !!props.meta.upkeep)),
+          ...describeJobEffects(props.meta.id, active.value),
+        ]
       : []
   return unit.map((u, i) => ({
     key: `${u.label}-${i}`,

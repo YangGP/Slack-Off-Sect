@@ -140,7 +140,7 @@ export const RESOURCES = [
     color: '#ffe08a',
     baseMax: 50,
     storageWeight: 0.1,
-    desc: '一纸符箓，可镇妖避劫，也能换些香火钱。',
+    desc: '以灵木符纸承托、灵气为墨绘成的符文。可镇妖避劫，也能换些香火钱。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
@@ -150,7 +150,7 @@ export const RESOURCES = [
     color: '#ffe9b0',
     baseMax: 15,
     storageWeight: 0.015,
-    desc: '香火为墨、朱砂为骨，一符既成，可镇一山之妖。',
+    desc: '同一道符文，绘在香火灵墨上 —— 品阶更高，可镇一山之妖。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {

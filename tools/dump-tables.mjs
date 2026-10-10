@@ -60,6 +60,7 @@ const effects = (e) => {
   if (e.ratioAll) out.push(`全局 +${pct(e.ratioAll)}`)
   if (e.jobRatio) out.push('职 ' + Object.entries(e.jobRatio).map(([k, v]) => `${jname(k)} +${pct(v)}`).join(' '))
   if (e.storage) out.push('储 ' + Object.entries(e.storage).map(([k, v]) => `${res(k)} +${v}`).join(' '))
+  if (e.storageRatio) out.push('仓容 ' + Object.entries(e.storageRatio).map(([k, v]) => `${res(k)} +${pct(v)}`).join(' '))
   if (e.storageAll) out.push(`通用仓储 +${e.storageAll}（成品按层级折算）`)
   if (e.maxDisciples) out.push(`弟子 +${e.maxDisciples}`)
   if (e.morale) out.push(`士气 +${e.morale}`)
