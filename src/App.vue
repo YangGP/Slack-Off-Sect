@@ -22,6 +22,7 @@ import BuffBar from './components/BuffBar.vue'
 import OfflineModal from './components/OfflineModal.vue'
 import ChangelogModal from './components/ChangelogModal.vue'
 import HabitabilityTip from './components/HabitabilityTip.vue'
+import HoverTip from './components/HoverTip.vue'
 
 const panels = {
   sect: SectPanel,
@@ -55,8 +56,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
     </div>
 
     <div class="update-notice" role="note" aria-label="版本更新提示">
-      <strong>{{ CURRENT_VERSION }} 大量调整 · 建议转世</strong>
-      <span>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</span>
+      <HoverTip :label="`${CURRENT_VERSION} · 更新说明`"><template #tip><p>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</p></template></HoverTip>
       <button class="btn" type="button" @click="actions.setTab('realm')">前往境界</button>
     </div>
 

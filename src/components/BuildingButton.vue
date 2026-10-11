@@ -5,7 +5,7 @@
  * → 「效果」分节 → 底部一行风味小字。
  */
 import { computed, onBeforeUnmount } from 'vue'
-import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
+import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { buildingCost, canAfford } from '@/game/engine'
 import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects, describeProcessingEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
@@ -44,7 +44,8 @@ const effectRows = computed(() => {
           ...describeProcessingEffects(props.meta.id, active.value),
         ]
       : []
-  return unit.map((u, i) => ({
+  const visible = new Set(view.visibleResources.value.map(resource => resource.id))
+  return unit.filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
     key: `${u.label}-${i}`,
     label: u.label,
     value: u.value,
@@ -52,7 +53,7 @@ const effectRows = computed(() => {
     tone: u.tone,
   }))
 })
-const needsText = computed(() => describeNeeds(props.meta.needs).join('，'))
+const conditions = computed(() => describeNeeds(props.meta.needs))
 const flavor = computed(() => BUILDING_FLAVOR[props.meta.id] || '')
 
 /** 维护费逐条成行：这些建筑才有「停用」按钮，停用即停费 */
@@ -103,82 +104,82 @@ onBeforeUnmount(clearHighlight)
         {{ meta.name }}<template v-if="count"> ({{ count }})</template>
         <span v-if="enabled > 0 && supply < 0.999" class="small warn"> · 缺料</span>
       </button>
+      <template #heading>
+        {{ meta.name }}
+                    <span class="tip-right">已建 {{ count }}</span>
+      </template>
       <template #tip>
-        <div class="tip-body">
-          <div class="tip-title">
-            {{ meta.name }}
-            <span class="tip-right">已建 {{ count }}</span>
-          </div>
-          <div class="tip-desc">{{ meta.desc }}</div>
-          <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
+        <div class="tip-desc">{{ meta.desc }}</div>
+        <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
 
-          <div class="tip-section">价格</div>
-          <div v-for="(amount, res) in price" :key="res" class="tip-row">
-            <span class="k">{{ resName(res) }}</span>
-            <span class="v" :class="{ bad: !enough(res, amount) }">{{ priceText(res, amount) }}</span>
-          </div>
+        <div class="tip-section">价格</div>
+        <div v-for="(amount, res) in price" :key="res" class="tip-row">
+          <span class="k">{{ resName(res) }}</span>
+          <span class="v" :class="{ bad: !enough(res, amount) }">{{ priceText(res, amount) }}</span>
+        </div>
 
-          <div class="tip-section">效果<template v-if="!count">（建成后）</template></div>
-          <!-- 一条效果一行：多资源的建筑（库房、谷仓…）不再挤成一长串 -->
-          <div v-for="row in effectRows" :key="row.key" class="tip-row">
-            <span class="k">{{ row.label }}</span>
-            <span class="v" :class="row.tone">
-              {{ row.value }}<template v-if="row.total && row.total !== row.value"
+        <div class="tip-section">效果<template v-if="!count">（建成后）</template></div>
+        <!-- 一条效果一行：多资源的建筑（库房、谷仓…）不再挤成一长串 -->
+        <div v-for="row in effectRows" :key="row.key" class="tip-row">
+          <span class="k">{{ row.label }}</span>
+          <span class="v" :class="row.tone">
+            {{ row.value }}<template v-if="row.total && row.total !== row.value"
+              >（合计 {{ row.total }}）</template
+            >
+          </span>
+        </div>
+        <template v-if="conditions.length && !count">
+          <div class="tip-section">条件</div>
+          <div v-for="(condition, ci) in conditions" :key="ci" class="tip-condition">{{ condition }}</div>
+        </template>
+        <template v-if="meta.upkeep">
+          <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
+          <div v-if="enabled > 0" class="tip-row">
+            <span class="k">供应</span>
+            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ Math.round(supply * 100) }}% · 按供应比例发挥效果</span>
+          </div>
+          <!-- 维护费同样一种资源一行 -->
+          <div v-for="row in upkeepRows" :key="row.key" class="tip-row">
+            <span class="k">{{ row.label }} 消耗</span>
+            <span class="v bad">
+              {{ row.unit }}<template v-if="row.total && row.total !== row.unit"
                 >（合计 {{ row.total }}）</template
               >
             </span>
           </div>
-          <div v-if="needsText && !count" class="tip-row">
-            <span class="k">解锁</span>
-            <span class="v">{{ needsText }}</span>
+          <div v-if="enabled === 0" class="tip-row">
+            <span class="k">当前</span>
+            <span class="v warn">已停用，暂不计维护费</span>
           </div>
-          <template v-if="meta.upkeep">
-            <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
-            <div v-if="enabled > 0" class="tip-row">
-              <span class="k">供应</span>
-              <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ Math.round(supply * 100) }}% · 按供应比例发挥效果</span>
-            </div>
-            <!-- 维护费同样一种资源一行 -->
-            <div v-for="row in upkeepRows" :key="row.key" class="tip-row">
-              <span class="k">{{ row.label }} 消耗</span>
-              <span class="v bad">
-                {{ row.unit }}<template v-if="row.total && row.total !== row.unit"
-                  >（合计 {{ row.total }}）</template
-                >
-              </span>
-            </div>
-            <div v-if="enabled === 0" class="tip-row">
-              <span class="k">当前</span>
-              <span class="v warn">已停用，暂不计维护费</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">说明</span>
-              <span class="v">只有带维护费的建筑能停用 —— 停用即停费，效果也一起停</span>
-            </div>
-          </template>
-
-          <div v-if="count && entry.on === false" class="tip-row">
-            <span class="k">状态</span>
-            <span class="v warn">{{ meta.upkeep ? '已停用：不出产、也不吃维护费' : '已停用：不出产，仓储与人口保留' }}</span>
+          <div class="tip-row">
+            <span class="k">说明</span>
+            <span class="v">只有带维护费的建筑能停用 —— 停用即停费，效果也一起停</span>
           </div>
+        </template>
 
-          <div v-if="flavor" class="tip-flavor">{{ flavor }}</div>
+        <div v-if="count && entry.on === false" class="tip-row">
+          <span class="k">状态</span>
+          <span class="v warn">{{ meta.upkeep ? '已停用：不出产、也不吃维护费' : '已停用：不出产，仓储与人口保留' }}</span>
         </div>
+
+        <div v-if="flavor" class="tip-flavor">{{ flavor }}</div>
       </template>
     </HoverTip>
 
     <!-- 只有带维护费的建筑能停用：停用即停费，这才是一个真选择（§5.4） -->
-    <button
-      v-if="count > 0 && meta.upkeep"
-      class="side-btn"
-      :class="{ on: entry.on === false }"
-      :title="entry.on === false ? '重新启用（恢复维护费）' : '停用（省下维护费）'"
-      @click="actions.toggle(meta.id)"
-    >
-      {{ entry.on === false ? '启' : '停' }}
-    </button>
-    <button v-if="count > 0" class="side-btn danger" title="拆除一座，返还一半材料" @click="sell">
-      售
-    </button>
+    <HoverTip v-if="count > 0 && meta.upkeep" class="side-tip" :title="entry.on === false ? '启用建筑' : '停用建筑'" :description="entry.on === false ? '重新启用，恢复维护费与建筑效果。' : '停用后省下维护费，建筑效果同时停止。'">
+      <button
+        class="side-btn"
+        :class="{ on: entry.on === false }"
+        @click="actions.toggle(meta.id)"
+      >
+        {{ entry.on === false ? '启' : '停' }}
+      </button>
+    </HoverTip>
+    <HoverTip v-if="count > 0" class="side-tip" title="出售建筑" description="拆除一座，返还一半材料。">
+      <button class="side-btn danger" @click="sell">
+        售
+      </button>
+    </HoverTip>
   </div>
 </template>

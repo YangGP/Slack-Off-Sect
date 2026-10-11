@@ -116,18 +116,26 @@ const condenseStatus = computed(() => {
 <template>
   <div class="box" :class="compact ? 'craft-quick' : 'craft-full'">
     <div class="box-head">
-      {{ compact ? '快捷炼制' : '炼制' }}<span class="hint">通用制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
+      <HoverTip :label="compact ? '快捷炼制' : '炼制'"><template #tip>
+          <p>手动制作与批量按钮立即扣料并合成。自动制作需参悟《心有灵犀》或取得首颗道果；勾选配方后由总开关控制。快捷配方数量不限。</p>
+          <p>金丹起，自动产线共用专业设施容量；扩建增加工位，节料技艺减少每份投入，小数收益持续累积。</p>
+          <p>各配方可单独选择自动速限。实际速度受共享工位容量约束，提高速限会增加每分钟耗料，每份收益不变。参悟《疾炼法》解锁速限调整。</p>
+          <p>分配权重越高，工位紧张时获得的容量越多；达标、满仓或缺料会释放容量，空闲容量自动分给其他产线。手动制作与节气满仓凝液不占常驻工位。</p>
+          <p>库存达到目标后暂停，使用成品后自动补回；0表示不限。手动制作不受目标限制。旧存档的未完成订单继续加工，也可暂停或取消。</p>
+        </template></HoverTip><span class="hint">通用制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
       <button v-if="compact" class="craft-open" @click="actions.setTab('craft')">全部配方 →</button>
     </div>
     <div class="box-body">
       <div v-if="!compact" class="craft-settings small">
         <label class="sw"><input type="checkbox" :checked="state.settings.autoCraftOn" @change="actions.setSetting('autoCraftOn', $event.target.checked)" />自动制作总开关</label>
-        <label class="sw" title="勾选全部已解锁配方，取消勾选则清除全部自动选择；不受筛选影响，总开关保持不变">
-          <input type="checkbox" aria-label="全部自动" :checked="allAuto" :indeterminate.prop="someAuto && !allAuto" :disabled="!derived.autoCraftUnlocked" @change="actions.setAllAutoCraft($event.target.checked)" />全部自动
-        </label>
-        <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
+        <HoverTip title="全部自动" description="勾选全部已解锁配方，取消勾选则清除全部自动选择；不受筛选影响，总开关保持不变。">
+          <label class="sw">
+            <input type="checkbox" aria-label="全部自动" :checked="allAuto" :indeterminate.prop="someAuto && !allAuto" :disabled="!derived.autoCraftUnlocked" @change="actions.setAllAutoCraft($event.target.checked)" />全部自动
+          </label>
+        </HoverTip>
+        <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方</span>
       </div>
-      <div v-if="!compact" class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}。金丹起，自动产线共用专业设施容量；扩建增加工位，节料技艺减少每份投入。小数收益持续累积。</div>
+      <div v-if="!compact" class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}</div>
       <div v-if="!compact && derived.industrial" class="processing-overview small" aria-label="加工工位容量">
         <div v-for="station in stationRows" :key="station.id">
           <span>{{ station.name }}</span>
@@ -142,22 +150,28 @@ const condenseStatus = computed(() => {
           <span v-if="station.drain" class="dim">动力消耗 {{ fmt(station.drain * 60) }} {{ state.settings.processingModes[station.id] === 'energy' ? '灵能' : '灵气' }}/分</span>
           <span v-if="station.mode !== 'normal'" class="dim">{{ station.powerReason }}<template v-if="!station.boost"> · 普通加工</template></span>
         </div>
-        <p class="dim">冷却容量 {{ fmt(derived.processingCoolingCapacity) }} · 灵能供能容量 {{ fmt(derived.processingPowerCapacity) }}。普通工位自然散热，晶核阵提供冷却回路；《冷凝换热》提升回路容量。</p>
-        <p class="dim">超载与灵能驱动最多增加一倍基础容量，共用冷却回路；仅额外加工耗动力，每容量秒耗10灵气或0.1灵能。缺料、仓满或负荷低于基础容量时不耗加工动力；灵能枢另有维持费。提高自动速限才能使用额外容量。</p>
-        <p class="dim">手动制作与批量按钮立即扣料并合成。自动加工按工位、动力与冷却容量持续运行，遵守库存目标和材料保留量。旧存档的未完成订单继续加工，也可暂停或取消。</p>
-        <p class="dim">分配权重越高，工位紧张时获得的容量越多；达标、满仓或缺料会释放容量。速限限制单条产线负荷，空闲容量自动分给其他产线。手动制作与节气满仓凝液不占常驻工位。</p>
+        <div>
+          <HoverTip label="动力与冷却"><template #tip>
+              <p>普通工位自然散热，晶核阵提供冷却回路；《冷凝换热》提升回路容量。</p>
+              <p>超载与灵能驱动最多增加一倍基础容量，共用冷却回路；仅额外加工耗动力，每容量秒耗10灵气或0.1灵能。提高自动速限才能使用额外容量。</p>
+              <p>缺料、仓满或负荷低于基础容量时不耗加工动力；灵能枢另有维持费。</p>
+            </template></HoverTip>
+          <span class="dim">冷却容量 {{ fmt(derived.processingCoolingCapacity) }} · 灵能供能容量 {{ fmt(derived.processingPowerCapacity) }}</span>
+        </div>
       </div>
       <div v-if="!compact && state.buildings.polarizeArray?.count" class="processing-overview small" aria-label="双极供料状态">
-        <div>双极分流 · 负荷 {{ fmtPercent(derived.buildingSupply.polarizeArray || 0) }}<span class="dim">正负灵子同时分流，任一侧满仓时只补下游实际用量；断供则降载。</span></div>
+        <div><HoverTip label="双极分流"><template #tip><p>正负灵子同时分流，任一侧满仓时只补下游实际用量；断供则降载。</p></template></HoverTip> · 负荷 {{ fmtPercent(derived.buildingSupply.polarizeArray || 0) }}</div>
         <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ fmt((derived.rates[id] || 0) * 60) }}/分 · 设施消耗 {{ fmt(-(derived.expense[id] || 0) * 60) }}/分</span></div>
       </div>
-      <div v-if="!compact && derived.autoCraftSpeedUnlocked" class="small craft-settings">
-        <span class="dim">各配方可单独选择自动速限。金丹起实际速度受共享工位容量约束，扩产会提高每分钟耗料，每份收益不因速限改变。</span>
-      </div>
-      <div v-else-if="!compact && derived.autoCraftUnlocked" class="small dim">参悟《疾炼法》后，可手动调整自动炼制速度。</div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需元婴期凝液法</div>
       <div v-if="!compact && derived.autoCraftUnlocked" class="small craft-settings">
-        <div class="good">{{ derived.daoAutomation ? '道果统筹 · 重修时即可自动炼制' : '百工统筹 · 保留建造用料，优先加工所需配方' }}</div>
+        <div class="good">
+          <HoverTip :label="derived.daoAutomation ? '道果统筹' : '百工统筹'"><template #tip>
+              <p>优先加工指定配方，自动炼制遵守材料保留量。首颗道果让重修时即可自动炼制。</p>
+              <p v-if="derived.daoAutomation">保留比例按仓储上限计算，与逐项保留取较高值。</p>
+              <p>逐项保留指定数量，扩仓不会改变保留量；0表示不保留。保留量仅约束自动炼制，手动制作可动用保留材料。</p>
+            </template></HoverTip>
+        </div>
         <label v-if="derived.daoAutomation">材料保留
           <select :value="state.settings.craftReservePercent" @change="actions.setSetting('craftReservePercent', Number($event.target.value))">
             <option v-for="n in [0, 10, 20, 30, 50]" :key="n" :value="n">{{ n }}% 仓储</option>
@@ -168,7 +182,6 @@ const condenseStatus = computed(() => {
             <option v-for="row in allRows" :key="row.meta.id" :value="row.meta.id">{{ row.meta.name }}</option>
           </select>
         </label>
-        <div v-if="derived.daoAutomation" class="dim">保留比例按仓储上限计算，与逐项保留取较高值，仅约束自动炼制。</div>
         <details>
           <summary>逐项保留材料</summary>
           <label v-for="id in reserveResources" :key="id">{{ resName(id) }}
@@ -176,14 +189,12 @@ const condenseStatus = computed(() => {
               :value="reserveDrafts[id] ?? (state.settings.craftReserves[id] || 0)"
               @input="reserveDrafts[id] = $event.target.value" @change="updateReserve(id, $event)" />
           </label>
-          <div class="dim">自动加工保留指定数量；扩仓不会改变保留量。0 表示不保留，手动制作可动用保留材料。</div>
         </details>
       </div>
       <div v-if="!compact" class="filters">
         <button v-for="f in FILTERS" :key="f.id" class="filter" :class="{ on: filter === f.id }" @click="state.ui.craftFilter = f.id">{{ f.name }}</button>
       </div>
       <div v-if="!rows.length" class="empty">{{ compact ? '前往炼制页选择快捷配方。' : '此筛选下没有可用配方。' }}</div>
-      <div v-if="!compact && derived.craftTargetsUnlocked" class="small dim craft-target-hint">库存达到目标后暂停，使用成品后自动补回；0 表示不限。手动制作不受目标限制。</div>
 
       <HoverTip
         v-for="row in rows"
@@ -210,7 +221,6 @@ const condenseStatus = computed(() => {
           <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
           <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resName(row.meta.out) }}/分</span>
           <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resName(res) }} {{ fmt(amount * row.autoStatus.perMinute) }}/分</template></span>
-          <span class="dim">按现有库存与工位估算；上游断供时暂停。</span>
           <span class="dim">瓶颈：{{ row.bottleneck.reason }}</span>
           <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resName(input.res) }} {{ fmt(input.deficit * 60) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
         </div>
@@ -275,76 +285,74 @@ const condenseStatus = computed(() => {
           </label>
         </div>
 
-        <template #tip>
-          <div class="tip-body">
-            <div class="tip-title">
-              {{ row.meta.name }}
-              <span class="tip-right">{{ resName(row.meta.out) }} ×{{ row.meta.amount }}</span>
-            </div>
-            <div class="tip-desc">{{ row.meta.desc }}</div>
+        <template #heading>
+          {{ row.meta.name }}
+                        <span class="tip-right">{{ resName(row.meta.out) }} ×{{ row.meta.amount }}</span>
+        </template>
+      <template #tip>
+          <div class="tip-desc">{{ row.meta.desc }}</div>
 
-            <div class="tip-section">价格</div>
-            <div v-for="(amount, res) in row.cost" :key="res" class="tip-row">
-              <span class="k">{{ resName(res) }}</span>
-              <span
-                class="v"
-                :class="{ bad: (state.resources[res] || 0) < amount }"
-              >{{ costLabel(state, derived, res, amount) }}</span>
-            </div>
+          <div class="tip-section">价格</div>
+          <div v-for="(amount, res) in row.cost" :key="res" class="tip-row">
+            <span class="k">{{ resName(res) }}</span>
+            <span
+              class="v"
+              :class="{ bad: (state.resources[res] || 0) < amount }"
+            >{{ costLabel(state, derived, res, amount) }}</span>
+          </div>
 
-            <div class="tip-section">产出</div>
-            <div class="tip-row">
-              <span class="k">现有</span>
-              <span class="v">{{ resName(row.meta.out) }} {{ fmtStock(row.have) }}</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">每次得到</span>
-              <span class="v good">{{ fmt(row.yield) }}</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">这批能做</span>
-              <span class="v">
-                <template v-for="(b, i) in row.batches.filter(batch => !compact || batch.frac !== 0.25)" :key="b.label">
-                  <template v-if="i"> · </template>{{ b.label }} {{ b.count }} 份
-                </template>
-              </span>
-            </div>
-            <div v-if="derived.craftBonusByResource[row.meta.out]" class="tip-row">
-              <span class="k">专业制作加成</span>
-              <span class="v good">+{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
-            </div>
-            <div v-if="row.yield > row.meta.amount" class="tip-row">
-              <span class="k">小数累积</span>
-              <span class="v">{{ fmtPercent(row.progress) }}</span>
-            </div>
+          <div class="tip-section">产出</div>
+          <div class="tip-row">
+            <span class="k">现有</span>
+            <span class="v">{{ resName(row.meta.out) }} {{ fmtStock(row.have) }}</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">每次得到</span>
+            <span class="v good">{{ fmt(row.yield) }}</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">这批能做</span>
+            <span class="v">
+              <template v-for="(b, i) in row.batches.filter(batch => !compact || batch.frac !== 0.25)" :key="b.label">
+                <template v-if="i"> · </template>{{ b.label }} {{ b.count }} 份
+              </template>
+            </span>
+          </div>
+          <div v-if="derived.craftBonusByResource[row.meta.out]" class="tip-row">
+            <span class="k">专业制作加成</span>
+            <span class="v good">+{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
+          </div>
+          <div v-if="row.yield > row.meta.amount" class="tip-row">
+            <span class="k">小数累积</span>
+            <span class="v">{{ fmtPercent(row.progress) }}</span>
+          </div>
 
-            <div class="tip-section">自动制作</div>
-            <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="tip-row">
-              <span class="k">凝灵诀</span>
-              <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>
-            </div>
-            <div v-if="derived.craftTargetsUnlocked" class="tip-row">
-              <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}（一份制作的加成可能超过目标）</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">节奏</span>
-              <span class="v">每 {{ fmt(row.autoStatus.step) }} 秒 1 份</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">还能做</span>
-              <span class="v">{{ row.autoStatus.canMake }} 份（受材料与仓储限制）</span>
-            </div>
-            <div v-if="row.autoStatus.on" class="tip-row">
-              <span class="k">本轮已做</span>
-              <span class="v good">{{ row.autoStatus.made }} 份</span>
-            </div>
-            <div class="tip-flavor">
-              {{
-                derived.autoCraftUnlocked
-                  ? '勾上「自动」后一份一份常驻做下去，材料、仓储或保留量不允许时先歇着；挂着游戏时也照做（总开关在炼制页或设置页）。'
-                  : '参悟《心有灵犀》或取得首颗道果后才能勾选自动制作。'
-              }}
-            </div>
+          <div class="tip-section">自动制作</div>
+          <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="tip-row">
+            <span class="k">凝灵诀</span>
+            <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>
+          </div>
+          <div v-if="derived.craftTargetsUnlocked" class="tip-row">
+            <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}；达到后暂停，用掉后补回。0不限，手动制作不受限制，一份制作的加成可能超过目标。</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">节奏</span>
+            <span class="v">每 {{ fmt(row.autoStatus.step) }} 秒 1 份</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">还能做</span>
+            <span class="v">{{ row.autoStatus.canMake }} 份（受材料与仓储限制）</span>
+          </div>
+          <div v-if="row.autoStatus.on" class="tip-row">
+            <span class="k">本轮已做</span>
+            <span class="v good">{{ row.autoStatus.made }} 份</span>
+          </div>
+          <div class="tip-flavor">
+            {{
+              derived.autoCraftUnlocked
+                ? '勾上「自动」后一份一份常驻做下去，材料、仓储或保留量不允许时先歇着；挂着游戏时也照做（总开关在炼制页或设置页）。'
+                : '参悟《心有灵犀》或取得首颗道果后才能勾选自动制作。'
+            }}
           </div>
         </template>
       </HoverTip>
@@ -353,8 +361,8 @@ const condenseStatus = computed(() => {
         <summary>尚未解锁的配方（{{ locked.length }} 个）</summary>
         <table class="grid">
           <tbody>
-            <tr v-for="row in locked" :key="row.meta.id" :title="row.meta.desc">
-              <td class="nowrap dim">{{ row.meta.name }}</td>
+            <tr v-for="row in locked" :key="row.meta.id">
+              <td class="nowrap dim"><HoverTip :label="row.meta.name" :description="row.meta.desc" /></td>
               <td class="small dim">{{ row.needs }}</td>
             </tr>
           </tbody>

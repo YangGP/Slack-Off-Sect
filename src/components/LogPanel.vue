@@ -5,6 +5,7 @@ import { fmtClock, fmtAmount, fmtTime } from '@/game/format'
 import { EVENT_MAP, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
 import { RESOURCE_MAP } from '@/data/resources'
 import { eventOutcome, eventEffect } from '@/game/engine'
+import HoverTip from './HoverTip.vue'
 
 const FILTERS = [
   { id: 'all', name: '全部' },
@@ -80,11 +81,10 @@ function preview(effect) {
     <!-- 普通来访可谢绝；已有威胁按期限默认防守。 -->
     <div v-if="pending" class="choice">
       <div class="choice-head">
-        <span class="good">抉择</span>
+        <span class="good"><HoverTip label="抉择"><template #tip><p>单次每种资源奖励最多为仓储的20%；满仓部分无法领取，交易用料按预览支付。</p></template></HoverTip></span>
         <span class="dim small">{{ getEventLevel(pending).label }} · {{ pending.name }}</span>
       </div>
       <div class="small dim" style="padding: 2px 0 4px">{{ pending.text }}</div>
-      <div v-if="!pending.threat" class="small dim">单次每种资源奖励最多为仓储的20%；满仓部分无法领取，交易用料按预览支付。</div>
       <div v-if="pending.threat" class="small dim">还有 {{ fmtTime(threatTime) }} · 到期依现有阵法防守，不主动消耗成品。</div>
       <div v-for="(opt, i) in pending.options" :key="opt.label" class="choice-row">
         <button class="btn primary" :disabled="!eventOutcome(state, derived, opt.effect || {}).affordable" @click="actions.resolveChoice(i)">{{ opt.label }}</button>

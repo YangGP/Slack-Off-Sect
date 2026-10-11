@@ -8,7 +8,7 @@ import { state, derived } from '@/game/store'
 import { CRAFTS } from '@/data/crafts'
 import { isCraftUnlocked, resourceFlow } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
-import { fmt, fmtCost, fmtRate, fmtStock, fmtTime } from '@/game/format'
+import { fmt, fmtRate, fmtTime } from '@/game/format'
 
 const props = defineProps({
   resId: { type: String, required: true },
@@ -25,10 +25,6 @@ const net = computed(() => flow.value.net)
 const max = computed(() => derived.max[props.resId] ?? Infinity)
 const amount = computed(() => state.resources[props.resId] || 0)
 const karmaStorageText = computed(() => `${((derived.karmaStorageMult - 1) * 100).toFixed(1).replace(/\.0$/, '')}%`)
-/** 整枚计数的资源（灵石/丹药/符箓/法器）不显示小数 */
-const amountText = computed(() =>
-  fmtStock(amount.value),
-)
 const factor = computed(() => derived.sourceFactor[props.resId] || 1)
 
 const sources = computed(() =>
@@ -135,13 +131,6 @@ const bonusRows = computed(() => {
 </script>
 
 <template>
-  <div class="tip-body">
-    <div class="tip-title">
-      {{ meta.name }}
-      <span class="tip-right">{{ amountText }}<template v-if="Number.isFinite(max)"> / {{ fmtCost(max) }}</template></span>
-    </div>
-    <!-- 与建筑（宗门）的提示同一套排版：标题 → 描述 → 分节 -->
-    <div class="tip-desc">{{ meta.desc }}</div>
     <div v-if="meta.storageWeight != null" class="tip-row">
       <span class="k">通用扩仓</span>
       <span class="v">基础容量的 {{ Math.round(meta.storageWeight * 1000) / 10 }}%；专属仓储全额计入</span>
@@ -215,5 +204,4 @@ const bonusRows = computed(() => {
       <span class="k">趋势</span>
       <span class="v">{{ etaText() }}</span>
     </div>
-  </div>
 </template>

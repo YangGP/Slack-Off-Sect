@@ -8,6 +8,7 @@ import { state, derived } from '@/game/store'
 import { TERMS, CALENDAR, DAYS_PER_SEASON } from '@/data/calendar'
 import { fmtTime } from '@/game/format'
 import { RESOURCE_MAP } from '@/data/resources'
+import HoverTip from './HoverTip.vue'
 
 const cal = computed(() => derived.calendar || null)
 
@@ -37,7 +38,7 @@ const timeHint = computed(() => {
 <template>
   <div class="box" v-if="cal">
     <div class="box-head">
-      历法<span class="hint">{{ timeHint }}</span>
+      <HoverTip label="历法"><template #tip><p>{{ timeHint }}</p><p>{{ cal.seasonDesc }}</p></template></HoverTip>
     </div>
     <div class="cal-date">
       第 {{ cal.year }} 年 · {{ cal.seasonName }} · 第 {{ cal.day }} 天
@@ -57,6 +58,5 @@ const timeHint = computed(() => {
       </span>
     </div>
     <div v-else class="small dim">本季对产出没有影响。</div>
-    <div class="small dim" style="padding-top: 2px">{{ cal.seasonDesc }}</div>
   </div>
 </template>

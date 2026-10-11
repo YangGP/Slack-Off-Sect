@@ -49,8 +49,8 @@ export const BUILDINGS = [
     // 实物建筑用材料计价：钎锤支架都是木匠活，不吃灵气；也不用自己的产出（矿石）当造价
     cost: { wood: 300 },
     priceRatio: 1.15,
-    desc: '钎锤齐备，开放矿工职位；派遣弟子后才能从山体上凿下矿石，供垒墙、砌基与点石成灵。',
-    effects: {},
+    desc: '钎锤齐备，开放矿工职位；派遣弟子开采矿石。每座启用的采矿场提高矿石、玄铁与灵石产出10%，多座相加。',
+    effects: { ratio: { rock: 0.1, ore: 0.1, stone: 0.1 } },
     needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'granary', count: 1 }] },
   },
   {
@@ -92,8 +92,8 @@ export const BUILDINGS = [
     // 普通药圃用木料营造，灵石留给凝灵与交易。
     cost: { wood: 400, stone: 60 },
     priceRatio: 1.15,
-    desc: '按四时节气轮种，开放采药人职位；派遣弟子照料和采收后才能取得灵草。',
-    effects: {},
+    desc: '按四时节气轮种，开放采药人职位；派遣弟子照料和采收后才能取得灵草。每座启用的药圃提高灵草产出10%，多座相加。',
+    effects: { ratio: { herb: 0.1 } },
     needs: { upgrades: ['herbStudy'] },
   },
   {

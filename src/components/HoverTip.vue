@@ -12,13 +12,16 @@
  * 把 #tip 内容用 Teleport 挂到 body 上做固定定位，避免被表格/滚动容器裁掉。
  * 提示框永远不与鼠标抢事件（pointer-events: none）。
  */
-import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, nextTick, watch, onMounted, onBeforeUnmount, useId } from 'vue'
 
 const props = defineProps({
-  width: { type: Number, default: 300 },
+  width: { type: Number, default: 360 },
   delay: { type: Number, default: 120 },
   /** 触发器的标签名：默认 span，放进 div/td 里时可传 div */
   tag: { type: String, default: 'span' },
+  label: { type: String, default: '' },
+  title: { type: String, default: '' },
+  description: { type: String, default: '' },
 })
 
 // 让外部可以跟着提示的显隐做事（例如高亮左栏资源行）
@@ -27,6 +30,7 @@ const emit = defineEmits(['show', 'hide'])
 const open = ref(false)
 const trigger = ref(null)
 const tip = ref(null)
+const tipId = useId()
 let timer = null
 let observer = null
 
@@ -138,6 +142,7 @@ defineExpose({ show, hide, open })
     :is="tag"
     ref="trigger"
     class="tip-trigger"
+    :aria-describedby="open ? tipId : undefined"
     @mouseenter="show"
     @mouseleave="hide"
     @focusin="onFocus"
@@ -145,16 +150,23 @@ defineExpose({ show, hide, open })
     @focusout="hide"
     @wheel="scrollTip"
   >
-    <slot />
+    <slot><span class="tip-label" tabindex="0" :aria-label="`${label}说明`">{{ label }}</span></slot>
     <Teleport to="body">
       <div
         v-if="open"
         ref="tip"
+        :id="tipId"
         class="tip"
         role="tooltip"
         :style="{ width: width + 'px' }"
       >
-        <slot name="tip" />
+        <div class="tip-body">
+          <div v-if="$slots.heading || title || label" class="tip-title">
+            <slot name="heading">{{ title || label }}</slot>
+          </div>
+          <div v-if="description" class="tip-desc">{{ description }}</div>
+          <slot name="tip" />
+        </div>
       </div>
     </Teleport>
   </component>

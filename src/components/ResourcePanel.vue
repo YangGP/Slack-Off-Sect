@@ -1,6 +1,6 @@
 <script setup>
 import { state, derived, view, ui } from '@/game/store'
-import { fmt, fmtCost, fmtFixed, fmtResource } from '@/game/format'
+import { fmt, fmtCost, fmtFixed, fmtResource, fmtStock } from '@/game/format'
 import { RESOURCE_MAP } from '@/data/resources'
 import { resourceFlow } from '@/game/engine'
 import HoverTip from './HoverTip.vue'
@@ -72,6 +72,7 @@ function bonusTone(id) {
           :key="r.id"
           tag="tr"
           :width="350"
+          :description="r.desc"
           :class="{ 'res-hl': isNeeded(r.id), 'res-lack': isLacking(r.id) }"
         >
           <td class="res-name">{{ r.name }}</td>
@@ -81,6 +82,9 @@ function bonusTone(id) {
             {{ netOf(r.id) ? (netOf(r.id) > 0 ? '+' : '') + fmt(netOf(r.id)) + '/秒' : '' }}
           </td>
           <td class="num res-bonus" :class="bonusTone(r.id)">{{ bonusOf(r.id) }}</td>
+          <template #heading>
+            {{ r.name }}<span class="tip-right">{{ fmtStock(amountOf(r.id)) }}<template v-if="Number.isFinite(maxOf(r.id))"> / {{ fmtCost(maxOf(r.id)) }}</template></span>
+          </template>
           <template #tip>
             <SourceBreakdown :res-id="r.id" />
           </template>

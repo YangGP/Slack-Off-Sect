@@ -18,6 +18,7 @@
     "clean": "node tools/clean.mjs",
     "check:encoding": "node tools/check-encoding.mjs",
     "audit": "vite build --ssr tools/resource-audit.mjs --outDir .smoke-audit --emptyOutDir && node .smoke-audit/resource-audit.js",
+    "audit:disciples": "vite build --ssr tools/disciple-audit.mjs --outDir .smoke-disciple-audit --emptyOutDir && node .smoke-disciple-audit/disciple-audit.js",
     "balance": "vite build --ssr tools/balance.mjs --outDir .smoke-balance --emptyOutDir && node .smoke-balance/balance.js",
     "audit:economy": "vite build --ssr tools/economy-audit.mjs --outDir .smoke-economy --emptyOutDir && node .smoke-economy/economy-audit.js",
     "audit:crafts": "vite build --ssr tools/tier-audit.mjs --outDir .smoke-tier --emptyOutDir && node .smoke-tier/tier-audit.js",

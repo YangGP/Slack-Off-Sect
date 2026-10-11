@@ -1,4 +1,5 @@
 import { CONFIG } from '@/data/config'
+import { DISCIPLE_GROWTH, SPIRITUAL_ROOT_MAP, realmBaseChance, cultivationRequired, discipleFactor, syncDisciples, newDisciple, cultivateDisciple, discipleDismissalCost } from '@/data/disciples'
 import { RESOURCES, RESOURCE_MAP } from '@/data/resources'
 import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 import { JOBS } from '@/data/jobs'
@@ -68,6 +69,8 @@ export function createDerived() {
     rawUpkeep: 0,
     /** 每名弟子每秒的口粮（已含境界倍率，未含减耗） */
     discipleUpkeep: 0,
+    discipleWeight: 0,
+    discipleJobWeights: {},
     netQi: 0,
     habitability: CONFIG.HABITABILITY_BASE,
     habitabilityBonus: 0,
@@ -690,7 +693,7 @@ function recomputeRaw(state, derived, supply) {
     const n = state.disciples.jobs[job.id] || 0
     if (n > 0) {
       for (const output of jobOutputs(state, job)) {
-        const raw = output.base * n * (1 + (jobRatio[job.id] || 0)) * discipleMult
+        const raw = output.base * derived.discipleJobWeights[job.id] * (1 + (jobRatio[job.id] || 0)) * discipleMult
         prod[output.resource] = (prod[output.resource] || 0) + raw
         addSource(output.resource, { kind: 'job', id: job.id, label: job.name, count: n, raw })
       }
@@ -768,7 +771,7 @@ function recomputeRaw(state, derived, supply) {
    * 指数取 1 时口粮与境界倍率同倍上涨，这个比值在任何境界都固定在 0.25/0.6 ≈ 42%。
    */
   const discipleUpkeep = CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
-  const rawUpkeep = state.disciples.total * discipleUpkeep
+  const rawUpkeep = derived.discipleWeight * discipleUpkeep
   const reduction = rawUpkeep * Math.min(0.85, acc.consumeReduction)
   const upkeep = rawUpkeep - reduction
 
@@ -926,6 +929,14 @@ function recomputeRaw(state, derived, supply) {
  * Storage and housing remain available even when production is starved.
  */
 export function recompute(state, derived, seconds = 1) {
+  syncDisciples(state.disciples)
+  derived.discipleJobWeights = Object.fromEntries(JOBS.map(job => [job.id, 0]))
+  derived.discipleWeight = 0
+  for (const member of state.disciples.members) {
+    const factor = discipleFactor(member, state.realm)
+    derived.discipleWeight += factor
+    if (member.roleId) derived.discipleJobWeights[member.roleId] += factor
+  }
   const dt = Math.max(0.001, seconds)
   const supply = {}
   const buildingConsumers = BUILDINGS.filter((b) => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
@@ -1056,7 +1067,7 @@ export function toggleBuilding(state, derived, id) {
 
 export function setJob(state, derived, jobId, value) {
   const job = JOBS.find((j) => j.id === jobId)
-  if (!job || !isJobUnlocked(state, job)) return
+  if (!job || !isJobUnlocked(state, job) || !Number.isFinite(value)) return
   const jobs = state.disciples.jobs
   const current = jobs[jobId] || 0
   let target = Math.max(0, Math.floor(value))
@@ -1082,6 +1093,79 @@ export function fillJob(state, derived, jobId) {
   setJob(state, derived, jobId, (state.disciples.jobs[jobId] || 0) + idle)
 }
 
+export function assignDisciples(state, derived, ids, roleId) {
+  if (roleId !== null && !JOBS.some(job => job.id === roleId && isJobUnlocked(state, job))) return false
+  const selected = new Set(ids)
+  for (const member of state.disciples.members) if (selected.has(member.id)) member.roleId = roleId
+  for (const job of JOBS) state.disciples.jobs[job.id] = 0
+  for (const member of state.disciples.members) if (member.roleId) state.disciples.jobs[member.roleId]++
+  recompute(state, derived)
+  return true
+}
+
+export function discipleDismissalPreview(state, ids) {
+  const selected = new Set(ids)
+  const members = state.disciples.members.filter(member => selected.has(member.id))
+  const qi = members.reduce((total, member) => total + discipleDismissalCost(member), 0)
+  return { ids: members.map(member => member.id), count: members.length, cost: { qi },
+    affordable: Number.isSafeInteger(qi) && canAfford(state, { qi }) }
+}
+
+/** 逐出整批支付，费用或人口变化时要求重新确认，不部分执行。 */
+export function dismissDisciples(state, derived, ids, quote = null) {
+  const preview = discipleDismissalPreview(state, ids)
+  if (quote && (preview.cost.qi !== quote.cost.qi || preview.count !== quote.count)) return { dismissed: 0, reason: 'changed' }
+  if (!preview.count) return { dismissed: 0, reason: 'empty' }
+  if (!preview.affordable) return { dismissed: 0, reason: 'insufficient' }
+  payCost(state, preview.cost)
+  const selected = new Set(preview.ids)
+  state.disciples.members = state.disciples.members.filter(member => !selected.has(member.id))
+  state.disciples.total = state.disciples.members.length
+  for (const job of JOBS) state.disciples.jobs[job.id] = 0
+  for (const member of state.disciples.members) if (member.roleId) state.disciples.jobs[member.roleId]++
+  pushLog(state, `逐出师门 ${preview.count} 人，支付灵气 ${preview.cost.qi}`, 'info')
+  recompute(state, derived)
+  return { dismissed: preview.count, cost: preview.cost }
+}
+
+export function discipleBreakthroughPreview(state, member) {
+  const target = member.realm + 1
+  const required = cultivationRequired(member.realm)
+  const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
+    [id, Math.max(1, Math.ceil(amount * DISCIPLE_GROWTH.costFactor))]))
+  const chance = Math.min(BREAKTHROUGH.chanceCap, 1 - (1 - realmBaseChance(target)) * DISCIPLE_GROWTH.failureFactor +
+    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance)
+  const status = target >= REALMS.length ? '已至最高境界' : member.cooldown > 0 ? '突破调息中' :
+    member.cultivation < required ? '修炼中' : target > state.realm ? '受宗门境界限制' : '待突破'
+  return { target, required, cost, chance, status, ready: status === '待突破', affordable: canAfford(state, cost) }
+}
+
+/** 首版只损失本境修为与材料，不引入个人死亡或永久停滞。 */
+export function breakthroughDisciples(state, derived, ids, random = Math.random) {
+  const selected = new Set(ids)
+  const result = { success: 0, failed: 0, skipped: 0, insufficient: false }
+  for (const member of state.disciples.members) {
+    if (!selected.has(member.id)) continue
+    const preview = discipleBreakthroughPreview(state, member)
+    if (!preview.ready) { result.skipped++; continue }
+    if (!preview.affordable) { result.insufficient = true; break }
+    payCost(state, preview.cost)
+    member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + (preview.cost.qi || 0))
+    if (random() < preview.chance) {
+      member.realm++
+      member.cultivation = 0
+      result.success++
+    } else {
+      member.cultivation *= 1 - DISCIPLE_GROWTH.failureLoss
+      member.cooldown = DISCIPLE_GROWTH.cooldown
+      result.failed++
+    }
+  }
+  if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}`, result.failed ? 'info' : 'good')
+  recompute(state, derived)
+  return result
+}
+
 /**
  * 弟子自动前来：有空房就会陆续来人，不需要手动招募。
  * 每 arrivalInterval(derived) 秒来一名；住满则清零计时，扩建后重新开始算。
@@ -1099,6 +1183,9 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   let arrived = 0
   while (state.arrivalTimer >= interval && state.disciples.total < derived.maxDisciples && derived.leaveChance === 0) {
     state.arrivalTimer -= interval
+    const member = newDisciple(state.disciples)
+    cultivateDisciple(member, Math.min(dt, state.arrivalTimer))
+    state.disciples.members.push(member)
     state.disciples.total += 1
     state.stats.recruits += 1
     arrived += 1
@@ -1106,7 +1193,9 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   }
   if (arrived > 0) {
     if (!silent) {
-      pushLog(state, `一名弟子慕名而来（门中现有 ${state.disciples.total} 人）`, 'good')
+      const newcomers = state.disciples.members.slice(-arrived)
+      const roots = newcomers.map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、')
+      pushLog(state, `${arrived === 1 ? '一名' : arrived + '名'}弟子慕名而来（${roots}；门中现有 ${state.disciples.total} 人）`, 'good')
     }
     recompute(state, derived)
   }
@@ -1754,9 +1843,7 @@ export function toggleAutoCraft(state, derived, recipeId) {
 export function breakthroughPreview(state, derived, options = {}) {
   const rules = BREAKTHROUGH
   const tribulation = state.realm >= rules.tribulationRealm
-  const baseChance = rules.lateBaseChances[state.realm + 1] ?? (tribulation
-    ? rules.tribulationChance - (state.realm - rules.tribulationRealm) * rules.chanceDrop
-    : state.realm + 1 === rules.tribulationRealm ? rules.goldenCoreChance : rules.earlyChance)
+  const baseChance = realmBaseChance(state.realm + 1)
   const availableAids = BREAKTHROUGH_AIDS[state.realm + 1] || []
   const aids = availableAids.filter(aid => options[aid.id] === true)
   const cost = { ...(realmCost(state, derived, state.realm + 1) || {}) }
@@ -2001,8 +2088,10 @@ function settleEventOutcome(state, derived, spec, text, kind, source) {
   }
   if (outcome.recruits > 0) {
     state.disciples.total += outcome.recruits
+    syncDisciples(state.disciples)
     state.stats.recruits += outcome.recruits
     parts.push(`弟子 +${outcome.recruits}`)
+    parts.push(state.disciples.members.slice(-outcome.recruits).map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、'))
   } else if (spec.recruit) parts.push('居所已满，无法收徒')
   pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
 }
@@ -2153,7 +2242,19 @@ export function tick(state, derived, dt, opts = {}) {
   const { offline = false, events = true } = opts
   const cap = dt > 60 ? 60 : dt
   recompute(state, derived, cap)
+  for (const member of state.disciples.members) cultivateDisciple(member, cap)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
+
+  // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。
+  const qiDemand = Math.max(0, -(derived.expense?.qi || 0) * cap)
+  const qiAvailable = Math.max(0, (state.resources.qi || 0) + (derived.rates.qi || 0) * cap)
+  const qiSupply = qiDemand > 0 ? Math.min(1, qiAvailable / qiDemand) : 0
+  if (derived.discipleWeight > 0 && derived.upkeep > 0) {
+    for (const member of state.disciples.members) {
+      const consumed = derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight * cap * qiSupply
+      member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + consumed)
+    }
+  }
 
   // 1) 资源结算（灵气先算净产出）
   for (const r of RESOURCES) {
@@ -2221,6 +2322,8 @@ export function tick(state, derived, dt, opts = {}) {
       [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
         .find((job) => (jobs[job.id] || 0) > 0)?.id
     if (jobId) jobs[jobId] -= 1
+    const index = state.disciples.members.findIndex(member => member.roleId === jobId)
+    if (index >= 0) state.disciples.members.splice(index, 1)
     state.disciples.total -= 1
     pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')
     recompute(state, derived)

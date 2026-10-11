@@ -2,11 +2,27 @@
 
 更新：2026-10-11。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
 
-v0.34：玩家与模拟脚本的手动制作通过`craft`即时结算；`craftBatch`按当前材料和仓容计算份数，再立即制作。不生成订单，不改变自动计时；自动加工仍受工位、供能、冷却、库存目标与材料保留量约束。`requestCraft`及订单管理只保留为旧版兼容与回归验证接口，旧存档的`craftOrders`继续加工，可暂停、恢复或取消，重修时清空。`processingBottleneck`复用加工计划和统一资源流量显示供料缓冲；`progression-diagnostics.mjs`输出破境缺料、仓容缺口、生产设施与未解锁扩仓前置。
+v0.32（界面）：所有tooltip统一使用`HoverTip`，不再使用`RuleTip`或原生`title`提示。组件负责正文外壳和标题：简单规则用`label`自动生成可聚焦的点状下划线入口；按钮与表格保留默认触发插槽，用`title`或`#heading`提供标题、`description`提供说明、`#tip`提供明细。所有内容共用`tip-desc`、`tip-section`、`tip-row`（左标签／右数值）及`tip-note`／`tip-flavor`（分隔线后的淡色左对齐备注），不在业务组件重复创建`tip-body`或`tip-title`。默认宽360px，复杂明细可指定宽度，均受视口约束；支持悬停、键盘聚焦、Escape关闭及触发器滚轮阅读，下拉框操作期间暂停提示。重复说明与开发信息从默认界面移除；实时数值、操作条件、缺料原因、身死总风险和读档覆盖提醒保留，重修确认流程不变。DOM检查验证默认隐藏、统一结构、提示内容与风险可见性。
+
+弟子管理的四个原生下拉框通过`StableSelect`隔离父页高频刷新；筛选选项固定，人数在栏外显示。岗位选项仅在解锁集合改变时更新，集合未变则复用数组；子组件不使用原生`v-model`每帧同步值，避免操作期间被页面刷新重写。DOM检查验证选项无额外变更、节点与焦点保留，以及尚未提交的选择不被重置。
+
+建筑效果的资源条目由`describeEffects`和`describeJobEffects`携带`resource`标识，`BuildingButton`按`view.visibleResources`过滤每座效果；全局效果、职位开放和工位容量保留。过滤只影响展示，不改效果结算；合计仍按相同标签对应原始总效果。新增资源效果时沿用资源标识，避免按中文文案判断解锁。
+
+`UpgradeTable`中已炼成法宝与可参悟技艺同用名称、花费、操作三列，等级和供能状态显示在名称旁；法宝不再重复出现在已参悟折叠里。tooltip当前效果按实际祭炼倍率与供能比例计算，下一等级预览按满供倍率计算，均使用`describeEffects`的结构化行，不拼成一段文案。`unlockRows`按每栋建筑、每个配方和每项参悟分行；列表摘要`unlockText`仍按分类合并。
+
+tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐、自然换行，不放在`tip-row .v`数值列里；建筑与参悟使用相同样式。`describeNeeds`返回的各前置保留为单独条目，其中“建成其一”仍是一组任选条件。效果补充说明和所属阶段使用`tip-note`，避免长说明挤压左侧标签。
+
+弟子`residenceSeconds`记录在线／离线停留，`totalQiConsumed`记录个人口粮与个人突破实际支付的灵气；旧档缺失或非法值补零。`cultivateDisciple`在修满后继续累计时间，`tick`在资源结算前按个人有效境界权重分配口粮，并按灵气可用量与总持续支出的供给比例折算实际消耗。`discipleDismissalCost`以历法全年秒数计算已满年数，逐人向上取整；`discipleDismissalPreview`去重身份并合计，`dismissDisciples`原子支付、移除记录、同步岗位和人口，保留递增身份。store负责精确费用确认与立即存档，执行时重新校验费用、人数和支付能力，预览变化时拒绝执行；管理页限定筛选内选择并清除已逐出身份。
+
+v0.32（灵根）：`SPIRITUAL_ROOTS`定义权重及速度，`cultivationRate`是修为增长与界面预计时间的统一入口。个体保存`spiritualRoot`，缺失或无效值补`triple`；旧人数档补建的个体也用三灵根。`disciples.rootSeed`保存独立LCG序列，避免收徒改变事件及突破的随机序列；归一化不抽取。新增`sortDisciples`按本境比例或实际速度稳定排序，不改存档数组。管理栏组合筛选，筛选变更清选择，排序保留身份选择。`npm run audit:disciples -- 72 12345 protected`运行无事件、0仙缘／道果、5秒经营、60秒培养（每次最多20人）的真实引擎审计；`greedy`不留宗门材料，`off`不培养，末尾`triple`固定三灵根对照。`tools/disciple-training.mjs`仅供模拟调用，未加入游戏自动化。
+
+v0.32（弟子成长）：`disciples.members`保存独立身份、姓名、岗位、境界、本境修为及调息剩余秒数；`nextId`分配身份。`data/disciples.js`统一配置修炼、个人倍率与宗门基础突破概率。`syncDisciples`兼容人数接口并同步个体，个体调岗动作反向汇总人数；岗位按`discipleJobWeights`汇总个人有效倍率，口粮按`discipleWeight`汇总。`tick`先推进已有弟子修炼，到来时只计入门后时间；事件招入补建个体，流失移除实际人选。旧档归一化补凡体记录，随机状态不参与姓名生成；重修清空个体。首版材料按目标基础费用1%逐项取整，失败只损失本境修为与调息。`tools/disciple-check.mjs`接入smoke验证保存、上限、失败、批量支付及离线。
+
+v0.31（手动合成）：玩家与模拟脚本的手动制作通过`craft`即时结算；`craftBatch`按当前材料和仓容计算份数，再立即制作。不生成订单，不改变自动计时；自动加工仍受工位、供能、冷却、库存目标与材料保留量约束。`requestCraft`及订单管理只保留为旧版兼容与回归验证接口，旧存档的`craftOrders`继续加工，可暂停、恢复或取消，重修时清空。`processingBottleneck`复用加工计划和统一资源流量显示供料缓冲；`progression-diagnostics.mjs`输出破境缺料、仓容缺口、生产设施与未解锁扩仓前置。
 
 推进模拟可用`npm run balance -- 72 0 12345`固定种子跑自然路线，或`npm run balance -- 72 0 12345 industry`隔离破境失败以验证产业链；后者不用于报告自然通关速度。`npm run check:industry`运行可控负荷对照，供料及大仓储为测试夹具，不是自然开局。
 
-v0.32：`processingPlan`统一计算基础工位、供能和冷却分配，`runIndustrialCraft`按下一次出货或动力耗尽时刻推进。动力连续扣费不写入`expense`，只写入自动加工流量显示，避免tick重复收费；常规维护费仍由供给计算及tick支付。动力保留量另加可开工配方的一份同种原料。偏极阵在维护供给迭代中按两侧剩余仓容与下游耗料取最低负荷。`processingModes`设置通过专用动作验证与归一化，保存偏好但研究门槛每世重判。
+v0.31（动力与冷却）：`processingPlan`统一计算基础工位、供能和冷却分配，`runIndustrialCraft`按下一次出货或动力耗尽时刻推进。动力连续扣费不写入`expense`，只写入自动加工流量显示，避免tick重复收费；常规维护费仍由供给计算及tick支付。动力保留量另加可开工配方的一份同种原料。偏极阵在维护供给迭代中按两侧剩余仓容与下游耗料取最低负荷。`processingModes`设置通过专用动作验证与归一化，保存偏好但研究门槛每世重判。
 
 ## 分层与数据流
 
@@ -52,7 +68,7 @@ v0.32：`processingPlan`统一计算基础工位、供能和冷却分配，`runI
 - 完整炼制和左栏快捷共用CraftPanel，自动选择、库存与制作动作同步；快捷数量不限，偏好随存档及重置保留。
 - 存档通过下载和选择本地文件导入。危险操作按现有交互确认，普通操作写纪事与状态提示。
 
-玩家更新日志由src/data/changelog.js维护，在数组开头追加版本、日期、标题和变化，CURRENT_VERSION取首条，同时更新README。界面迭代号、包SemVer和存档结构版本分别维护；不因修改玩家日志而自动改锁文件。
+玩家更新日志由src/data/changelog.js维护。同一轮功能开发、小修复、文案精简和数值微调追加到当前版本，集中发布或开启新的主要功能批次时再新增版本；不为每次修改单独升号。CURRENT_VERSION取首条，同时更新README与DESIGN。界面迭代号、包SemVer和存档结构版本分别维护；不因修改玩家日志而自动改锁文件。v0.3之后按功能批次整理：原v0.31～v0.34合并为v0.31工业加工，原v0.35～v0.38合并为v0.32弟子成长。历史测量注明当时阶段，不当作最终规则的测量。
 
 ## 验证命令
 

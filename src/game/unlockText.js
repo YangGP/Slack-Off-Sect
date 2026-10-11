@@ -97,13 +97,13 @@ export function unlockText(id) {
   return parts.join('；')
 }
 
-/** 解锁清单的结构化版本：一行一类（解锁建筑 / 开放配方 / 开启参悟） */
+/** 解锁清单的结构化版本：每栋建筑、配方和参悟条目单独一行。 */
 export function unlockRows(id) {
   const g = unlockGroups(id)
   const rows = []
-  if (g.buildings.length) rows.push({ label: '解锁建筑', value: g.buildings.join('、') })
-  if (g.crafts.length) rows.push({ label: '开放配方', value: g.crafts.join('、') })
-  if (g.upgrades.length) rows.push({ label: '开启参悟', value: g.upgrades.join('、') })
+  for (const value of g.buildings) rows.push({ label: '解锁建筑', value })
+  for (const value of g.crafts) rows.push({ label: '开放配方', value })
+  for (const value of g.upgrades) rows.push({ label: '开启参悟', value })
   return rows
 }
 

@@ -26,6 +26,7 @@ import {
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP, craftCost } from '../src/data/crafts.js'
 import { runIndustryChecks } from './industry-check.mjs'
+import { runDiscipleChecks } from './disciple-check.mjs'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
@@ -818,6 +819,44 @@ section('矿工灵石副产出')
   E.recompute(s, d)
   ok('停用灵石矿后副产出停止且玄铁保留', !d.sources.stone?.some(x => x.id === 'miner') && d.sources.ore.some(x => x.id === 'miner'))
 }
+section('采矿场矿物增产')
+{
+  const { state: s, derived: d } = newGame()
+  s.disciples.total = 1
+  s.disciples.jobs.miner = 1
+  s.upgrades.prospectStudy = true
+  s.buildings.quarry = { count: 1, on: true }
+  s.buildings.spiritQuarry = { count: 1, on: true }
+  s.buildings.spiritField = { count: 1, on: true }
+  E.recompute(s, d)
+  const mineralRates = Object.fromEntries(['rock', 'ore', 'stone'].map(id => [id, d.rates[id]]))
+  const qiRate = d.rates.qi
+  ok('单座采矿场为三种矿物实际产出增加10%', ['rock', 'ore', 'stone'].every(id => close(d.sourceFactor[id], d.globalMult * 1.1)))
+  s.buildings.quarry.count = 3
+  E.recompute(s, d)
+  ok('三座采矿场加成相加至30%，不影响灵气', Object.entries(mineralRates).every(([id, rate]) => close(d.rates[id], rate * 1.3 / 1.1)) && close(d.rates.qi, qiRate))
+  s.buildings.quarry.on = false
+  E.recompute(s, d)
+  ok('停用采矿场移除矿物加成并停止采矿石', d.rates.rock === 0 && ['ore', 'stone'].every(id => close(d.rates[id], mineralRates[id] / 1.1)))
+}
+section('药圃灵草增产')
+{
+  const { state: s, derived: d } = newGame()
+  s.disciples.total = 1
+  s.disciples.jobs.herbalist = 1
+  s.buildings.herbGarden = { count: 1, on: true }
+  s.buildings.spiritField = { count: 1, on: true }
+  E.recompute(s, d)
+  const herbRate = d.rates.herb
+  const qiRate = d.rates.qi
+  ok('单座药圃为灵草实际生产产出增加10%', herbRate > 0 && close(d.sourceFactor.herb, d.globalMult * (1 + (d.seasonRatio.herb || 0)) * 1.1))
+  s.buildings.herbGarden.count = 3
+  E.recompute(s, d)
+  ok('三座药圃加成相加至30%，不影响灵气', close(d.rates.herb, herbRate * 1.3 / 1.1) && close(d.rates.qi, qiRate))
+  s.buildings.herbGarden.on = false
+  E.recompute(s, d)
+  ok('停用药圃移除灵草产出加成', close(d.rates.herb, herbRate / 1.1) && (d.ratio.herb || 0) === 0)
+}
 section('基础资源由人力生产，普通聚灵阵例外')
 {
   const humanResources = new Set(JOBS.map(job => job.resource))
@@ -1185,8 +1224,8 @@ section('还差多久买得起')
     s3.resources.qi = 5000
     // 灵气**净额必须为正**：法器要灵石、灵石靠「点石成灵」吃灵气，
     // 若灵气净额为负，现印路径会（正确地）返回 Infinity —— 那样测的就不是配方链了。
-    // 20 名弟子：10 名阵徒产 6 气/秒 > 20 × 0.25 的口粮；4 名矿工供得上 1 座炼铁炉的炉料。
-    s3.disciples.total = 20
+    // 22 名弟子：10 名阵徒产 6 气/秒 > 22 × 0.25 的口粮；4 名矿工供得上 1 座炼铁炉的炉料。
+    s3.disciples.total = 22
     s3.disciples.jobs = { farmer: 10, woodcutter: 6, herbalist: 2, miner: 4 }
     E.recompute(s3, d3)
     const waits = []
@@ -1780,10 +1819,10 @@ section('本轮评估问题回归')
   const before = { ...d.rates }
   s.upgrades.ironPick = true
   E.recompute(s, d)
-  ok('玄铁镐只提高矿石，不提高玄铁和天然灵石', close(d.rates.rock, before.rock * 1.3, 1e-9) && close(d.rates.ore, before.ore, 1e-9) && close(d.rates.stone, before.stone, 1e-9))
+  ok('玄铁镐与采矿场矿石加成相加，不提高玄铁和天然灵石', close(d.rates.rock, before.rock * 1.4 / 1.1, 1e-9) && close(d.rates.ore, before.ore, 1e-9) && close(d.rates.stone, before.stone, 1e-9))
   s.treasureLevels.ironPick = 2
   E.recompute(s, d)
-  ok('玄铁镐祭炼仍只提高矿石', close(d.rates.rock, before.rock * 1.48, 1e-9) && close(d.rates.ore, before.ore, 1e-9) && close(d.rates.stone, before.stone, 1e-9))
+  ok('玄铁镐祭炼仍只提高矿石', close(d.rates.rock, before.rock * 1.58 / 1.1, 1e-9) && close(d.rates.ore, before.ore, 1e-9) && close(d.rates.stone, before.stone, 1e-9))
   for (const [id, fixed] of [['grotto', 15000], ['heavenTower', 40000]]) {
     const { state: storageState, derived: storageDerived } = newGame()
     const base = storageDerived.max.insight
@@ -2494,8 +2533,8 @@ section('提示里的效果一节：一个效果一行')
   const rowsOf = (id) => effectRows(UPGRADE_MAP[id], describeEffects)
   const alchemy = rowsOf('alchemyArt')
   ok(
-    '炼丹术的效果是三条（解锁建筑 / 开放配方 / 开启参悟）',
-    alchemy.length === 3,
+    '炼丹术每项解锁建筑、配方与参悟各自成行',
+    alchemy.length === Object.values(unlockGroups('alchemyArt')).reduce((sum, items) => sum + items.length, 0) && alchemy.every(row => !row.value.includes('、')),
     alchemy.map((r) => r.label + '=' + r.value).join(' ｜ '),
   )
   ok(
@@ -2510,7 +2549,9 @@ section('提示里的效果一节：一个效果一行')
     JSON.stringify(bt),
   )
   const qi = rowsOf('qiOrigin')
-  ok('灵源考仅一行开启参悟，不再预告已删除的建筑', qi.length === 1 && qi[0].label === '开启参悟', JSON.stringify(qi))
+  ok('灵源考每项开启参悟单独一行，不再预告已删除的建筑', qi.length === unlockGroups('qiOrigin').upgrades.length && qi.every(row => row.label === '开启参悟' && !row.value.includes('、')), JSON.stringify(qi))
+  const heaven = rowsOf('grottoArt')
+  ok('洞天福地每栋解锁建筑单独一行', heaven.filter(row => row.label === '解锁建筑').length === 2 && heaven.every(row => !row.value.includes('、')), JSON.stringify(heaven))
 }
 
 // ------------------------------------------------------------
@@ -3959,7 +4000,7 @@ section('金丹：修真、工艺、材料与建设闭环')
   ok('金丹档开放阵基装配、淬玄工艺、材料库与灵流要诀', ['arrayAssembly', 'steelWorking', 'earthEssence', 'flowField'].every(id => E.isUpgradeUnlocked(s, UPGRADE_MAP[id])))
   ok('凝晶工艺与御剑术仍需各自研究前置', E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalCraft) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.swordFlight))
   ok('工艺条目显示它实际开放的配方', unlockGroups('arrayAssembly').crafts.includes('组装阵基'))
-  // 采药人需要药圃才开工；伐木场会给灵木 +5% 比例，会污染 ×1.3 的增产对比，故不建
+  // 采药人需要药圃才开工；灵草已有药圃10%加成，灵流要诀的30%与其相加。
   s.buildings.herbGarden = { count: 1, on: true }
   s.disciples.jobs.woodcutter = 1
   s.disciples.jobs.herbalist = 1
@@ -3969,7 +4010,7 @@ section('金丹：修真、工艺、材料与建设闭环')
   ok('增产前两条产线已在运转', baseRates.wood > 0 && baseRates.herb > 0)
   E.research(s, d, 'flowField')
   E.recompute(s, d)
-  ok('灵流要诀给灵木与灵草各三成增产，玄铁写在效果表内', close(d.rates.wood / baseRates.wood, 1.3) && close(d.rates.herb / baseRates.herb, 1.3) && UPGRADE_MAP.flowField.effects.ratio.ore === 0.3)
+  ok('灵流要诀给灵木与灵草各三成加成，与药圃加成相加，玄铁写在效果表内', close(d.rates.wood / baseRates.wood, 1.3) && close(d.rates.herb / baseRates.herb, 1.4 / 1.1) && UPGRADE_MAP.flowField.effects.ratio.ore === 0.3)
   s.buildings.warehouse = { count: 5, on: true }
   ok('阵基装配与材料库在金丹参悟', E.research(s, d, 'arrayAssembly') && E.research(s, d, 'earthEssence') && UPGRADE_MAP.earthEssence.needs.realm == null)
   ok('未见过玄钢前材料库不露面（渐进露出）', !d.unlockedBuildings.includes('depot'))
@@ -4765,6 +4806,9 @@ section('破境概率与失败结算')
 
 section('工业加工容量、供料与兼容性')
 runIndustryChecks(E, ok, close, newGame)
+
+section('弟子成长、分工与突破')
+runDiscipleChecks(E, ok, close)
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {

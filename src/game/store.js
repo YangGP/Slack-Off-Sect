@@ -280,6 +280,32 @@ export const actions = {
     for (const j of JOBS) state.disciples.jobs[j.id] = 0
     afterAction('所有弟子回家歇着了', 'info')
   },
+  assignDisciples(ids, roleId) {
+    if (!E.assignDisciples(state, derived, ids, roleId)) return false
+    afterAction('所选弟子的岗位已调整', 'good')
+    return true
+  },
+  breakthroughDisciples(ids) {
+    const result = E.breakthroughDisciples(state, derived, ids)
+    afterAction(`突破成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient ? 'bad' : 'info')
+    return result
+  },
+  dismissDisciples(ids) {
+    const preview = E.discipleDismissalPreview(state, ids)
+    if (!preview.count) return { dismissed: 0 }
+    if (!preview.affordable) {
+      toast('灵气不足，无法逐出所选弟子', 'bad')
+      return { dismissed: 0 }
+    }
+    const member = preview.count === 1 ? state.disciples.members.find(member => member.id === preview.ids[0]) : null
+    if (!window.confirm(`确定将${member ? member.name : '所选 ' + preview.count + ' 名弟子'}逐出师门？\n需支付灵气 ${preview.cost.qi.toLocaleString('zh-CN')}（累计消耗×（已满年数＋1），每人向上取整）。\n逐出后移除个人成长与岗位，无法撤回。`)) return { dismissed: 0 }
+    const result = E.dismissDisciples(state, derived, preview.ids, preview)
+    if (result.dismissed) {
+      afterAction(`已逐出 ${result.dismissed} 人，支付灵气 ${result.cost.qi}`, 'info')
+      saveNow()
+    } else toast(result.reason === 'changed' ? '逐出费用或人数已变化，请重新确认' : '灵气不足，未逐出弟子', 'bad')
+    return result
+  },
   research(id) {
     const ok = E.research(state, derived, id)
     afterAction(ok ? `参悟《${E.UPGRADE_MAP[id]?.name}》` : '', ok ? 'good' : '')

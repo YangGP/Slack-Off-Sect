@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { state, derived, actions, ui, saveNow } from '@/game/store'
 import { fmtClock, fmtTime, fmt } from '@/game/format'
 import { CONFIG } from '@/data/config'
+import HoverTip from './HoverTip.vue'
 
 const fileInput = ref(null)
 const importing = ref(false)
@@ -60,7 +61,7 @@ function doReset() {
 <template>
   <div class="box">
     <div class="box-head">
-      存档<span class="hint">
+      <HoverTip label="存档"><template #tip><p>导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持旧版文本存档和JSON存档。</p></template></HoverTip><span class="hint">
         上次保存 {{ fmtClock(ui.lastSavedAt || state.lastSaveAt) }}，自动保存每
         {{ CONFIG.AUTOSAVE_MS / 1000 }} 秒
       </span>
@@ -73,13 +74,13 @@ function doReset() {
         <button class="btn danger" :disabled="importing" @click="doReset">重新开山（清档）</button>
       </div>
       <input ref="fileInput" type="file" accept=".txt,.json,text/plain,application/json" aria-label="上传存档文件" hidden @change="doImport">
-      <div class="small dim" style="padding-top: 6px">导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持旧版文本存档和 JSON 存档。</div>
+      <div class="small dim" style="padding-top: 6px">读取存档将覆盖当前进度。</div>
       <div v-if="importError" class="small warn" role="status" style="padding-top: 6px">{{ importError }}</div>
     </div>
   </div>
 
   <div class="box">
-    <div class="box-head">挂机设置</div>
+    <div class="box-head"><HoverTip label="挂机设置"><template #tip><p>《龟息功》延长离线收益上限。参悟《心有灵犀》或取得首颗道果后，可在炼制页逐项勾选自动配方；总开关控制所有自动制作。</p></template></HoverTip></div>
     <div class="box-body">
       <label class="sw">
         <input
@@ -106,8 +107,7 @@ function doReset() {
         自动制作总开关
       </label>
       <div class="small dim" style="padding-top: 4px">
-        离线收益上限 {{ fmt(derived.offlineHours) }} 小时（参悟《龟息功》可 +8 小时）；
-        自动制作需要先参悟《心有灵犀》，之后在左栏炼制块里逐项勾选。
+        离线收益上限 {{ fmt(derived.offlineHours) }} 小时
       </div>
     </div>
   </div>
@@ -116,15 +116,11 @@ function doReset() {
     <div class="box-head">关于</div>
     <div class="box-body">
       <div class="kv"><span class="k">游戏</span><span class="v">摸鱼宗门 · Slack Off Sect</span></div>
-      <div class="kv"><span class="k">技术栈</span><span class="v">Vue 3 + Vite（纯 JavaScript）</span></div>
       <div class="kv">
         <span class="k">参考</span><span class="v">猫国建设者（Kittens Game）的放置玩法与数据结构</span>
       </div>
       <div class="kv">
         <span class="k">本次挂机</span><span class="v">{{ fmtTime(state.stats.playTime) }}</span>
-      </div>
-      <div class="kv">
-        <span class="k">设计文档</span><span class="v">docs/DESIGN.md</span>
       </div>
     </div>
   </div>

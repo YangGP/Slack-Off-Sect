@@ -94,27 +94,25 @@ const tabs = computed(() => [
         <button class="build-btn" :class="{ poor: !showCore }" @click="actions.drawQi()">
           吸取天地灵气
         </button>
+        <template #heading>吸取天地灵气</template>
         <template #tip>
-          <div class="tip-body">
-            <div class="tip-title">吸取天地灵气</div>
-            <div class="tip-desc">
-              伸手一引，天地间游散的灵气自会入体。开局什么都没有时，这是唯一的进项。
-            </div>
-            <div class="tip-section">收益</div>
-            <div class="tip-row">
-              <span class="k">每次点击</span>
-              <span class="v good">灵气 +{{ fmt(gain) }}</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">聚灵阵加持</span>
-              <span class="v">前{{ CONFIG.CLICK_QI_FULL_FIELDS }}座每座 +{{ fmt(CONFIG.CLICK_QI_PER_FIELD) }}，之后增益递减</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">已吸取</span>
-              <span class="v">{{ state.stats.clicks || 0 }} 次</span>
-            </div>
-            <div class="tip-flavor">点击手不停，灵气自然来。</div>
+          <div class="tip-desc">
+            伸手一引，天地间游散的灵气自会入体。开局什么都没有时，这是唯一的进项。
           </div>
+          <div class="tip-section">收益</div>
+          <div class="tip-row">
+            <span class="k">每次点击</span>
+            <span class="v good">灵气 +{{ fmt(gain) }}</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">聚灵阵加持</span>
+            <span class="v">前{{ CONFIG.CLICK_QI_FULL_FIELDS }}座每座 +{{ fmt(CONFIG.CLICK_QI_PER_FIELD) }}，之后增益递减</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">已吸取</span>
+            <span class="v">{{ state.stats.clicks || 0 }} 次</span>
+          </div>
+          <div class="tip-flavor">点击手不停，灵气自然来。</div>
         </template>
       </HoverTip>
     </div>
@@ -130,25 +128,23 @@ const tabs = computed(() => [
         >
           催生灵木
         </button>
+        <template #heading>催生灵木</template>
         <template #tip>
-          <div class="tip-body">
-            <div class="tip-title">催生灵木</div>
-            <div class="tip-desc">{{ grow.meta.desc }}</div>
-            <div class="tip-section">价格与收益</div>
-            <div class="tip-row">
-              <span class="k">每份</span>
-              <span class="v">灵气 {{ fmt(grow.meta.cost.qi) }} → 灵木 {{ fmt(grow.yield) }}</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">本次可做</span>
-              <span class="v" :class="{ bad: !grow.affordable }">{{ grow.canMake }} 份</span>
-            </div>
-            <div class="tip-row">
-              <span class="k">灵木现有</span>
-              <span class="v">{{ fmt(grow.have) }} / {{ fmt(grow.max) }}</span>
-            </div>
-            <div class="tip-flavor">点一下立刻出一份；满仓自然停下。炼制页里也能连续或自动催生。</div>
+          <div class="tip-desc">{{ grow.meta.desc }}</div>
+          <div class="tip-section">价格与收益</div>
+          <div class="tip-row">
+            <span class="k">每份</span>
+            <span class="v">灵气 {{ fmt(grow.meta.cost.qi) }} → 灵木 {{ fmt(grow.yield) }}</span>
           </div>
+          <div class="tip-row">
+            <span class="k">本次可做</span>
+            <span class="v" :class="{ bad: !grow.affordable }">{{ grow.canMake }} 份</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">灵木现有</span>
+            <span class="v">{{ fmt(grow.have) }} / {{ fmt(grow.max) }}</span>
+          </div>
+          <div class="tip-flavor">点一下立刻出一份；满仓自然停下。炼制页里也能连续或自动催生。</div>
         </template>
       </HoverTip>
     </div>

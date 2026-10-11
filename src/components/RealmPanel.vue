@@ -62,8 +62,10 @@ function reincarnate() {
 <template>
   <div class="box">
     <div class="box-head">
-      修行境界<span class="hint">每突破一境，全局产出永久提升</span>
-      <span class="hint faint">　化神期起可转世 · 渡劫期起可飞升</span>
+      <HoverTip label="修行境界"><template #tip>
+          <p>{{ REALMS[state.realm].desc }}</p>
+          <p>当前宗门境界提供全局产出倍率，口粮也随倍率增加。化神期起可转世，渡劫期可飞升。</p>
+        </template></HoverTip>
     </div>
     <div class="box-body">
       <!-- 境界阶梯：已达（灰）/ 当前（黑）/ 未达（淡）。两个里程碑写在头顶的提示里 -->
@@ -91,35 +93,33 @@ function reincarnate() {
             <td class="num">
               <HoverTip :width="320">
                 <span>{{ fmtInt(state.karma) }} <span class="dim">×{{ derived.karmaMult.toFixed(2) }}</span></span>
+                <template #heading>仙缘<span class="tip-right">永久加成</span></template>
                 <template #tip>
-                  <div class="tip-body">
-                    <div class="tip-title">仙缘<span class="tip-right">永久加成</span></div>
-                    <div class="tip-desc">转世与飞升带走的因果，下一世还在身上。</div>
-                    <div class="tip-section">加成倍率</div>
-                    <div class="tip-row">
-                      <span class="k">每点</span><span class="v good">全局产出 +2%</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">软上限</span>
-                      <span class="v">
-                        +200%（
-                        {{ Math.round(CONFIG.KARMA_BONUS_CAP * 0.75 / CONFIG.KARMA_BONUS_PER_POINT) }}
-                        点之后递减）
-                      </span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">当前</span><span class="v">×{{ derived.karmaMult.toFixed(2) }}</span>
-                    </div>
-                    <div class="tip-section">仓储加成</div>
-                    <div class="tip-row">
-                      <span class="k">每点</span><span class="v good">全部有限容量 +{{ fmtPercent(CONFIG.KARMA_STORAGE_PER_POINT, 2) }}</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">软上限</span><span class="v">+{{ fmtPercent(CONFIG.KARMA_STORAGE_CAP) }}（{{ Math.round(CONFIG.KARMA_STORAGE_CAP * 0.75 / CONFIG.KARMA_STORAGE_PER_POINT) }}点之后递减）</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">当前仓储</span><span class="v good">+{{ fmtPercent(derived.karmaStorageMult - 1, 1) }}</span>
-                    </div>
+                  <div class="tip-desc">转世与飞升带走的因果，下一世还在身上。</div>
+                  <div class="tip-section">加成倍率</div>
+                  <div class="tip-row">
+                    <span class="k">每点</span><span class="v good">全局产出 +2%</span>
+                  </div>
+                  <div class="tip-row">
+                    <span class="k">软上限</span>
+                    <span class="v">
+                      +200%（
+                      {{ Math.round(CONFIG.KARMA_BONUS_CAP * 0.75 / CONFIG.KARMA_BONUS_PER_POINT) }}
+                      点之后递减）
+                    </span>
+                  </div>
+                  <div class="tip-row">
+                    <span class="k">当前</span><span class="v">×{{ derived.karmaMult.toFixed(2) }}</span>
+                  </div>
+                  <div class="tip-section">仓储加成</div>
+                  <div class="tip-row">
+                    <span class="k">每点</span><span class="v good">全部有限容量 +{{ fmtPercent(CONFIG.KARMA_STORAGE_PER_POINT, 2) }}</span>
+                  </div>
+                  <div class="tip-row">
+                    <span class="k">软上限</span><span class="v">+{{ fmtPercent(CONFIG.KARMA_STORAGE_CAP) }}（{{ Math.round(CONFIG.KARMA_STORAGE_CAP * 0.75 / CONFIG.KARMA_STORAGE_PER_POINT) }}点之后递减）</span>
+                  </div>
+                  <div class="tip-row">
+                    <span class="k">当前仓储</span><span class="v good">+{{ fmtPercent(derived.karmaStorageMult - 1, 1) }}</span>
                   </div>
                 </template>
               </HoverTip>
@@ -128,22 +128,20 @@ function reincarnate() {
             <td class="num">
               <HoverTip :width="320">
                 <span>{{ fmtInt(state.dao || 0) }} <span class="dim">×{{ derived.daoMult.toFixed(2) }}</span></span>
+                <template #heading>道果<span class="tip-right">只有飞升给</span></template>
                 <template #tip>
-                  <div class="tip-body">
-                    <div class="tip-title">道果<span class="tip-right">只有飞升给</span></div>
-                    <div class="tip-desc">飞升时结下的道果，比仙缘更高一层。</div>
-                    <div class="tip-section">效果</div>
-                    <div class="tip-row">
-                      <span class="k">全局产出</span>
-                      <span class="v good">每颗 +{{ fmtPercent(CONFIG.DAO_PRODUCTION_BONUS) }}</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">转世/飞升仙缘</span>
-                      <span class="v good">每颗 +{{ fmtPercent(CONFIG.DAO_KARMA_GAIN_BONUS) }}</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">当前</span><span class="v">×{{ derived.daoMult.toFixed(2) }}</span>
-                    </div>
+                  <div class="tip-desc">飞升时结下的道果，比仙缘更高一层。</div>
+                  <div class="tip-section">效果</div>
+                  <div class="tip-row">
+                    <span class="k">全局产出</span>
+                    <span class="v good">每颗 +{{ fmtPercent(CONFIG.DAO_PRODUCTION_BONUS) }}</span>
+                  </div>
+                  <div class="tip-row">
+                    <span class="k">转世/飞升仙缘</span>
+                    <span class="v good">每颗 +{{ fmtPercent(CONFIG.DAO_KARMA_GAIN_BONUS) }}</span>
+                  </div>
+                  <div class="tip-row">
+                    <span class="k">当前</span><span class="v">×{{ derived.daoMult.toFixed(2) }}</span>
                   </div>
                 </template>
               </HoverTip>
@@ -154,17 +152,20 @@ function reincarnate() {
         </tbody>
       </table>
 
-      <div class="small dim" style="padding-top: 4px">{{ REALMS[state.realm].desc }}</div>
     </div>
   </div>
 
   <div class="box">
     <div class="box-head">
-      破境<span class="hint">{{ next ? '下一境：' + next.name : '已至此界尽头' }}</span>
+      <HoverTip label="破境"><template #tip>
+          <p>辅助方案可叠加，须备齐整组材料，费用另加于基础材料，换境后需重新选择。每次尝试均消耗全部投料，失败不退回。</p>
+          <p v-if="!preview.tribulation">失败无额外惩罚，不损失修为。</p>
+          <p v-else>失败且存活：{{ preview.regressionOnFailure ? '退回上一境' : '境界不变' }}，全局产出降低5%，持续120秒（重复失败只刷新时间）；另扣突破所用库存材料的2%，向下取整，不扣灵气与灵机。</p>
+          <p v-if="preview.deathOnFailure">冲关失败后，{{ fmtPercent(preview.deathOnFailure) }}概率身死道消；{{ preview.regressionOnFailure ? fmtPercent(preview.regressionOnFailure) + '概率退一境' : fmtPercent(1 - preview.deathOnFailure) + '概率存活且境界不变' }}。身死清空范围同转世，保留已有仙缘、道果、成就与累计统计；本次仙缘减半，不结道果。</p>
+        </template></HoverTip><span class="hint">{{ next ? '下一境：' + next.name : '已至此界尽头' }}</span>
     </div>
     <div class="box-body">
       <template v-if="next">
-        <div class="small dim">{{ next.desc }}</div>
         <div style="padding: 6px 0">
           {{ preview.tribulation ? '渡劫成功率' : '突破成功率' }}
           <b class="good">{{ fmtPercent(preview.chance) }}</b>
@@ -177,21 +178,9 @@ function reincarnate() {
             <span v-for="(amount, res) in aid.cost" :key="res" :class="{ lack: !enoughOf(state, res, amount) }" style="margin-right: 6px">{{ resName(res) }} {{ fmtCost(amount) }}</span>
           </label>
         </div>
-        <div class="small dim" style="padding-bottom: 6px">
-          各组可选并可叠加；勾选方案须备齐整组材料，费用另加于基础突破材料，换境后需重新选择。每次尝试均消耗全部投料，失败不退回。
-          <template v-if="!preview.tribulation">失败无额外惩罚，不损失修为。</template>
-          <template v-else>
-            失败且存活：{{ preview.regressionOnFailure ? '退回上一境' : '境界不变' }}，全局产出降低5%，持续120秒（重复失败只刷新时间）；另扣突破所用库存材料的2%，向下取整，不扣灵气与灵机。
-          </template>
-        </div>
         <div v-if="preview.deathOnFailure" class="small bad" style="padding-bottom: 6px">
-          冲关失败：
-          <template v-if="preview.regressionOnFailure">{{ fmtPercent(preview.regressionOnFailure) }} 概率退一境，</template>
-          <template v-else>{{ fmtPercent(1 - preview.deathOnFailure) }} 概率存活且境界不变，</template>
-          {{ fmtPercent(preview.deathOnFailure) }} 概率身死道消。
           本次总退境概率 {{ fmtPercent(preview.regressionRisk, 1) }}，本次总身死概率 {{ fmtPercent(preview.deathRisk, preview.deathRisk < 0.01 ? 2 : 1) }}。
-          身死立即重开，清空范围同转世，保留已有仙缘、道果、成就与累计统计；
-          本次可得仙缘减半为 {{ preview.deathKarma }} 点，不结道果。
+          身死立即重开，本次仙缘减半为 {{ preview.deathKarma }} 点，不结道果。
         </div>
         <div style="padding: 4px 0">
           全局产出 ×{{ derived.realmMult.toFixed(2) }} →
@@ -214,41 +203,39 @@ function reincarnate() {
                       {{ resName(res) }} {{ fmtCost(amount) }}
                     </span>
                   </span>
-                  <template #tip>
-                    <div class="tip-body">
-                      <div class="tip-title">
-                        {{ next.name }}
-                        <span class="tip-right">境界倍率 ×{{ next.mult.toFixed(2) }}</span>
-                      </div>
-                      <div class="tip-desc">{{ next.desc }}</div>
+                  <template #heading>
+                    {{ next.name }}
+                                            <span class="tip-right">境界倍率 ×{{ next.mult.toFixed(2) }}</span>
+                  </template>
+      <template #tip>
+                    <div class="tip-desc">{{ next.desc }}</div>
 
-                      <div class="tip-section">价格</div>
-                      <div v-for="(amount, res) in cost" :key="res" class="tip-row">
-                        <span class="k">{{ resName(res) }}</span>
-                        <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
-                          {{ costLabel(state, derived, res, amount) }}
-                        </span>
-                      </div>
+                    <div class="tip-section">价格</div>
+                    <div v-for="(amount, res) in cost" :key="res" class="tip-row">
+                      <span class="k">{{ resName(res) }}</span>
+                      <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
+                        {{ costLabel(state, derived, res, amount) }}
+                      </span>
+                    </div>
 
-                      <div class="tip-section">效果</div>
-                      <div class="tip-row">
-                        <span class="k">破境后</span>
-                        <span class="v good">全局产出 ×{{ next.mult.toFixed(2) }}</span>
-                      </div>
-                      <div class="tip-row">
-                        <span class="k">现在</span>
-                        <span class="v">全局产出 ×{{ (REALMS[state.realm]?.mult ?? 1).toFixed(2) }}</span>
-                      </div>
-                      <!-- 口粮随境界倍率上涨（§5.4）：破境是一次「产能升级」，也是一次「养人涨价」，
-                           不写出来玩家会在破境那一刻突然发现灵气净额变负 -->
-                      <div class="tip-row">
-                        <span class="k">每人口粮</span>
-                        <span class="v warn">
-                          {{ perPersonUpkeep.toFixed(3) }}/秒 → {{ (perPersonUpkeep * ratio).toFixed(3) }}/秒（↑{{
-                            ((ratio - 1) * 100).toFixed(0)
-                          }}%）
-                        </span>
-                      </div>
+                    <div class="tip-section">效果</div>
+                    <div class="tip-row">
+                      <span class="k">破境后</span>
+                      <span class="v good">全局产出 ×{{ next.mult.toFixed(2) }}</span>
+                    </div>
+                    <div class="tip-row">
+                      <span class="k">现在</span>
+                      <span class="v">全局产出 ×{{ (REALMS[state.realm]?.mult ?? 1).toFixed(2) }}</span>
+                    </div>
+                    <!-- 口粮随境界倍率上涨（§5.4）：破境是一次「产能升级」，也是一次「养人涨价」，
+                         不写出来玩家会在破境那一刻突然发现灵气净额变负 -->
+                    <div class="tip-row">
+                      <span class="k">每人口粮</span>
+                      <span class="v warn">
+                        {{ perPersonUpkeep.toFixed(3) }}/秒 → {{ (perPersonUpkeep * ratio).toFixed(3) }}/秒（↑{{
+                          ((ratio - 1) * 100).toFixed(0)
+                        }}%）
+                      </span>
                     </div>
                   </template>
                 </HoverTip>
@@ -268,7 +255,11 @@ function reincarnate() {
 
   <div class="box">
     <div class="box-head">
-      转世与飞升<span class="hint">两者清空范围相同，都只结算仙缘；飞升额外结一颗道果</span>
+      <HoverTip label="转世与飞升"><template #tip>
+          <p>两者清空范围相同，都结算仙缘；飞升额外结一颗道果。转世并非飞升门槛。</p>
+          <p>重置：资源、弟子、建筑、修真、技艺·法宝（含祭炼等级）、制作进度、境界。保留：成就、仙缘、道果、累计统计与宗门纪事。</p>
+          <p>首颗道果解锁「道果统筹」：重修时即可自动炼制，可指定优先配方并保留材料。</p>
+        </template></HoverTip>
     </div>
     <div class="box-body">
       <table class="grid">
@@ -289,12 +280,8 @@ function reincarnate() {
         </tbody>
       </table>
 
-      <div class="small dim" style="padding: 6px 0">
-        重置：资源、弟子、建筑、修真、技艺·法宝（含祭炼等级）、制作进度、境界。
-        保留：成就、仙缘、道果、累计统计与宗门纪事。
-      </div>
 
-      <div class="box-sub">转世<span class="hint">化神期起 · 早期的那一层</span></div>
+      <div class="box-sub">转世</div>
       <div class="tip-row">
         <span class="k">门槛</span>
         <span class="v" :class="canReincarnate ? 'good' : 'dim'">
@@ -309,29 +296,15 @@ function reincarnate() {
       </div>
       <div style="padding: 8px 0">
         <button class="btn" :disabled="!canReincarnate" @click="reincarnate">转世</button>
-        <span v-if="!canReincarnate" class="small dim" style="margin-left: 10px">
-          还需修到「{{ REALMS[REINCARNATE_REALM_INDEX].name }}」才能转世。
-        </span>
       </div>
 
       <div class="box-sub">
-        飞升<span class="hint">渡劫期 · 终极目标；转世是常见路线，但不是必需</span>
-      </div>
-      <div class="small" :class="state.dao > 0 ? 'good' : 'dim'">
-        首颗道果解锁「道果统筹」：重修时即可自动炼制，可指定优先配方并保留材料。
+        飞升
       </div>
       <div class="tip-row">
         <span class="k">境界</span>
         <span class="v" :class="ascendRealmOk ? 'good' : 'dim'">
           {{ ascendRealmOk ? '已达成' : '需修到 ' + REALMS[ASCEND_REALM_INDEX].name }}
-        </span>
-      </div>
-      <div class="tip-row">
-        <span class="k">本世转世</span>
-        <span class="v">
-          {{ state.stats.reincarnations }} 次<span class="dim">
-            （常见路线 ≈ {{ CONFIG.ASCEND_TURNS_REFERENCE }} 次）</span
-          >
         </span>
       </div>
       <div class="tip-row">
@@ -342,9 +315,6 @@ function reincarnate() {
       </div>
       <div style="padding: 8px 0">
         <button class="btn danger" :disabled="!canAscend" @click="ascend">飞升</button>
-        <span v-if="!canAscend" class="small dim" style="margin-left: 10px">
-          还需修到「{{ REALMS[ASCEND_REALM_INDEX].name }}」才能飞升。
-        </span>
       </div>
     </div>
   </div>

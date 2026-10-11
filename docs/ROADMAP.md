@@ -1,6 +1,6 @@
 # 后续方向（未排期）
 
-更新：2026-10-10。本文只记录尚待决定或完成的工作。当前实现见 [DESIGN.md](DESIGN.md)，历史实施见 [BALANCE.md](BALANCE.md)。
+更新：2026-10-11。本文只记录尚待决定或完成的工作。当前实现见 [DESIGN.md](DESIGN.md)，历史实施见 [BALANCE.md](BALANCE.md)。
 
 ## 1. 修真两线重组
 
@@ -25,7 +25,7 @@
 
 ## 5. 弟子个体成长
 
-保留 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) 草案：个体记录与自动修炼 → 突破 → 灵根 → 天赋。尚未实现，需要先确定它与宗门境界、劳动力规模及操作负担的关系。
+v0.32已实现个体成长、基础概率突破、灵根差异、组合筛选与批量管理，见[DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md)。新增弟子培养模拟用于比较材料预留与直接批量突破。后续观察慢成长与材料竞争，再评估天赋、自动突破及复杂失败风险；高级死亡或永久停滞仍未加入。
 
 ## 6. 体验与验证
 

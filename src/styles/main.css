@@ -855,6 +855,23 @@ details.fold[open] > summary::before {
   cursor: help;
 }
 
+.build-item .side-tip {
+  flex: 0 0 auto;
+}
+
+.tip-label {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.tip-body p {
+  margin: 6px 0 0;
+}
+
+.tip-body p:first-child {
+  margin-top: 0;
+}
+
 .tip {
   position: fixed;
   visibility: hidden;
@@ -878,12 +895,15 @@ details.fold[open] > summary::before {
   border-bottom: 1px solid var(--line-soft);
   padding-bottom: 3px;
   margin-bottom: 4px;
+  font-weight: 600;
 }
 
 .tip-title .tip-right {
   margin-left: auto;
   color: var(--dim);
   font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  text-align: right;
 }
 
 .tip-row {
@@ -936,7 +956,8 @@ details.fold[open] > summary::before {
   padding-top: 3px;
 }
 
-.tip-note {
+.tip-note,
+.tip-flavor {
   color: var(--faint);
   font-size: 12px;
   border-top: 1px solid var(--line-soft);
@@ -944,25 +965,21 @@ details.fold[open] > summary::before {
   padding-top: 4px;
 }
 
-/* 建筑提示：描述 / 分节标题 / 风味小字 */
+/* 所有提示共用：标题、说明、分节、数值行和备注。 */
 .tip-desc {
-  color: var(--text);
   padding-bottom: 2px;
+}
+
+.tip-condition {
+  padding: 2px 0;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .tip-section {
   color: var(--dim);
   font-size: 12px;
-  border-top: 1px solid var(--line-soft);
-  margin-top: 5px;
-  padding-top: 4px;
-}
-
-.tip-flavor {
-  color: var(--faint);
-  font-size: 12px;
-  font-style: italic;
-  text-align: right;
   border-top: 1px solid var(--line-soft);
   margin-top: 5px;
   padding-top: 4px;

@@ -6,9 +6,11 @@
  */
 import { JSDOM } from 'jsdom'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { JOBS } from '../src/data/jobs.js'
 import { CHANGELOG, CURRENT_VERSION } from '../src/data/changelog.js'
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS } from '../src/data/crafts.js'
 import { EVENT_MAP } from '../src/data/events.js'
+import { CALENDAR, DAYS_PER_YEAR } from '../src/data/calendar.js'
 
 let passed = 0
 let failed = 0
@@ -106,10 +108,41 @@ const app = window.document.getElementById('app')
 const text = () => app.textContent || ''
 const html = () => app.innerHTML || ''
 
+async function ruleText(label) {
+  const trigger = window.document.querySelector(`[aria-label="${label}说明"]`)?.closest('.tip-trigger')
+  trigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const result = [...window.document.querySelectorAll('[role="tooltip"]')]
+    .find(el => el.querySelector('.tip-title')?.textContent === label)?.textContent || ''
+  trigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  await new Promise(r => setTimeout(r, 30))
+  return result
+}
+
+function tipSectionRows(tip, title) {
+  const section = [...(tip?.querySelectorAll('.tip-section') || [])].find(el => el.textContent.trim() === title)
+  const rows = []
+  for (let el = section?.nextElementSibling; el && !el.classList.contains('tip-section'); el = el.nextElementSibling) {
+    if (el.classList.contains('tip-row')) rows.push(el)
+  }
+  return rows
+}
+
 ok('标题渲染出来了', text().includes('摸鱼宗门'))
 {
   const notice = window.document.querySelector('.update-notice')
-  ok('页面顶部显示当前版本与建议转世提示', notice?.textContent.includes(CURRENT_VERSION) && notice.textContent.includes('大量调整') && notice.textContent.includes('建议转世'))
+  ok('页面顶部更新提示精简为版本入口', notice?.textContent.includes(CURRENT_VERSION) && notice.textContent.includes('更新说明') && !notice.textContent.includes('建议旧档'))
+  const label = notice?.querySelector('.tip-label')
+  label?.focus()
+  await new Promise(r => setTimeout(r, 180))
+  ok('说明标题支持键盘聚焦，完整建议只出现在提示内', window.document.querySelector('[role="tooltip"]')?.textContent.includes('建议旧档达到转世条件后转世') && !text().includes('建议旧档'))
+  const ruleTip = window.document.querySelector('[role="tooltip"]')
+  ok('规则提示使用统一正文与标题外壳', ruleTip?.querySelectorAll('.tip-body').length === 1 && ruleTip.querySelectorAll('.tip-title').length === 1)
+  ok('提示触发器关联可见的提示内容', label?.closest('.tip-trigger').getAttribute('aria-describedby') === ruleTip?.id && !!ruleTip?.id)
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await new Promise(r => setTimeout(r, 30))
+  ok('Escape关闭说明提示', !window.document.querySelector('[role="tooltip"]'))
+  label?.blur()
   const previousTab = state.ui.tab
   notice?.querySelector('button')?.click()
   await new Promise(r => setTimeout(r, 50))
@@ -361,6 +394,14 @@ state.resources.qi = affordabilityQi
   ok('带维护费的建筑显示「停」按钮', !!btn('聚灵大阵', '停'))
   ok('两者都能拆除（售）', !!btn('聚灵阵', '售') && !!btn('聚灵大阵', '售'))
 
+  const sellButton = btn('聚灵阵', '售')
+  sellButton.focus()
+  await new Promise(r => setTimeout(r, 180))
+  const sellTip = doc.querySelector('[role="tooltip"]')
+  ok('出售按钮聚焦时显示统一操作提示', sellTip?.querySelector('.tip-title')?.textContent === '出售建筑' && sellTip.querySelector('.tip-desc')?.textContent.includes('返还一半材料') && !sellButton.hasAttribute('title'))
+  sellButton.blur()
+  await new Promise(r => setTimeout(r, 30))
+
   const qiExpenseBefore = -(derived.expense.qi || 0)
   ok('聚灵大阵在吃灵气', qiExpenseBefore > 0, `${qiExpenseBefore}`)
   btn('聚灵大阵', '停').dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
@@ -375,6 +416,7 @@ state.resources.qi = affordabilityQi
   await new Promise((r) => setTimeout(r, 320))
   const tipText = doc.querySelector('.tip')?.textContent.replace(/\s+/g, '') || ''
   ok('悬停提示里有「维护」分节', tipText.includes('维护') && tipText.includes('灵气'), tipText.slice(0, 60))
+  ok('详细建筑提示与规则提示共用单一外壳', doc.querySelector('.tip')?.querySelectorAll('.tip-body').length === 1 && doc.querySelector('.tip')?.querySelectorAll('.tip-title').length === 1)
   tipTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
   await new Promise((r) => setTimeout(r, 60))
 
@@ -385,6 +427,7 @@ state.resources.qi = affordabilityQi
     state.resources.wood = 9999
     state.resources.stone = 9999
     state.resources.ore = 9999
+    state.resources.herb = 9999
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 80))
     const storeItem = item('库房')
@@ -573,10 +616,18 @@ ok(
 state.ui.tab = 'disciples'
 await new Promise((r) => setTimeout(r, 50))
 ok('切换到弟子面板', html().includes('职位分配'))
-ok('弟子页提示日常5%至10%增产及前期宜居设施', text().includes('弟子数+40～60') && text().includes('5%～10%') && text().includes('清风小院和膳养堂'))
+ok('弟子管理默认隐藏，只显示展开入口', !doc.querySelector('#disciple-management') && !doc.querySelector('.disciple-list') && doc.querySelector('[aria-controls="disciple-management"]')?.getAttribute('aria-expanded') === 'false')
+{
+  const trigger = doc.querySelector('.main [data-habitability]')?.closest('.tip-trigger')
+  trigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const tip = doc.querySelector('[role="tooltip"]')?.textContent || ''
+  ok('宜居设施建议移入提示，弟子页收起长段说明', !text().includes('清风小院和膳养堂') && tip.includes('弟子数+40～60') && tip.includes('5%～10%') && tip.includes('清风小院和膳养堂'))
+  trigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+}
 
 // 注意：顶部通栏里也有一张 table.grid，所以这里要限定到中列（.main）里找职位表
-const jobRows = doc.querySelectorAll('.main table.grid tbody tr').length
+const jobRows = doc.querySelectorAll('.main table.job-grid tbody tr').length
 ok('职位表渲染出职位行', jobRows >= 6, `${jobRows} 行`)
 
 // 开局是 0 人 0 职位：先给座聚灵阵（阵徒的门槛）与几个人，再看职位表
@@ -637,6 +688,206 @@ await new Promise(r => setTimeout(r, 50))
 actions.shiftJob('farmer', 2)
 ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.jobs.farmer}`)
 {
+  const savedDisciples = JSON.parse(JSON.stringify(state.disciples))
+  const savedRealm = state.realm
+  const savedResources = { ...state.resources }
+  const savedBuildings = JSON.parse(JSON.stringify(state.buildings))
+  const originalRandom = Math.random
+  try {
+    state.realm = 1
+    state.buildings.hut = { count: 20, on: true }
+    state.disciples.total = 35
+    for (const job of JOBS) state.disciples.jobs[job.id] = 0
+    engine.recompute(state, derived)
+    for (const member of state.disciples.members) {
+      member.realm = 0
+      member.cultivation = 3600
+      member.cooldown = 0
+      member.spiritualRoot = 'triple'
+    }
+    state.resources.qi = 1000
+    state.resources.insight = 100
+    engine.recompute(state, derived)
+    await new Promise(r => setTimeout(r, 40))
+    const managementToggle = doc.querySelector('[aria-controls="disciple-management"]')
+    managementToggle.click()
+    await new Promise(r => setTimeout(r, 30))
+    ok('点击入口展开管理并隐藏底层职位操作', !!doc.querySelector('#disciple-management') && managementToggle.getAttribute('aria-expanded') === 'true' && doc.querySelector('.assignment-surface').style.display === 'none' && doc.activeElement === doc.querySelector('#disciple-management'))
+    ok('展开管理保留30人分页', doc.querySelectorAll('.disciple-list tbody tr').length === 30 && text().includes('每页30人'))
+    for (const control of doc.querySelectorAll('#disciple-management select')) {
+      const label = control.getAttribute('aria-label')
+      const originalValue = control.value
+      const mutations = []
+      const observer = new window.MutationObserver(records => mutations.push(...records))
+      observer.observe(control, { attributes: true, childList: true, characterData: true, subtree: true })
+      control.dispatchEvent(new window.Event('pointerdown', { bubbles: true }))
+      control.focus()
+      control.value = control.options[control.options.length - 1].value
+      const editingValue = control.value
+      // 实时刷新修为、库存和派生岗位集合，尚未发 change 的选择应保留。
+      state.disciples.members[0].cooldown = 1
+      state.resources.qi -= 1
+      engine.recompute(state, derived)
+      await new Promise(r => setTimeout(r, 50))
+      ok(`${label}操作期间刷新保留节点、焦点和选择`, control === doc.querySelector(`[aria-label="${label}"]`) && doc.activeElement === control && control.value === editingValue)
+      ok(`${label}选项不随实时数据反复更新`, mutations.length === 0)
+      observer.disconnect()
+      control.value = originalValue
+      control.blur()
+      state.disciples.members[0].cooldown = 0
+    }
+    engine.recompute(state, derived)
+    await new Promise(r => setTimeout(r, 30))
+    const clickNamed = name => [...doc.querySelectorAll('.main button')].find(button => button.textContent.trim() === name)?.click()
+    clickNamed('选择本分类')
+    await new Promise(r => setTimeout(r, 30))
+    ok('选择本分类包括下一页弟子', text().includes('已选 35 人'))
+    doc.querySelector('#disciple-management').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('Esc收起管理并恢复职位分配和入口焦点', !doc.querySelector('#disciple-management') && doc.querySelector('.assignment-surface').style.display !== 'none' && doc.activeElement === managementToggle)
+    managementToggle.click()
+    await new Promise(r => setTimeout(r, 30))
+    ok('同页重新展开保留跨页选择', text().includes('已选 35 人'))
+    const roleSelect = doc.querySelector('[aria-label="所选弟子的岗位"]')
+    roleSelect.value = 'woodcutter'
+    roleSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    clickNamed('分配所选弟子')
+    await new Promise(r => setTimeout(r, 30))
+    ok('管理栏批量分工同步原职位表', state.disciples.jobs.woodcutter === 35 && state.disciples.members.every(member => member.roleId === 'woodcutter'))
+    Math.random = () => 0
+    clickNamed('所选弟子突破')
+    await new Promise(r => setTimeout(r, 30))
+    ok('管理栏批量突破覆盖跨页人选', state.disciples.members.every(member => member.realm === 1 && member.cultivation < 1))
+    const filter = doc.querySelector('[aria-label="弟子境界筛选"]')
+    filter.value = '0'
+    filter.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('境界分类显示空状态并清除选择', text().includes('此分类暂无弟子') && text().includes('已选 0 人'))
+    filter.value = '1'
+    filter.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('境界筛选只显示对应弟子', doc.querySelectorAll('.disciple-list tbody tr').length === 30 && [...doc.querySelectorAll('.disciple-list tbody tr')].every(row => row.textContent.includes('引气入体')))
+    const fast = state.disciples.members[0], slow = state.disciples.members[1]
+    fast.spiritualRoot = 'heaven'
+    fast.cultivation = 100
+    slow.spiritualRoot = 'five'
+    slow.cultivation = 5400
+    const rootSelect = doc.querySelector('[aria-label="弟子灵根筛选"]')
+    rootSelect.value = 'heaven'
+    rootSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    const discipleRow = doc.querySelector('.disciple-list tbody tr')
+    ok('灵根筛选与境界筛选组合，列表收起修炼明细', doc.querySelectorAll('.disciple-list tbody tr').length === 1 && discipleRow.textContent.includes('天灵根') && !discipleRow.textContent.includes('修为/秒') && !discipleRow.textContent.includes('口粮'))
+    discipleRow.dispatchEvent(new window.MouseEvent('mouseenter'))
+    await new Promise(r => setTimeout(r, 180))
+    const memberDetails = () => [...doc.querySelectorAll('[role="tooltip"]')].find(el => el.querySelector('.tip-title')?.textContent.includes(`#${fast.id}`))
+    ok('悬停弟子行可查看修炼、岗位与突破明细', memberDetails()?.textContent.includes('2修为/秒') && memberDetails()?.textContent.includes('本境修为') && memberDetails()?.textContent.includes('个人岗位系数') && memberDetails()?.textContent.includes('口粮') && memberDetails()?.textContent.includes('目标 / 成功率') && memberDetails()?.textContent.includes('花费：'))
+    fast.cultivation = 200
+    await new Promise(r => setTimeout(r, 30))
+    ok('弟子明细跟随实际修为更新', memberDetails()?.textContent.includes('200 /'))
+    doc.querySelector('.disciple-list tbody tr')?.dispatchEvent(new window.MouseEvent('mouseleave'))
+    await new Promise(r => setTimeout(r, 30))
+    const detailName = doc.querySelector('.disciple-name')
+    detailName.focus()
+    await new Promise(r => setTimeout(r, 180))
+    ok('弟子姓名支持键盘聚焦查看明细', !!memberDetails())
+    detailName.blur()
+    clickNamed('选择本分类')
+    await new Promise(r => setTimeout(r, 30))
+    ok('选择本分类只包含当前灵根筛选人选', text().includes('已选 1 人'))
+    rootSelect.value = 'all'
+    rootSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('切换灵根清除隐藏人选', text().includes('已选 0 人'))
+    const sortSelect = doc.querySelector('[aria-label="弟子排序"]')
+    sortSelect.value = 'progress'
+    sortSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('管理栏按本境进度排序', doc.querySelector('.disciple-list tbody input[type="checkbox"]').value === String(slow.id))
+    sortSelect.value = 'rate'
+    sortSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('管理栏按灵根修炼速度排序', doc.querySelector('.disciple-list tbody input[type="checkbox"]').value === String(fast.id))
+    sortSelect.value = 'arrival'
+    sortSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    filter.value = 'all'
+    filter.dispatchEvent(new window.Event('change', { bubbles: true }))
+  } finally {
+    Math.random = originalRandom
+    state.disciples = savedDisciples
+    state.realm = savedRealm
+    state.resources = savedResources
+    state.buildings = savedBuildings
+    engine.recompute(state, derived)
+    const managementToggle = doc.querySelector('[aria-controls="disciple-management"]')
+    if (managementToggle?.getAttribute('aria-expanded') === 'true') managementToggle.click()
+  }
+  await new Promise(r => setTimeout(r, 30))
+}
+console.log('\n== 弟子逐出师门 ==')
+{
+  const previous = actions.exportText()
+  const originalConfirm = window.confirm
+  const year = CALENDAR.DAY_SECONDS * DAYS_PER_YEAR
+  actions.importText(JSON.stringify({
+    disciples: { total: 3, jobs: { farmer: 1, woodcutter: 1 }, members: [
+      { id: 11, name: '甲弟子', roleId: 'farmer', spiritualRoot: 'triple', residenceSeconds: 0, totalQiConsumed: 10.1 },
+      { id: 12, name: '乙弟子', roleId: 'woodcutter', spiritualRoot: 'heaven', residenceSeconds: year, totalQiConsumed: 20 },
+      { id: 13, name: '丙弟子', roleId: null, spiritualRoot: 'five', residenceSeconds: year * 2, totalQiConsumed: 30 },
+    ] },
+    resources: { qi: 200 },
+    ui: { tab: 'disciples' },
+  }))
+  try {
+    await new Promise(r => setTimeout(r, 50))
+    doc.querySelector('[aria-controls="disciple-management"]')?.click()
+    await new Promise(r => setTimeout(r, 30))
+    const single = () => doc.querySelector('[aria-label="逐出弟子11"]')
+    const batchButton = () => [...doc.querySelectorAll('.management-batch button')].find(el => el.textContent.startsWith('逐出所选'))
+    ok('弟子管理提供单人逐出与默认禁用的批量逐出', !!single() && batchButton()?.disabled && single()?.closest('td') === doc.querySelector('.disciple-list tbody tr')?.cells[5])
+    let prompt = ''
+    window.confirm = message => { prompt = message; return false }
+    single()?.click()
+    await new Promise(r => setTimeout(r, 30))
+    ok('单人逐出先确认姓名和精确费用，取消无损', prompt.includes('甲弟子') && prompt.includes('灵气 11') && prompt.includes('无法撤回') && state.disciples.total === 3 && state.resources.qi === 200)
+    window.confirm = () => true
+    single()?.click()
+    await new Promise(r => setTimeout(r, 30))
+    const saved = JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1'))
+    ok('单人逐出扣费并立即保存，人口岗位和列表同步', state.disciples.total === 2 && state.resources.qi === 189 && state.disciples.jobs.farmer === 0 && !single() && saved.disciples.members.every(member => member.id !== 11))
+    const root = doc.querySelector('[aria-label="弟子灵根筛选"]')
+    root.value = 'heaven'
+    root.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    const detail = doc.querySelector('.disciple-name')
+    detail?.focus()
+    await new Promise(r => setTimeout(r, 180))
+    ok('弟子明细显示已满年数、累计消耗与逐出费用', doc.querySelector('.tip')?.textContent.includes('已满 1 年') && doc.querySelector('.tip')?.textContent.includes('累计灵气消耗') && doc.querySelector('.tip')?.textContent.includes('逐出费用'))
+    detail?.blur()
+    ;[...doc.querySelectorAll('.management-selection button')].find(el => el.textContent === '选择本分类')?.click()
+    await new Promise(r => setTimeout(r, 30))
+    ok('批量逐出费用只包含筛选内所选弟子', batchButton()?.textContent.includes('灵气 40') && text().includes('已选 1 人'))
+    state.resources.qi = 39
+    await new Promise(r => setTimeout(r, 30))
+    let asked = false
+    window.confirm = () => { asked = true; return true }
+    actions.dismissDisciples([12])
+    ok('灵气不足禁用逐出按钮并拒绝执行，不打开确认', batchButton()?.disabled && doc.querySelector('[aria-label="逐出弟子12"]')?.disabled && !asked && state.disciples.total === 2 && state.resources.qi === 39)
+    state.resources.qi = 200
+    await new Promise(r => setTimeout(r, 30))
+    batchButton()?.click()
+    await new Promise(r => setTimeout(r, 30))
+    ok('确认批量逐出只移除所选并清除选择，其他灵根保留', state.disciples.total === 1 && state.disciples.members[0].id === 13 && state.resources.qi === 160 && state.disciples.jobs.woodcutter === 0 && text().includes('已选 0 人') && text().includes('此分类暂无弟子'))
+  } finally {
+    window.confirm = originalConfirm
+    actions.importText(previous)
+    await new Promise(r => setTimeout(r, 30))
+    const toggle = doc.querySelector('[aria-controls="disciple-management"]')
+    if (toggle?.getAttribute('aria-expanded') === 'true') toggle.click()
+    await new Promise(r => setTimeout(r, 30))
+  }
+}
+{
   const previousPopulation = state.disciples.total
   const previousPenalty = state.habitabilityPenalty
   state.habitabilityPenalty = -derived.habitabilityBonus
@@ -646,13 +897,19 @@ ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.j
   const farmerSource = derived.sources.qi.find(row => row.kind === 'job' && row.id === 'farmer')
   const cells = doc.querySelector('.main table.grid tbody tr')?.querySelectorAll('td')
   ok('岗位表显示减半后的实际单人产出', derived.discipleMult === 0.5 && Math.abs(parseFloat(cells?.[2].textContent.trim()) - farmerSource.value / 2) < 0.005)
-  ok('弟子页说明宜居度阈值和当前岗位倍率', text().includes('弟子岗位倍率 ×0.50') && text().includes('每60秒'))
+  ok('弟子页保留当前岗位倍率并收起阈值说明', text().includes('弟子岗位倍率 ×0.50') && !text().includes('每60秒'))
+  doc.querySelector('[aria-controls="disciple-management"]').click()
+  await new Promise(r => setTimeout(r, 30))
+  ok('弟子成长规则默认隐藏且可悬停查看', !text().includes('损失20%本境修为') && (await ruleText('弟子管理')).includes('损失20%本境修为并调息60秒'))
+  doc.querySelector('[aria-controls="disciple-management"]').click()
+  await new Promise(r => setTimeout(r, 30))
   const habitabilityTrigger = doc.querySelector('[data-habitability]')?.closest('.tip-trigger')
   habitabilityTrigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
   await new Promise(r => setTimeout(r, 180))
   const habitabilityTip = () => [...doc.querySelectorAll('.tip')].find(el => el.textContent.includes('宜居度 · 当前效果'))
   ok('宜居度悬停展示当前减产与来源', habitabilityTip()?.textContent.includes('拥挤减产') &&
     habitabilityTip()?.textContent.includes('弟子岗位综合倍率') && habitabilityTip()?.textContent.includes('×0.50') && habitabilityTip()?.textContent.includes('宜居度来源'))
+  ok('宜居度阈值移入提示', habitabilityTip()?.textContent.includes('每60秒') && habitabilityTip()?.textContent.includes('岗位产出减半'))
   state.disciples.total = 71
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
@@ -672,7 +929,12 @@ ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.j
   state.upgrades.homePlanning = true
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
-  ok('宜居度面板显示已入住配套的实际贡献', derived.housingHabitability === 4 && text().includes('其中入住配套 +4'))
+  const housingTrigger = doc.querySelector('[data-habitability]')?.closest('.tip-trigger')
+  housingTrigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const housingTip = [...doc.querySelectorAll('.tip')].find(el => el.textContent.includes('宜居度 · 当前效果'))
+  ok('宜居度提示显示已入住配套的实际贡献', derived.housingHabitability === 4 && housingTip?.textContent.includes('其中入住配套+4') && !text().includes('其中入住配套'))
+  housingTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
   state.disciples.total = previousPopulation
   if (previousHut) state.buildings.hut = previousHut
   else delete state.buildings.hut
@@ -811,7 +1073,7 @@ ok('技艺页渲染出来了', html().includes('技艺与法宝'))
 
 state.ui.tab = 'cultivation'
 await new Promise((r) => setTimeout(r, 50))
-ok('修真页渲染出来了', html().includes('扩充灵机上限'))
+ok('修真页渲染且标题说明可悬停查看', text().includes('修真') && !text().includes('扩充灵机上限') && (await ruleText('修真')).includes('扩充灵机上限'))
 ok('修真页不列技艺·法宝层的条目', ![...doc.querySelectorAll('.main table.grid tbody tr')].some(tr => ['引气诀', '聚灵幡'].includes(tr.cells[0]?.textContent.trim())))
 
 // 修真 / 技艺页的花费列只写「需要多少」，现有与还差多久都进悬停提示
@@ -873,6 +1135,37 @@ const cells = dataRows.map((tr) => ({
   }
 }
 
+// 条件独立分节，多个前置逐条显示，避免长文字挤在数值列中。
+{
+  const previous = actions.exportText()
+  actions.importText(JSON.stringify({
+    upgrades: { prospectStudy: true },
+    buildings: { lumberYard: { count: 2, on: true }, ironFurnace: { count: 1, on: true }, quarry: { count: 1, on: true } },
+    resources: { insight: 1000, wood: 1000, rock: 1000 },
+    peak: { wood: 1000, rock: 1000 },
+    ui: { tab: 'cultivation', sectFilter: 'all' },
+  }))
+  await new Promise(r => setTimeout(r, 50))
+  const row = [...doc.querySelectorAll('.main .upgrade-table tbody tr')].find(el => el.cells[0]?.textContent.trim() === '木作器械')
+  row?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const tip = doc.querySelector('.tip')
+  const conditions = [...(tip?.querySelectorAll('.tip-condition') || [])]
+  ok('修真条件独立分节且每个建筑和研究前置各占一行', [...(tip?.querySelectorAll('.tip-section') || [])].some(el => el.textContent === '条件') && conditions.length === 3 && conditions.some(el => el.textContent === '需建成 伐木场 ×2') && conditions.some(el => el.textContent === '需建成 炼铁炉 ×1') && conditions.some(el => el.textContent === '需参悟《探矿术》'))
+  ok('条件正文不再使用右对齐的数值行', conditions.every(el => !el.closest('.tip-row') && !el.classList.contains('v')) && ![...(tip?.querySelectorAll('.tip-row .k') || [])].some(el => el.textContent === '条件'))
+  row?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  state.ui.tab = 'sect'
+  await new Promise(r => setTimeout(r, 50))
+  const building = [...doc.querySelectorAll('.main .build-item')].find(el => el.querySelector('.build-btn')?.textContent.includes('百工坊'))
+  building?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const buildingConditions = [...(doc.querySelector('.tip')?.querySelectorAll('.tip-condition') || [])]
+  ok('建筑条件沿用相同分节与逐条样式', buildingConditions.length === 2 && buildingConditions.some(el => el.textContent === '需建成 伐木场 ×1') && buildingConditions.some(el => el.textContent === '需建成 采矿场 ×1'))
+  building?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
 // 技艺页的筛选：全部 / 技艺 / 法宝（灵源考已完成，聚灵幡已经开放）
 state.ui.tab = 'skills'
 state.ui.skillFilter = 'treasure'
@@ -913,6 +1206,9 @@ ok('筛选「全部」时两类都在', html().includes('聚灵幡') && html().i
   actions.research('spiritBanner')
   await new Promise((r) => setTimeout(r, 60))
   ok('炼成后出现「已炼成的法宝」表', html().includes('已炼成的法宝') && html().includes('Lv.0'))
+  const forgedTable = [...doc.querySelectorAll('.main .box-body > table.grid')].find(table => table.querySelector('th')?.textContent.includes('已炼成的法宝'))
+  ok('已炼成法宝与可参悟技艺使用相同三列表格', [...(forgedTable?.querySelectorAll('thead th') || [])].map(el => el.textContent.trim()).join('|') === '已炼成的法宝|花费|操作' && forgedTable?.querySelector('tbody tr')?.cells.length === 3 && !forgedTable.querySelector('.eff'))
+  ok('已炼成法宝不在已参悟折叠中重复展示', ![...doc.querySelectorAll('.main details.fold')].filter(el => el.querySelector('summary')?.textContent.startsWith('已参悟')).some(el => el.textContent.includes('聚灵幡')))
 
   const refineBtn = () =>
     [...doc.querySelectorAll('.box-body > table.grid .btn')].find((b) => b.textContent.trim() === '祭炼')
@@ -1108,7 +1404,7 @@ ok('境界面板渲染', html().includes('飞升'))
   state.ui.tab = 'realm'
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 60))
-  ok('境界页标出转世与飞升的门槛', html().includes('化神期起可转世') && html().includes('渡劫期起可飞升'))
+  ok('境界页保留转世与飞升的门槛', text().includes('需修到 化神期') && text().includes('需修到 渡劫期'))
   ok('转世与飞升分成两段', html().includes('转世与飞升'))
   ok(
     '门槛未达成时不报「可得」数字（免得误导）',
@@ -1145,7 +1441,7 @@ ok('境界面板渲染', html().includes('飞升'))
   ok('点击转世后建筑与资源清空', Object.keys(state.buildings).length === 0 && (state.resources.qi || 0) === 0)
   ok('点击转世后仙缘增加', state.karma > 7, String(state.karma))
   window.confirm = savedConfirm
-  // 道果：飞升才给；转世次数不足时界面要说明「飞升还需先转世」
+  // 道果：飞升才给；转世不是飞升门槛。
   state.realm = 10
   state.dao = 0
   state.stats.reincarnations = 0
@@ -1154,7 +1450,7 @@ ok('境界面板渲染', html().includes('飞升'))
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 60))
   ok('境界页显示道果行', html().includes('道果'))
-  ok('界面写明转世不是飞升的必需条件', html().includes('转世是常见路线，但不是必需'))
+  ok('转世与飞升说明可查看清空范围和飞升条件', !text().includes('重置：资源') && (await ruleText('转世与飞升')).includes('转世并非飞升门槛'))
   const ascBtn = () => [...doc.querySelectorAll('.panel .btn')].find((b) => b.textContent.includes('飞升'))
   ok('渡劫期即可飞升（一次都没转世也行）', ascBtn() && ascBtn().disabled === false)
   const savedConfirm2 = window.confirm
@@ -1260,8 +1556,9 @@ ok('境界面板渲染', html().includes('飞升'))
   state.realm = 4
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
-  ok('金丹冲元婴展示60%渡劫概率与轻微惩罚', text().includes('渡劫成功率 60%') && text().includes('降低5%') && text().includes('失败不退回'))
-  ok('金丹起展示小概率身死且存活不退境', text().includes('1% 概率身死道消') && text().includes('99% 概率存活且境界不变') && text().includes('本次总身死概率 0.40%') && text().includes('本次总退境概率 0.0%'))
+  const earlyRiskTip = await ruleText('破境')
+  ok('金丹冲元婴展示60%渡劫概率，详细惩罚可悬停查看', text().includes('渡劫成功率 60%') && !text().includes('库存材料的2%') && earlyRiskTip.includes('降低5%') && earlyRiskTip.includes('失败不退回'))
+  ok('金丹起保留本次总风险并在提示展示条件概率', earlyRiskTip.includes('1%概率身死道消') && earlyRiskTip.includes('99%概率存活且境界不变') && text().includes('本次总身死概率 0.40%') && text().includes('本次总退境概率 0.0%'))
   const faithLabel = [...doc.querySelectorAll('.main label')].find(label => label.textContent.includes('香火祈愿'))
   const faithCheckbox = faithLabel?.querySelector('input[type="checkbox"]')
   ok('香火加成有可选供奉入口', !!faithCheckbox)
@@ -1288,7 +1585,8 @@ ok('境界面板渲染', html().includes('飞升'))
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
   ok('炼虚冲关明确展示总身死风险和减半收益', text().includes('本次总身死概率 8.0%') && text().includes('身死立即重开') && text().includes('仙缘减半'))
-  ok('炼虚失败展示大概率退境并保留减产扣料', text().includes('90% 概率退一境') && text().includes('退回上一境') && text().includes('本次总退境概率 72.0%') && text().includes('降低5%') && text().includes('库存材料的2%'))
+  const lateRiskTip = await ruleText('破境')
+  ok('炼虚失败保留总退境风险，详细规则可悬停查看', lateRiskTip.includes('90%概率退一境') && lateRiskTip.includes('退回上一境') && text().includes('本次总退境概率 72.0%') && lateRiskTip.includes('降低5%') && lateRiskTip.includes('库存材料的2%'))
   state.realm = 2
   engine.recompute(state, derived)
 }
@@ -1296,6 +1594,8 @@ ok('境界面板渲染', html().includes('飞升'))
 state.ui.tab = 'settings'
 await new Promise(r => setTimeout(r, 50))
 ok('设置面板渲染', html().includes('存档'))
+ok('设置保留读档覆盖提醒，移除技术栈与文档路径', text().includes('读取存档将覆盖当前进度') && !text().includes('技术栈') && !text().includes('docs/DESIGN.md'))
+ok('挂机设置说明收起且包含道果自动化入口', !text().includes('参悟《心有灵犀》') && (await ruleText('挂机设置')).includes('取得首颗道果'))
 ok('默认隐藏调试入口和手动奇遇', !doc.querySelector('.debug-panel') && !text().includes('来一次奇遇') && ![...doc.querySelectorAll('.tab')].some(b => b.textContent.trim() === '调试'))
 ok('旧控制台 API 已移除', typeof window.CHEAT === 'undefined')
 const eventsBeforeDebug = state.stats.eventsSeen
@@ -1640,6 +1940,7 @@ console.log('\n== 采矿场职位效果 ==')
   state.buildings.quarry = { count: 3, on: true }
   state.buildings.lumberYard = { count: 1, on: true }
   state.buildings.granary = { count: 1, on: true }
+  for (const id of ['rock', 'ore', 'stone']) state.seen[id] = true
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
   const quarry = [...doc.querySelectorAll('.build-item')].find(el => el.querySelector('.build-btn')?.textContent.includes('采矿场'))
@@ -1650,7 +1951,51 @@ console.log('\n== 采矿场职位效果 ==')
   const row = [...(tip?.querySelectorAll('.tip-row') || [])].find(el => el.textContent.includes('矿工 基础产出'))
   ok('采矿场提示展示矿工职位与每人矿石基础产出', tip?.textContent.includes('开放职位') && row?.textContent.includes('矿石 +0.150/秒·人'))
   ok('矿工基础产出不随采矿场座数重复叠加', !!row && !row.textContent.includes('合计'))
+  ok('采矿场提示列出三种矿物的每座10%产出加成', ['矿石', '玄铁', '灵石'].every(name => new RegExp(`${name}\\s*产出\\s*\\+10%`).test(tip?.textContent || '')))
   trigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
+console.log('\n== 建筑资源效果按解锁显示 ==')
+{
+  const previous = actions.exportText()
+  state.ui.tab = 'sect'
+  state.ui.buildingFilter = 'all'
+  state.upgrades.herbStudy = true
+  state.buildings.herbGarden = { count: 2, on: true }
+  state.buildings.warehouse = { count: 1, on: true }
+  state.seen.herb = false
+  state.resources.herb = 0
+  state.peak.herb = 0
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  const garden = [...doc.querySelectorAll('.build-item')].find(el => el.querySelector('.build-btn')?.textContent.includes('药圃'))
+  const trigger = garden?.querySelector('.tip-trigger')
+  trigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const rows = () => [...(doc.querySelector('.tip')?.querySelectorAll('.tip-row') || [])].map(el => el.textContent.replace(/\s+/g, ' ').trim())
+  ok('未解锁灵草时隐藏药圃资源加成与职位产出，保留开放职位', !rows().some(t => /灵草 产出|采药人 基础产出/.test(t)) && rows().some(t => t.includes('开放职位') && t.includes('采药人')))
+  state.resources.herb = 1
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('获得灵草后自动显示每座10%与两座合计20%的效果', rows().some(t => /灵草\s*产出\s*\+10%/.test(t) && /合计\s*\+20%/.test(t)) && rows().some(t => t.includes('采药人 基础产出')), rows().join(' ｜ '))
+  state.resources.herb = 0
+  state.peak.herb = 1
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('库存归零但有历史峰值时仍保留资源效果', rows().some(t => t.includes('灵草 产出')))
+  trigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  state.peak.herb = 0
+  const warehouse = [...doc.querySelectorAll('.build-item')].find(el => el.querySelector('.build-btn')?.textContent.includes('库房'))
+  const warehouseTrigger = warehouse?.querySelector('.tip-trigger')
+  warehouseTrigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  ok('仓储效果也隐藏未解锁资源', !rows().some(t => t.includes('灵草 上限')))
+  state.seen.herb = true
+  await new Promise(r => setTimeout(r, 50))
+  ok('已解锁资源即使库存与峰值为零也显示仓储效果', rows().some(t => t.includes('灵草 上限')))
+  warehouseTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
   actions.importText(previous)
   await new Promise(r => setTimeout(r, 50))
 }
@@ -1836,14 +2181,23 @@ console.log('\n== 灵能枢实时供能与早期空间技艺移除 ==')
   }))
   await new Promise(r => setTimeout(r, 50))
   const coreRow = () => [...doc.querySelectorAll('.box-body > table.grid tr')].find(row => row.textContent.includes('灵能枢') && row.textContent.includes('Lv.0'))
-  ok('无供能的灵能枢显示停效与实际零加成', coreRow()?.textContent.includes('缺灵能停效') && !coreRow()?.querySelector('.eff')?.textContent.includes('+50%'))
+  coreRow()?.querySelector('[aria-label="灵能枢祭炼详情"]')?.focus()
+  await new Promise(r => setTimeout(r, 180))
+  const zeroRows = tipSectionRows(doc.querySelector('.tip'), '效果')
+  ok('无供能的灵能枢显示停效与实际零加成', coreRow()?.textContent.includes('缺灵能停效') && zeroRows.length === 3 && zeroRows.every(el => /^\+0(?:%)?$/.test(el.querySelector('.v')?.textContent || '')))
+  doc.activeElement?.blur()
+  await new Promise(r => setTimeout(r, 30))
   ok('技艺页不再出现储物袋与纳物诀', !doc.querySelector('.main')?.textContent.includes('储物袋') && !doc.querySelector('.main')?.textContent.includes('纳物诀'))
   state.resources.qiEnergy = 10
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
-  ok('补充灵能后界面恢复满供效果', coreRow()?.textContent.includes('供能 100%') && coreRow()?.querySelector('.eff')?.textContent.includes('+50%'))
   coreRow()?.dispatchEvent(new window.MouseEvent('mouseenter'))
   await new Promise(r => setTimeout(r, 340))
+  const currentEffects = tipSectionRows(doc.querySelector('.tip'), '效果')
+  ok('补充灵能后界面恢复满供效果', coreRow()?.textContent.includes('供能 100%') && currentEffects.some(el => el.querySelector('.k')?.textContent === '灵气 产出' && el.querySelector('.v')?.textContent === '+50%'))
+  ok('法宝当前效果每项独立一行', currentEffects.length === 3 && currentEffects.map(el => el.querySelector('.k')?.textContent).join('|') === '灵气 产出|灵机 产出|加工供能容量' && currentEffects.every(el => !/[，、；]/.test(el.querySelector('.v')?.textContent || '')))
+  const nextEffects = tipSectionRows(doc.querySelector('.tip'), '祭炼后满供 · Lv.1 ×1.30')
+  ok('祭炼后预览每项独立一行并使用下一等级倍率', nextEffects.length === 3 && nextEffects.some(el => el.querySelector('.k')?.textContent === '灵气 产出' && el.querySelector('.v')?.textContent === '+65%'))
   ok('法宝提示显示持续耗能和缺供规则', doc.querySelector('.tip')?.textContent.includes('满供消耗') && doc.querySelector('.tip')?.textContent.includes('供能不足按比例运行'))
   coreRow()?.dispatchEvent(new window.MouseEvent('mouseleave'))
   actions.importText(previous)

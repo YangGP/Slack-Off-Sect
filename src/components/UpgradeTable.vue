@@ -101,7 +101,7 @@ const locked = computed(() =>
     })),
 )
 
-const researched = computed(() => props.list.filter((u) => state.upgrades[u.id]))
+const researched = computed(() => props.list.filter((u) => state.upgrades[u.id] && u.kind !== 'treasure'))
 
 /** 已炼成、可继续祭炼的法宝（只有法宝能祭炼） */
 const forged = computed(() =>
@@ -111,20 +111,17 @@ const forged = computed(() =>
       const cost = refineCost(state, u.id)
       const mult = treasureMult(state, u)
       const supply = derived.upgradeSupply[u.id] ?? 1
-      const text = (m) =>
-        describeEffects(scaleEffectsBy(u.effects, m))
-          .map((t) => t.text)
-          .join('，')
       return {
         meta: u,
         level: treasureLevel(state, u.id),
         mult,
         cost,
         affordable: !!cost && canAfford(state, cost),
-        eff: text(mult * supply),
-        unitEff: text(mult + CONFIG.TREASURE_REFINE_STEP),
+        effects: describeEffects(scaleEffectsBy(u.effects, mult * supply)),
+        nextEffects: describeEffects(scaleEffectsBy(u.effects, mult + CONFIG.TREASURE_REFINE_STEP)),
+        nextMult: mult + CONFIG.TREASURE_REFINE_STEP,
         supply,
-        upkeep: Object.entries(u.upkeep || {}).map(([res, amount]) => `${resName(res)} ${fmt(amount * mult)}/秒`).join('、'),
+        upkeep: Object.entries(u.upkeep || {}).map(([res, amount]) => ({ resource: res, value: `${fmt(amount * mult)}/秒` })),
       }
     }),
 )
@@ -149,8 +146,7 @@ function kindName(meta) {
 <template>
   <div class="box">
     <div class="box-head">
-      {{ title }}<span class="hint">{{ hint }}　已参悟 {{ researched.length }}</span>
-      <span class="hint faint">　悬停「花费」查看效果</span>
+      <HoverTip :label="title"><template #tip><p>{{ hint }}</p><p v-if="note">{{ note }}</p></template></HoverTip><span class="hint">已参悟 {{ researched.length + forged.length }}</span>
     </div>
     <div class="box-body">
       <div v-if="filters.length" class="filters">
@@ -160,18 +156,16 @@ function kindName(meta) {
             {{ f.name }}
           </button>
         </template>
-        <span v-if="note" class="push small dim">{{ note }}</span>
       </div>
 
       <!-- 已炼成的法宝：可以反复祭炼，每级效果 +30%、花费 ×1.7 递增 -->
-      <table v-if="forged.length" class="grid">
+      <table v-if="forged.length" class="grid upgrade-table">
+        <colgroup><col class="upgrade-name" /><col /><col class="upgrade-action" /></colgroup>
         <thead>
           <tr>
             <th>已炼成的法宝</th>
-            <th>等级</th>
-            <th>当前效果</th>
-            <th>下次祭炼</th>
-            <th>操作</th>
+            <th>花费</th>
+            <th class="right">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -181,14 +175,13 @@ function kindName(meta) {
             @mouseenter="rowEnter($event, item)"
             @mouseleave="rowLeave($event)"
           >
-            <td class="nowrap">{{ item.meta.name }} <span class="small dim">法宝</span></td>
-            <td class="num nowrap">
-              Lv.{{ item.level }}<span class="small dim"> ×{{ item.mult.toFixed(2) }}</span>
+            <td class="nowrap">
+              {{ item.meta.name }} <span class="small dim">法宝 · Lv.{{ item.level }} ×{{ item.mult.toFixed(2) }}</span>
+              <span v-if="item.upkeep.length" class="small dim"> · {{ state.upgradeEnabled[item.meta.id] === false ? '已停用' : item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span>
             </td>
-            <td class="eff">{{ item.eff }}<span v-if="item.upkeep" class="small dim"> · {{ state.upgradeEnabled[item.meta.id] === false ? '已停用' : item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span></td>
             <td class="cost nowrap">
               <HoverTip :width="380">
-                <span class="cost-line">
+                <span class="cost-line" tabindex="0" :aria-label="`${item.meta.name}祭炼详情`">
                   <span
                     v-for="(amount, res) in item.cost"
                     :key="res"
@@ -197,46 +190,47 @@ function kindName(meta) {
                     {{ resName(res) }} {{ costText(res, amount) }}
                   </span>
                 </span>
+                <template #heading>
+                  {{ item.meta.name }}
+                  <span class="tip-right">法宝 · Lv.{{ item.level }} ×{{ item.mult.toFixed(2) }}</span>
+                </template>
                 <template #tip>
-                  <div class="tip-body">
-                    <div class="tip-title">
-                      {{ item.meta.name }}
-                      <span class="tip-right">法宝 · Lv.{{ item.level }}</span>
-                    </div>
-                    <div class="tip-desc">{{ item.meta.desc }}</div>
-                    <div v-if="item.meta.refine?.materials" class="tip-row">
-                      <span class="k">进阶祭炼</span>
-                      <span class="v">第{{ (item.meta.refine.materialFromLevel || 0) + 1 }}次起需{{ Object.keys(item.meta.refine.materials).map(resName).join('、') }}，用量随层数增加</span>
-                    </div>
-
-                    <div class="tip-section">价格</div>
-                    <div v-for="(amount, res) in item.cost" :key="res" class="tip-row">
-                      <span class="k">{{ resName(res) }}</span>
-                      <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
-                        {{ costLabel(state, derived, res, amount) }}
-                      </span>
-                    </div>
-
-                    <div class="tip-section">效果</div>
-                    <div v-if="item.upkeep" class="tip-row">
-                      <span class="k">满供消耗</span>
-                      <span class="v">{{ item.upkeep }}；供能不足按比例运行</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">当前</span>
-                      <span class="v">{{ item.eff }}（×{{ item.mult.toFixed(2) }}）</span>
-                    </div>
-                    <div class="tip-row">
-                      <span class="k">祭炼后{{ item.upkeep ? '满供' : '' }}（Lv.{{ item.level + 1 }}）</span>
-                      <span class="v good">
-                        {{ item.unitEff }}（×{{ (item.mult + 0.3).toFixed(2) }}）
-                      </span>
-                    </div>
+                  <div class="tip-desc">{{ item.meta.desc }}</div>
+                  <div v-if="item.meta.refine?.materials" class="tip-row">
+                    <span class="k">进阶祭炼</span>
+                    <span class="v">第{{ (item.meta.refine.materialFromLevel || 0) + 1 }}次起需{{ Object.keys(item.meta.refine.materials).map(resName).join('、') }}，用量随层数增加</span>
                   </div>
+
+                  <div class="tip-section">价格</div>
+                  <div v-for="(amount, res) in item.cost" :key="res" class="tip-row">
+                    <span class="k">{{ resName(res) }}</span>
+                    <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
+                      {{ costLabel(state, derived, res, amount) }}
+                    </span>
+                  </div>
+
+                  <div class="tip-section">效果</div>
+                  <div v-for="(row, ri) in item.effects" :key="ri" class="tip-row">
+                    <span class="k">{{ row.label }}</span>
+                    <span class="v" :class="row.tone">{{ row.value }}</span>
+                  </div>
+                  <div class="tip-section">祭炼后{{ item.upkeep.length ? '满供' : '' }} · Lv.{{ item.level + 1 }} ×{{ item.nextMult.toFixed(2) }}</div>
+                  <div v-for="(row, ri) in item.nextEffects" :key="ri" class="tip-row">
+                    <span class="k">{{ row.label }}</span>
+                    <span class="v" :class="row.tone">{{ row.value }}</span>
+                  </div>
+                  <template v-if="item.upkeep.length">
+                    <div class="tip-section">维护</div>
+                    <div v-for="row in item.upkeep" :key="row.resource" class="tip-row">
+                      <span class="k">满供消耗 · {{ resName(row.resource) }}</span>
+                      <span class="v bad">{{ row.value }}</span>
+                    </div>
+                    <div class="tip-note">供能不足按比例运行，当前效果已计入实际供能。</div>
+                  </template>
                 </template>
               </HoverTip>
             </td>
-            <td>
+            <td class="right">
               <button v-if="item.meta.upkeep" class="btn" :aria-label="`${item.meta.name}启停`" @click="actions.toggleUpkeepUpgrade(item.meta.id)">
                 {{ state.upgradeEnabled[item.meta.id] === false ? '启用' : '停用' }}
               </button>
@@ -244,11 +238,12 @@ function kindName(meta) {
                 祭炼
               </button>
             </td>
-            </tr>
+          </tr>
         </tbody>
       </table>
 
-      <table class="grid" v-if="available.length">
+      <table class="grid upgrade-table" v-if="available.length">
+        <colgroup><col class="upgrade-name" /><col /><col class="upgrade-action" /></colgroup>
         <thead>
           <tr>
             <th>名称</th>
@@ -259,8 +254,8 @@ function kindName(meta) {
         <tbody>
           <template v-for="(item, i) in available" :key="item.meta.id">
             <tr v-if="isStageStart(available, i)" class="stage-row">
-              <td colspan="4">
-                {{ item.stage.label }}<span class="small dim">　{{ item.stage.hint }}</span>
+              <td colspan="3">
+                <HoverTip :label="item.stage.label"><template #tip><p>{{ item.stage.hint }}</p></template></HoverTip>
               </td>
             </tr>
             <tr @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
@@ -280,42 +275,33 @@ function kindName(meta) {
                     {{ resName(res) }} {{ costText(res, amount) }}
                   </span>
                 </span>
+                <template #heading>
+                  {{ item.meta.name }}
+                  <span class="tip-right">{{ kindName(item.meta) }}</span>
+                </template>
                 <template #tip>
-                  <div class="tip-body">
-                    <div class="tip-title">
-                      {{ item.meta.name }}
-                      <span class="tip-right">{{ kindName(item.meta) }}</span>
-                    </div>
-                    <div class="tip-desc">{{ item.meta.desc }}</div>
+                  <div class="tip-desc">{{ item.meta.desc }}</div>
 
-                    <div class="tip-section">价格</div>
-                    <div v-for="(amount, res) in item.meta.cost" :key="res" class="tip-row">
-                      <span class="k">{{ resName(res) }}</span>
-                      <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
-                        {{ costLabel(state, derived, res, amount) }}
-                      </span>
-                    </div>
-
-                    <div class="tip-section">效果</div>
-                    <!-- 一个效果一行：数值 / 规则效果各自成行，解锁清单按类成行 -->
-                    <div v-for="(row, ri) in effectRows(item.meta, describeEffects)" :key="ri" class="tip-row">
-                      <span class="k">{{ row.label }}</span>
-                      <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
-                    </div>
-                    <div v-if="item.meta.effectDesc" class="tip-row">
-                      <span class="k">因此</span>
-                      <!-- effectDesc 本身就以「因此」开头，这里去掉前缀，免得标签与正文重复 -->
-                      <span class="v">{{ item.meta.effectDesc.replace(/^因此[：:]?\s*/, '') }}</span>
-                    </div>
-                    <div v-if="item.stage" class="tip-row">
-                      <span class="k">所属</span>
-                      <span class="v dim">{{ item.stage.label }}　{{ item.stage.hint }}</span>
-                    </div>
-                    <div v-if="describeNeeds(item.meta.needs).length" class="tip-row">
-                      <span class="k">条件</span>
-                      <span class="v">{{ describeNeeds(item.meta.needs).join('，') }}</span>
-                    </div>
+                  <div class="tip-section">价格</div>
+                  <div v-for="(amount, res) in item.meta.cost" :key="res" class="tip-row">
+                    <span class="k">{{ resName(res) }}</span>
+                    <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
+                      {{ costLabel(state, derived, res, amount) }}
+                    </span>
                   </div>
+
+                  <div class="tip-section">效果</div>
+                  <!-- 数值、规则和解锁清单均按单个效果成行。 -->
+                  <div v-for="(row, ri) in effectRows(item.meta, describeEffects)" :key="ri" class="tip-row">
+                    <span class="k">{{ row.label }}</span>
+                    <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
+                  </div>
+                  <div v-if="item.meta.effectDesc" class="tip-note">{{ item.meta.effectDesc }}</div>
+                  <div v-if="item.stage" class="tip-note">所属：{{ item.stage.label }} · {{ item.stage.hint }}</div>
+                  <template v-if="describeNeeds(item.meta.needs).length">
+                    <div class="tip-section">条件</div>
+                    <div v-for="(condition, ci) in describeNeeds(item.meta.needs)" :key="ci" class="tip-condition">{{ condition }}</div>
+                  </template>
                 </template>
               </HoverTip>
             </td>
@@ -356,7 +342,7 @@ function kindName(meta) {
       </details>
 
       <details class="fold" v-if="researched.length">
-        <summary>已参悟（{{ researched.length }} 条）—— 悬停名称看详情</summary>
+        <summary>已参悟（{{ researched.length }} 条）</summary>
         <table class="grid" style="padding-top: 4px">
           <tbody>
             <tr v-for="item in researched" :key="item.id">
@@ -364,25 +350,19 @@ function kindName(meta) {
                 <HoverTip :width="380">
                   <span class="good">{{ item.name }}</span>
                   <span class="small dim">　{{ kindName(item) }}</span>
+                  <template #heading>
+                    {{ item.name }}
+                    <span class="tip-right">{{ kindName(item) }}</span>
+                  </template>
                   <template #tip>
-                    <div class="tip-body">
-                      <div class="tip-title">
-                        {{ item.name }}
-                        <span class="tip-right">{{ kindName(item) }}</span>
-                      </div>
-                      <div class="tip-desc">{{ item.desc }}</div>
+                    <div class="tip-desc">{{ item.desc }}</div>
 
-                      <div class="tip-section">效果</div>
-                      <div v-for="(row, ri) in effectRows(item, describeEffects)" :key="ri" class="tip-row">
-                        <span class="k">{{ row.label }}</span>
-                        <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
-                      </div>
-                      <div v-if="item.effectDesc" class="tip-row">
-                        <span class="k">因此</span>
-                        <!-- effectDesc 本身就以「因此」开头，这里去掉前缀，免得标签与正文重复 -->
-                        <span class="v">{{ item.effectDesc.replace(/^因此[：:]?\s*/, '') }}</span>
-                      </div>
+                    <div class="tip-section">效果</div>
+                    <div v-for="(row, ri) in effectRows(item, describeEffects)" :key="ri" class="tip-row">
+                      <span class="k">{{ row.label }}</span>
+                      <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
                     </div>
+                    <div v-if="item.effectDesc" class="tip-note">{{ item.effectDesc }}</div>
                   </template>
                 </HoverTip>
               </td>
@@ -394,3 +374,22 @@ function kindName(meta) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.upgrade-table {
+  table-layout: fixed;
+}
+.upgrade-name {
+  width: 38%;
+}
+.upgrade-action {
+  width: 112px;
+}
+.upgrade-table .nowrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.upgrade-table td.right {
+  white-space: nowrap;
+}
+</style>

@@ -5,6 +5,7 @@ import { CRAFT_MAP, DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/cr
 import { RECIPE_STATIONS } from '@/data/industry'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
 import { floorNumber } from './numbers'
+import { normalizeDisciples } from '@/data/disciples'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -32,7 +33,7 @@ export function createInitialState() {
     // 各资源的历史最高水位：建筑「渐进露出」用它判定（对标猫国 unlockRatio）
     peak: {},
 
-    disciples: { total: 0, jobs },
+    disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: Date.now() >>> 0 },
     // 弟子自动前来的计时（秒）
     arrivalTimer: 0,
     // 历法：已经过去的天数（小数，1 天 = CALENDAR.DAY_SECONDS 秒）
@@ -144,6 +145,7 @@ export function normalizeState(state) {
   // 采石工并入矿工，原有分配相加，人口总数保持不变。
   merged.disciples.jobs.miner = (merged.disciples.jobs.miner || 0) + (merged.disciples.jobs.stonecutter || 0)
   delete merged.disciples.jobs.stonecutter
+  normalizeDisciples(merged.disciples)
   // 老档补「飞升层」与「转世计数」
   merged.dao = state.dao || 0
   merged.stats = merged.stats || {}
@@ -270,7 +272,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   // 飞升是「转世重修」：连开局那点家底也没有，跟第一次开山一样从点击起步（§3.4）
   state.seen = { qi: true }
   state.peak = {}
-  state.disciples = { total: 0, jobs: { ...fresh.disciples.jobs } }
+  state.disciples = { ...fresh.disciples, jobs: { ...fresh.disciples.jobs }, members: [] }
   state.arrivalTimer = 0
   state.buildings = {}
   state.starterHutBuilt = false
