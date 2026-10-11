@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { state, view, actions } from '@/game/store'
+import { state, view, actions, ui } from '@/game/store'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { canAfford, idleDisciples } from '@/game/engine'
 import { UPGRADE_MAP } from '@/data/upgrades'
@@ -22,6 +22,7 @@ const badges = computed(() => ({
   skills: view.researchableSkills.value.filter((id) => canAfford(state, UPGRADE_MAP[id].cost)).length,
   achievements: `${Object.keys(state.achievements).length}/${ACHIEVEMENTS.length}`,
 }))
+const tabs = computed(() => ui.debug ? [...TABS, { id: 'debug', name: '调试' }] : TABS)
 
 function badgeOf(id) {
   const b = badges.value[id]
@@ -32,9 +33,9 @@ function badgeOf(id) {
 
 <template>
   <nav class="tabs">
-    <template v-for="(t, i) in TABS" :key="t.id">
+    <template v-for="(t, i) in tabs" :key="t.id">
       <span v-if="i" class="divider">|</span>
-      <button class="tab" :class="{ active: state.ui.tab === t.id }" @click="actions.setTab(t.id)">
+      <button class="tab" :class="{ active: t.id === 'debug' ? ui.debugPage : !(ui.debug && ui.debugPage) && state.ui.tab === t.id }" @click="actions.setTab(t.id)">
         {{ t.name }}<span v-if="badgeOf(t.id)" class="badge"> {{ badgeOf(t.id) }}</span>
       </button>
     </template>

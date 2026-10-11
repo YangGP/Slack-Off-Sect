@@ -12,6 +12,7 @@
     "smoke": "vite build --ssr tools/smoke.mjs --outDir .smoke --emptyOutDir && node .smoke/smoke.js",
     "check:render": "vite build --ssr tools/render-check.mjs --outDir .smoke-render --emptyOutDir && node .smoke-render/render-check.js",
     "check:dom": "vite build --config tools/vite.domcheck.config.js && node tools/dom-check.mjs",
+    "check:industry": "vite build --ssr tools/industry-scenarios.mjs --outDir .smoke-industry-scenarios --emptyOutDir && node .smoke-industry-scenarios/industry-scenarios.js",
     "check": "npm run check:encoding && npm run check:tools && npm run smoke && npm run check:render && npm run check:dom",
     "check:tools": "vite build --ssr tools/audit-check.mjs --outDir .smoke-tools --emptyOutDir && node .smoke-tools/audit-check.js",
     "clean": "node tools/clean.mjs",

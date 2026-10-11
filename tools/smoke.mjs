@@ -24,7 +24,8 @@ import {
   CULTIVATION_STAGE_OF,
 } from '../src/data/upgrades.js'
 import { TECHNIQUES } from '../src/data/techniques.js'
-import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
+import { CRAFTS, CRAFT_MAP, craftCost } from '../src/data/crafts.js'
+import { runIndustryChecks } from './industry-check.mjs'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
@@ -249,7 +250,7 @@ section('数据完整性')
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
   const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
-  const pureNumeric = ['storageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource']
+  const pureNumeric = ['storageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio']
   // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
@@ -336,7 +337,7 @@ section('数据完整性')
     'woodworking', 'waterworkshop', 'spiritSaw', 'spiritCultivation',
     'steelWorking', 'swordFlight', 'spiritSmelting',
     'arrayAssembly', 'crystalCraft', 'crystalPolishing', 'alchemyFire',
-    'arrayRefine', 'mahayanaArt', 'flowField', 'qiRune',
+    'arrayRefine', 'mahayanaArt', 'flowField', 'qiRune', 'craftTempo',
   ]
   const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
   ok(
@@ -2922,8 +2923,8 @@ section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能
     const before = build(0)
     const after = build(250) // 250 灵能 → 满额 +500%
     ok(
-      '灵能大幅提高基础物资产出',
-      after.wood > before.wood * 3,
+      '囤积灵能不再免费提高基础物资产出',
+      close(after.wood, before.wood),
       '灵木 ' + before.wood.toFixed(3) + '/秒 → ' + after.wood.toFixed(3) + '/秒',
     )
     ok(
@@ -2956,12 +2957,12 @@ section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能
       `灵石 ${before.stone.toFixed(3)} → ${stockOnly.stone.toFixed(3)}`,
     )
     ok(
-      '参悟《灵能应用》后，点石成灵与刨木成板的收益随灵能提高',
-      learned.stone > stockOnly.stone && learned.plank > stockOnly.plank,
+      '灵能应用改为驱动工位，不再凭库存提高单份收益',
+      close(learned.stone, stockOnly.stone) && close(learned.plank, stockOnly.plank),
       `灵石 ${stockOnly.stone.toFixed(3)} → ${learned.stone.toFixed(3)}`,
     )
     ok('灵能应用不外溢到名单之外的配方（采药制丹不变）', Math.abs(learned.pill - before.pill) < 1e-9)
-    ok('两条灵石配方都得到灵能应用加成', learned.infusedStone > stockOnly.infusedStone && close(learned.infusedStone, learned.stone))
+    ok('点石成灵仍保持原始收益', close(learned.infusedStone, stockOnly.infusedStone))
   }
 
   // 灵气六阶阶梯（RESEARCH.md）：气 → 液 → 晶 → 灵气分子 → 正负灵子 → 灵能；灵石是含灵矿物，不在阶梯上
@@ -3132,6 +3133,8 @@ section('事件工艺奖励与交易')
   s.upgrades.arrayAssembly = true
   s.buildings.forge = { count: 1, on: true }
   s.buildings.talismanHall = { count: 1, on: true }
+  s.buildings.workshop = { count: 1, on: true }
+  s.resources.wood = 1000 // 为专业工位提供持续维护。
   E.recompute(s, d)
   d.rates = { ...d.rates, wood: 350, qi: 500, ore: 100, stone: 30 }
   const rate = E.eventResourceRate(s, d, 'arrayBase')
@@ -3497,12 +3500,14 @@ section('缺料、长期断粮与首颗道果')
   a.resources.qi = 140
   a.resources.rock = ad.max.rock
   a.autoCraft.infuseStone = true
+  a.settings.craftReserves.qi = 140
   E.runAutoCraft(a, ad, 1)
   ok('自动炼制保留材料底线', a.resources.qi === 140 && a.resources.stone === 0)
-  ok('自动状态说明保留材料导致的暂停', E.autoCraftStatus(a, ad, 'infuseStone').reason.includes('保留材料'))
+  ok('自动状态说明保留材料导致的暂停', E.autoCraftStatus(a, ad, 'infuseStone').reason.includes('保留材料'), E.autoCraftStatus(a, ad, 'infuseStone').reason)
   E.craft(a, ad, 'infuseStone')
   ok('手动制作允许玩家动用保留材料', a.resources.qi === 125 && a.resources.stone === 1)
   a.settings.craftReservePercent = 0
+  delete a.settings.craftReserves.qi
   a.settings.autoCraftPriority = 'refinePill'
   a.buildings.alchemyRoom = { count: 1, on: true }
   a.resources.wood = 100
@@ -3989,7 +3994,7 @@ section('金丹：修真、工艺、材料与建设闭环')
   const beforeYield = E.craftYield(d, recipe)
   s.upgrades.crystalPolishing = true
   E.recompute(s, d)
-  ok('凝晶专业强化增加实际单份收益', close(E.craftYield(d, recipe) - beforeYield, 0.2))
+  ok('凝晶精修减少每份耗料并提高加工效率，单份收益不变', close(E.craftYield(d, recipe), beforeYield) && craftCost(d, recipe).qi === 240 && d.craftSpeedByRecipe.condenseCrystal === 0.25)
   d.rates = { qi: 600, wood: 80, ore: 40 }
   const crystalRate = E.eventResourceRate(s, d, 'crystal')
   d.craftBonusByResource.crystal += 0.5
@@ -4001,9 +4006,9 @@ section('金丹：修真、工艺、材料与建设闭环')
   E.recompute(s, d)
   E.setCraftTarget(s, d, 'condenseCrystal', 2)
   E.simulateOffline(s, d, 30)
-  ok('灵晶离线自动制作遵守目标并结转已有小数收益', s.resources.crystal === 3 && s.resources.talisman === 900 && s.craftTargets.condenseCrystal === 2)
+  ok('灵晶离线自动制作遵守目标并结转已有小数收益', s.resources.crystal === 2 && s.resources.talisman === 900 && s.craftTargets.condenseCrystal === 2)
   const saved = parseImport(exportSave(s))
-  ok('灵晶工艺与库存目标可以存读档', saved.resources.crystal === 3 && saved.upgrades.crystalCraft && saved.craftTargets.condenseCrystal === 2)
+  ok('灵晶工艺与库存目标可以存读档', saved.resources.crystal === 2 && saved.upgrades.crystalCraft && saved.craftTargets.condenseCrystal === 2)
   const old = normalizeState({ resources: { stone: 17 }, buildings: { observatory: { count: 1, on: true } } })
   ok('旧档保留库存与建筑，新增灵晶补零', old.resources.stone === 17 && old.resources.crystal === 0 && E.isBuildingUnlocked(old, 'observatory'))
   resetForReincarnation(s, 0)
@@ -4552,6 +4557,7 @@ section('后期建材：研究、加工与营造')
   s.upgrades.intuition = true
   s.settings.autoCraftOn = true
   s.autoCraft.mixSpiritMortar = true
+  s.buildings.workshop = { count: 1, on: true }
   s.resources.stone = 100
   s.resources.spiritLiquid = 10
   E.recompute(s, d)
@@ -4756,6 +4762,9 @@ section('破境概率与失败结算')
   const [win, wd] = setup(4)
   ok('低于成功率时正常破境', E.breakthrough(win, wd, {}, () => 0.599) && win.realm === 5 && win.stats.bestRealm === 5)
 }
+
+section('工业加工容量、供料与兼容性')
+runIndustryChecks(E, ok, close, newGame)
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {

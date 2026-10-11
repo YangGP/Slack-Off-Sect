@@ -7,7 +7,7 @@ const emit = defineEmits(['change'])
 </script>
 
 <template>
-  <label class="small craft-speed-setting">自动速度
+  <label class="small craft-speed-setting">自动速限
     <select :aria-label="`${name}自动炼制速度`" :value="speed" @change="emit('change', Number($event.target.value))">
       <option v-for="value in CONFIG.AUTO_CRAFT_SPEEDS" :key="value" :value="value">{{ value }}×</option>
     </select>

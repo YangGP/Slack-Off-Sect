@@ -6,6 +6,8 @@ import { BUILDING_MAP } from '@/data/buildings'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { JOBS, JOB_MAP } from '@/data/jobs'
 import { REALMS } from '@/data/realms'
+import { PROCESSING_STATIONS, PROCESSING_STATION_MAP } from '@/data/industry'
+import { CRAFT_MAP } from '@/data/crafts'
 import { fmt, fmtPercent } from './format'
 
 function resName(id) {
@@ -29,6 +31,11 @@ export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
     'craftBonus',
     'habitabilityPerHousing',
     'craftBonusByResource',
+    'processingCapacityRatio',
+    'processingPowerCapacity',
+    'processingCoolingRatio',
+    'craftSpeedByRecipe',
+    'craftCostReduction',
     'disasterGuardByResource',
     'arrivalBonus',
     'breakthroughDiscount',
@@ -107,6 +114,15 @@ export function describeEffects(ef) {
       push(`${resName(res)} 制作产出`, `+${fmtPercent(value)}`, 'good')
     }
   }
+  for (const [id, value] of Object.entries(ef.processingCapacityRatio || {})) {
+    push(`${PROCESSING_STATION_MAP[id]?.name || id} 容量（金丹起）`, `+${fmtPercent(value)}`, 'good')
+  }
+  for (const [id, value] of Object.entries(ef.craftSpeedByRecipe || {})) {
+    push(`${CRAFT_MAP[id]?.name || id} 加工效率（金丹起）`, `+${fmtPercent(value)}`, 'good')
+  }
+  for (const [id, value] of Object.entries(ef.craftCostReduction || {})) {
+    push(`${CRAFT_MAP[id]?.name || id} 每份耗料`, `-${fmtPercent(value)}（整枚向上取整）`, 'good')
+  }
   if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
   if (ef.disasterGuardByResource) {
     for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {
@@ -119,14 +135,25 @@ export function describeEffects(ef) {
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
-  if (ef.autoCraftSpeedControl) push('各配方自动调速', '1× / 2× / 5× / 10×（叠加境界速度）', 'unlock')
+  if (ef.autoCraftSpeedControl) push('各配方自动速限', '1× / 2× / 5× / 10×（金丹起受工位容量约束）', 'unlock')
   if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝液法》', 'good')
-  if (ef.energyCraft) push('灵能应用', '灵能同时提高灵石（点石成灵）与木板的制作产出', 'good')
+  if (ef.energyCraft) push('灵能应用', '解锁工位灵能驱动，按额外负荷耗能', 'unlock')
+  if (ef.processingPowerCapacity) push('加工供能容量', `+${fmt(ef.processingPowerCapacity)}`, 'good')
+  if (ef.processingCoolingRatio) push('晶核阵冷却容量', `+${fmtPercent(ef.processingCoolingRatio)}`, 'good')
   if (ef.unlockBuildings) {
     for (const id of ef.unlockBuildings) {
       push('解锁建筑', BUILDING_MAP[id]?.name || id, 'unlock')
     }
   }
+  return out
+}
+
+export function describeProcessingEffects(buildingId, count = 1) {
+  const out = PROCESSING_STATIONS.filter(station => station.buildings[buildingId]).map(station => ({
+    label: `${station.name} 容量（金丹起）`, value: `+${fmt(station.buildings[buildingId] * count)}`,
+    tone: 'good',
+  }))
+  if (buildingId === 'crystalArray') out.push({ label: '冷却回路容量', value: `+${fmt(2 * count)}（可由冷凝换热提升）`, tone: 'good' })
   return out
 }
 

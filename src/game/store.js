@@ -17,8 +17,6 @@ import {
   clearStorage,
   exportSave,
   parseImport,
-  backupBeforeCheatClear,
-  loadCheatClearBackup,
   saveLoadError,
   allowSaveAfterRecovery,
 } from './save'
@@ -35,6 +33,7 @@ export const derived = reactive(E.createDerived())
 export const ui = reactive({
   saveLoadError,
   debug: false,
+  debugPage: false,
   offlineReport: null,
   toast: null,
   message: null,
@@ -53,6 +52,7 @@ if (typeof window !== 'undefined') {
     configurable: true,
     get() {
       ui.debug = true
+      ui.debugPage = true
       return '调试模式已开启'
     },
   })
@@ -204,60 +204,36 @@ export function toast(text, kind = 'info') {
   ui.message = text
 }
 
-/** 控制台作弊：直接修改库存，允许超过仓储；正常生产仍遵守仓储规则。 */
-function cheatResources(resources, amount, replace = false, backup = false) {
-  if (saveLoadError) throw new Error('存档读取失败，请先导入有效存档或执行 CHEAT.restore()，资源未改动')
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || amount > Number.MAX_SAFE_INTEGER) {
-    throw new RangeError('数量必须是非负有限数字，且不超过 Number.MAX_SAFE_INTEGER')
-  }
-  // 先校验整批，避免错误输入只改动一部分资源。
-  const updates = resources.map(resource => {
-    const meta = RESOURCES.find(r => r.id === resource || r.name === resource)
-    if (!meta) throw new Error(`未知资源：${resource}；使用 CHEAT.list() 查看资源列表`)
-    const value = replace ? amount : (state.resources[meta.id] || 0) + amount
-    if (!Number.isFinite(value) || value > Number.MAX_SAFE_INTEGER) throw new RangeError(`${meta.name}数量超出安全范围`)
-    return [meta.id, meta.integer ? Math.floor(value) : value]
-  })
-  if (backup && !backupBeforeCheatClear(state)) throw new Error('清空前备份失败，资源未改动')
-  for (const [id, value] of updates) {
-    state.resources[id] = value
-    if (value > 0) state.seen[id] = true
-  }
-  ui.debug = true
-  E.trackPeak(state)
-  E.recompute(state, derived)
-  saveNow()
-  toast('作弊资源已更新并保存', 'good')
-  return Object.fromEntries(updates)
-}
-
-export const cheats = Object.freeze({
-  add(resource, amount) { return cheatResources([resource], amount) },
-  set(resource, amount) { return cheatResources([resource], amount, true) },
-  clear(resource) {
-    return cheatResources(resource === undefined ? RESOURCES.filter(r => !['karma', 'dao'].includes(r.id)).map(r => r.id) : [resource], 0, true, true)
-  },
-  restore() {
-    const backup = loadCheatClearBackup()
-    if (!backup) throw new Error('没有清空前备份；旧版清空操作无法通过此命令恢复')
-    actions.importText(backup)
-    toast('已恢复最近一次清空前的存档', 'good')
-    return true
-  },
-  all(amount = 1000000) { return cheatResources(RESOURCES.map(r => r.id), amount) },
-  list() { return RESOURCES.map(r => ({ id: r.id, name: r.name, amount: state.resources[r.id] || 0, max: derived.max[r.id] })) },
-  help() { return 'CHEAT.add("灵石", 100000)：增加资源；CHEAT.set("qi", 5000)：设置库存；CHEAT.all(1000000)：增加所有资源；CHEAT.clear("灵石")：清空单种资源；CHEAT.clear()：清空普通库存，保留仙缘与道果；CHEAT.restore()：恢复最近一次清空前的备份；console.table(CHEAT.list())：资源列表。允许超过仓储，立即保存；整件资源向下取整。' },
-})
-
-if (typeof window !== 'undefined') {
-  Object.defineProperty(window, 'CHEAT', { configurable: true, value: cheats })
-}
-
 // ============================================================
 // 对外动作
 // ============================================================
 
 export const actions = {
+  setDebugResource(id, amount) {
+    if (!ui.debug) return false
+    if (saveLoadError) {
+      toast('存档读取失败，请先在设置中导入有效备份', 'bad')
+      return false
+    }
+    const meta = RESOURCES.find(r => r.id === id)
+    if (!meta || typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || amount > Number.MAX_SAFE_INTEGER) {
+      toast('数量必须是非负有限数字，且不超过安全整数上限', 'bad')
+      return false
+    }
+    const value = meta.integer ? Math.floor(amount) : amount
+    state.resources[id] = value
+    if (id === 'karma' || id === 'dao') state[id] = value
+    if (value > 0) state.seen[id] = true
+    E.trackPeak(state)
+    E.recompute(state, derived)
+    const saved = saveNow()
+    toast(saved ? `${meta.name}已修改并保存` : `${meta.name}已修改，但保存失败`, saved ? 'good' : 'bad')
+    return true
+  },
+  closeDebug() {
+    ui.debug = false
+    ui.debugPage = false
+  },
   buy(id, count = 1) {
     const meta = E.BUILDING_MAP[id]
     const n = E.buyBuilding(state, derived, id, count)
@@ -309,21 +285,24 @@ export const actions = {
     afterAction(ok ? `参悟《${E.UPGRADE_MAP[id]?.name}》` : '', ok ? 'good' : '')
     return ok
   },
-  /** 制作一份（瞬发） */
+  /** 手动制作即时扣料与出货，自动加工单独遵守工位节拍。 */
   craft(id, { times = 1 } = {}) {
-    const before = state.stats.craftCount
-    E.craft(state, derived, id, { times })
-    const made = state.stats.craftCount - before
+    const made = Number.isSafeInteger(times) && times > 0 ? E.craft(state, derived, id, { times }) : 0
     if (made > 0) afterAction(`制作完成 ×${made}`, 'good')
     else toast('材料不足或仓储已满', 'bad')
   },
 
-  /** 按比例做一批：把「材料能做出来的份数」取 frac 份一次做掉（界面上的 ¼料 / ½料 / 全部） */
+  /** 按当前材料与仓容比例立即制作。 */
   craftBatch(id, frac = 1) {
-    const before = state.stats.craftCount
     const made = E.craftBatch(state, derived, id, frac)
     if (made > 0) afterAction(`制作完成 ×${made}`, 'good')
     else toast('材料不足或仓储已满', 'bad')
+  },
+
+  manageCraftOrder(id, action) {
+    if (!E.manageCraftOrder(state, derived, id, action)) return false
+    afterAction(action === 'cancel' ? '已取消未完成订单' : action === 'pause' ? '订单已暂停' : '订单已恢复', 'good')
+    return true
   },
 
   /** 手动吸取天地灵气（开局唯一的灵气来源，对标猫国的采集猫薄荷） */
@@ -458,7 +437,7 @@ export const actions = {
     toast('已重新开山立派', 'good')
   },
   setSetting(key, value) {
-    if (key === 'autoCraftSpeeds' || key === 'autoCraftSpeed') return false
+    if (key === 'autoCraftSpeeds' || key === 'autoCraftSpeed' || key === 'craftWeights' || key === 'processingModes') return false
     state.settings[key] = value
     saveNow()
   },
@@ -466,6 +445,16 @@ export const actions = {
     if (!E.setAutoCraftSpeed(state, derived, recipeId, speed)) return false
     saveNow()
     toast(`${CRAFT_MAP[recipeId].name}自动速度 ×${speed}`, 'good')
+    return true
+  },
+  setCraftWeight(recipeId, weight) {
+    if (!E.setCraftWeight(state, derived, recipeId, Number(weight))) return false
+    saveNow()
+    return true
+  },
+  setProcessingMode(stationId, mode) {
+    if (!E.setProcessingMode(state, derived, stationId, mode)) return false
+    saveNow()
     return true
   },
   toggleUpkeepUpgrade(id) {
@@ -483,6 +472,11 @@ export const actions = {
     return true
   },
   setTab(tab) {
+    if (tab === 'debug') {
+      if (ui.debug) ui.debugPage = true
+      return
+    }
+    ui.debugPage = false
     state.ui.tab = tab
   },
   dismissOffline() {

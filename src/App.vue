@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { state, derived, view, ui } from '@/game/store'
+import { state, derived, view, ui, actions } from '@/game/store'
 import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import { CURRENT_VERSION } from '@/data/changelog'
@@ -14,6 +14,7 @@ import CraftPanel from './components/CraftPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import DebugPanel from './components/DebugPanel.vue'
 import LogPanel from './components/LogPanel.vue'
 import CalendarPanel from './components/CalendarPanel.vue'
 import TotalsPanel from './components/TotalsPanel.vue'
@@ -33,7 +34,7 @@ const panels = {
   settings: SettingsPanel,
 }
 
-const activePanel = computed(() => panels[state.ui.tab] || SectPanel)
+const activePanel = computed(() => ui.debug && ui.debugPage ? DebugPanel : panels[state.ui.tab] || SectPanel)
 const idle = computed(() => idleDisciples(state))
 const qiFlow = computed(() => resourceFlow(derived, 'qi'))
 /** 有空房时顶栏显示「下一位弟子还有多久」 */
@@ -46,7 +47,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
   <div class="wrap">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
-      <span>请在设置中导入有效备份，或使用 CHEAT.restore() 恢复清空前备份。错误：{{ ui.saveLoadError }}</span>
+      <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>
     </div>
     <div class="title-line">
       摸鱼宗门<span class="sub">Slack Off Sect</span>
@@ -56,7 +57,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
     <div class="update-notice" role="note" aria-label="版本更新提示">
       <strong>{{ CURRENT_VERSION }} 大量调整 · 建议转世</strong>
       <span>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</span>
-      <button class="btn" type="button" @click="state.ui.tab = 'realm'">前往境界</button>
+      <button class="btn" type="button" @click="actions.setTab('realm')">前往境界</button>
     </div>
 
     <div class="stat-line">
@@ -98,7 +99,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
 
       <!-- 中列：唯一的一层边框容器，建筑网格/面板从顶部直接开始 -->
       <main class="main">
-        <div class="panel" :class="{ 'panel-craft': state.ui.tab === 'craft' }">
+        <div class="panel" :class="{ 'panel-craft': !(ui.debug && ui.debugPage) && state.ui.tab === 'craft' }">
           <component :is="activePanel" />
         </div>
       </main>

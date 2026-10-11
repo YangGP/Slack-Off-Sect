@@ -1,6 +1,12 @@
 # 工程约定与工具
 
-更新：2026-10-10。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
+更新：2026-10-11。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
+
+v0.34：玩家与模拟脚本的手动制作通过`craft`即时结算；`craftBatch`按当前材料和仓容计算份数，再立即制作。不生成订单，不改变自动计时；自动加工仍受工位、供能、冷却、库存目标与材料保留量约束。`requestCraft`及订单管理只保留为旧版兼容与回归验证接口，旧存档的`craftOrders`继续加工，可暂停、恢复或取消，重修时清空。`processingBottleneck`复用加工计划和统一资源流量显示供料缓冲；`progression-diagnostics.mjs`输出破境缺料、仓容缺口、生产设施与未解锁扩仓前置。
+
+推进模拟可用`npm run balance -- 72 0 12345`固定种子跑自然路线，或`npm run balance -- 72 0 12345 industry`隔离破境失败以验证产业链；后者不用于报告自然通关速度。`npm run check:industry`运行可控负荷对照，供料及大仓储为测试夹具，不是自然开局。
+
+v0.32：`processingPlan`统一计算基础工位、供能和冷却分配，`runIndustrialCraft`按下一次出货或动力耗尽时刻推进。动力连续扣费不写入`expense`，只写入自动加工流量显示，避免tick重复收费；常规维护费仍由供给计算及tick支付。动力保留量另加可开工配方的一份同种原料。偏极阵在维护供给迭代中按两侧剩余仓容与下游耗料取最低负荷。`processingModes`设置通过专用动作验证与归一化，保存偏好但研究门槛每世重判。
 
 ## 分层与数据流
 
@@ -25,10 +31,13 @@
 | globalMult、realmMult、karmaMult、ratio、jobRatio、bonus | 倍率与来源拆分 |
 | buildingSupply | 带维护费设施的运行比例 |
 | craftBonus、craftBonusByResource、craftSpeed | 制作收益及自动节拍 |
+| industrial、processingCapacity、craftSpeedByRecipe、craftCostReduction | 金丹工业模式、设备容量、加工效率与节料 |
 | disasterGuard、disasterGuardByResource | 通用与指定资源防灾 |
 | autoCraftUnlocked、autoCondenseUnlocked、craftTargetsUnlocked、daoAutomation | 自动加工、凝石、库存目标与道果统筹 |
 
 口粮和维护按expense结算，自动加工逐份扣料。展示收支统一调用resourceFlow计入当前自动耗料，不能将它重复并入expense。来源明细相加应与对应速率一致。
+
+工业工位与配方映射在data/industry.js维护。processingPlan只读取状态，按可运行配方及分配权重分配设备容量；runIndustrialCraft推进至下一份完成时刻后重分配。craftCost是所有实际制作支付及展示费用的统一入口。craftTimers.t在工业模式记录基础加工秒数；industryVersion=1避免旧高速计时重复迁移。settings.craftWeights随偏好保留，normalizeState过滤未知配方、非整数及范围外权重。
 
 ## 展示与交互
 

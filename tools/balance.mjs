@@ -10,11 +10,21 @@ import * as E from '../src/game/engine.js'
 import { createBot } from './player-bot.mjs'
 import { REALMS } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
+import { progressionDiagnostics } from './progression-diagnostics.mjs'
 
 const HOURS = Number(process.argv[2] || 4)
 if (!Number.isFinite(HOURS) || HOURS <= 0 || HOURS > 168) throw new Error('小时数需大于0且不超过168')
 const TOTAL = HOURS * 3600
 const DECISION_EVERY = 5
+const seedInput = process.argv[4]
+if (seedInput !== undefined) {
+  let seed = Number(seedInput)
+  if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new Error('随机种子需为32位无符号整数')
+  Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296)
+}
+const isolateFailure = process.argv[5] === 'industry'
+if (process.argv[5] !== undefined && !isolateFailure) throw new Error('第五参数仅支持industry，隔离破境失败以验证产业路线')
+const attempts = { attempted: 0, success: 0, failed: 0, regression: 0, death: 0 }
 
 const state = createInitialState()
 // 可选第三参数：带指定仙缘重修，用同一策略检查后续周目的仓储链。
@@ -23,7 +33,19 @@ if (!Number.isFinite(karma) || karma < 0 || !Number.isInteger(karma)) throw new 
 state.karma = karma
 const derived = E.createDerived()
 E.recompute(state, derived)
-const bot = createBot(state, derived)
+const bot = createBot(state, derived, { breakthrough(s, d) {
+  if (!REALMS[s.realm + 1] || !E.canAfford(s, E.breakthroughPreview(s, d).cost)) return false
+  attempts.attempted++
+  const before = s.realm
+  const result = isolateFailure ? E.breakthrough(s, d, {}, () => 0) : E.breakthrough(s, d)
+  if (result) attempts.success++
+  else {
+    attempts.failed++
+    if (s.realm === 0 && before >= 4) attempts.death++
+    else if (s.realm < before) attempts.regression++
+  }
+  return result
+} })
 
 const checkpoints = new Set([
   60, 300, 600, 1800, 3600, 7200, 10800, 14400, 21600, 28800, 36000, 43200, 57600,
@@ -49,7 +71,7 @@ function snapshot(t) {
   console.log(`          ${res}`)
 }
 
-console.log(`模拟 ${HOURS} 小时，初始仙缘 ${karma}，每 ${DECISION_EVERY} 秒决策一次\n`)
+console.log(`模拟 ${HOURS} 小时，初始仙缘 ${karma}，每 ${DECISION_EVERY} 秒决策一次；种子 ${seedInput ?? '随机'}，路线 ${isolateFailure ? '产业（破境必成）' : '自然'}\n`)
 let previousRealm = state.realm
 let sawEnergy = false
 for (let t = 1; t <= TOTAL; t++) {
@@ -57,6 +79,7 @@ for (let t = 1; t <= TOTAL; t++) {
   if (t % DECISION_EVERY === 0) bot.act()
   if (t % 300 === 0) E.recompute(state, derived)
   if (checkpoints.has(t)) snapshot(t)
+  if (t % 21600 === 0) console.log(`推进诊断 ${(t / 3600).toFixed(0)}h：${JSON.stringify(progressionDiagnostics(state, derived))}`)
   if (state.realm !== previousRealm) {
     console.log(`里程碑 ${(t / 3600).toFixed(2)}h：${REALMS[state.realm].name}`)
     previousRealm = state.realm
@@ -72,3 +95,5 @@ console.log(`成就：${Object.keys(state.achievements).length} 条`)
 console.log(`累计灵气：${Math.round(state.stats.totalQi)}，累计灵机：${Math.round(state.stats.totalInsight)}`)
 console.log(`遭遇天灾：${state.stats.disasters} 次，奇遇：${state.stats.eventsSeen} 次`)
 console.log(`飞升可得仙缘：${E.ascensionGain(state, derived)}`)
+console.log(`破境统计：${JSON.stringify(attempts)}`)
+console.log(`最终诊断：${JSON.stringify(progressionDiagnostics(state, derived))}`)

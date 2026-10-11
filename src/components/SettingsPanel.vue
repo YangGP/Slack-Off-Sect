@@ -112,18 +112,6 @@ function doReset() {
     </div>
   </div>
 
-  <div v-if="ui.debug" class="box">
-    <div class="box-head">
-      山中趣事<span class="hint">手动触发一次随机奇遇（调试用）</span>
-    </div>
-    <div class="box-body">
-      <button class="btn" @click="actions.triggerEvent()">来一次奇遇</button>
-      <span class="small dim">
-        正常每 2.5 ~ 7 分钟自动发生一次奇遇或天灾，结果写进右侧「宗门纪事」。
-      </span>
-    </div>
-  </div>
-
   <div class="box">
     <div class="box-head">关于</div>
     <div class="box-body">

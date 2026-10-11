@@ -2,7 +2,6 @@ import { normalizeState, createInitialState } from './state'
 
 export const SAVE_KEY = 'slack-off-sect.save.v1'
 export const SAVE_VERSION = 1
-export const CHEAT_BACKUP_KEY = `${SAVE_KEY}.before-cheat-clear`
 export let saveLoadError = ''
 
 export function allowSaveAfterRecovery() {
@@ -68,20 +67,6 @@ export function clearStorage() {
   } catch (err) {
     return false
   }
-}
-
-/** 独立备份槽，不随主存档自动保存被覆盖。 */
-export function backupBeforeCheatClear(state) {
-  try {
-    storage.setItem(CHEAT_BACKUP_KEY, JSON.stringify(serialize(state)))
-    return true
-  } catch (err) {
-    return false
-  }
-}
-
-export function loadCheatClearBackup() {
-  return storage.getItem(CHEAT_BACKUP_KEY)
 }
 
 /** 导出为便于复制粘贴的 base64 文本 */

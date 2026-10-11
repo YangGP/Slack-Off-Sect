@@ -6,6 +6,8 @@
  *   点「制作」是瞬发的（点一下立刻出一份，见 §7）；
  *   点「连续」则是下一个长期活儿 —— 按这个节奏一份一份出，直到材料或仓储用尽。
  */
+import { RESOURCE_MAP } from './resources.js'
+
 export const CRAFTS = [
   {
     // 搬迁自宗门页的手动按钮：现在它就是炼制页里的一条普通配方，
@@ -284,4 +286,14 @@ export function craftTime(recipe, derived) {
 /** 手动调速只改变常驻自动节拍，事件产能估价仍使用境界基础节拍。 */
 export function autoCraftTime(recipe, derived) {
   return craftTime(recipe, derived) / Math.max(1, derived?.autoCraftSpeeds?.[recipe.id] || 1)
+}
+
+/** 节料改变每份投入，手动、自动、事件估价与界面共用。固定阵印不参与节料。 */
+export function craftCost(derived, recipe) {
+  const saving = recipe.fixedYield ? 0 : Math.min(0.5, Math.max(0, derived?.craftCostReduction?.[recipe.id] || 0))
+  if (!saving) return recipe.cost
+  return Object.fromEntries(Object.entries(recipe.cost).map(([res, amount]) => {
+    const reduced = amount * (1 - saving)
+    return [res, RESOURCE_MAP[res]?.integer ? Math.ceil(reduced - 1e-9) : reduced]
+  }))
 }

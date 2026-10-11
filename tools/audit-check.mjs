@@ -4,6 +4,25 @@ import { BUILDING_MAP } from '../src/data/buildings.js'
 import { JOB_MAP } from '../src/data/jobs.js'
 import { RESOURCE_MAP } from '../src/data/resources.js'
 import { CRAFT_MAP } from '../src/data/crafts.js'
+import { progressionDiagnostics } from './progression-diagnostics.mjs'
+import { createBot } from './player-bot.mjs'
+import { createInitialState } from '../src/game/state.js'
+import * as E from '../src/game/engine.js'
+
+// 复现合体材料容量不足：必须追踪尚未解锁的洞天扩仓链。
+const blockedState = createInitialState(), blockedDerived = E.createDerived()
+blockedState.realm = 8
+blockedState.buildings.depot = { count: 2, on: true }
+blockedState.buildings.library = { count: 100, on: true }
+E.recompute(blockedState, blockedDerived)
+blockedState.resources.qiParticle = 100
+const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
+assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need === 120)
+assert.ok(blocked.expansions.some(b => b.id === 'grotto' && !b.unlocked))
+assert.equal(blocked.producer.id, 'splitArray')
+const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
+assert.ok(prerequisites.upgrades.has('grottoArt'))
+assert.ok(prerequisites.buildings.has('grotto'))
 
 const brief = { hours: 1 / 3600 }
 const originalCap = RESOURCE_MAP.qi.baseMax

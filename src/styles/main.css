@@ -1290,3 +1290,7 @@ textarea {
 .choice-preview {
   flex-basis: 100%;
 }
+.processing-overview { margin: 8px 0; padding: 6px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.processing-overview > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.processing-overview p { margin: 6px 0 0; }
+.processing-line { display: flex; flex-direction: column; gap: 3px; margin: 5px 0; overflow-wrap: anywhere; }

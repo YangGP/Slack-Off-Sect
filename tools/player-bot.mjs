@@ -116,6 +116,7 @@ export const ADVANCED_CRAFTS = {
 export const STONE_QI_FLOOR = 400
 
 export function createBot(state, derived, policy = {}) {
+  const submitCraft = (id, times = 1) => E.craft(state, derived, id, { times })
   const realmNeed = () => policy.realmCost
     ? policy.realmCost(state, derived) : E.realmCost(state, derived, state.realm + 1)
   const normalHabitability = () => derived.habitability - (state.habitabilityPenalty || 0)
@@ -303,7 +304,7 @@ export function createBot(state, derived, policy = {}) {
     // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
     for (const [res, amount] of Object.entries(next)) {
       if (amount <= (derived.max[res] || 0)) continue
-      const expansion = E.BUILDINGS.filter(b => E.checkNeeds(state, b.needs) &&
+      const expansion = E.BUILDINGS.filter(b => (b.needs?.realm == null || b.needs.realm <= state.realm) &&
         ((b.effects?.storage?.[res] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
         .map(b => ({ id: b.id, cost: E.buildingCost(state, b.id, 1) }))
         .filter(b => Object.entries(b.cost).every(([r, v]) => v <= derived.max[r]))
@@ -314,6 +315,17 @@ export function createBot(state, derived, policy = {}) {
   }
 
   function act() {
+    if (derived.industrial && derived.autoCraftSpeedUnlocked) {
+      for (const id of derived.availableCrafts) if (derived.autoCraftSpeeds[id] !== 5) E.setAutoCraftSpeed(state, derived, id, 5)
+      const capacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0)
+      const energyReady = derived.energyCraftUnlocked && derived.processingPowerCapacity > 0 &&
+        state.resources.qiEnergy > Math.max(100, (state.settings.craftReserves.qiEnergy || 0))
+      const overloadReady = derived.netQi > capacity * 10 + 20 && state.resources.qi > derived.max.qi * 0.3
+      for (const id of Object.keys(derived.processingCapacity)) {
+        const mode = energyReady ? 'energy' : overloadReady ? 'overload' : 'normal'
+        if ((state.settings.processingModes[id] || 'normal') !== mode) E.setProcessingMode(state, derived, id, mode)
+      }
+    }
     // 固印时先暂停耗能法宝，待渡劫材料备齐再启用；使用玩家同样可用的启停操作。
     if (state.upgrades.energyCore && state.realm >= 9) {
       const next = realmNeed() || {}
@@ -488,6 +500,11 @@ export function createBot(state, derived, policy = {}) {
 
     buildStep(0, reserveCost, shortRes, requiredBuildings)
 
+    const housingNeed = state.disciples.total >= derived.maxDisciples
+      ? ['hut', 'logHouse', 'mansion', 'caveDwelling'].filter(id => derived.unlockedBuildings.includes(id))
+        .map(id => E.buildingCost(state, id, 1)).filter(cost => cost.wood > 0).sort((a, b) => a.wood - b.wood)[0]
+      : null
+
     // 只暂停会侵占预留量的加工；库存充足时仍可准备突破材料的上游原料。
     // 四档费用清单更短，若仅凭输入出现在预留表就禁做，会把固印所需晶银一起停掉。
     const blocksCraft = (c) => reserveCost && Object.entries(c.cost).some(([k, amount]) =>
@@ -498,7 +515,12 @@ export function createBot(state, derived, policy = {}) {
     for (const c of CRAFTS) {
       if (!derived.availableCrafts.includes(c.id)) continue
       // 攒破境前置期间：跳过会吃掉这些资源的配方（但它本身若产的就是要攒的资源，则放行）。
-      if (blocksCraft(c)) continue
+      const savingWood = housingNeed && state.resources.wood < housingNeed.wood && c.cost.wood > 0 &&
+        (state.resources[c.out] || 0) >= (housingNeed[c.out] || 0)
+      const blocked = blocksCraft(c) || savingWood
+      const order = state.craftOrders?.[c.id]
+      if (order && order.paused !== !!blocked) E.manageCraftOrder(state, derived, c.id, blocked ? 'pause' : 'resume')
+      if (blocked) continue
       const target = E.craftTarget(state, derived, c.id)
       if (target > 0 && (state.resources[c.out] || 0) >= target) continue
       if (c.id === 'infuseStone' && state.resources.qi < STONE_QI_FLOOR) continue
@@ -507,7 +529,7 @@ export function createBot(state, derived, policy = {}) {
         // 只在「看的那个资源」低于上限的两成时才催生一次
         const cap = derived.max[rescue.watch] || 0
         if ((state.resources[rescue.watch] || 0) > cap * rescue.below) continue
-        if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 1 })
+        if (E.canAfford(state, c.cost)) submitCraft(c.id)
         continue
       }
       const adv = ADVANCED_CRAFTS[c.id]
@@ -521,12 +543,12 @@ export function createBot(state, derived, policy = {}) {
         if (!enough) continue
         const cap = Math.min(derived.max[c.out], Math.max(adv.cap, craftDemand[c.out] || 0))
         if ((state.resources[c.out] || 0) >= cap) continue
-        if (E.canAfford(state, c.cost)) E.craft(state, derived, c.id, { times: 1 })
+        if (E.canAfford(state, c.cost)) submitCraft(c.id)
         continue
       }
       if (E.canAfford(state, c.cost)) {
         const needed = target > 0 ? Math.ceil((target - (state.resources[c.out] || 0)) / E.craftYield(derived, c)) : 10
-        E.craft(state, derived, c.id, { times: Math.min(10, needed) })
+        submitCraft(c.id, Math.min(10, needed))
       }
     }
 
@@ -562,5 +584,5 @@ export function createBot(state, derived, policy = {}) {
     if (advanced) assignJobs()
   }
 
-  return { act, assignJobs, buildStep }
+  return { act, assignJobs, buildStep, prerequisites: breakthroughPrereqs }
 }

@@ -12,6 +12,7 @@ import { REALMS, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_LEVELS, getEventLevel } from '../src/data/events.js'
+import { PROCESSING_STATIONS, PROCESSING_STATION_MAP, RECIPE_STATIONS } from '../src/data/industry.js'
 
 const res = (id) => RESOURCES.find((r) => r.id === id)?.name || id
 
@@ -68,6 +69,11 @@ const effects = (e) => {
   if (e.consumeRatio) out.push(`消耗 −${pct(e.consumeRatio)}`)
   if (e.craftBonus) out.push(`制作 +${pct(e.craftBonus)}`)
   if (e.craftBonusByResource) for (const [id, value] of Object.entries(e.craftBonusByResource)) out.push(`${res(id)}制作 +${pct(value)}`)
+  if (e.processingCapacityRatio) for (const [id, value] of Object.entries(e.processingCapacityRatio)) out.push(`${PROCESSING_STATION_MAP[id]?.name || id}容量 +${pct(value)}（金丹起）`)
+  if (e.processingPowerCapacity) out.push(`加工供能容量 +${e.processingPowerCapacity}`)
+  if (e.processingCoolingRatio) out.push(`晶核阵冷却容量 +${pct(e.processingCoolingRatio)}`)
+  if (e.craftSpeedByRecipe) for (const [id, value] of Object.entries(e.craftSpeedByRecipe)) out.push(`${CRAFTS.find(c => c.id === id)?.name || id}加工效率 +${pct(value)}（金丹起）`)
+  if (e.craftCostReduction) for (const [id, value] of Object.entries(e.craftCostReduction)) out.push(`${CRAFTS.find(c => c.id === id)?.name || id}每份耗料 −${pct(value)}（整枚向上取整）`)
   if (e.disasterGuard) out.push(`灾损 −${pct(e.disasterGuard)}`)
   if (e.disasterGuardByResource) for (const [id, value] of Object.entries(e.disasterGuardByResource)) out.push(`${res(id)}灾损额外减免 ${pct(value)}（合计上限80%）`)
   if (e.ascendBonus) out.push(`仙缘 +${pct(e.ascendBonus)}`)
@@ -76,6 +82,7 @@ const effects = (e) => {
   if (e.offlineHours) out.push(`离线 +${e.offlineHours}h`)
   if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')
+  if (e.autoCraftSpeedControl) out.push('自动速限1/2/5/10倍（受工位约束）')
   if (e.autoCondenseLiquid) out.push('节气满仓自动凝液（需凝液法）')
   if (e.unlockBuildings?.length) out.push('解锁 ' + e.unlockBuildings.map(bname).join('/'))
   return out.join('；')
@@ -217,4 +224,14 @@ emit('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   }
 }
 
+emit('\n## 工业加工工位（金丹起）\n')
+emit('容量按启用设施及维护供给缩放，再乘设备容量升级；同工位配方按1～100权重分配，默认同权重。达到自动速限的配方不占剩余容量，缺料、满仓、达标会释放工位。每份耗时另受境界与加工效率影响；手动制作及节气满仓凝液不占常驻工位。\n')
+emit('| 工位 | 基础容量来源 | 共用配方 |')
+emit('| --- | --- | --- |')
+for (const station of PROCESSING_STATIONS) {
+  const source = Object.entries(station.buildings).map(([id, amount]) => `${bname(id)}每座${Math.round(amount * 1000) / 1000}`).join('、')
+  const base = station.baseUpgrade ? `《${uname(station.baseUpgrade)}》提供1；` : ''
+  const recipes = CRAFTS.filter(c => RECIPE_STATIONS[c.id] === station.id).map(c => c.name).join('、')
+  emit(`| ${station.name} | ${base}${source} | ${recipes} |`)
+}
 flush(process.argv[2] || 'docs/TABLES.md')

@@ -2,6 +2,7 @@ import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
+import { RECIPE_STATIONS } from '@/data/industry'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
 import { floorNumber } from './numbers'
 
@@ -47,6 +48,8 @@ export function createInitialState() {
      *   made 这一轮自动做了几份（界面显示用）
      */
     craftTimers: {},
+    craftOrders: {},
+    industryVersion: 1,
 
     buildings: {},
     starterHutBuilt: false,
@@ -101,6 +104,8 @@ export function createInitialState() {
       autosave: true,
       autoCraftOn: true,
       autoCraftSpeeds: {},
+      craftWeights: {},
+      processingModes: {},
       offlineProgress: true,
       craftReservePercent: 20,
       craftReserves: {},
@@ -177,6 +182,9 @@ export function normalizeState(state) {
   }
   merged.craftTargets = { ...fresh.craftTargets, ...(state.craftTargets || {}) }
   merged.craftTimers = state.craftTimers || state.craftQueue || {}
+  merged.craftOrders = Object.fromEntries(Object.entries(state.craftOrders || {})
+    .filter(([id, order]) => Object.hasOwn(RECIPE_STATIONS, id) && Number.isInteger(order?.remaining) && order.remaining > 0 && order.remaining <= 1000000)
+    .map(([id, order]) => [id, { remaining: order.remaining, paused: order.paused === true }]))
   merged.treasureLevels = state.treasureLevels || {}
   merged.buffs = Array.isArray(state.buffs) ? state.buffs : []
   merged.affairs = { ...fresh.affairs }
@@ -204,6 +212,18 @@ export function normalizeState(state) {
     return [id, CONFIG.AUTO_CRAFT_SPEEDS.includes(speed) ? speed : speed === undefined ? legacySpeed : 1]
   }))
   delete merged.settings.autoCraftSpeed
+  merged.settings.processingModes = Object.fromEntries(Object.entries(state.settings?.processingModes || {})
+    .filter(([id, value]) => Object.values(RECIPE_STATIONS).includes(id) && ['normal', 'overload', 'energy'].includes(value)))
+  merged.settings.craftWeights = Object.fromEntries(Object.entries(state.settings?.craftWeights || {})
+    .filter(([id, value]) => Object.hasOwn(RECIPE_STATIONS, id) && Number.isInteger(value) && value >= 1 && value <= 100))
+  // 旧自动计时按调速后的秒数保存；工业工位改存基础加工秒数，保持一份的完成比例。
+  if (!state.industryVersion && merged.realm >= 4) {
+    merged.craftTimers = Object.fromEntries(Object.entries(merged.craftTimers).map(([id, timer]) => [id, {
+      ...timer, t: (Number.isFinite(timer.t) ? Math.max(0, timer.t) : 0) *
+        (RECIPE_STATIONS[id] && merged.upgrades.craftTempo ? merged.settings.autoCraftSpeeds[id] || 1 : 1),
+    }]))
+  }
+  merged.industryVersion = 1
   merged.settings.craftReserves = Object.fromEntries(Object.entries(state.settings?.craftReserves || {})
     .filter(([id, value]) => Object.hasOwn(fresh.resources, id) && Number.isFinite(value) && value >= 0))
   for (const key of ['autoCraft', 'craftTargets', 'craftTimers', 'craftProgress']) {
@@ -260,6 +280,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.treasureLevels = {}
   state.craftProgress = {}
   state.craftTimers = {}
+  state.craftOrders = {}
+  state.industryVersion = 1
   state.autoCraft = {}
   state.craftTargets = {}
   state.realm = 0

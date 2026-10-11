@@ -2,11 +2,12 @@
 /** 完整炼制页与左栏快捷炼制共用同一套操作、状态和悬停明细。 */
 import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
-import { CRAFTS, ADVANCED_CRAFT_OUTPUTS } from '@/data/crafts'
-import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield, isProgressionVisible } from '@/game/engine'
+import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
+import { PROCESSING_STATIONS } from '@/data/industry'
+import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield, isProgressionVisible, processingPlan, processingBottleneck } from '@/game/engine'
 import { costLabel } from '@/game/pricing'
 import { describeNeeds } from '@/game/effectsText'
-import { fmt, fmtPercent, fmtStock } from '@/game/format'
+import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
 import { RESOURCE_MAP } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { CALENDAR } from '@/data/calendar'
@@ -19,6 +20,22 @@ const filter = computed(() => state.ui.craftFilter || 'all')
 // 库存每帧刷新；编辑中的草稿不能被尚未提交的库存目标覆盖。
 const targetDrafts = reactive({})
 const reserveDrafts = reactive({})
+const weightDrafts = reactive({})
+const plan = computed(() => processingPlan(state, derived))
+const stationRows = computed(() => PROCESSING_STATIONS.map(station => ({
+  ...station, capacity: derived.processingCapacity[station.id] || 0,
+  used: Object.values(plan.value).filter(line => line.station === station.id).reduce((sum, line) => sum + line.work, 0),
+  boost: Object.values(plan.value).find(line => line.station === station.id)?.boost || 0,
+  mode: Object.values(plan.value).find(line => line.station === station.id)?.mode || 'normal',
+  powerReason: Object.values(plan.value).find(line => line.station === station.id)?.powerReason || '',
+  drain: Object.values(plan.value).filter(line => line.station === station.id).reduce((sum, line) => sum + Object.values(line.powerDrain).reduce((a, b) => a + b, 0), 0),
+})).filter(station => station.capacity > 0 || allRows.value.some(row => row.autoStatus.line?.station === station.id)))
+
+function updateWeight(id, event) {
+  actions.setCraftWeight(id, event.target.value)
+  delete weightDrafts[id]
+  event.target.value = String(state.settings.craftWeights[id] || 1)
+}
 
 /** 批量快捷：按「材料能做出的份数」取比例 */
 const BATCHES = [
@@ -32,13 +49,15 @@ const allRows = computed(() =>
     const canMake = maxCraftable(state, derived, c.id)
     return {
       meta: c,
+      cost: craftCost(derived, c),
       yield: craftYield(derived, c),
       affordable: canMake >= 1,
       progress: state.craftProgress[c.id] || 0,
       auto: !!state.autoCraft[c.id],
       have: state.resources[c.out] || 0,
       max: derived.max[c.out],
-      autoStatus: autoCraftStatus(state, derived, c.id),
+      autoStatus: autoCraftStatus(state, derived, c.id, plan.value),
+      bottleneck: processingBottleneck(state, derived, c.id, plan.value),
       batches: BATCHES.map((b) => ({ ...b, count: Math.floor(canMake * b.frac) })),
     }
   }),
@@ -89,7 +108,7 @@ const condenseStatus = computed(() => {
   const target = autoCraftStatus(state, derived, 'condenseLiquid').target
   if (target > 0 && state.resources.spiritLiquid >= target) return '凝灵诀 · 目标已达'
   if (state.resources.spiritLiquid >= derived.max.spiritLiquid) return '凝灵诀 · 灵液满仓'
-  if ((state.resources.qi || 0) < CRAFTS.find(c => c.id === 'condenseLiquid').cost.qi) return '凝灵诀 · 缺灵气暂停'
+  if ((state.resources.qi || 0) < craftCost(derived, CRAFTS.find(c => c.id === 'condenseLiquid')).qi) return '凝灵诀 · 缺灵气暂停'
   return '凝灵诀 · 节气满仓自凝灵液'
 })
 </script>
@@ -108,9 +127,32 @@ const condenseStatus = computed(() => {
         </label>
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
       </div>
-      <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
+      <div v-if="!compact" class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}。金丹起，自动产线共用专业设施容量；扩建增加工位，节料技艺减少每份投入。小数收益持续累积。</div>
+      <div v-if="!compact && derived.industrial" class="processing-overview small" aria-label="加工工位容量">
+        <div v-for="station in stationRows" :key="station.id">
+          <span>{{ station.name }}</span>
+          <span :class="station.capacity > 0 ? 'dim' : 'warn'">使用 {{ fmt(station.used) }} / {{ fmt(station.capacity + station.boost) }} 容量<span v-if="station.boost">（动力增加 {{ fmt(station.boost) }}）</span></span>
+          <label v-if="derived.autoCraftSpeedUnlocked || derived.energyCraftUnlocked">驱动
+            <select :aria-label="`${station.name}驱动方式`" :value="station.mode" @change="actions.setProcessingMode(station.id, $event.target.value)">
+              <option value="normal">普通</option>
+              <option v-if="derived.autoCraftSpeedUnlocked" value="overload">灵气超载</option>
+              <option v-if="derived.energyCraftUnlocked" value="energy">灵能驱动</option>
+            </select>
+          </label>
+          <span v-if="station.drain" class="dim">动力消耗 {{ fmt(station.drain * 60) }} {{ state.settings.processingModes[station.id] === 'energy' ? '灵能' : '灵气' }}/分</span>
+          <span v-if="station.mode !== 'normal'" class="dim">{{ station.powerReason }}<template v-if="!station.boost"> · 普通加工</template></span>
+        </div>
+        <p class="dim">冷却容量 {{ fmt(derived.processingCoolingCapacity) }} · 灵能供能容量 {{ fmt(derived.processingPowerCapacity) }}。普通工位自然散热，晶核阵提供冷却回路；《冷凝换热》提升回路容量。</p>
+        <p class="dim">超载与灵能驱动最多增加一倍基础容量，共用冷却回路；仅额外加工耗动力，每容量秒耗10灵气或0.1灵能。缺料、仓满或负荷低于基础容量时不耗加工动力；灵能枢另有维持费。提高自动速限才能使用额外容量。</p>
+        <p class="dim">手动制作与批量按钮立即扣料并合成。自动加工按工位、动力与冷却容量持续运行，遵守库存目标和材料保留量。旧存档的未完成订单继续加工，也可暂停或取消。</p>
+        <p class="dim">分配权重越高，工位紧张时获得的容量越多；达标、满仓或缺料会释放容量。速限限制单条产线负荷，空闲容量自动分给其他产线。手动制作与节气满仓凝液不占常驻工位。</p>
+      </div>
+      <div v-if="!compact && state.buildings.polarizeArray?.count" class="processing-overview small" aria-label="双极供料状态">
+        <div>双极分流 · 负荷 {{ fmtPercent(derived.buildingSupply.polarizeArray || 0) }}<span class="dim">正负灵子同时分流，任一侧满仓时只补下游实际用量；断供则降载。</span></div>
+        <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ fmt((derived.rates[id] || 0) * 60) }}/分 · 设施消耗 {{ fmt(-(derived.expense[id] || 0) * 60) }}/分</span></div>
+      </div>
       <div v-if="!compact && derived.autoCraftSpeedUnlocked" class="small craft-settings">
-        <span class="dim">各配方可单独选择自动速度，并叠加境界提速。材料消耗按速度增加，每份收益不变。</span>
+        <span class="dim">各配方可单独选择自动速限。金丹起实际速度受共享工位容量约束，扩产会提高每分钟耗料，每份收益不因速限改变。</span>
       </div>
       <div v-else-if="!compact && derived.autoCraftUnlocked" class="small dim">参悟《疾炼法》后，可手动调整自动炼制速度。</div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需元婴期凝液法</div>
@@ -150,7 +192,7 @@ const condenseStatus = computed(() => {
         class="craft-row"
         :data-craft="row.meta.id"
         :width="330"
-        @show="highlightCost(row.meta.cost)"
+        @show="highlightCost(row.cost)"
         @hide="clearHighlight"
       >
         <div class="craft-line">
@@ -159,13 +201,22 @@ const condenseStatus = computed(() => {
           <label v-if="!compact" class="craft-pin small"><input type="checkbox" :checked="state.settings.quickCrafts.includes(row.meta.id)" :aria-label="`${row.meta.name}快捷炼制`" @change="updateQuick(row.meta.id, $event)" />快捷</label>
         </div>
         <div v-if="!compact" class="craft-cost small">
-          <template v-for="(amount, res, index) in row.meta.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: (state.resources[res] || 0) < amount }">{{ resName(res) }} {{ fmtStock(amount) }}</span></template>
+          <template v-for="(amount, res, index) in row.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: (state.resources[res] || 0) < amount }">{{ resName(res) }} {{ fmtCost(amount) }}</span></template>
           <span class="dim"> → </span><span class="good">{{ resName(row.meta.out) }} {{ fmt(row.yield) }}</span>
           <span v-if="derived.craftBonusByResource[row.meta.out]" class="dim"> · 专业加成 +{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
         </div>
+        <div v-if="!compact && row.autoStatus.line" class="processing-line small" :data-processing="row.meta.id">
+          <span>{{ row.autoStatus.line.name }} · 容量分配 {{ fmtPercent(row.autoStatus.line.share) }}</span>
+          <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
+          <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resName(row.meta.out) }}/分</span>
+          <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resName(res) }} {{ fmt(amount * row.autoStatus.perMinute) }}/分</template></span>
+          <span class="dim">按现有库存与工位估算；上游断供时暂停。</span>
+          <span class="dim">瓶颈：{{ row.bottleneck.reason }}</span>
+          <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resName(input.res) }} {{ fmt(input.deficit * 60) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
+        </div>
         <div class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
-            自动中 · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
+            {{ row.autoStatus.orderRemaining && !row.autoStatus.orderPaused ? '订单加工中' : '自动中' }} · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
           </span>
           <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
           <span
@@ -176,6 +227,7 @@ const condenseStatus = computed(() => {
           </span>
           <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
           <span v-if="!compact && row.yield > row.meta.amount" class="dim"> · 小数累积 {{ fmtPercent(row.progress) }}</span>
+          <span v-if="row.autoStatus.orderRemaining" :class="row.autoStatus.orderPaused ? 'warn' : 'dim'">订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</span>
         </div>
         <div class="craft-line">
           <button
@@ -203,9 +255,18 @@ const condenseStatus = computed(() => {
             />
             自动
           </label>
+          <template v-if="row.autoStatus.orderRemaining">
+            <button class="btn" :aria-label="`${row.meta.name}${row.autoStatus.orderPaused ? '恢复' : '暂停'}订单`" @click="actions.manageCraftOrder(row.meta.id, row.autoStatus.orderPaused ? 'resume' : 'pause')">{{ row.autoStatus.orderPaused ? '恢复订单' : '暂停订单' }}</button>
+            <button class="btn" :aria-label="`${row.meta.name}取消订单`" @click="actions.manageCraftOrder(row.meta.id, 'cancel')">取消订单</button>
+          </template>
           <CraftSpeedSelect v-if="!compact && derived.autoCraftSpeedUnlocked"
             :name="row.meta.name" :speed="derived.autoCraftSpeeds[row.meta.id]"
             @change="actions.setAutoCraftSpeed(row.meta.id, $event)" />
+          <label v-if="!compact && row.autoStatus.line" class="small">分配权重
+            <input class="qty" type="number" min="1" max="100" step="1"
+              :aria-label="`${row.meta.name}加工分配权重`" :value="weightDrafts[row.meta.id] ?? row.autoStatus.line.weight"
+              @input="weightDrafts[row.meta.id] = $event.target.value" @change="updateWeight(row.meta.id, $event)" />
+          </label>
           <label v-if="!compact && derived.craftTargetsUnlocked" class="small">目标
             <input class="qty" type="number" min="0" step="1" :value="targetDrafts[row.meta.id] ?? row.autoStatus.target"
               :aria-label="`${row.meta.name}库存目标`"
@@ -223,7 +284,7 @@ const condenseStatus = computed(() => {
             <div class="tip-desc">{{ row.meta.desc }}</div>
 
             <div class="tip-section">价格</div>
-            <div v-for="(amount, res) in row.meta.cost" :key="res" class="tip-row">
+            <div v-for="(amount, res) in row.cost" :key="res" class="tip-row">
               <span class="k">{{ resName(res) }}</span>
               <span
                 class="v"

@@ -12,6 +12,35 @@
  * 这棵树就是猫国工坊升级那种「一层层推」的推进感。
  */
 export const TECHNIQUES = [
+  {
+    id: 'heatExchange', name: '冷凝换热', glyph: '冷',
+    cost: { insight: 4800, steel: 6, arrayBase: 4, spiritLiquid: 10 },
+    desc: '以晶核阵循环冷凝余热。每座运行中的晶核阵提供的冷却容量翻倍；高负荷加工共用冷却回路，散热不足时自动降载。',
+    effects: { processingCoolingRatio: 1 },
+    needs: { realm: 6, upgrades: ['liquidReflux', 'crystalCraft'], building: { id: 'crystalArray', count: 1 } },
+  },
+  // ---------- 工程技艺：设备容量、加工效率与单位耗料 ----------
+  {
+    id: 'arrayStandards', name: '阵基规制', glyph: '规',
+    cost: { insight: 600, plank: 6, ore: 150 },
+    desc: '统一阵基尺寸与导灵接口，减少装配对位时间。阵基加工效率 +50%；不改变每份用料与收益。',
+    effects: { craftSpeedByRecipe: { assembleArrayBase: 0.5 } },
+    needs: { realm: 4, upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
+  },
+  {
+    id: 'liquidReflux', name: '凝液回流', glyph: '回',
+    cost: { insight: 1800, steel: 4, arrayBase: 3 },
+    desc: '在凝液工位加设回流纹，捕集未凝气流。每份灵液耗气减少15%，手动与自动凝液均适用。',
+    effects: { craftCostReduction: { condenseLiquid: 0.15 } },
+    needs: { realm: 5, upgrades: ['liquidArt', 'steelWorking'] },
+  },
+  {
+    id: 'runeStamping', name: '定纹模刻', glyph: '模',
+    cost: { insight: 2400, steel: 6, arrayBase: 4, crystal: 3 },
+    desc: '以预制纹模重复刻制标准构件。符箓与阵基加工效率 +100%；灵符仍需精密刻纹，继续共用符箓堂容量。',
+    effects: { craftSpeedByRecipe: { drawTalisman: 1, assembleArrayBase: 1 } },
+    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune'], building: { id: 'talismanHall', count: 2 } },
+  },
   // ---------- 采集与种植：四条基础线 ----------
   {
     id: 'qiArt',
@@ -514,8 +543,8 @@ export const TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 2600, steel: 12, crystal: 25, spiritArtifact: 3 },
     refine: { insight: 8000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '持续消耗灵能驱动聚灵与参悟设施。满供时灵气产出 +50%、灵机产出 +25%；每秒消耗灵能 1，效果与耗能随祭炼同比增长，供能不足时按比例运行，无供能则停效。',
-    effects: { ratio: { qi: 0.5, insight: 0.25 } },
+    desc: '持续消耗灵能驱动聚灵与参悟设施，并提供4单位加工供能容量。满供时灵气产出 +50%、灵机产出 +25%；基础维持每秒消耗灵能1，加工加速另按实际负荷耗能。效果、供能容量与维持费随祭炼同比增长，断供或停用时失效。',
+    effects: { ratio: { qi: 0.5, insight: 0.25 }, processingPowerCapacity: 4 },
     upkeep: { qiEnergy: 1 },
     needs: { upgrades: ['energyApplication'] },
   },
