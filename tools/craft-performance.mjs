@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 
 for (const copies of [1000, 10000, 100000, 1000000000]) {
   const state = reactive(createInitialState()), derived = E.createDerived()
@@ -8,7 +8,7 @@ for (const copies of [1000, 10000, 100000, 1000000000]) {
   E.recompute(state, derived)
   state.resources.qi = copies * 15
   state.resources.rock = copies * 3
-  state.__max.stone = derived.max.stone = copies
+  derived.max.stone = copies
   const start = performance.now()
   const made = E.craftBatch(state, derived, 'infuseStone')
   const milliseconds = Math.round(performance.now() - start)

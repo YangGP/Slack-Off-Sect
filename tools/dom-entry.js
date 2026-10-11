@@ -1,3 +1,4 @@
+import * as engine from './engine-fixture.mjs'
 /**
  * DOM 验证用的入口：只负责把「浏览器里真正加载的那份代码」暴露出来。
  * 这个文件由 tools/vite.domcheck.config.js 用**客户端模式**打包（不是 SSR），
@@ -10,13 +11,14 @@ import {
   derived,
   ui,
   actions,
-  engine,
+  initializeGame,
   startLoop,
   stopLoop,
   saveNow,
 } from '../src/game/store.js'
 
 export function mount(target) {
+  initializeGame()
   const app = createApp(App)
   app.mount(target)
   return app

@@ -1,3 +1,4 @@
+import { runArchitectureChecks } from './architecture-check.mjs'
 /**
  * 冒烟测试：不依赖浏览器，直接把游戏引擎跑一遍。
  * 覆盖：数据完整性、初始产出、购买/拆除、职位分配、制作、成就、离线收益、飞升、长期挂机稳定性。
@@ -13,7 +14,7 @@ import {
 } from '../src/game/state.js'
 import { createBot, ADVANCED_CRAFTS } from './player-bot.mjs'
 import { fmt, fmtAmount, fmtCost, fmtFixed, fmtInt, fmtResource, fmtStock } from '../src/game/format.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
@@ -112,7 +113,7 @@ section('整批制作与逐份制作一致')
             s.resources[recipe.out] = 2
             s.craftProgress[id] = progress
             d.craftBonus = bonus
-            s.__max[recipe.out] = d.max[recipe.out] = RESOURCE_MAP[recipe.out].integer ? Math.floor(2 + room) : 2 + room
+            d.max[recipe.out] = RESOURCE_MAP[recipe.out].integer ? Math.floor(2 + room) : 2 + room
             const expected = structuredClone(s)
             const gain = E.craftYield(d, recipe)
             let expectedMade = 0
@@ -123,7 +124,7 @@ section('整批制作与逐份制作一致')
               const whole = floorNumber(acc)
               expected.craftProgress[id] = Math.max(0, acc - whole)
               if (whole > 0) {
-                E.addResource(expected, recipe.out, whole)
+                E.addResource(expected, recipe.out, whole, d.max[recipe.out])
                 expected.stats.crafted[recipe.out] = (expected.stats.crafted[recipe.out] || 0) + whole
               }
               expected.stats.craftCount++
@@ -3690,7 +3691,7 @@ section('分层仓储、点击与进阶祭炼')
   ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer).every(r => Number.isInteger(d.max[r.id])))
   const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: 1000 } })
   E.recompute(old, d)
-  E.addResource(old, 'nineTurnPill', 10)
+  E.addResource(old, 'nineTurnPill', 10, d.max.nineTurnPill)
   ok('旧档超额成品不被收入操作抹掉且不能继续囤货', old.resources.nineTurnPill === 1000)
   E.payCost(old, { nineTurnPill: 3 })
   E.tick(old, d, 1, { events: false })
@@ -4809,6 +4810,8 @@ runIndustryChecks(E, ok, close, newGame)
 
 section('弟子成长、分工与突破')
 runDiscipleChecks(E, ok, close)
+
+runArchitectureChecks()
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)
 if (failed) {

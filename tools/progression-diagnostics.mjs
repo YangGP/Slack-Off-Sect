@@ -1,4 +1,4 @@
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
 import { RESOURCE_MAP } from '../src/data/resources.js'

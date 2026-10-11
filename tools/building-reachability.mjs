@@ -3,7 +3,7 @@
  * 假定已开放来源的资源可攒满，不估算耗时、净产出或玩家购买策略。
  */
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { BUILDINGS } from '../src/data/buildings.js'
 import { ALL_UPGRADES } from '../src/data/upgrades.js'
 import { CRAFTS } from '../src/data/crafts.js'

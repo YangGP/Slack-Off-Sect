@@ -29,14 +29,29 @@ v0.31（动力与冷却）：`processingPlan`统一计算基础工位、供能�
 | 位置 | 职责 |
 | --- | --- |
 | src/data/*.js | 数据定义、配置与相关纯辅助函数 |
-| src/game/engine.js | 重算、生产、购买、制作、研究、事件、离线与重置 |
-| src/game/state.js、save.js | 初始状态、归一化、序列化与存档 |
-| src/game/store.js | Vue单例、主循环、actions和临时UI状态 |
+| src/game/engine.js | 保持现有 API 的公共出口，业务系统不反向依赖此文件 |
+| src/game/systems/*.js | 经济供给、建筑、弟子、炼制规则与动作、突破、事件和时间推进 |
+| src/game/state.js、migrations.js、saveSchema.js | 初始状态、历史迁移与当前结构校验 |
+| src/game/save.js | 序列化、导入及可注入存储的独立 repository |
+| src/game/runtime.js、context.js | 无 Vue/DOM 的游戏实例、循环、时钟、随机源及实例计时器 |
+| src/game/store.js | Vue绑定、actions、临时UI状态和浏览器生命周期适配 |
 | src/game/format.js、pricing.js、effectsText.js | 数量、价格与效果的统一展示 |
 | src/components/*.vue、App.vue | 展示与交互，通过actions改变状态 |
 | src/styles/main.css | 平面文字表格与响应式布局 |
 
 组件调用actions，由引擎修改state并重算derived，Vue更新展示。规则计算集中在引擎和数据辅助函数；derived不保存。引擎不依赖Vue或DOM，测试通过Vite SSR解析@别名后在Node运行。
+
+`initializeGame`在应用启动时显式读档和结算离线；单独导入store不会读取存储、推进离线或注册浏览器事件。`createGame`支持注入`now`、`random`及状态对象，`createRuntime`支持独立存储和定时器适配器，自动保存与成就计时不跨实例共享。读档和清档后重置循环计时，避免将旧进度的一段时间结算到新档。
+
+开发时游戏模块的热更新由store接收：先保存已初始化的进度、清理旧循环，再请求完整页面重载，由main重新读档、挂载和启动。否则Vue组件热更新可能挂到新store，而新store没有启动循环。`npm run check:startup`执行真实main入口并验证更新前后的时间、资源、进度保存和循环重启。
+
+`recompute`只修改derived，不创建弟子、记录资源峰值或向state写入仓储缓存。资源增加与扣费入口维护峰值；`addResource`显式接收容量。弟子个体是运行时权威状态，人数和岗位数量在收徒、调岗、逐出和流失动作中汇总；旧人数档由迁移阶段补建个体。测试和审计的手写人数夹具通过`tools/engine-fixture.mjs`显式同步后再计算。
+
+供给迭代在普通对象上进行，结束时一次提交derived；解锁集合、加工消耗与来源排序仅在收敛后计算。tick保留结算阶段必要的重算，store不再追加重复重算。系统依赖方向由`tools/architecture-check.mjs`验证，禁止系统依赖Vue或引擎公共出口，并检查循环依赖。
+
+所有增益、事务期限与事件随机抽取使用实例上下文。在线与离线共用时间推进，最多一秒步长，并在增益到期或事务期限处切步；离线从实际保存时间起算，保留不足一秒的尾段，不产生新随机事件。现实期限和生产收益上限分开处理，超过离线收益上限后仍按现实时间判断期限。
+
+存档结构版本为2，沿用原有localStorage键以便发现旧档。读档流程为解析、版本检查、迁移和字段校验；旧档正常兼容时保留完整进度，未知版本或结构冲突时只继承有效的仙缘和道果并显示恢复说明。无法解析的文件继续保留原档并阻止自动覆盖。序列化使用持久字段白名单，派生数据、运行上下文与恢复提示不写入存档。
 
 | 派生字段 | 含义 |
 | --- | --- |
@@ -77,6 +92,7 @@ v0.31（动力与冷却）：`processingPlan`统一计算基础工位、供能�
 | npm run check:encoding | BOM与文本换行 |
 | npm run smoke | 数据、前置、供料、产出、实际操作、存档与离线 |
 | npm run check:render | Vue SSR模板与警告 |
+| npm run check:startup | 真实main入口、浏览器定时器接收对象、热更新保存与重启 |
 | npm run check:dom | jsdom真实挂载、主循环、更新日志与交互 |
 | npm run check:tools | 审计参数、临时修改还原与多路线统计 |
 | npm run check | 上述检查 |

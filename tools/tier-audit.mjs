@@ -1,5 +1,5 @@
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'

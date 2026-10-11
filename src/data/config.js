@@ -92,8 +92,6 @@ export const CONFIG = {
   EVENT_MAX_GAP: 420,
   // 单次事件每种资源的奖励上限，先限奖励额度，再按剩余仓储结算。
   EVENT_REWARD_STORAGE_SHARE: 0.2,
-  // 刷新派生数据的最小间隔（秒），避免每帧全量重算
-  RECOMPUTE_MIN_GAP: 0.25,
   // 凝灵诀：每逢节气（15 天 = 45 秒），灵气满仓时把仓内这个比例的灵气凝成灵液
   AUTO_CONDENSE_RATIO: 0.5,
   // 日志上限

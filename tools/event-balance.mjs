@@ -1,4 +1,5 @@
-import * as E from '../src/game/engine.js'
+import { setGameContext } from '../src/game/context.js'
+import * as E from './engine-fixture.mjs'
 import { createInitialState } from '../src/game/state.js'
 import { createBot } from './player-bot.mjs'
 import { EVENT_MAP } from '../src/data/events.js'
@@ -9,14 +10,12 @@ const hours = Number(process.argv[2] || 16)
 const karma = Number(process.argv[3] || 0)
 if (!Number.isFinite(hours) || hours <= 0) throw new Error('小时数必须为正数')
 if (!Number.isFinite(karma) || karma < 0) throw new Error('仙缘必须为非负数')
-const realNow = Date.now
-const realRandom = Math.random
 for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [83, 'active'], [83, 'default']]) {
   let rng = seed || 1
-  Math.random = () => { rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0; return rng / 4294967296 }
+  const random = () => { rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0; return rng / 4294967296 }
   let now = 1800000000000
-  Date.now = () => now
-  const s = createInitialState()
+  const s = createInitialState(now)
+  setGameContext(s, { now: () => now, random })
   s.karma = karma
   const d = E.createDerived()
   E.recompute(s, d)
@@ -27,7 +26,7 @@ for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [8
   const milestones = {}
   for (let t = 1; t <= hours * 3600; t++) {
     now += 1000
-    E.tick(s, d, 1, { events: seed !== 0 })
+    E.tick(s, d, 1, { events: seed !== 0, startAt: now - 1000 })
     if (t % 5 === 0) {
       if (s.pendingChoice) {
         const event = EVENT_MAP[s.pendingChoice.id]
@@ -64,5 +63,3 @@ for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [8
   console.log(JSON.stringify({ seed, karma, response, events: s.stats.eventsSeen, choices: s.stats.choicesMade, declined, realm: REALMS[s.realm].name, milestones, threats, invalid }))
   if (invalid) process.exitCode = 1
 }
-Date.now = realNow
-Math.random = realRandom

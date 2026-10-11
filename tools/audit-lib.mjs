@@ -5,7 +5,7 @@
  * 支持「假设性改动」：只在本次运行里改数据对象，跑完还原，不落盘。
  */
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
 import { CRAFT_MAP } from '../src/data/crafts.js'

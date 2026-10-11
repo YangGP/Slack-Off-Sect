@@ -115,7 +115,7 @@ export function syncDisciples(data, { defaultRoot = null } = {}) {
   }
 }
 
-export function normalizeDisciples(data) {
+export function normalizeDisciples(data, { preferMembers = false } = {}) {
   const seen = new Set()
   data.members = (Array.isArray(data.members) ? data.members : []).filter(member =>
     member && Number.isSafeInteger(member.id) && member.id > 0 && !seen.has(member.id) && seen.add(member.id))
@@ -132,11 +132,21 @@ export function normalizeDisciples(data) {
   data.nextId = data.members.reduce((next, member) => Math.max(next, member.id + 1),
     Number.isSafeInteger(data.nextId) && data.nextId > 0 ? data.nextId : 1)
   data.rootSeed = Number.isInteger(data.rootSeed) && data.rootSeed >= 0 && data.rootSeed <= 4294967295 ? data.rootSeed : 1
-  syncDisciples(data, { defaultRoot: 'triple' })
+  if (preferMembers) recountDisciples(data)
+  else syncDisciples(data, { defaultRoot: 'triple' })
 }
 
 export function cultivateDisciple(member, seconds) {
   member.residenceSeconds = Math.min(Number.MAX_SAFE_INTEGER, (member.residenceSeconds || 0) + seconds)
   member.cooldown = Math.max(0, member.cooldown - seconds)
   member.cultivation = Math.min(cultivationRequired(member.realm), member.cultivation + seconds * cultivationRate(member))
+}
+
+/** 个体记录是运行时权威状态；总人数和岗位数量仅作兼容视图。 */
+export function recountDisciples(data) {
+  data.total = data.members.length
+  for (const job of JOBS) data.jobs[job.id] = 0
+  for (const member of data.members) {
+    if (member.roleId && Object.hasOwn(data.jobs, member.roleId)) data.jobs[member.roleId]++
+  }
 }

@@ -1,3 +1,4 @@
+import { setGameContext } from '../src/game/context.js'
 /** Diagnose first ascension with real costs and actions, without changing game data.
  * Usage: npm run audit:pacing -- [hours] [karma] [refineLevel] [eventSeed] [rush] [dao] [labor]
  * Uses the reference bot; optional refining adds one affordable production refine per decision.
@@ -5,7 +6,7 @@
  * Later manual qi clicks are excluded. Stops when ascension becomes available.
  */
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { EVENT_MAP } from '../src/data/events.js'
 
@@ -21,16 +22,17 @@ if (!Number.isFinite(hours) || hours <= 0 || hours > 168 ||
     !Number.isInteger(eventSeed) || eventSeed < 0 || eventSeed > 0xffffffff || !Number.isInteger(dao) || dao < 0) {
   throw new Error('参数：小时数 0~168，仙缘非负整数，祭炼等级 0~10')
 }
-let simulatedNow = Date.now()
+let simulatedNow = Date.UTC(2026, 9, 11)
+let random = () => Math.random()
 if (eventSeed) {
-  Date.now = () => simulatedNow
   let randomState = eventSeed >>> 0
-  Math.random = () => {
+  random = () => {
     randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0
     return randomState / 4294967296
   }
 }
-const state = createInitialState()
+const state = createInitialState(simulatedNow)
+setGameContext(state, { now: () => simulatedNow, random })
 state.karma = karma
 state.dao = dao
 const derived = E.createDerived()
@@ -107,7 +109,7 @@ function allocateLabor() {
 
 for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
   simulatedNow += 1000
-  E.tick(state, derived, 1, { events: !!eventSeed })
+  E.tick(state, derived, 1, { events: !!eventSeed, startAt: simulatedNow - 1000 })
   if (elapsed % 5 === 0) {
     if (state.pendingChoice) {
       const event = EVENT_MAP[state.pendingChoice.id]

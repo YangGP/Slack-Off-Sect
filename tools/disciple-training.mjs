@@ -1,4 +1,4 @@
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 
 /** 仅模拟玩家操作，不是游戏内自动突破。 */
 export function trainDisciples(state, derived, { mode = 'protected', random = Math.random, limit = 20 } = {}) {

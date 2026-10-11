@@ -41,7 +41,7 @@ async function doImport(event) {
       reader.readAsText(file, 'utf-8')
     })
     actions.importText(text)
-    importError.value = '读档成功'
+    importError.value = ui.saveRecoveryNotice || '读档成功'
   } catch (err) {
     importError.value = '导入失败：' + (err?.message || '格式不正确')
   } finally {
@@ -61,7 +61,7 @@ function doReset() {
 <template>
   <div class="box">
     <div class="box-head">
-      <HoverTip label="存档"><template #tip><p>导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持旧版文本存档和JSON存档。</p></template></HoverTip><span class="hint">
+      <HoverTip label="存档"><template #tip><p>导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持旧版文本存档和JSON存档；结构冲突时仅继承仙缘和道果。</p></template></HoverTip><span class="hint">
         上次保存 {{ fmtClock(ui.lastSavedAt || state.lastSaveAt) }}，自动保存每
         {{ CONFIG.AUTOSAVE_MS / 1000 }} 秒
       </span>

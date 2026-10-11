@@ -1,6 +1,6 @@
 /** Controlled load experiments; fixtures are not a natural player progression. */
 import { createInitialState, normalizeState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { CRAFT_MAP, craftTime } from '../src/data/crafts.js'
 import { PROCESSING_STATIONS } from '../src/data/industry.js'
 

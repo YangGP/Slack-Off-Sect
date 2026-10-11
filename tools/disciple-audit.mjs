@@ -1,5 +1,6 @@
+import { setGameContext } from '../src/game/context.js'
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { trainDisciples } from './disciple-training.mjs'
 import { REALMS } from '../src/data/realms.js'
@@ -15,12 +16,11 @@ const randomStream = initial => {
   let value = initial
   return () => ((value = (Math.imul(value, 1664525) + 1013904223) >>> 0) / 4294967296)
 }
-const originalRandom = Math.random, originalNow = Date.now
 const epoch = Date.UTC(2026, 9, 11)
 const discipleRandom = randomStream(seed ^ 0xa5a5a5a5)
-Math.random = randomStream(seed)
-Date.now = () => epoch
-const state = createInitialState()
+let now = epoch
+const state = createInitialState(epoch)
+setGameContext(state, { now: () => now, random: randomStream(seed) })
 state.disciples.rootSeed = seed
 const derived = E.createDerived()
 E.recompute(state, derived)
@@ -29,12 +29,12 @@ const report = { hours, seed, mode, roots, events: false, karma: 0, dao: 0, deci
   attempts: 0, success: 0, failed: 0, reserved: 0, spent: {}, starvingSeconds: 0, lostDisciples: 0, waitingHours: 0,
   sectMilestones: {}, discipleMilestones: {}, snapshots: [] }
 let previousRealm = 0
-try {
+{
   for (let t = 1; t <= hours * 3600; t++) {
-    Date.now = () => epoch + t * 1000
+    now = epoch + t * 1000
     const population = state.disciples.total
     const deaths = state.stats.breakthroughDeaths
-    E.tick(state, derived, 1, { events: false })
+    E.tick(state, derived, 1, { events: false, startAt: now - 1000 })
     if (roots === 'triple') for (const member of state.disciples.members) member.spiritualRoot = 'triple'
     if (t % 5 === 0) bot.act()
     if (t % 60 === 0 && mode !== 'off') {
@@ -76,7 +76,4 @@ try {
   report.finalKarma = state.karma
   report.deaths = state.stats.breakthroughDeaths
   console.log(`RESULT ${JSON.stringify(report)}`)
-} finally {
-  Math.random = originalRandom
-  Date.now = originalNow
 }

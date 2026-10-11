@@ -41,7 +41,7 @@ const qiFlow = computed(() => resourceFlow(derived, 'qi'))
 /** 有空房时顶栏显示「下一位弟子还有多久」 */
 const waitNext = computed(() => nextArrivalIn(state, derived))
 // 最近一次操作提示，4 秒后自行消失（不弹气泡，只在状态行显示一行字）
-const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.toast.text : ''))
+const status = computed(() => ui.toast?.text || '')
 </script>
 
 <template>
@@ -50,6 +50,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
       <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>
     </div>
+    <div v-if="ui.saveRecoveryNotice" class="update-notice" role="status">{{ ui.saveRecoveryNotice }}</div>
     <div class="title-line">
       摸鱼宗门<span class="sub">Slack Off Sect</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>

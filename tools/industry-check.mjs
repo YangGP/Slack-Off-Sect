@@ -2,7 +2,7 @@ import { CRAFT_MAP, craftTime, craftCost } from '../src/data/crafts.js'
 import { PROCESSING_STATIONS, RECIPE_STATIONS } from '../src/data/industry.js'
 import { UPGRADE_MAP } from '../src/data/upgrades.js'
 import { createInitialState, normalizeState, resetForReincarnation } from '../src/game/state.js'
-import * as Engine from '../src/game/engine.js'
+import * as Engine from './engine-fixture.mjs'
 
 export function runIndustryChecks(E = Engine,
   ok = (name, valid, extra = '') => { if (!valid) throw new Error(`${name} ${extra}`); console.log(`✓ ${name}`) },

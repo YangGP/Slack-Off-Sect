@@ -1,0 +1,150 @@
+import { JOBS } from '@/data/jobs'
+import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval } from './core'
+import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
+import { recompute } from './economy'
+import { REALMS, BREAKTHROUGH } from '@/data/realms'
+import { gameRandom } from '../context'
+
+export function setJob(state, derived, jobId, value) {
+  const job = JOBS.find((j) => j.id === jobId)
+  if (!job || !isJobUnlocked(state, job) || !Number.isFinite(value)) return
+  const jobs = state.disciples.jobs
+  const current = jobs[jobId] || 0
+  let target = Math.max(0, Math.floor(value))
+  const others = JOBS.reduce((sum, j) => (j.id === jobId ? sum : sum + (jobs[j.id] || 0)), 0)
+  const free = state.disciples.total - others
+  target = Math.min(target, free)
+  jobs[jobId] = target
+  syncDisciples(state.disciples) // 人数操作在动作边界转换为个体分工
+  recountDisciples(state.disciples)
+  if (target !== current) {
+    pushLog(state, `${job.name} 人数调整为 ${target}`, 'info')
+  }
+  recompute(state, derived)
+}
+
+export function shiftJob(state, derived, jobId, delta) {
+  const current = state.disciples.jobs[jobId] || 0
+  setJob(state, derived, jobId, current + delta)
+}
+
+/** 一键把闲散弟子填进某个职位 */
+export function fillJob(state, derived, jobId) {
+  const idle = idleDisciples(state)
+  if (idle <= 0) return
+  setJob(state, derived, jobId, (state.disciples.jobs[jobId] || 0) + idle)
+}
+
+export function assignDisciples(state, derived, ids, roleId) {
+  if (roleId !== null && !JOBS.some(job => job.id === roleId && isJobUnlocked(state, job))) return false
+  const selected = new Set(ids)
+  for (const member of state.disciples.members) if (selected.has(member.id)) member.roleId = roleId
+  recountDisciples(state.disciples)
+  recompute(state, derived)
+  return true
+}
+
+export function discipleDismissalPreview(state, ids) {
+  const selected = new Set(ids)
+  const members = state.disciples.members.filter(member => selected.has(member.id))
+  const qi = members.reduce((total, member) => total + discipleDismissalCost(member), 0)
+  return { ids: members.map(member => member.id), count: members.length, cost: { qi },
+    affordable: Number.isSafeInteger(qi) && canAfford(state, { qi }) }
+}
+
+/** 逐出整批支付，费用或人口变化时要求重新确认，不部分执行。 */
+export function dismissDisciples(state, derived, ids, quote = null) {
+  const preview = discipleDismissalPreview(state, ids)
+  if (quote && (preview.cost.qi !== quote.cost.qi || preview.count !== quote.count)) return { dismissed: 0, reason: 'changed' }
+  if (!preview.count) return { dismissed: 0, reason: 'empty' }
+  if (!preview.affordable) return { dismissed: 0, reason: 'insufficient' }
+  payCost(state, preview.cost)
+  const selected = new Set(preview.ids)
+  state.disciples.members = state.disciples.members.filter(member => !selected.has(member.id))
+  recountDisciples(state.disciples)
+  pushLog(state, `逐出师门 ${preview.count} 人，支付灵气 ${preview.cost.qi}`, 'info')
+  recompute(state, derived)
+  return { dismissed: preview.count, cost: preview.cost }
+}
+
+export function discipleBreakthroughPreview(state, member) {
+  const target = member.realm + 1
+  const required = cultivationRequired(member.realm)
+  const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
+    [id, Math.max(1, Math.ceil(amount * DISCIPLE_GROWTH.costFactor))]))
+  const chance = Math.min(BREAKTHROUGH.chanceCap, 1 - (1 - realmBaseChance(target)) * DISCIPLE_GROWTH.failureFactor +
+    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance)
+  const status = target >= REALMS.length ? '已至最高境界' : member.cooldown > 0 ? '突破调息中' :
+    member.cultivation < required ? '修炼中' : target > state.realm ? '受宗门境界限制' : '待突破'
+  return { target, required, cost, chance, status, ready: status === '待突破', affordable: canAfford(state, cost) }
+}
+
+/** 首版只损失本境修为与材料，不引入个人死亡或永久停滞。 */
+export function breakthroughDisciples(state, derived, ids, random = () => gameRandom(state)) {
+  const selected = new Set(ids)
+  const result = { success: 0, failed: 0, skipped: 0, insufficient: false }
+  for (const member of state.disciples.members) {
+    if (!selected.has(member.id)) continue
+    const preview = discipleBreakthroughPreview(state, member)
+    if (!preview.ready) { result.skipped++; continue }
+    if (!preview.affordable) { result.insufficient = true; break }
+    payCost(state, preview.cost)
+    member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + (preview.cost.qi || 0))
+    if (random() < preview.chance) {
+      member.realm++
+      member.cultivation = 0
+      result.success++
+    } else {
+      member.cultivation *= 1 - DISCIPLE_GROWTH.failureLoss
+      member.cooldown = DISCIPLE_GROWTH.cooldown
+      result.failed++
+    }
+  }
+  if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}`, result.failed ? 'info' : 'good')
+  recompute(state, derived)
+  return result
+}
+
+/**
+ * 弟子自动前来：有空房就会陆续来人，不需要手动招募。
+ * 每 arrivalInterval(derived) 秒来一名；住满则清零计时，扩建后重新开始算。
+ * 离线推演时只计数不写日志，由 simulateOffline 汇总一条。
+ * @returns {number} 本次来了几名
+ */
+export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
+  if (dt <= 0) return 0
+  if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) {
+    state.arrivalTimer = 0
+    return 0
+  }
+  state.arrivalTimer = (state.arrivalTimer || 0) + dt
+  const interval = arrivalInterval(derived)
+  let arrived = 0
+  while (state.arrivalTimer >= interval && state.disciples.total < derived.maxDisciples && derived.leaveChance === 0) {
+    state.arrivalTimer -= interval
+    const member = newDisciple(state.disciples)
+    cultivateDisciple(member, Math.min(dt, state.arrivalTimer))
+    state.disciples.members.push(member)
+    recountDisciples(state.disciples)
+    state.stats.recruits += 1
+    arrived += 1
+    recompute(state, derived)
+  }
+  if (arrived > 0) {
+    if (!silent) {
+      const newcomers = state.disciples.members.slice(-arrived)
+      const roots = newcomers.map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、')
+      pushLog(state, `${arrived === 1 ? '一名' : arrived + '名'}弟子慕名而来（${roots}；门中现有 ${state.disciples.total} 人）`, 'good')
+    }
+    recompute(state, derived)
+  }
+  // 住满了就把计时清零：扩建之后重新开始算，不会立刻蹦出一个人
+  if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) state.arrivalTimer = 0
+  return arrived
+}
+
+export function clearJobs(state, derived) {
+  for (const member of state.disciples.members) member.roleId = null
+  recountDisciples(state.disciples)
+  recompute(state, derived)
+}

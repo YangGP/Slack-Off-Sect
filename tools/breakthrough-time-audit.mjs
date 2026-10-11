@@ -1,3 +1,4 @@
+import { setGameContext } from '../src/game/context.js'
 /** Run the same attentive reference player with guaranteed, naked or fully aided breakthroughs.
  * Usage after SSR bundling: node bundle.js [mode] [seed] [hours]
  * Full aids start at the golden core; earlier 95% realms use no optional materials.
@@ -9,7 +10,7 @@
  */
 import fs from 'node:fs'
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 
 const mode = process.argv[2] || 'baseline'
@@ -20,12 +21,13 @@ const outcome = process.argv[6] || 'success'
 if (!['baseline', 'naked', 'aided', 'focus'].includes(mode) || !Number.isInteger(seed) || seed < 1 || !Number.isFinite(hours) || hours <= 0 || hours > 168
   || !['full', 'none', 'pill', 'equipment', 'faith'].includes(selection) || !['success', 'regression', 'death'].includes(outcome)) throw Error('Invalid arguments')
 let now = 1791676800000, rngState = seed >>> 0
-Date.now = () => now
-Math.random = () => {
+const random = () => {
   rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0
   return rngState / 4294967296
 }
-const s = createInitialState(), d = E.createDerived()
+const s = createInitialState(now)
+setGameContext(s, { now: () => now, random })
+const d = E.createDerived()
 E.recompute(s, d)
 const options = () => {
   if (!['aided', 'focus'].includes(mode) || s.realm < 3) return {}
@@ -71,7 +73,7 @@ const attempt = () => {
   let forced = []
   if (mode === 'focus' && focus.start) forced = target === 8 && !focus.attempts.length
     ? { success: [0], regression: [0.99, 0.99], death: [0.99, 0] }[outcome] : [0]
-  const ok = E.breakthrough(s, d, options(), mode === 'baseline' ? () => 0 : forced.length ? () => forced.shift() ?? 0 : Math.random)
+  const ok = E.breakthrough(s, d, options(), mode === 'baseline' ? () => 0 : forced.length ? () => forced.shift() ?? 0 : random)
   if (beforeSnapshot) {
     focus.attempts.push({ minutesFromStart: +((elapsed - focus.start.seconds) / 60).toFixed(2), before: beforeSnapshot,
       afterRealm: s.realm, karma: s.karma, cost, success: ok })
@@ -119,7 +121,7 @@ const allocateLabor = () => {
 }
 for (elapsed = 5; elapsed <= hours * 3600; elapsed += 5) {
   // tick(dt>1) splits into seconds, so advance wall time with each second as well.
-  for (let i = 0; i < 5; i++) { now += 1000; E.tick(s, d, 1, { events: false }) }
+  for (let i = 0; i < 5; i++) { now += 1000; E.tick(s, d, 1, { events: false, startAt: now - 1000 }) }
   if (elapsed % 60 === 0) allocateLabor()
   prepare()
   observeFocus()

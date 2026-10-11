@@ -5,7 +5,7 @@
  * 灵气富余就凝石、缺破境材料就专门去做、能破境就破境。
  * 目的是给出一个**稳定可复现**的参照玩家，而不是最优打法。
  */
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { JOB_MAP } from '../src/data/jobs.js'
 import { CONFIG } from '../src/data/config.js'
 import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'

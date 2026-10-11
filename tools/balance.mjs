@@ -1,3 +1,4 @@
+import { setGameContext } from '../src/game/context.js'
 /**
  * 平衡性推演：模拟一个「勤快但不精算」的玩家，看看节奏是否合理。
  * 玩家策略在 tools/player-bot.mjs 里（与 tools/resource-audit.mjs 共用，保证两边结论一致）。
@@ -6,7 +7,7 @@
  *   npm run balance -- [小时数] [初始仙缘]
  */
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { REALMS } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
@@ -16,17 +17,21 @@ const HOURS = Number(process.argv[2] || 4)
 if (!Number.isFinite(HOURS) || HOURS <= 0 || HOURS > 168) throw new Error('小时数需大于0且不超过168')
 const TOTAL = HOURS * 3600
 const DECISION_EVERY = 5
+let random = () => Math.random()
+let simulatedNow = Date.UTC(2026, 9, 11)
 const seedInput = process.argv[4]
 if (seedInput !== undefined) {
   let seed = Number(seedInput)
   if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new Error('随机种子需为32位无符号整数')
-  Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296)
+  random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296)
 }
 const isolateFailure = process.argv[5] === 'industry'
 if (process.argv[5] !== undefined && !isolateFailure) throw new Error('第五参数仅支持industry，隔离破境失败以验证产业路线')
 const attempts = { attempted: 0, success: 0, failed: 0, regression: 0, death: 0 }
 
-const state = createInitialState()
+const state = createInitialState(simulatedNow)
+if (seedInput !== undefined) state.disciples.rootSeed = Number(seedInput)
+setGameContext(state, { now: () => simulatedNow, random })
 // 可选第三参数：带指定仙缘重修，用同一策略检查后续周目的仓储链。
 const karma = Number(process.argv[3] || 0)
 if (!Number.isFinite(karma) || karma < 0 || !Number.isInteger(karma)) throw new Error('仙缘需为非负整数')
@@ -75,7 +80,8 @@ console.log(`模拟 ${HOURS} 小时，初始仙缘 ${karma}，每 ${DECISION_EVE
 let previousRealm = state.realm
 let sawEnergy = false
 for (let t = 1; t <= TOTAL; t++) {
-  E.tick(state, derived, 1, { events: false })
+  simulatedNow += 1000
+  E.tick(state, derived, 1, { events: false, startAt: simulatedNow - 1000 })
   if (t % DECISION_EVERY === 0) bot.act()
   if (t % 300 === 0) E.recompute(state, derived)
   if (checkpoints.has(t)) snapshot(t)

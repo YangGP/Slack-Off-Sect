@@ -8,36 +8,31 @@ import { CULTIVATION, ALL_UPGRADES } from '@/data/upgrades'
 import { TECHNIQUES } from '@/data/techniques'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
-import { createInitialState, normalizeState, resetForAscension, resetForReincarnation } from './state'
+import { createInitialState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
 import { atLeast } from './numbers'
-import {
-  saveToStorage,
-  loadFromStorage,
-  clearStorage,
-  exportSave,
-  parseImport,
-  saveLoadError,
-  allowSaveAfterRecovery,
-} from './save'
+import { createSaveRepository, exportSave, parseImport } from './save'
+import { createGame, createRuntime } from './runtime'
 
 // ============================================================
 // 单例状态
 // ============================================================
 
-const restored = loadFromStorage()
-export const state = reactive(restored ? normalizeState(restored) : createInitialState())
+let restored = null
+let initialized = false
+export const state = reactive(createInitialState())
 export const derived = reactive(E.createDerived())
 
 /** 临时 UI 状态（不存档） */
 export const ui = reactive({
-  saveLoadError,
+  saveLoadError: '',
+  saveRecoveryNotice: '',
   debug: false,
   debugPage: false,
   offlineReport: null,
   toast: null,
   message: null,
-  lastSavedAt: restored?.lastSaveAt || 0,
+  lastSavedAt: 0,
   /**
    * 悬停购买项时高亮左栏资源行：
    *   need —— 这项花费涉及的资源
@@ -46,16 +41,35 @@ export const ui = reactive({
   highlight: { need: [], lack: [] },
 })
 
-// 控制台执行 DEBUG 开启本次页面的调试入口；刷新后恢复隐藏，不写入存档。
-if (typeof window !== 'undefined') {
-  Object.defineProperty(window, 'DEBUG', {
-    configurable: true,
-    get() {
-      ui.debug = true
-      ui.debugPage = true
-      return '调试模式已开启'
-    },
-  })
+const game = createGame({ state, derived })
+const repository = createSaveRepository()
+const runtime = createRuntime({ game, repository,
+  onSaved: at => { ui.lastSavedAt = at },
+  onAdvance: reportAdvance,
+})
+
+/** 明确启动入口；导入 store 不读取存档、不结算离线、不注册浏览器事件。 */
+export function initializeGame() {
+  if (initialized) return
+  initialized = true
+  restored = runtime.load()
+  ui.saveLoadError = repository.loadError
+  ui.saveRecoveryNotice = restored?.__recoveryNotice || ''
+  ui.lastSavedAt = restored?.lastSaveAt || 0
+  applyOfflineProgress()
+  runtime.resetClock()
+  // 控制台执行 DEBUG 开启本次页面的调试入口；刷新后恢复隐藏，不写入存档。
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'DEBUG', {
+      configurable: true,
+      get() {
+        ui.debug = true
+        ui.debugPage = true
+        return '调试模式已开启'
+      },
+    })
+  }
+
 }
 
 /** 悬停某个花费时高亮对应资源；cost 形如 { qi: 100, wood: 20 } */
@@ -71,20 +85,18 @@ export function clearHighlight() {
   if (ui.highlight.need.length) ui.highlight = { need: [], lack: [] }
 }
 
-E.recompute(state, derived)
-
 // ============================================================
 // 离线收益
 // ============================================================
 
 function applyOfflineProgress() {
-  if (!restored) return
+  if (!restored || restored.__recoveryNotice) return
   if (state.settings.offlineProgress === false) return
   const elapsed = (Date.now() - (restored.lastSaveAt || Date.now())) / 1000
   if (elapsed < 30) return
   const capSeconds = Math.floor((derived.offlineHours || CONFIG.OFFLINE_CAP_HOURS) * 3600)
   const seconds = Math.min(elapsed, capSeconds)
-  const result = E.simulateOffline(state, derived, seconds, {})
+  const result = game.simulateOffline(seconds, { startAt: restored.lastSaveAt })
   const gains = Object.entries(result.gains)
     .map(([id, amount]) => ({
       id,
@@ -113,53 +125,22 @@ function applyOfflineProgress() {
   E.recompute(state, derived)
 }
 
-applyOfflineProgress()
 
 // ============================================================
 // 主循环
 // ============================================================
 
-let handle = null
-let last = Date.now()
-let autosaveAcc = 0
-let recomputeAcc = 0
-
-/** 把一段时间推进游戏；跨度太大时切成 1 秒步长，避免公式失真 */
+/** 推进入口与主循环共用实例的结算策略。 */
 export function advance(dt) {
-  if (dt <= 0) return
-  if (dt > 3) {
-    const result = E.simulateOffline(state, derived, Math.min(dt, 6 * 3600), {})
-    const parts = Object.entries(result.gains)
-      .slice(0, 4)
-      .map(([id, amount]) => `${RESOURCES.find((r) => r.id === id)?.name || id}+${Math.round(amount)}`)
-    if (dt > 60) {
-      E.pushLog(state, `挂机 ${Math.round(dt)} 秒${parts.length ? '，' + parts.join('，') : ''}`, 'info')
-    }
-  } else {
-    E.tick(state, derived, dt)
-  }
-  E.recompute(state, derived)
+  const result = game.advance(dt)
+  reportAdvance(dt, result)
 }
 
-function step() {
-  const now = Date.now()
-  let dt = (now - last) / 1000
-  last = now
-  if (dt > 0.001) {
-    advance(dt)
-    autosaveAcc += dt
-    recomputeAcc += dt
-    if (recomputeAcc >= CONFIG.RECOMPUTE_MIN_GAP) {
-      recomputeAcc = 0
-      E.recompute(state, derived)
-    }
-    if (state.settings.autosave && autosaveAcc >= CONFIG.AUTOSAVE_MS / 1000) {
-      autosaveAcc = 0
-      saveNow()
-    }
-  } else {
-    E.recompute(state, derived)
-  }
+function reportAdvance(dt, result) {
+  if (!result || dt <= 60) return
+  const parts = Object.entries(result.gains).slice(0, 4)
+    .map(([id, amount]) => `${RESOURCES.find(r => r.id === id)?.name || id}+${Math.round(amount)}`)
+  E.pushLog(state, `挂机 ${Math.round(dt)} 秒${parts.length ? '，' + parts.join('，') : ''}`, 'info')
 }
 
 function onHide() {
@@ -171,35 +152,33 @@ function onBeforeUnload() {
 }
 
 export function startLoop() {
-  if (saveLoadError) return
-  if (handle) return
-  last = Date.now()
-  handle = setInterval(step, CONFIG.TICK_MS)
+  initializeGame()
+  if (!runtime.start()) return
   document.addEventListener('visibilitychange', onHide)
   window.addEventListener('beforeunload', onBeforeUnload)
 }
 
 export function stopLoop() {
-  if (!handle) return
-  clearInterval(handle)
-  handle = null
-  document.removeEventListener('visibilitychange', onHide)
-  window.removeEventListener('beforeunload', onBeforeUnload)
+  runtime.stop()
+  if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide)
+  if (typeof window !== 'undefined') window.removeEventListener('beforeunload', onBeforeUnload)
 }
 
 export function saveNow() {
-  const ok = saveToStorage(state)
-  if (ok) ui.lastSavedAt = Date.now()
-  return ok
+  return runtime.save()
 }
 
-/** 任何会改变数值的操作之后调用：立即重算 + 提示 */
+/** 引擎动作已更新派生数据，这里只负责操作提示。 */
 function afterAction(text, kind = 'good') {
-  E.recompute(state, derived)
   if (text) toast(text, kind)
 }
 
+let toastHandle = null
+
 export function toast(text, kind = 'info') {
+  if (toastHandle) clearTimeout(toastHandle)
+  toastHandle = setTimeout(() => { ui.toast = null; toastHandle = null }, 4000)
+  toastHandle.unref?.()
   ui.toast = { text, kind, at: Date.now() }
   ui.message = text
 }
@@ -211,7 +190,7 @@ export function toast(text, kind = 'info') {
 export const actions = {
   setDebugResource(id, amount) {
     if (!ui.debug) return false
-    if (saveLoadError) {
+    if (ui.saveLoadError) {
       toast('存档读取失败，请先在设置中导入有效备份', 'bad')
       return false
     }
@@ -277,7 +256,7 @@ export const actions = {
     afterAction(`闲散弟子已派往${JOBS.find((j) => j.id === jobId)?.name}`, 'good')
   },
   clearJobs() {
-    for (const j of JOBS) state.disciples.jobs[j.id] = 0
+    E.clearJobs(state, derived)
     afterAction('所有弟子回家歇着了', 'info')
   },
   assignDisciples(ids, roleId) {
@@ -411,6 +390,7 @@ export const actions = {
   resolveChoice(index) {
     const event = E.resolveChoice(state, derived, index)
     if (!event) return false
+    E.recompute(state, derived)
     afterAction('', '')
     saveNow()
     return true
@@ -418,11 +398,12 @@ export const actions = {
   triggerEvent() {
     if (!ui.debug) return false
     E.fireEvent(state, derived)
+    E.recompute(state, derived)
     afterAction('', '')
   },
   save() {
-    saveNow()
-    toast('已存档', 'good')
+    const saved = saveNow()
+    toast(saved ? '已存档' : '存档失败', saved ? 'good' : 'bad')
   },
   /** 清空宗门纪事（右侧列表顶部的小链接） */
   clearLog() {
@@ -434,29 +415,26 @@ export const actions = {
   },
   importText(text) {
     const next = parseImport(text)
-    const keys = Object.keys(state)
-    for (const k of keys) {
-      if (!(k in next)) delete state[k]
-    }
-    Object.assign(state, next)
-    E.recompute(state, derived)
+    ui.saveRecoveryNotice = next.__recoveryNotice || ''
+    game.replaceState(next)
+    runtime.resetClock()
+    ui.offlineReport = null
+    ui.highlight = { need: [], lack: [] }
     const recovering = !!ui.saveLoadError
-    allowSaveAfterRecovery()
+    repository.allowRecovery()
     ui.saveLoadError = ''
     saveNow()
     if (recovering) startLoop()
-    toast('读档成功', 'good')
+    toast(ui.saveRecoveryNotice || '读档成功', 'good')
     return true
   },
   resetGame() {
-    if (!clearStorage()) return false
+    if (!repository.clear()) return false
     const recovering = !!ui.saveLoadError
     ui.saveLoadError = ''
-    const fresh = createInitialState()
-    const keys = Object.keys(state)
-    for (const k of keys) if (!(k in fresh)) delete state[k]
-    Object.assign(state, fresh)
-    E.recompute(state, derived)
+    game.reset()
+    runtime.resetClock()
+    ui.saveRecoveryNotice = ''
     saveNow()
     if (recovering) startLoop()
     ui.offlineReport = null
@@ -571,3 +549,16 @@ export const view = {
 }
 
 export { E as engine, CONFIG, BUILDINGS, JOBS, CULTIVATION, TECHNIQUES, ALL_UPGRADES, ACHIEVEMENTS, REALMS, RESOURCES }
+
+if (import.meta.hot) {
+  // 游戏模块拥有状态和计时器，局部替换会让已挂载组件与新 store 脱节。
+  // 保存后让 Vite 完整重载，重新经过 main 的初始化、挂载和启动入口。
+  import.meta.hot.accept(() => {
+    import.meta.hot.invalidate('游戏模块更新，需要重新启动主循环')
+  })
+  import.meta.hot.dispose(() => {
+    if (initialized) saveNow()
+    stopLoop()
+    if (toastHandle) clearTimeout(toastHandle)
+  })
+}

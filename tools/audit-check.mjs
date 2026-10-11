@@ -7,7 +7,7 @@ import { CRAFT_MAP } from '../src/data/crafts.js'
 import { progressionDiagnostics } from './progression-diagnostics.mjs'
 import { createBot } from './player-bot.mjs'
 import { createInitialState } from '../src/game/state.js'
-import * as E from '../src/game/engine.js'
+import * as E from './engine-fixture.mjs'
 
 // 复现合体材料容量不足：必须追踪尚未解锁的洞天扩仓链。
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
