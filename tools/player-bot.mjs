@@ -115,7 +115,9 @@ export const ADVANCED_CRAFTS = {
 /** 凝石时至少留多少灵气（模拟玩家不会把灵气抽干） */
 export const STONE_QI_FLOOR = 400
 
-export function createBot(state, derived) {
+export function createBot(state, derived, policy = {}) {
+  const realmNeed = () => policy.realmCost
+    ? policy.realmCost(state, derived) : E.realmCost(state, derived, state.realm + 1)
   const normalHabitability = () => derived.habitability - (state.habitabilityPenalty || 0)
   const comfortFloor = () => state.disciples.total + (state.realm >= 5 ? 100 : 40)
   const comfortCeiling = () => state.disciples.total + (state.realm >= 5 ? 120 : 60)
@@ -250,7 +252,7 @@ export function createBot(state, derived) {
    * 返回待研究 id 与必需建筑数量；循环依赖通过访问集合终止。
    */
   function breakthroughPrereqs() {
-    const next = E.realmCost(state, derived, state.realm + 1)
+    const next = realmNeed()
     const buildings = new Map()
     if (!next) return { upgrades: new Set(), buildings }
     const chain = new Set()
@@ -314,7 +316,7 @@ export function createBot(state, derived) {
   function act() {
     // 固印时先暂停耗能法宝，待渡劫材料备齐再启用；使用玩家同样可用的启停操作。
     if (state.upgrades.energyCore && state.realm >= 9) {
-      const next = E.realmCost(state, derived, state.realm + 1) || {}
+      const next = realmNeed() || {}
       const ready = !next.ascensionSeal || ((state.resources.ascensionSeal || 0) >= next.ascensionSeal &&
         (state.resources.qiEnergy || 0) >= (next.qiEnergy || 0))
       if ((state.upgradeEnabled.energyCore !== false) !== ready) E.toggleUpkeepUpgrade(state, derived, 'energyCore')
@@ -323,7 +325,7 @@ export function createBot(state, derived) {
     // 金丹后按近期建筑/研究/破境需求设置加工库存目标，避免把原料无限加工。
     // 这是新目标控件允许玩家执行的策略，手动与自动制作使用同一目标。
     if (derived.craftTargetsUnlocked) {
-      const demand = { ...(E.realmCost(state, derived, state.realm + 1) || {}) }
+      const demand = { ...(realmNeed() || {}) }
       for (const id of derived.availableUpgrades) {
         if (!wantsComfortUpgrade(E.UPGRADE_MAP[id])) continue
         for (const [res, amount] of Object.entries(E.UPGRADE_MAP[id].cost)) demand[res] = Math.max(demand[res] || 0, amount)
@@ -379,7 +381,7 @@ export function createBot(state, derived) {
     const { upgrades: prereq, buildings: requiredBuildings } = breakthroughPrereqs()
     // 入住配套是正常人口发展的基础投资，先学会再持续扩屋。
     if (derived.availableUpgrades.includes('homePlanning')) prereq.add('homePlanning')
-    const nextNeed = E.realmCost(state, derived, state.realm + 1) || {}
+    const nextNeed = realmNeed() || {}
     const shortRes = Object.keys(nextNeed).filter((r) => (derived.max[r] || 0) < nextNeed[r])
     const storageFixIds = new Set(
       derived.availableUpgrades.filter((id) => {
@@ -424,7 +426,7 @@ export function createBot(state, derived) {
     // 金丹以前仅由加工品触发，以免开局攒基础资源时把自举建筑一起停掉。
     if (!reserveCost) {
       const PRIMARY = new Set(['qi', 'wood', 'rock', 'stone', 'herb', 'ore', 'insight', 'faith'])
-      const need = E.realmCost(state, derived, state.realm + 1) || {}
+      const need = realmNeed() || {}
       const missing = Object.entries(need).filter(([r, v]) => (state.resources[r] || 0) < v)
       const craftedMissing = missing.filter(([r]) => !PRIMARY.has(r))
       if (missing.length > 0 && missing.length <= 3 && (craftedMissing.length > 0 || state.realm >= 4)) {
@@ -556,7 +558,8 @@ export function createBot(state, derived) {
       }
     }
 
-    if (E.breakthrough(state, derived)) assignJobs()
+    const advanced = policy.breakthrough ? policy.breakthrough(state, derived) : E.breakthrough(state, derived)
+    if (advanced) assignJobs()
   }
 
   return { act, assignJobs, buildStep }

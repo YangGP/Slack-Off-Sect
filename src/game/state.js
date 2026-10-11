@@ -89,6 +89,7 @@ export function createInitialState() {
       playTime: 0,
       ascensions: 0,
       reincarnations: 0,
+      breakthroughDeaths: 0,
       bestRealm: 0,
       offlineGains: 0,
       eventsSeen: 0,
@@ -273,6 +274,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.affairs = { ...fresh.affairs }
   state.stats.lifeInsight = 0
   if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
+  else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1
   else state.stats.ascensions += 1
   state.nextEventAt = Date.now() + 90000
   state.lastTickAt = Date.now()

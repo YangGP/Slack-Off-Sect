@@ -361,9 +361,13 @@ export const actions = {
     saveNow()
     return true
   },
-  breakthrough() {
-    const ok = E.breakthrough(state, derived)
+  breakthrough(options = {}) {
+    const deaths = state.stats.breakthroughDeaths || 0
+    const ok = E.breakthrough(state, derived, options)
     if (ok) toast(`突破成功：${REALMS[state.realm].name}`, 'good')
+    else toast((state.stats.breakthroughDeaths || 0) > deaths ? '身死道消，仙缘减半，已重开' : '突破未成，请查看宗门纪事', 'bad')
+    saveNow()
+    return ok
   },
   /**
    * 转世重修：化神期起可做，清空的东西与飞升完全一样（资源 / 弟子 / 建筑 /

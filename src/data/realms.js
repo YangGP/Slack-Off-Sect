@@ -100,3 +100,76 @@ export const REINCARNATE_REALM_INDEX = 6
 export const ASCEND_REALM_INDEX = REALMS.length - 1
 
 export const MAX_REALM_INDEX = REALMS.length - 1
+
+/** 风险按冲关前的境界划分，概率加成为百分点。 */
+export const BREAKTHROUGH = {
+  earlyChance: 0.95,
+  goldenCoreChance: 0.70,
+  lateBaseChances: { 8: 0.20, 9: 0.15, 10: 0.10 }, // 按目标境界：合体、大乘、渡劫
+  tribulationRealm: 4,
+  tribulationChance: 0.60,
+  chanceDrop: 0.05,
+  chanceCap: 0.99,
+  deathRealm: 7,
+  deathChance: 0.10,
+  deathChanceStep: 0.05,
+  stockLoss: 0.02,
+  productionLoss: 0.05,
+  recoverySeconds: 120,
+}
+
+const aid = (name, cost, bonus) => ({ name, cost, bonus })
+
+/** 按目标境界配置。复合方案必须整组支付；ID带境界，旧勾选不会用于新境界。 */
+export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
+  1: [
+    aid('温养经脉', { qi: 80 }, 0.02),
+    aid('灵木引气', { wood: 20 }, 0.02),
+    aid('香火祈愿', { faith: 20 }, 0.01),
+  ],
+  2: [
+    aid('灵草洗髓', { herb: 60 }, 0.02),
+    aid('灵石稳气', { stone: 20 }, 0.02),
+    aid('香火祈愿', { faith: 40 }, 0.02),
+  ],
+  3: [
+    aid('丹药固基', { pill: 6 }, 0.02),
+    aid('符箓镇脉', { talisman: 4 }, 0.02),
+    aid('香火祈愿', { faith: 80 }, 0.03),
+  ],
+  4: [
+    aid('仙草养丹', { immortalHerb: 3 }, 0.06),
+    aid('法器护丹', { artifact: 6 }, 0.06),
+    aid('香火祈愿', { faith: 120 }, 0.08),
+  ],
+  5: [
+    aid('仙草护婴', { immortalHerb: 8 }, 0.08),
+    aid('符阵镇劫', { arrayBase: 4, talisman: 20 }, 0.10),
+    aid('香火祈愿', { faith: 250 }, 0.07),
+  ],
+  6: [
+    aid('九转养神', { nineTurnPill: 1 }, 0.08),
+    aid('晶符凝神', { crystal: 12, spiritTalisman: 4 }, 0.10),
+    aid('香火祈愿', { faith: 600 }, 0.07),
+  ],
+  7: [
+    aid('丹草护虚', { nineTurnPill: 2, immortalHerb: 12 }, 0.08),
+    aid('灵器锚空', { spiritArtifact: 2, spiritTalisman: 8 }, 0.11),
+    aid('香火祈愿', { faith: 1200 }, 0.06),
+  ],
+  8: [
+    aid('九转合真', { nineTurnPill: 4 }, 0.16),
+    aid('银器共鸣', { mithril: 12, spiritArtifact: 3 }, 0.24),
+    aid('香火祈愿', { faith: 2400 }, 0.10),
+  ],
+  9: [
+    aid('灵子归一', { qiParticle: 40, crystal: 20 }, 0.16),
+    aid('玄金护道', { arcaneGold: 8, spiritArtifact: 4 }, 0.26),
+    aid('香火祈愿', { faith: 5000 }, 0.08),
+  ],
+  10: [
+    aid('灵宝挡劫', { spiritTreasure: 2, nineTurnPill: 8 }, 0.16),
+    aid('阵印封雷', { ascensionSeal: 60, crystalSilver: 12 }, 0.28),
+    aid('香火祈愿', { faith: 10000 }, 0.06),
+  ],
+}).map(([realm, aids]) => [realm, aids.map((entry, index) => ({ ...entry, id: `${realm}:${index}` }))]))

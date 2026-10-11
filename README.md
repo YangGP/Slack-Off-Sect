@@ -2,7 +2,7 @@
 
 用 Vue 3 + Vite（纯 JavaScript）实现的修仙宗门挂机放置游戏，参考猫国的资源池、劳动力、叠加建筑与研究加工体系。
 
-**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前版本 **v0.23**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
+**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前版本 **v0.3 · 渡劫突破大更新**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
 
 ## 开发与检查
 
@@ -24,6 +24,8 @@ npm run clean        # 删除构建、测试与审计产物
 
 修真研究灵气、材料与经营，技艺和法宝提供增益。符文是技术，灵木和金属是载体；金丹发展阵基与玄钢，元婴发展灵液、灵晶与混灵土，后续以玄铁混灵土、秘银、玄金和晶银营造高阶设施。炼制页管理批量制作、自动加工及库存目标，左栏可自选快捷配方。
 
+破境按概率结算，各目标境界可选不同的护道材料与香火祈愿，失败投料不退回。炼虚起冲关失败可能退境或身死重开；渡劫基础成功率10%，满配60%。身死保留已有永久积累，本次仙缘收益减半。
+
 带维护费的设施可以停用，缺料时收益按实际供给缩放；分灵、偏极与湮灭的进料和出料随全局倍率同步提速。建筑成本指数增长，可拆除返还一半材料；法宝可重复祭炼。心有灵犀开放自动加工、优先配方与逐项材料保留。突破主材料分四档：筑基至元婴用丹药，化神至合体用灵液与灵晶，大乘用灵气分子，渡劫用飞升阵印。化神起可转世取得永久仙缘，大乘通过湮灭产线固结稳定的飞升阵印，渡劫可飞升并取得道果；首颗道果永久开放重修自动加工与按仓储比例保留。成就保留行为记录，当前不提供产出奖励。
 
 主循环与离线补算共用引擎。设置页支持下载和导入存档文件；存档位于浏览器 localStorage，按同源隔离。
@@ -39,6 +41,7 @@ npm run clean        # 删除构建、测试与审计产物
 | [CRAFT-PROGRESSION](docs/CRAFT-PROGRESSION.md) | 符文载体、晶核阵、防护分工与后期建材 |
 | [HABITABILITY](docs/HABITABILITY.md) | 宜居度公式、风险与供给 |
 | [BALANCE](docs/BALANCE.md) | 平衡改动及历史审计结果 |
+| [BREAKTHROUGH-PACING](docs/BREAKTHROUGH-PACING.md) | 渡劫突破对重试、重修与游戏时间的影响 |
 | [ROADMAP](docs/ROADMAP.md) | 尚未实施、待评估的方向 |
 | [SPIRIT-ENERGY](docs/SPIRIT-ENERGY.md) | 灵子与灵能场世界观，区分设定和实现 |
 | [MIDGAME-EVENTS](docs/MIDGAME-EVENTS.md) | 已实现药圃防务与后续事务草案 |
@@ -58,6 +61,8 @@ npm run audit:economy                      # 成品容量、基础需求与去�
 npm run audit:crafts -- 24 0               # 加工链与边际增益
 npm run audit:buildings                    # 前置、来源与容量可达性
 npm run audit:pacing -- 72 0 0 0           # 首次生产、建设与各境耗时
+npm run audit:breakthrough -- aided 2 72   # 满配护道的真实引擎节奏样本
+npm run audit:breakthrough-risk           # 退境、身死与重试次数的数学模型
 npm run balance -- 24 0                    # 固定时长的资源快照
 npm run balance:events -- 24               # 固定种子事件对照
 npm run balance:visits -- 24               # 持续操作与间歇上线

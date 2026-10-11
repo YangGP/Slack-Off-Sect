@@ -6,7 +6,8 @@ import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { TECHNIQUES } from '@/data/techniques'
 import { CRAFTS, CRAFT_MAP, craftTime, autoCraftTime } from '@/data/crafts'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '@/data/achievements'
-import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH, BREAKTHROUGH_AIDS } from '@/data/realms'
+import { resetForRebirth } from './state'
 import { EVENTS, EVENT_MAP, getEventLevel, isEventInRealm } from '@/data/events'
 import { CALENDAR, TERMS, SEASONS, DAYS_PER_SEASON, DAYS_PER_YEAR } from '@/data/calendar'
 import { atLeast, subtractResource, floorNumber, ceilNumber } from './numbers'
@@ -1488,15 +1489,67 @@ export function toggleAutoCraft(state, derived, recipeId) {
   return state.autoCraft[recipeId]
 }
 
-export function breakthrough(state, derived) {
+/** 预览与支付使用同一份报价，辅助材料不受破境折扣影响。 */
+export function breakthroughPreview(state, derived, options = {}) {
+  const rules = BREAKTHROUGH
+  const tribulation = state.realm >= rules.tribulationRealm
+  const baseChance = rules.lateBaseChances[state.realm + 1] ?? (tribulation
+    ? rules.tribulationChance - (state.realm - rules.tribulationRealm) * rules.chanceDrop
+    : state.realm + 1 === rules.tribulationRealm ? rules.goldenCoreChance : rules.earlyChance)
+  const availableAids = BREAKTHROUGH_AIDS[state.realm + 1] || []
+  const aids = availableAids.filter(aid => options[aid.id] === true)
+  const cost = { ...(realmCost(state, derived, state.realm + 1) || {}) }
+  for (const aid of aids) {
+    for (const [res, amount] of Object.entries(aid.cost)) cost[res] = (cost[res] || 0) + amount
+  }
+  const chance = Math.min(rules.chanceCap, baseChance + aids.reduce((sum, aid) => sum + aid.bonus, 0))
+  const deathOnFailure = state.realm >= rules.deathRealm
+    ? rules.deathChance + (state.realm - rules.deathRealm) * rules.deathChanceStep : 0
+  const regressionOnFailure = deathOnFailure > 0 ? 1 - deathOnFailure : 0
+  const maxChance = Math.min(rules.chanceCap, baseChance + availableAids.reduce((sum, aid) => sum + aid.bonus, 0))
+  return { baseChance, chance, maxChance, availableAids, cost, tribulation, deathOnFailure, regressionOnFailure,
+    regressionRisk: (1 - chance) * regressionOnFailure, deathRisk: (1 - chance) * deathOnFailure,
+    deathKarma: Math.floor(reincarnationGain(state, derived) / 2) }
+}
+
+export function breakthrough(state, derived, options = {}, random = Math.random) {
   const next = REALMS[state.realm + 1]
   if (!next) return false
-  const cost = realmCost(state, derived, state.realm + 1)
+  const preview = breakthroughPreview(state, derived, options)
+  const { cost } = preview
   if (!canAfford(state, cost)) {
     pushLog(state, '破境所需资源不足，强冲只会伤及道基。', 'bad')
     return false
   }
   payCost(state, cost)
+  if (random() >= preview.chance) {
+    if (preview.deathOnFailure > 0 && random() < preview.deathOnFailure) {
+      const name = REALMS[state.realm].name
+      resetForRebirth(state, preview.deathKarma, 'death')
+      pushLog(state, `自【${name}】冲关失败，身死道消，强制重开；本次仙缘减半，获得 ${preview.deathKarma} 点。`, 'bad')
+    } else if (preview.tribulation) {
+      const lost = []
+      for (const res of Object.keys(next.cost)) {
+        if (res === 'insight' || res === 'qi') continue
+        const amount = Math.min(state.resources[res] || 0, floorNumber((state.resources[res] || 0) * BREAKTHROUGH.stockLoss))
+        if (amount > 0) {
+          payCost(state, { [res]: amount })
+          lost.push(`${RESOURCE_MAP[res].name} ${amount}`)
+        }
+      }
+      const injury = { id: 'breakthroughInjury', name: '渡劫调养', mult: -BREAKTHROUGH.productionLoss,
+        target: null, until: Date.now() + BREAKTHROUGH.recoverySeconds * 1000 }
+      state.buffs = state.buffs.filter(b => b.id !== injury.id)
+      state.buffs.push(injury)
+      if (preview.regressionOnFailure > 0) state.realm -= 1
+      const realmOutcome = preview.regressionOnFailure > 0 ? `退回【${REALMS[state.realm].name}】` : '境界不变'
+      pushLog(state, `冲击【${next.name}】失败，材料不退回，${realmOutcome}；全局产出降低5%，持续120秒${lost.length ? `；额外损失 ${lost.join('、')}` : '；无额外库存损失'}。`, 'bad')
+    } else {
+      pushLog(state, `冲击【${next.name}】失败，材料不退回，境界不变，无额外惩罚。`, 'bad')
+    }
+    recompute(state, derived)
+    return false
+  }
   state.realm += 1
   state.stats.bestRealm = Math.max(state.stats.bestRealm, state.realm)
   pushLog(state, `天地异象，成功突破至【${next.name}】`, 'realm')

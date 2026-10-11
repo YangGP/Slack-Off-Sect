@@ -27,7 +27,7 @@ import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP } from '../src/data/crafts.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
-import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '../src/data/realms.js'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
 import { SEASONS, CALENDAR } from '../src/data/calendar.js'
 import { CONFIG } from '../src/data/config.js'
 import { exportSave, parseImport } from '../src/game/save.js'
@@ -41,6 +41,8 @@ import {
 import { describeEffects } from '../src/game/effectsText.js'
 import { nearlyEqual, atLeast, floorNumber, ceilNumber } from '../src/game/numbers.js'
 import { enough, costLabel } from '../src/game/pricing.js'
+
+const successfulBreakthrough = (state, derived) => E.breakthrough(state, derived, {}, () => 0)
 
 let passed = 0
 let failed = 0
@@ -1900,13 +1902,13 @@ section('修真·技艺 / 境界 / 飞升')
   const { state: s2, derived: d2 } = newGame()
   // 破境材料横跨基础资源与进阶成品，逐项列举容易漏（每加一种料就断）—— 统一补满。
   for (const r of RESOURCES) s2.resources[r.id] = 1e7
-  const okBreak = E.breakthrough(s2, d2)
+  const okBreak = successfulBreakthrough(s2, d2)
   ok('破境成功', okBreak === true && s2.realm === 1)
   ok('境界倍率提升', d2.realmMult > 1)
 
   // 一路推到渡劫期
   let guard = 0
-  while (E.breakthrough(s2, d2) && guard++ < 50) {
+  while (successfulBreakthrough(s2, d2) && guard++ < 50) {
     // 补满**所有**资源：早先这里逐个列了 7 种，加了进阶品之后
     // 一路只推到第 8 境就断了（夹具的错，不是玩法的错）—— 改成通用写法，以后新增资源不会再犯。
     for (const r of RESOURCES) s2.resources[r.id] = 1e7
@@ -4339,14 +4341,14 @@ section('金丹起步与末期产业破境')
   for (const r of RESOURCES) late.resources[r.id] = 1e7
   late.resources.qiParticle = 0
   E.recompute(late, ld)
-  ok('基础材料齐全也不能跳过分灵进入大乘', E.breakthrough(late, ld) === false && late.realm === 8)
+  ok('基础材料齐全也不能跳过分灵进入大乘', successfulBreakthrough(late, ld) === false && late.realm === 8)
   late.resources.qiParticle = E.realmCost(late, ld, 9).qiParticle
-  ok('分灵产物备齐后能突破大乘', E.breakthrough(late, ld) === true && late.realm === 9)
+  ok('分灵产物备齐后能突破大乘', successfulBreakthrough(late, ld) === true && late.realm === 9)
   late.resources.ascensionSeal = 0
   E.recompute(late, ld)
-  ok('渡劫不能绕过湮灭固结的飞升阵印', E.breakthrough(late, ld) === false && late.realm === 9)
+  ok('渡劫不能绕过湮灭固结的飞升阵印', successfulBreakthrough(late, ld) === false && late.realm === 9)
   late.resources.ascensionSeal = E.realmCost(late, ld, 10).ascensionSeal
-  ok('整条产业材料备齐后可渡劫飞升', E.breakthrough(late, ld) === true && E.canAscend(late))
+  ok('整条产业材料备齐后可渡劫飞升', successfulBreakthrough(late, ld) === true && E.canAscend(late))
 
   const { state: saving, derived: sd } = newGame()
   saving.realm = 4
@@ -4595,9 +4597,9 @@ section('分阶段产业、工业吞吐与首飞准备')
     }
     s.resources[material] = 0
     E.recompute(s, d)
-    ok(`${REALMS[realm].name}突破不能缺少${RESOURCE_MAP[material].name}`, !E.breakthrough(s, d))
+    ok(`${REALMS[realm].name}突破不能缺少${RESOURCE_MAP[material].name}`, !successfulBreakthrough(s, d))
     s.resources[material] = E.realmCost(s, d, realm + 1)[material]
-    ok(`${material}备齐后可以正常破境`, E.breakthrough(s, d))
+    ok(`${material}备齐后可以正常破境`, successfulBreakthrough(s, d))
   }
 
   s.realm = 9
@@ -4649,6 +4651,95 @@ section('分阶段产业、工业吞吐与首飞准备')
   E.recompute(s, d)
   E.runAutoCraft(s, d, 3)
   ok('首飞前优先配方先取得竞争用料', s.resources.pill > 0 && s.resources.stone === 1)
+}
+
+section('破境概率与失败结算')
+{
+  const setup = (realm) => {
+    const s = createInitialState(), d = E.createDerived()
+    s.realm = realm
+    s.stats.lifeInsight = 200000
+    s.karma = 50
+    s.dao = 2
+    E.recompute(s, d)
+    for (const id of Object.keys(s.resources)) s.resources[id] = 100000
+    return [s, d]
+  }
+  for (let realm = 0; realm < 10; realm++) {
+    const [s, d] = setup(realm)
+    const p = E.breakthroughPreview(s, d)
+    ok(`境界${realm}基础概率遵守阶段`, close(p.baseChance, realm < 3 ? 0.95 : realm === 3 ? 0.70 : realm >= 7 ? 0.20 - (realm - 7) * 0.05 : 0.6 - (realm - 4) * 0.05))
+    ok(`境界${realm}身死风险遵守炼虚分界`, realm < 7 ? p.deathRisk === 0 : p.deathRisk > 0)
+    ok(`境界${realm}退境风险遵守炼虚分界`, realm < 7 ? p.regressionRisk === 0 : close(p.regressionOnFailure + p.deathOnFailure, 1))
+    const options = Object.fromEntries(p.availableAids.map(aid => [aid.id, true]))
+    const aided = E.breakthroughPreview(s, d, options)
+    ok(`目标境界${realm + 1}独立配置两组护道与香火`, p.availableAids.length === 3 && p.availableAids[2].cost.faith > 0)
+    ok(`目标境界${realm + 1}满配概率符合设计`, close(aided.chance, realm < 3 ? 0.99 : realm === 3 ? 0.90 : 0.85 - (realm - 4) * 0.05) && close(p.maxChance, aided.chance))
+    const expected = { ...E.realmCost(s, d, realm + 1) }
+    for (const aid of p.availableAids) {
+      for (const [res, amount] of Object.entries(aid.cost)) expected[res] = (expected[res] || 0) + amount
+    }
+    ok(`目标境界${realm + 1}基础和辅助费用相加`, Object.entries(expected).every(([res, amount]) => close(aided.cost[res], amount)))
+    for (const aid of p.availableAids) {
+      for (const [res, amount] of Object.entries(aid.cost)) {
+        const [poor, pd] = setup(realm)
+        poor.resources[res] = (E.realmCost(poor, pd, realm + 1)[res] || 0) + amount - 1
+        const before = { ...poor.resources }
+        ok(`目标境界${realm + 1}方案${aid.name}缺${res}不可支付`, !E.breakthrough(poor, pd, { [aid.id]: true }, () => { throw Error('不应掷骰') }) && Object.entries(before).every(([id, have]) => poor.resources[id] === have))
+      }
+    }
+    const obsolete = Object.fromEntries((BREAKTHROUGH_AIDS[realm === 0 ? 10 : realm] || []).map(aid => [aid.id, true]))
+    ok(`目标境界${realm + 1}不沿用其他境界方案`, close(E.breakthroughPreview(s, d, obsolete).chance, p.baseChance))
+    // 所有护道加工品在冲关前即可解锁生产，不要求下一境的配方。
+    for (const aid of p.availableAids) {
+      for (const res of Object.keys(aid.cost)) {
+        const recipe = CRAFTS.find(c => c.out === res)
+        if (recipe) ok(`目标境界${realm + 1}的${res}可提前生产`, (recipe.needs?.realm || 0) <= realm)
+      }
+    }
+  }
+  const [early, ed] = setup(3)
+  const ec = E.realmCost(early, ed, 4)
+  ok('金丹70%边界失败不倒退、只扣突破材料', !E.breakthrough(early, ed, {}, () => 0.70) && early.realm === 3 && early.resources.pill === 100000 - ec.pill && early.buffs.length === 0)
+  const [golden, gd] = setup(3)
+  ok('金丹低于70%边界时突破成功', E.breakthrough(golden, gd, {}, () => 0.699) && golden.realm === 4)
+  const [s, d] = setup(4)
+  const all = Object.fromEntries(BREAKTHROUGH_AIDS[5].map(aid => [aid.id, true]))
+  const p = E.breakthroughPreview(s, d, all)
+  ok('元婴护道叠加25个百分点且计入报价', close(p.chance, 0.85) && p.cost.faith === 250 && p.cost.immortalHerb === 8 && p.cost.arrayBase === 4 && p.cost.talisman === REALMS[5].cost.talisman + 20)
+  const [capped, cd] = setup(0)
+  const earlyOptions = Object.fromEntries(BREAKTHROUGH_AIDS[1].map(aid => [aid.id, true]))
+  ok('成功率最高99%', E.breakthroughPreview(capped, cd, earlyOptions).chance === 0.99)
+  const [poor, pd] = setup(4)
+  poor.resources.faith = 249
+  ok('辅助材料不足不支付、不掷骰', !E.breakthrough(poor, pd, all, () => { throw Error('不应掷骰') }) && poor.resources.qi === 100000)
+  ok('渡劫失败境界不变', !E.breakthrough(s, d, all, () => 0.99) && s.realm === 4)
+  ok('失败扣基础与辅助材料及2%相关库存', s.resources.pill === 100000 - p.cost.pill - Math.floor((100000 - p.cost.pill) * 0.02) && s.resources.faith === 99750 && s.resources.immortalHerb === 99992 && s.resources.arrayBase === 99996 && s.resources.talisman === 100000 - p.cost.talisman - Math.floor((100000 - p.cost.talisman) * 0.02))
+  ok('失败减产5%且有恢复期限', s.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05 && b.until > Date.now()))
+  E.breakthrough(s, d, {}, () => 0.99)
+  ok('连续失败减产不叠加', s.buffs.filter(b => b.id === 'breakthroughInjury').length === 1)
+  for (let realm = 7; realm <= 9; realm++) {
+    const [alive, ad] = setup(realm)
+    alive.stats.bestRealm = realm
+    const cost = E.realmCost(alive, ad, realm + 1)
+    const material = Object.keys(cost).find(id => id !== 'qi' && id !== 'insight')
+    const remaining = alive.resources[material] - cost[material]
+    ok(`境界${realm}失败存活必退一境`, !E.breakthrough(alive, ad, {}, () => 0.99) && alive.realm === realm - 1)
+    ok(`境界${realm}退境仍减产扣料并保留本世`, alive.resources[material] === remaining - Math.floor(remaining * 0.02) && alive.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && alive.stats.bestRealm === realm && alive.stats.lifeInsight === 200000 && alive.karma === 50 && alive.dao === 2)
+    ok(`境界${realm}退境后产出倍率立即更新`, ad.realmMult === REALMS[realm - 1].mult)
+  }
+  const [dead, dd] = setup(7)
+  dead.achievements.firstQi = true
+  dead.stats.bestRealm = 7
+  const gain = Math.floor(E.reincarnationGain(dead, dd) / 2)
+  let roll = 0
+  ok('炼虚失败可身死重开', !E.breakthrough(dead, dd, {}, () => roll++ === 0 ? 0.99 : 0) && dead.realm === 0)
+  ok('只减半本次仙缘且不误计转世飞升', dead.karma === 50 + gain && dead.dao === 2 && dead.stats.breakthroughDeaths === 1 && dead.stats.reincarnations === 0 && dead.stats.ascensions === 0)
+  ok('身死保留历史、清空本世', dead.achievements.firstQi && dead.stats.bestRealm === 7 && dead.stats.lifeInsight === 0 && dead.resources.pill === 0 && dead.buffs.length === 0)
+  const restored = parseImport(exportSave(dead))
+  ok('身死记录可保存恢复', restored.stats.breakthroughDeaths === 1 && restored.karma === dead.karma && restored.dao === 2)
+  const [win, wd] = setup(4)
+  ok('低于成功率时正常破境', E.breakthrough(win, wd, {}, () => 0.599) && win.realm === 5 && win.stats.bestRealm === 5)
 }
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项`)

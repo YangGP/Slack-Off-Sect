@@ -1,7 +1,7 @@
 {
   "name": "slack-off-sect",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "description": "Slack Off Sect (摸鱼宗门) —— 一个 Vue3 + Vite 的修仙宗门挂机放置游戏",
   "type": "module",
@@ -22,6 +22,8 @@
     "audit:crafts": "vite build --ssr tools/tier-audit.mjs --outDir .smoke-tier --emptyOutDir && node .smoke-tier/tier-audit.js",
     "audit:buildings": "vite build --ssr tools/building-reachability.mjs --outDir .smoke-reachability --emptyOutDir && node .smoke-reachability/building-reachability.js",
     "audit:pacing": "vite build --ssr tools/pacing-audit.mjs --outDir .smoke-pacing --emptyOutDir && node .smoke-pacing/pacing-audit.js",
+    "audit:breakthrough": "vite build --ssr tools/breakthrough-time-audit.mjs --outDir .smoke-breakthrough-time --emptyOutDir && node .smoke-breakthrough-time/breakthrough-time-audit.js",
+    "audit:breakthrough-risk": "vite build --ssr tools/breakthrough-risk-model.mjs --outDir .smoke-breakthrough-risk --emptyOutDir && node .smoke-breakthrough-risk/breakthrough-risk-model.js",
     "balance:events": "vite build --ssr tools/event-balance.mjs --outDir .smoke-event-balance --emptyOutDir && node .smoke-event-balance/event-balance.js",
     "balance:visits": "vite build --ssr tools/playstyles.mjs --outDir .smoke-visits --emptyOutDir && node .smoke-visits/playstyles.js",
     "docs:tables": "node tools/dump-tables.mjs"

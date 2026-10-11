@@ -1,8 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
-import { realmCost, canAfford } from '@/game/engine'
+import { breakthroughPreview, canAfford } from '@/game/engine'
 import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
 import { costLabel, enough as enoughOf } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -10,7 +10,12 @@ import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 
 const next = computed(() => REALMS[state.realm + 1] || null)
-const cost = computed(() => (next.value ? realmCost(state, derived, state.realm + 1) : null))
+const aids = reactive({})
+watch(() => state.realm, () => {
+  for (const id of Object.keys(aids)) delete aids[id]
+}, { flush: 'sync' })
+const preview = computed(() => breakthroughPreview(state, derived, aids))
+const cost = computed(() => next.value ? preview.value.cost : null)
 
 /** 破境后的口粮倍率：口粮随境界倍率上涨，破境既升产能也升成本（§5.4） */
 const ratio = computed(() => {
@@ -160,6 +165,31 @@ function reincarnate() {
     <div class="box-body">
       <template v-if="next">
         <div class="small dim">{{ next.desc }}</div>
+        <div style="padding: 6px 0">
+          {{ preview.tribulation ? '渡劫成功率' : '突破成功率' }}
+          <b class="good">{{ fmtPercent(preview.chance) }}</b>
+          <span class="dim">（基础 {{ fmtPercent(preview.baseChance) }}，本境满配 {{ fmtPercent(preview.maxChance) }}）</span>
+        </div>
+        <div class="small" style="display: flex; gap: 16px; flex-wrap: wrap; padding-bottom: 6px">
+          <label v-for="aid in preview.availableAids" :key="aid.id">
+            <input v-model="aids[aid.id]" type="checkbox">
+            {{ aid.name }} +{{ fmtPercent(aid.bonus) }}：
+            <span v-for="(amount, res) in aid.cost" :key="res" :class="{ lack: !enoughOf(state, res, amount) }" style="margin-right: 6px">{{ resName(res) }} {{ fmtCost(amount) }}</span>
+          </label>
+        </div>
+        <div class="small dim" style="padding-bottom: 6px">
+          各组可选并可叠加；勾选方案须备齐整组材料，费用另加于基础突破材料，换境后需重新选择。每次尝试均消耗全部投料，失败不退回。
+          <template v-if="!preview.tribulation">失败无额外惩罚，不损失修为。</template>
+          <template v-else>
+            失败且存活：{{ preview.regressionOnFailure ? '退回上一境' : '境界不变' }}，全局产出降低5%，持续120秒（重复失败只刷新时间）；另扣突破所用库存材料的2%，向下取整，不扣灵气与灵机。
+          </template>
+        </div>
+        <div v-if="preview.deathOnFailure" class="small bad" style="padding-bottom: 6px">
+          炼虚起冲关失败：{{ fmtPercent(preview.regressionOnFailure) }} 概率退一境，{{ fmtPercent(preview.deathOnFailure) }} 概率身死道消。
+          本次总退境概率 {{ fmtPercent(preview.regressionRisk, 1) }}，本次总身死概率 {{ fmtPercent(preview.deathRisk, 1) }}。
+          身死立即重开，清空范围同转世，保留已有仙缘、道果、成就与累计统计；
+          本次可得仙缘减半为 {{ preview.deathKarma }} 点，不结道果。
+        </div>
         <div style="padding: 4px 0">
           全局产出 ×{{ derived.realmMult.toFixed(2) }} →
           <span class="good">×{{ next.mult.toFixed(2) }}</span>
@@ -221,7 +251,7 @@ function reincarnate() {
                 </HoverTip>
               </td>
               <td class="right">
-                <button class="btn primary" :disabled="!affordable" @click="actions.breakthrough()">
+                <button class="btn primary" :disabled="!affordable" @click="actions.breakthrough(aids)">
                   冲击 {{ next.name }}
                 </button>
               </td>

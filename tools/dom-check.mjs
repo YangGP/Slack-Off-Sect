@@ -1255,6 +1255,37 @@ ok('境界面板渲染', html().includes('飞升'))
   }
 }
 
+// 护道选项改变实际报价、概率与可支付状态。
+{
+  state.realm = 4
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('金丹冲元婴展示60%渡劫概率与轻微惩罚', text().includes('渡劫成功率 60%') && text().includes('降低5%') && text().includes('失败不退回'))
+  const faithLabel = [...doc.querySelectorAll('.main label')].find(label => label.textContent.includes('香火祈愿'))
+  const faithCheckbox = faithLabel?.querySelector('input[type="checkbox"]')
+  ok('香火加成有可选供奉入口', !!faithCheckbox)
+  if (faithCheckbox) {
+    faithCheckbox.click()
+    await new Promise(r => setTimeout(r, 50))
+    ok('勾选香火实时增加成功率与报价', text().includes('渡劫成功率 67%') && doc.querySelector('.main .cost')?.textContent.includes('香火 250'))
+    faithCheckbox.click()
+    await new Promise(r => setTimeout(r, 50))
+    ok('取消供奉恢复基础概率与报价', text().includes('渡劫成功率 60%') && !doc.querySelector('.main .cost')?.textContent.includes('香火 250'))
+    faithCheckbox.click()
+    state.realm = 5
+    engine.recompute(state, derived)
+    await new Promise(r => setTimeout(r, 50))
+    ok('换境后更新护道材料、供奉量并清空选择', text().includes('九转养神') && text().includes('晶符凝神') && text().includes('香火 600') && text().includes('渡劫成功率 55%') && !doc.querySelector('.main input[type="checkbox"]:checked'))
+  }
+  state.realm = 7
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('炼虚冲关明确展示总身死风险和减半收益', text().includes('本次总身死概率 8.0%') && text().includes('身死立即重开') && text().includes('仙缘减半'))
+  ok('炼虚失败展示大概率退境并保留减产扣料', text().includes('90% 概率退一境') && text().includes('退回上一境') && text().includes('本次总退境概率 72.0%') && text().includes('降低5%') && text().includes('库存材料的2%'))
+  state.realm = 2
+  engine.recompute(state, derived)
+}
+
 state.ui.tab = 'settings'
 await new Promise((r) => setTimeout(r, 50))
 ok('设置面板渲染', html().includes('存档'))
