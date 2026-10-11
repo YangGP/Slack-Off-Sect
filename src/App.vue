@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { state, derived, view, ui } from '@/game/store'
-import { fmt, fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
+import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import { CURRENT_VERSION } from '@/data/changelog'
 import ResourcePanel from './components/ResourcePanel.vue'
@@ -20,6 +20,7 @@ import TotalsPanel from './components/TotalsPanel.vue'
 import BuffBar from './components/BuffBar.vue'
 import OfflineModal from './components/OfflineModal.vue'
 import ChangelogModal from './components/ChangelogModal.vue'
+import HabitabilityTip from './components/HabitabilityTip.vue'
 
 const panels = {
   sect: SectPanel,
@@ -43,6 +44,10 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
 
 <template>
   <div class="wrap">
+    <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
+      <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
+      <span>请在设置中导入有效备份，或使用 CHEAT.restore() 恢复清空前备份。错误：{{ ui.saveLoadError }}</span>
+    </div>
     <div class="title-line">
       摸鱼宗门<span class="sub">Slack Off Sect</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
@@ -63,8 +68,7 @@ const status = computed(() => (ui.toast && Date.now() - ui.toast.at < 4000 ? ui.
       <template v-if="idle > 0">
         <span class="sep">·</span>闲散 <b class="warn">{{ idle }}</b>
       </template>
-      <span class="sep">·</span>宜居度
-      <b :class="derived.habitabilityMult < 1 || derived.discipleMult < 1 ? 'bad' : derived.habitabilityMult > 1 ? 'good' : ''">{{ fmt(derived.habitability) }}</b>
+      <span class="sep">·</span><HabitabilityTip />
       <span v-if="derived.discipleMult < 1" class="bad">（弟子产出减半）</span>
       <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
       <span class="sep">·</span>灵气进项 <b class="good">{{ fmtRate(qiFlow.income) }}</b>

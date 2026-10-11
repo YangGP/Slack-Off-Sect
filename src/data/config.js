@@ -5,6 +5,7 @@
 export const CONFIG = {
   // 金丹后加工速度按境界倍率的平方根提升，保留加工设施的增产价值。
   CRAFT_SPEED_REALM_BASE: 2,
+  AUTO_CRAFT_SPEEDS: [1, 2, 5, 10],
   // 主循环每 100ms 跑一次，所有速率都以「每秒」为单位
   TICK_MS: 100,
   // 自动存档间隔
@@ -88,7 +89,7 @@ export const CONFIG = {
   // 宜居度是点数；只限制产量倍率，不限制宜居度本身。
   HABITABILITY_BASE: 20,
   HABITABILITY_LOSS_PER_POINT: 0.01,
-  HABITABILITY_GAIN_PER_POINT: 0.005,
+  HABITABILITY_GAIN_PER_POINT: 0.0025,
   HABITABILITY_GLOBAL_CAP: 0.5,
   HABITABILITY_BONUS_MARGIN: 20,
   HABITABILITY_JOB_MARGIN: 20,
@@ -104,6 +105,8 @@ export const CONFIG = {
   // 隐藏成就/随机奇遇的检查间隔（秒）
   EVENT_MIN_GAP: 150,
   EVENT_MAX_GAP: 420,
+  // 单次事件每种资源的奖励上限，先限奖励额度，再按剩余仓储结算。
+  EVENT_REWARD_STORAGE_SHARE: 0.2,
   // 刷新派生数据的最小间隔（秒），避免每帧全量重算
   RECOMPUTE_MIN_GAP: 0.25,
   // 凝灵诀：每逢节气（15 天 = 45 秒），灵气满仓时把仓内这个比例的灵气凝成灵液

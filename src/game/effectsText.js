@@ -119,6 +119,7 @@ export function describeEffects(ef) {
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
+  if (ef.autoCraftSpeedControl) push('各配方自动调速', '1× / 2× / 5× / 10×（叠加境界速度）', 'unlock')
   if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝液法》', 'good')
   if (ef.energyCraft) push('灵能应用', '灵能同时提高灵石（点石成灵）与木板的制作产出', 'good')
   if (ef.unlockBuildings) {
@@ -144,6 +145,8 @@ export function describeJobEffects(buildingId, count = 1) {
     // 这栋建筑开放（或开启基础产出）的职位
     if (job.building === buildingId || job.needs?.building?.id === buildingId) {
       push('开放职位', job.name, 'unlock')
+      // 基础产出按每名弟子结算，建筑数量不会将它重复叠加。
+      push(`${job.name} 基础产出`, `${resName(job.resource)} +${fmt(count > 0 ? job.base : 0)}/秒·人`, 'good')
     }
     // 由本建筑开启的额外产出（按人数结算，不随建筑座数叠加）
     for (const output of job.additionalOutputs || []) {

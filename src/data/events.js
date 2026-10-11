@@ -12,7 +12,7 @@
  *
  * 事件只做"声明"，效果由 engine 解释执行：
  *   buff      临时增益（全局或指定资源），可叠加，取总和
- *   lootRate  按生产/加工产能的秒数发放资源，同时给出保底值
+ *   lootRate  按生产/加工产能秒数与保底值估价，每种资源最多奖励仓储20%，再扣除溢出
  *   tradeCost 按产能秒数定价，设最低用料与仓储10%上限；必须足额支付
  *   disaster  按比例掠夺资源，受 disasterGuard 减免，并记入 stats.disasters
  *   recruit   白捡一名弟子（不超过上限）

@@ -11,6 +11,7 @@ import { RESOURCE_MAP } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { CALENDAR } from '@/data/calendar'
 import HoverTip from './HoverTip.vue'
+import CraftSpeedSelect from './CraftSpeedSelect.vue'
 
 const props = defineProps({ compact: Boolean })
 const FILTERS = [{ id: 'all', name: '全部' }, { id: 'basic', name: '基础' }, { id: 'advanced', name: '进阶' }, { id: 'auto', name: '已选自动' }]
@@ -108,6 +109,10 @@ const condenseStatus = computed(() => {
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方 · 快捷配方数量不限</span>
       </div>
       <div v-if="!compact" class="small dim">金丹后，境界越高加工越快；当前加工速度 ×{{ fmt(derived.craftSpeed) }}。百工坊与专业设施提高每份产出，小数收益会持续累积。</div>
+      <div v-if="!compact && derived.autoCraftSpeedUnlocked" class="small craft-settings">
+        <span class="dim">各配方可单独选择自动速度，并叠加境界提速。材料消耗按速度增加，每份收益不变。</span>
+      </div>
+      <div v-else-if="!compact && derived.autoCraftUnlocked" class="small dim">参悟《疾炼法》后，可手动调整自动炼制速度。</div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需元婴期凝液法</div>
       <div v-if="!compact && derived.autoCraftUnlocked" class="small craft-settings">
         <div class="good">{{ derived.daoAutomation ? '道果统筹 · 重修时即可自动炼制' : '百工统筹 · 保留建造用料，优先加工所需配方' }}</div>
@@ -198,6 +203,9 @@ const condenseStatus = computed(() => {
             />
             自动
           </label>
+          <CraftSpeedSelect v-if="!compact && derived.autoCraftSpeedUnlocked"
+            :name="row.meta.name" :speed="derived.autoCraftSpeeds[row.meta.id]"
+            @change="actions.setAutoCraftSpeed(row.meta.id, $event)" />
           <label v-if="!compact && derived.craftTargetsUnlocked" class="small">目标
             <input class="qty" type="number" min="0" step="1" :value="targetDrafts[row.meta.id] ?? row.autoStatus.target"
               :aria-label="`${row.meta.name}库存目标`"

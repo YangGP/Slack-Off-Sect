@@ -280,3 +280,8 @@ export function craftTime(recipe, derived) {
   const time = recipe && recipe.time > 0 ? recipe.time : 1
   return time / Math.max(1, derived?.craftSpeed || 1)
 }
+
+/** 手动调速只改变常驻自动节拍，事件产能估价仍使用境界基础节拍。 */
+export function autoCraftTime(recipe, derived) {
+  return craftTime(recipe, derived) / Math.max(1, derived?.autoCraftSpeeds?.[recipe.id] || 1)
+}

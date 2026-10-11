@@ -2,6 +2,12 @@ import { normalizeState, createInitialState } from './state'
 
 export const SAVE_KEY = 'slack-off-sect.save.v1'
 export const SAVE_VERSION = 1
+export const CHEAT_BACKUP_KEY = `${SAVE_KEY}.before-cheat-clear`
+export let saveLoadError = ''
+
+export function allowSaveAfterRecovery() {
+  saveLoadError = ''
+}
 
 /** 浏览器才有 localStorage；纯 Node / SSR 环境下退化为“无存档” */
 const storage =
@@ -30,6 +36,7 @@ function serialize(state) {
 }
 
 export function saveToStorage(state) {
+  if (saveLoadError) return false
   try {
     const payload = serialize(state)
     storage.setItem(SAVE_KEY, JSON.stringify(payload))
@@ -47,6 +54,7 @@ export function loadFromStorage() {
     if (!raw) return null
     return normalizeState(JSON.parse(raw))
   } catch (err) {
+    saveLoadError = err?.message || '无法读取本地存档'
     console.warn('[摸鱼宗门] 读档失败', err)
     return null
   }
@@ -55,10 +63,25 @@ export function loadFromStorage() {
 export function clearStorage() {
   try {
     storage.removeItem(SAVE_KEY)
+    allowSaveAfterRecovery()
     return true
   } catch (err) {
     return false
   }
+}
+
+/** 独立备份槽，不随主存档自动保存被覆盖。 */
+export function backupBeforeCheatClear(state) {
+  try {
+    storage.setItem(CHEAT_BACKUP_KEY, JSON.stringify(serialize(state)))
+    return true
+  } catch (err) {
+    return false
+  }
+}
+
+export function loadCheatClearBackup() {
+  return storage.getItem(CHEAT_BACKUP_KEY)
 }
 
 /** 导出为便于复制粘贴的 base64 文本 */

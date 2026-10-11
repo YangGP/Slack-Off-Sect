@@ -4,11 +4,12 @@ import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 import { JOBS } from '@/data/jobs'
 import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { TECHNIQUES } from '@/data/techniques'
-import { CRAFTS, CRAFT_MAP, craftTime } from '@/data/crafts'
+import { CRAFTS, CRAFT_MAP, craftTime, autoCraftTime } from '@/data/crafts'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { EVENTS, EVENT_MAP, getEventLevel, isEventInRealm } from '@/data/events'
 import { CALENDAR, TERMS, SEASONS, DAYS_PER_SEASON, DAYS_PER_YEAR } from '@/data/calendar'
+import { atLeast, subtractResource, floorNumber, ceilNumber } from './numbers'
 
 const EPS = 1e-9
 
@@ -80,6 +81,8 @@ export function createDerived() {
     daoMult: 1,
     craftBonus: 0,
     craftSpeed: 1,
+    autoCraftSpeeds: {},
+    autoCraftSpeedUnlocked: false,
     craftBonusByResource: {},
     disasterGuard: 0,
     disasterGuardByResource: {},
@@ -186,7 +189,7 @@ export function isBuildingUnlocked(state, id) {
   const revealCost = id === 'hut' && !state.starterHutBuilt ? { qi: meta.cost.qi } : meta.cost
   for (const res in revealCost || {}) {
     const seen = (state.peak && state.peak[res]) || 0
-    if (seen < revealCost[res] * ratio - 1e-9) return false
+    if (!atLeast(seen, revealCost[res] * ratio)) return false
   }
   return true
 }
@@ -236,14 +239,14 @@ export function isCraftUnlocked(state, craft) {
 
 export function canAfford(state, cost, times = 1) {
   for (const k in cost) {
-    if ((state.resources[k] || 0) + EPS < cost[k] * times) return false
+    if (!atLeast(state.resources[k] || 0, cost[k] * times)) return false
   }
   return true
 }
 
 export function payCost(state, cost, times = 1) {
   for (const k in cost) {
-    state.resources[k] = Math.max(0, (state.resources[k] || 0) - cost[k] * times)
+    state.resources[k] = subtractResource(state.resources[k] || 0, cost[k] * times)
   }
 }
 
@@ -259,7 +262,7 @@ export function addResource(state, id, amount) {
   }
   next = Math.max(0, next)
   // 整枚计数的资源（灵石/丹药/符箓/法器）不留小数：事件按百分比增减、旧存档都可能带小数
-  if (meta?.integer) next = Math.floor(next + 1e-9)
+  if (meta?.integer) next = floorNumber(next)
   state.resources[id] = next
   if (next > 0) state.seen[id] = true
   return next - before
@@ -277,7 +280,7 @@ export function roundCost(cost) {
   const out = {}
   for (const k in cost) {
     const v = cost[k]
-    out[k] = RESOURCE_MAP[k]?.integer ? Math.ceil(v - 1e-9) : v
+    out[k] = RESOURCE_MAP[k]?.integer ? ceilNumber(v) : v
   }
   return out
 }
@@ -325,7 +328,7 @@ export function maxAffordable(state, id, cap = 500) {
     for (const k in price) {
       const have = state.resources[k] || 0
       const used = running[k] || 0
-      if (have + EPS < used + price[k]) {
+      if (!atLeast(have, used + price[k])) {
         ok = false
         break
       }
@@ -395,20 +398,20 @@ export function nextArrivalIn(state, derived) {
  */
 export function timeToAfford(state, derived, resId, need, depth = 0, path = new Set()) {
   const have = state.resources[resId] || 0
-  if (have >= need) return 0
+  if (atLeast(have, need)) return 0
   const rate = derived.net?.[resId] ?? derived.rates[resId] ?? 0
   let best = rate > 0 ? (need - have) / rate : Infinity
   if (path.has(resId) || depth >= RESOURCES.length) return best
   const next = new Set(path).add(resId)
   for (const recipe of CRAFTS) {
     if (recipe.out !== resId || !isCraftUnlocked(state, recipe) || recipe.cost[resId]) continue
-    const copies = Math.ceil((need - have) / craftYield(derived, recipe))
+    const copies = ceilNumber((need - have) / craftYield(derived, recipe))
     let wait = 0
     for (const res in recipe.cost) {
       const sub = timeToAfford(state, derived, res, recipe.cost[res] * copies, depth + 1, next)
       wait = Math.max(wait, sub)
     }
-    if (isAutoCrafting(state, derived, recipe.id)) wait += copies * craftTime(recipe, derived)
+    if (isAutoCrafting(state, derived, recipe.id)) wait += copies * autoCraftTime(recipe, derived)
     best = Math.min(best, wait)
   }
   return best
@@ -481,6 +484,7 @@ function applyEffects(ef, mult, targets, src) {
   if (ef.offlineHours) acc.offlineHours += ef.offlineHours * mult
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
   if (ef.autoCraft) acc.autoCraftUnlocked = true
+  if (ef.autoCraftSpeedControl) acc.autoCraftSpeedUnlocked = true
   if (ef.autoCondenseLiquid) acc.autoCondenseLiquidUnlocked = true
   if (ef.energyCraft) acc.energyCraftUnlocked = true
   if (ef.prod) {
@@ -550,6 +554,7 @@ function recomputeRaw(state, derived, supply) {
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     karmaRatio: 0,
     autoCraftUnlocked: false,
+    autoCraftSpeedUnlocked: false,
     autoCondenseLiquidUnlocked: false,
     ratioAll: 0,
   }
@@ -814,7 +819,7 @@ function recomputeRaw(state, derived, supply) {
 
   for (const r of RESOURCES) {
     if (Number.isFinite(max[r.id])) max[r.id] *= karmaStorageMult
-    if (r.integer) max[r.id] = Math.floor(max[r.id] + EPS)
+    if (r.integer) max[r.id] = floorNumber(max[r.id])
   }
   derived.karmaStorageMult = karmaStorageMult
   // 比例加仓在此统一生效：上限 =（基础 + 定额）×（1 + 比例）
@@ -874,6 +879,11 @@ function recomputeRaw(state, derived, supply) {
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = (state.dao || 0) >= 1
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
+  derived.autoCraftSpeedUnlocked = acc.autoCraftSpeedUnlocked
+  derived.autoCraftSpeeds = Object.fromEntries(CRAFTS.map(recipe => {
+    const speed = state.settings.autoCraftSpeeds?.[recipe.id]
+    return [recipe.id, derived.autoCraftSpeedUnlocked && CONFIG.AUTO_CRAFT_SPEEDS.includes(speed) ? speed : 1]
+  }))
   derived.autoCondenseLiquidUnlocked = acc.autoCondenseLiquidUnlocked
   // 满仓凝液与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
   derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseLiquidUnlocked
@@ -981,7 +991,7 @@ export function sellBuilding(state, derived, id, count = 1) {
   if (id === 'hut' && e.count === n) state.starterHutStanding = false
   for (const k in refund) {
     // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」
-    refund[k] = RESOURCE_MAP[k]?.integer ? Math.floor(refund[k] * 0.5 + 1e-9) : refund[k] * 0.5
+    refund[k] = RESOURCE_MAP[k]?.integer ? floorNumber(refund[k] * 0.5) : refund[k] * 0.5
   }
   e.count -= n
   state.stats.buildingsBuilt = Math.max(0, state.stats.buildingsBuilt - n)
@@ -1098,25 +1108,23 @@ export function craftYield(derived, recipe) {
   return recipe.amount * (1 + bonus)
 }
 
-/** 做一份（内部用：不改 derived、不写日志），返回实际得到几个 */
-function craftUnit(state, derived, recipe) {
-  if (!canAfford(state, recipe.cost)) return 0
-  const cap = derived.max[recipe.out]
-  if ((state.resources[recipe.out] || 0) >= cap - EPS) return 0
-  payCost(state, recipe.cost)
-  return addCraftGain(state, derived, recipe, craftYield(derived, recipe))
+function materialCopies(state, recipe) {
+  let byMaterial = Infinity
+  for (const res in recipe.cost) {
+    const cost = recipe.cost[res]
+    const have = state.resources[res] || 0
+    if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(have)) return 0
+    if (cost > 0) byMaterial = Math.min(byMaterial, floorNumber(have / cost))
+  }
+  return Number.isFinite(byMaterial) ? Math.max(0, byMaterial) : 0
 }
 
 /** 按当前材料与仓储余量，这个配方最多还能做几份 */
 export function maxCraftable(state, derived, recipeId) {
   const recipe = CRAFT_MAP[recipeId]
   if (!recipe || !isCraftUnlocked(state, recipe)) return 0
-  let byMaterial = Infinity
-  for (const res in recipe.cost) {
-    byMaterial = Math.min(byMaterial, Math.floor((state.resources[res] || 0) / recipe.cost[res]))
-  }
-  if (!Number.isFinite(byMaterial)) byMaterial = 0
-  const room = Math.floor(
+  const byMaterial = materialCopies(state, recipe)
+  const room = floorNumber(
     (derived.max[recipe.out] - (state.resources[recipe.out] || 0)) / recipe.amount,
   )
   return Math.max(0, Math.min(byMaterial, room))
@@ -1127,21 +1135,22 @@ export function maxCraftable(state, derived, recipeId) {
  * 界面上的「¼料 / ½料 / 全部」就是它（全部 = frac 1）。
  */
 export function craftBatch(state, derived, recipeId, frac = 1) {
-  const n = Math.floor(maxCraftable(state, derived, recipeId) * frac + EPS)
+  if (!Number.isFinite(frac) || frac <= 0 || frac > 1) return 0
+  const n = floorNumber(maxCraftable(state, derived, recipeId) * frac)
   if (n <= 0) return 0
   return craft(state, derived, recipeId, { times: n })
 }
 
 /** 把一次制作的产出累进 craftProgress，返回这次凑出的整数产出 */
-function addCraftGain(state, derived, recipe, gain) {
+function addCraftGain(state, derived, recipe, gain, copies = 1) {
   const acc = (state.craftProgress[recipe.id] || 0) + gain
-  const whole = Math.floor(acc + EPS)
-  state.craftProgress[recipe.id] = acc - whole
+  const whole = floorNumber(acc)
+  state.craftProgress[recipe.id] = subtractResource(acc, whole)
   if (whole > 0) {
     addResource(state, recipe.out, whole)
     state.stats.crafted[recipe.out] = (state.stats.crafted[recipe.out] || 0) + whole
   }
-  state.stats.craftCount = (state.stats.craftCount || 0) + 1
+  state.stats.craftCount = (state.stats.craftCount || 0) + copies
   return whole
 }
 
@@ -1166,7 +1175,7 @@ export function isAutoCrafting(state, derived, recipeId) {
 export function autoCraftStatus(state, derived, recipeId) {
   const recipe = CRAFT_MAP[recipeId]
   const timer = (state.craftTimers && state.craftTimers[recipeId]) || null
-  const step = craftTime(recipe, derived)
+  const step = autoCraftTime(recipe, derived)
   const out = {
     on: isAutoCrafting(state, derived, recipeId),
     step,
@@ -1190,6 +1199,7 @@ export function autoCraftStatus(state, derived, recipeId) {
  * 离线也照做：自动制作就是「挂着也一直在做」。
  */
 export function runAutoCraft(state, derived, dt) {
+  if (!Number.isFinite(dt) || dt < 0) return false
   if (!state.craftTimers) state.craftTimers = {}
   let made = false
   const recipes = [...CRAFTS]
@@ -1199,20 +1209,24 @@ export function runAutoCraft(state, derived, dt) {
   }
   for (const recipe of recipes) {
     if (!isAutoCrafting(state, derived, recipe.id)) continue
-    const step = craftTime(recipe, derived)
+    const step = autoCraftTime(recipe, derived)
     const timer = state.craftTimers[recipe.id] || { t: 0, made: 0 }
-    timer.t = (timer.t || 0) + dt
-    while (timer.t + EPS >= step) {
-      const full = (state.resources[recipe.out] || 0) >= derived.max[recipe.out] - EPS
-      if (!canAutoCraft(state, derived, recipe) || full) {
-        // 材料/仓储不够：最多攒一份，材料一恢复就接着做，但不会攒成一波爆发
-        timer.t = Math.min(timer.t, step)
-        break
+    timer.t = (Number.isFinite(timer.t) ? Math.max(0, timer.t) : 0) + dt
+    if (timer.t + EPS >= step) {
+      const due = floorNumber((timer.t + EPS) / step)
+      let copies = due
+      for (const [res, cost] of Object.entries(recipe.cost)) {
+        if (cost > 0) copies = Math.min(copies, floorNumber(subtractResource(state.resources[res] || 0, autoCraftReserve(state, derived, res)) / cost))
       }
-      craftUnit(state, derived, recipe)
-      timer.made = (timer.made || 0) + 1
-      timer.t = Math.max(0, timer.t - step)
-      made = true
+      const target = craftTarget(state, derived, recipe.id)
+      const cap = target > 0 ? Math.min(target, derived.max[recipe.out]) : derived.max[recipe.out]
+      const result = canAutoCraft(state, derived, recipe)
+        ? settleCraftCopies(state, derived, recipe, copies, cap) : { count: 0 }
+      timer.made = (timer.made || 0) + result.count
+      timer.t = Math.max(0, timer.t - result.count * step)
+      // 未完成的份数只保留一份等待，不积攒成缺料恢复后的突发大量制作。
+      if (result.count < due) timer.t = Math.min(timer.t, step)
+      made ||= result.count > 0
     }
     state.craftTimers[recipe.id] = timer
   }
@@ -1229,11 +1243,11 @@ export function runAutoCondense(state, derived) {
   if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
   const qiMax = derived.max.qi || 0
   const qi = state.resources.qi || 0
-  if (qi < qiMax - EPS) return false
+  if (!atLeast(qi, qiMax)) return false
   const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
   const recipe = CRAFT_MAP.condenseLiquid
   if (!isCraftUnlocked(state, recipe)) return false
-  const times = Math.floor((qi * ratio) / recipe.cost.qi)
+  const times = floorNumber((qi * ratio) / recipe.cost.qi)
   let made = false
   for (let i = 0; i < times; i++) {
     // 每份重新检查，批量转换也遵守库存目标、仓储和道果材料保留量。
@@ -1250,13 +1264,28 @@ export function canAutoCraft(state, derived, recipe) {
   if (target > 0 && (state.resources[recipe.out] || 0) >= target) return false
   if (!canAfford(state, recipe.cost)) return false
   if (!derived.autoCraftUnlocked) return true
-  const reserve = clamp(Number(state.settings.craftReservePercent) || 0, 0, 90) / 100
   return Object.entries(recipe.cost).every(([res, cost]) =>
-    (state.resources[res] || 0) - cost >= Math.max(
-      derived.daoAutomation ? (derived.max[res] || 0) * reserve : 0,
-      Number(state.settings.craftReserves?.[res]) || 0,
-    ) - EPS,
+    atLeast(subtractResource(state.resources[res] || 0, cost), autoCraftReserve(state, derived, res)),
   )
+}
+
+function autoCraftReserve(state, derived, res) {
+  if (!derived.autoCraftUnlocked) return 0
+  const reserve = clamp(Number(state.settings.craftReservePercent) || 0, 0, 90) / 100
+  return Math.max(derived.daoAutomation ? (derived.max[res] || 0) * reserve : 0,
+    Number(state.settings.craftReserves?.[res]) || 0)
+}
+
+export function setAutoCraftSpeed(state, derived, recipeId, speed) {
+  if (!Object.hasOwn(CRAFT_MAP, recipeId)) return false
+  const recipe = CRAFT_MAP[recipeId]
+  if (!derived.autoCraftSpeedUnlocked || !recipe || !isCraftUnlocked(state, recipe) || !CONFIG.AUTO_CRAFT_SPEEDS.includes(speed)) return false
+  const fraction = clamp((state.craftTimers[recipeId]?.t || 0) / autoCraftTime(recipe, derived), 0, 1)
+  state.settings.autoCraftSpeeds ||= {}
+  state.settings.autoCraftSpeeds[recipeId] = speed
+  recompute(state, derived)
+  if (state.craftTimers[recipeId]) state.craftTimers[recipeId].t = fraction * autoCraftTime(recipe, derived)
+  return true
 }
 
 /** 目标是成品库存；0 表示不限，消费成品后自动补回。 */
@@ -1294,9 +1323,9 @@ function computeAutoCraftDrain(state, derived) {
   const drain = {}
   for (const recipe of CRAFTS) {
     if (!isAutoCrafting(state, derived, recipe.id)) continue
-    if ((state.resources[recipe.out] || 0) >= (derived.max[recipe.out] || Infinity) - EPS) continue
+    if (atLeast(state.resources[recipe.out] || 0, derived.max[recipe.out] || Infinity)) continue
     if (!canAutoCraft(state, derived, recipe)) continue
-    const per = craftTime(recipe, derived)
+    const per = autoCraftTime(recipe, derived)
     for (const res in recipe.cost) {
       if (!drain[res]) drain[res] = []
       drain[res].push({
@@ -1331,17 +1360,29 @@ export function drawQi(state, derived) {
   return gain
 }
 
+/** 手动与自动共用整批结算；自动可将库存目标作为提前停止的上限。 */
+function settleCraftCopies(state, derived, recipe, times, cap = derived.max[recipe.out]) {
+  const empty = { made: 0, count: 0 }
+  if (!Number.isFinite(times) || times <= 0) return empty
+  const have = state.resources[recipe.out] || 0
+  const gain = craftYield(derived, recipe)
+  const progress = state.craftProgress[recipe.id] || 0
+  if (!Number.isFinite(have) || !(cap > have) || atLeast(have, cap) ||
+      !Number.isFinite(gain) || gain <= 0 || !Number.isFinite(progress)) return empty
+  // 原来逐份扣料、累计小数并在满仓后停下。直接算出触及上限的那一份，
+  // 保留最后一份的溢出和进度规则，避免大批制作阻塞浏览器主线程。
+  const roomCopies = ceilNumber((ceilNumber(cap - have) - progress) / gain)
+  const count = Math.min(floorNumber(times), materialCopies(state, recipe), roomCopies)
+  if (!Number.isFinite(count) || count <= 0 || !Number.isFinite(progress + gain * count)) return empty
+  payCost(state, recipe.cost, count)
+  const made = addCraftGain(state, derived, recipe, gain * count, count)
+  return { made, count }
+}
+
 export function craft(state, derived, recipeId, { silent = false, times = 1 } = {}) {
   const recipe = CRAFTS.find((c) => c.id === recipeId)
   if (!recipe || !isCraftUnlocked(state, recipe)) return 0
-  let made = 0
-  const count = Math.max(0, Math.floor(times + EPS))
-  for (let i = 0; i < count; i++) {
-    if (!canAfford(state, recipe.cost)) break
-    const cap = derived.max[recipe.out]
-    if ((state.resources[recipe.out] || 0) >= cap - EPS) break
-    made += craftUnit(state, derived, recipe)
-  }
+  const { made } = settleCraftCopies(state, derived, recipe, times)
   if (made > 0) {
     if (!silent) {
       pushLog(
@@ -1590,16 +1631,16 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
   for (const [res, cost] of Object.entries(spec.tradeCost || {})) {
     const amount = Math.max(cost.floor, eventResourceRate(state, derived, res) * cost.seconds)
     const bounded = Math.min(amount, Math.max(cost.floor, (derived.max[res] || 0) * 0.1))
-    required[res] = RESOURCE_MAP[res]?.integer ? Math.ceil(bounded - 1e-9) : bounded
+    required[res] = RESOURCE_MAP[res]?.integer ? ceilNumber(bounded) : bounded
   }
-  const affordable = Object.entries(required).every(([res, amount]) => (state.resources[res] || 0) >= amount)
+  const affordable = canAfford(state, required)
   const resources = new Set([
     ...Object.keys(spec.cost || {}), ...Object.keys(spec.costShare || {}), ...Object.keys(required),
     ...(spec.disaster?.resources || []), ...Object.keys(spec.lootRate || {}), ...Object.keys(spec.boundedLoss || {}),
   ])
   for (const res of resources) {
     const integer = RESOURCE_MAP[res]?.integer
-    const whole = (amount) => integer ? Math.floor(amount + 1e-9) : amount
+    const whole = (amount) => integer ? floorNumber(amount) : amount
     const have = state.resources[res] || 0
     const fixed = Math.min(have, whole((spec.cost?.[res] || 0) + (required[res] || 0)))
     const share = whole((have - fixed) * (spec.costShare?.[res] || 0))
@@ -1609,8 +1650,9 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
       ? whole(remaining * disasterPercent * (1 - guard)) : 0
     const bounded = whole(Math.min(remaining, (spec.boundedLoss?.[res] || 0) * (1 - guard)))
     const lost = fixed + share + disaster + bounded
+    const rewardCap = (derived.max[res] ?? state.__max?.[res] ?? Infinity) * CONFIG.EVENT_REWARD_STORAGE_SHARE
     const offered = spec.lootRate?.[res] != null
-      ? whole(Math.max(spec.floor?.[res] || 0, eventResourceRate(state, derived, res) * spec.lootRate[res])) : 0
+      ? whole(Math.min(rewardCap, Math.max(spec.floor?.[res] || 0, eventResourceRate(state, derived, res) * spec.lootRate[res]))) : 0
     const room = Math.max(0, (state.__max?.[res] ?? Infinity) - (have - lost))
     const gained = Math.min(offered, whole(room))
     rows.push({ res, lost, gained, overflow: offered - gained })

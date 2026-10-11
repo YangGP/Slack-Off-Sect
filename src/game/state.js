@@ -1,8 +1,9 @@
 import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { CONFIG } from '@/data/config'
-import { DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
+import { CRAFT_MAP, DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
+import { floorNumber } from './numbers'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -98,6 +99,7 @@ export function createInitialState() {
     settings: {
       autosave: true,
       autoCraftOn: true,
+      autoCraftSpeeds: {},
       offlineProgress: true,
       craftReservePercent: 20,
       craftReserves: {},
@@ -124,7 +126,7 @@ export function normalizeState(state) {
   merged.resources = { ...fresh.resources, ...(state.resources || {}) }
   // 整枚计数的资源（灵石/丹药/符箓/法器）在旧档里可能被算成小数（涨价/折扣/祭炼留下的），读档时抹平
   for (const r of RESOURCES) {
-    if (r.integer) merged.resources[r.id] = Math.floor(merged.resources[r.id] || 0)
+    if (r.integer) merged.resources[r.id] = floorNumber(merged.resources[r.id] || 0)
   }
   merged.seen = { ...fresh.seen, ...(state.seen || {}) }
   merged.peak = state.peak || {}
@@ -195,6 +197,12 @@ export function normalizeState(state) {
   merged.stats = { ...fresh.stats, ...(state.stats || {}) }
   merged.stats.crafted = { ...(state.stats && state.stats.crafted) }
   merged.settings = { ...fresh.settings, ...(state.settings || {}) }
+  const legacySpeed = CONFIG.AUTO_CRAFT_SPEEDS.includes(state.settings?.autoCraftSpeed) ? state.settings.autoCraftSpeed : 1
+  merged.settings.autoCraftSpeeds = Object.fromEntries(Object.keys(CRAFT_MAP).map(id => {
+    const speed = state.settings?.autoCraftSpeeds?.[id]
+    return [id, CONFIG.AUTO_CRAFT_SPEEDS.includes(speed) ? speed : speed === undefined ? legacySpeed : 1]
+  }))
+  delete merged.settings.autoCraftSpeed
   merged.settings.craftReserves = Object.fromEntries(Object.entries(state.settings?.craftReserves || {})
     .filter(([id, value]) => Object.hasOwn(fresh.resources, id) && Number.isFinite(value) && value >= 0))
   for (const key of ['autoCraft', 'craftTargets', 'craftTimers', 'craftProgress']) {

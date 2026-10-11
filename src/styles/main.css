@@ -50,6 +50,40 @@ button {
   color: var(--text);
 }
 
+select {
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+select:hover {
+  border-color: var(--link);
+}
+
+select:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+select:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  cursor: default;
+}
+
+select option {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
 .wrap {
   max-width: 1380px;
   margin: 0 auto;
@@ -953,6 +987,18 @@ details.fold[open] > summary::before {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.craft-speed-setting {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.craft-speed-setting select {
+  min-width: 64px;
+  font-variant-numeric: tabular-nums;
 }
 
 .craft-full .craft-row {

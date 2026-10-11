@@ -1,5 +1,6 @@
 import { timeToAfford } from './engine'
 import { fmtCost, fmtStock, fmtTime } from './format'
+import { atLeast } from './numbers'
 
 /**
  * 价格文案：**全项目共用这一套写法**（建筑、参悟表、炼制、破境都用它）。
@@ -12,7 +13,7 @@ import { fmtCost, fmtStock, fmtTime } from './format'
  */
 export function costLabel(state, derived, res, amount) {
   const have = state.resources[res] || 0
-  if (have >= amount - 1e-9) return fmtCost(amount)
+  if (atLeast(have, amount)) return fmtCost(amount)
   const wait = timeToAfford(state, derived, res, amount)
   const eta = Number.isFinite(wait) && wait > 0 ? `（还差 ${fmtTime(wait)}）` : ''
   return `${fmtStock(have)} / ${fmtCost(amount)}${eta}`
@@ -20,5 +21,5 @@ export function costLabel(state, derived, res, amount) {
 
 /** 这一项够不够（够的只写需求、不够的标红） */
 export function enough(state, res, amount) {
-  return (state.resources[res] || 0) >= amount - 1e-9
+  return atLeast(state.resources[res] || 0, amount)
 }

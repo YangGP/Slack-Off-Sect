@@ -39,6 +39,8 @@ import {
   effectRows,
 } from '../src/game/unlockText.js'
 import { describeEffects } from '../src/game/effectsText.js'
+import { nearlyEqual, atLeast, floorNumber, ceilNumber } from '../src/game/numbers.js'
+import { enough, costLabel } from '../src/game/pricing.js'
 
 let passed = 0
 let failed = 0
@@ -61,6 +63,88 @@ function close(a, b, tol = 1e-6) {
 
 function section(title) {
   console.log(`\n== ${title} ==`)
+}
+
+section('浮点精度边界')
+{
+  ok('小数累加按容差比较', nearlyEqual(0.1 + 0.2, 0.3))
+  ok('真实差额和极小花费不被容差吞掉', !atLeast(0.3 - 1e-10, 0.3) && !atLeast(0, 1e-12))
+  ok('大数的舍入误差按量级处理', nearlyEqual(1e10 + 0.1 + 0.2, 1e10 + 0.3))
+  ok('非有限数不误判相等', !nearlyEqual(Infinity, 1) && !nearlyEqual(NaN, NaN))
+  ok('整份除法与价格取整吸收舍入误差', floorNumber(0.3 / 0.1) === 3 && ceilNumber((0.1 + 0.2) * 10) === 3)
+  ok('真实小数仍按原方向取整', floorNumber(3 - 1e-10) === 2 && ceilNumber(3 + 1e-10) === 4)
+  const s = createInitialState(), d = E.createDerived()
+  s.resources.qi = 0.3
+  const cost = { qi: 0.1 + 0.2 }
+  ok('购买、价格提示与等待时间一致', E.canAfford(s, cost) && enough(s, 'qi', cost.qi) && E.timeToAfford(s, d, 'qi', cost.qi) === 0 && costLabel(s, d, 'qi', cost.qi) === fmtCost(cost.qi))
+  s.resources.qi = 0.1 + 0.2
+  E.payCost(s, { qi: 0.3 })
+  ok('扣费后清除浮点残余', s.resources.qi === 0)
+  s.resources.qi = 15 - Number.EPSILON * 8
+  d.max.wood = 3 - Number.EPSILON * 2
+  ok('材料与仓储边界不会少算一份', E.maxCraftable(s, d, 'growWood') === 3)
+  ok('批量制作与材料判断一致', E.craftBatch(s, d, 'growWood') === 3 && s.resources.qi === 0 && s.resources.wood === 3)
+  s.resources.qi = 5
+  d.max.wood = 10
+  d.craftBonus = 1 - Number.EPSILON * 2
+  ok('制作进度取整后不留下负数尾差', E.craft(s, d, 'growWood', { times: 1 }) === 2 && s.craftProgress.growWood === 0)
+  ok('整数显示消除浮点尾差', fmtStock(3 - Number.EPSILON * 2) === '3' && fmtCost((0.1 + 0.2) * 10) === '3')
+  ok('旧存档整数边界保留数量', normalizeState({ resources: { stone: 3 - Number.EPSILON * 2 } }).resources.stone === 3)
+}
+
+section('整批制作与逐份制作一致')
+{
+  let equivalent = true
+  for (const id of ['infuseStone', 'growWood']) {
+    const recipe = CRAFT_MAP[id]
+    for (const bonus of [0, 0.1, 0.5, 2.75]) {
+      for (const progress of [0, 0.2, 0.9]) {
+        for (const room of [0, 0.5, 1, 5, 100]) {
+          for (const copies of [1, 3, 20]) {
+            const s = createInitialState(), d = E.createDerived()
+            s.buildings.quarry = { count: 1, on: true }
+            E.recompute(s, d)
+            for (const [res, cost] of Object.entries(recipe.cost)) s.resources[res] = cost * 12
+            s.resources[recipe.out] = 2
+            s.craftProgress[id] = progress
+            d.craftBonus = bonus
+            s.__max[recipe.out] = d.max[recipe.out] = RESOURCE_MAP[recipe.out].integer ? Math.floor(2 + room) : 2 + room
+            const expected = structuredClone(s)
+            const gain = E.craftYield(d, recipe)
+            let expectedMade = 0
+            for (let i = 0; i < copies; i++) {
+              if (!E.canAfford(expected, recipe.cost) || atLeast(expected.resources[recipe.out], d.max[recipe.out])) break
+              E.payCost(expected, recipe.cost)
+              const acc = expected.craftProgress[id] + gain
+              const whole = floorNumber(acc)
+              expected.craftProgress[id] = Math.max(0, acc - whole)
+              if (whole > 0) {
+                E.addResource(expected, recipe.out, whole)
+                expected.stats.crafted[recipe.out] = (expected.stats.crafted[recipe.out] || 0) + whole
+              }
+              expected.stats.craftCount++
+              expectedMade += whole
+            }
+            const made = E.craft(s, d, id, { times: copies, silent: true })
+            const matches = made === expectedMade && s.stats.craftCount === expected.stats.craftCount &&
+              close(s.craftProgress[id], expected.craftProgress[id]) &&
+              s.stats.crafted[recipe.out] === expected.stats.crafted[recipe.out] &&
+              Object.keys(s.resources).every(res => close(s.resources[res], expected.resources[res]))
+            if (equivalent && !matches) console.log({ id, bonus, progress, room, copies, made, expectedMade, actualCount: s.stats.craftCount, expectedCount: expected.stats.craftCount })
+            equivalent &&= matches
+          }
+        }
+      }
+    }
+  }
+  ok('360 种材料、加成、小数进度和仓储组合保持逐份语义', equivalent)
+  const s = createInitialState(), d = E.createDerived()
+  s.buildings.quarry = { count: 1, on: true }
+  E.recompute(s, d)
+  s.resources.qi = 150; s.resources.rock = 30
+  const before = JSON.stringify(s)
+  ok('异常批量参数不扣料', [NaN, Infinity, -1].every(times => E.craft(s, d, 'infuseStone', { times }) === 0) &&
+    [NaN, Infinity, -1, 2].every(frac => E.craftBatch(s, d, 'infuseStone', frac) === 0) && JSON.stringify(s) === before)
 }
 
 section('首间茅屋与采集开局')
@@ -162,7 +246,7 @@ section('数据完整性')
 
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
-  const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCondenseLiquid', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
+  const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
   const pureNumeric = ['storageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource']
   // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
@@ -3138,7 +3222,7 @@ section('选择类的结算流程')
 
 {
   const { state, derived } = newGame()
-  state.resources.herb = derived.max.herb - 10
+  state.resources.herb = derived.max.herb
   const herbBefore = state.resources.herb
   const spec = { costShare: { herb: 0.1 }, disaster: { resources: ['herb'], lossPercent: [0.1, 0.1] }, lootRate: { herb: 100 }, floor: { herb: 100 } }
   const result = E.eventOutcome(state, derived, spec).rows[0]
@@ -3154,12 +3238,39 @@ section('选择类的结算流程')
 }
 
 // ------------------------------------------------------------
+section('单次事件奖励上限')
+{
+  const { state: s, derived: d } = newGame()
+  s.realm = 10
+  s.resources.insight = 0
+  d.rates.insight = 1000
+  const spec = EVENT_MAP.tribulationTrial.options[0].effect
+  const reward = E.eventOutcome(s, d, spec).rows.find(row => row.res === 'insight')
+  ok('后期巨额产能奖励与保底均受20%仓储上限约束', reward.gained === 40 && reward.overflow === 0)
+  s.resources.insight = d.max.insight - 10
+  const nearFull = E.eventOutcome(s, d, spec).rows.find(row => row.res === 'insight')
+  ok('奖励限额与实际仓储溢出分开结算', nearFull.gained === 10 && nearFull.overflow === 30)
+  s.resources.insight = d.max.insight
+  const full = E.eventOutcome(s, d, spec).rows.find(row => row.res === 'insight')
+  ok('满仓时不产生虚假到账', full.gained === 0 && full.overflow === 40)
+  const fractional = E.eventOutcome(s, d, { lootRate: { stone: 1000 }, floor: { stone: 1000 } }).rows[0]
+  ok('整数资源的奖励上限向下取整', fractional.gained === Math.floor(d.max.stone * 0.2))
+  s.resources.insight = 0
+  s.resources.stone = 100
+  s.resources.spiritTalisman = 10
+  s.pendingChoice = { id: 'tribulationTrial', at: Date.now() }
+  const preview = E.eventOutcome(s, d, spec)
+  const before = { ...s.resources }
+  E.resolveChoice(s, d, 0)
+  ok('限额后的付费事件预览、扣料与到账一致', preview.affordable && preview.rows.every(row => close(s.resources[row.res], before[row.res] - row.lost + row.gained)))
+}
+
 section('宜居度：阈值、来源倍率与人口流失')
 {
   for (const [h, n, global, jobs, leave] of [
     [0, 100, 1, 0.5, 0.5], [-25, 100, 0.75, 0.5, 0.5], [-50, 100, 0.5, 0.5, 0.5],
-    [-500, 100, 0.5, 0.5, 0.5], [120, 100, 1, 1, 0], [170, 100, 1.25, 1, 0],
-    [220, 100, 1.5, 1, 0], [500, 100, 1.5, 1, 0], [80, 100, 1, 1, 0],
+    [-500, 100, 0.5, 0.5, 0.5], [120, 100, 1, 1, 0], [170, 100, 1.125, 1, 0],
+    [220, 100, 1.25, 1, 0], [320, 100, 1.5, 1, 0], [500, 100, 1.5, 1, 0], [186, 84, 1.205, 1, 0], [80, 100, 1, 1, 0],
     [79, 100, 1, 0.5, 0], [50, 100, 1, 0.5, 0], [49, 100, 1, 0.5, 0.02],
     [-10, 19, 0.9, 1, 0], [-1, 20, 0.99, 0.5, 0], [0, 20, 1, 1, 0],
     [-10, 49, 0.9, 0.5, 0], [-1, 50, 0.99, 0.5, 0.02], [0, 50, 1, 0.5, 0],
@@ -3187,9 +3298,9 @@ section('宜居度：阈值、来源倍率与人口流失')
   ok('宜居度不降低口粮，也不改变每份合成收益', close(d.upkeep, baseline.upkeep * 41 / 40) && close(E.craftYield(d, CRAFT_MAP.sawPlank), baseline.craft))
   ok('岗位惩罚后的来源明细仍与实际进项相等', close(d.sources.wood.reduce((sum, row) => sum + row.value, 0), d.rates.wood))
   s.habitabilityPenalty = 0
-  s.buildings.meditationPool = { count: 24, on: true }
+  s.buildings.meditationPool = { count: 44, on: true }
   E.recompute(s, d)
-  ok('宜居度富余实际增产最多50%并解除岗位减半', d.habitability === 164 && d.discipleMult === 1 && close(d.rates.wood, baseline.wood * 1.5) && close(d.sources.qi.find(row => row.kind === 'building').value, baseline.buildingQi * 1.5))
+  ok('宜居度富余实际增产最多50%并解除岗位减半', d.habitability === 284 && d.discipleMult === 1 && close(d.rates.wood, baseline.wood * 1.5) && close(d.sources.qi.find(row => row.kind === 'building').value, baseline.buildingQi * 1.5))
   ok('宜居度富余也不放大每份合成收益', close(E.craftYield(d, CRAFT_MAP.sawPlank), baseline.craft))
 
   const crowded = () => {
@@ -3257,11 +3368,11 @@ section('宜居配套：入住覆盖、实际投资与目标增产')
     Object.assign(s.resources, cost)
     ok(`第${i + 1}座清风小院实际营造且扣料`, E.buyBuilding(s, d, 'livingCourt') === 1 && s.resources.wood === 0 && s.resources.rock === 0)
   }
-  ok('早期入住配套加四座小院提供8%增产', d.habitability === 40 && close(d.habitabilityMult, 1.08) && d.discipleMult === 1)
+  ok('早期入住配套加四座小院提供4%增产', d.habitability === 40 && close(d.habitabilityMult, 1.04) && d.discipleMult === 1)
   s.buildings.hut.count = 30
   s.disciples.total = 60
   E.recompute(s, d)
-  ok('正常扩屋入住后保持同样的8%增产', d.housingHabitability === 60 && d.habitability === 96 && close(d.habitabilityMult, 1.08))
+  ok('正常扩屋入住后保持同样的4%增产', d.housingHabitability === 60 && d.habitability === 96 && close(d.habitabilityMult, 1.04))
   const housingEffects = describeEffects(UPGRADE_MAP.homePlanning.effects)
   ok('工艺说明明确标示每个已入住名额的宜居度', housingEffects.some(row => row.label === '宜居度 / 已入住名额'))
 
@@ -3321,7 +3432,7 @@ section('宜居配套：入住覆盖、实际投资与目标增产')
     Object.assign(s.resources, E.buildingCost(s, 'livingCourt', 1))
     bot.act()
   }
-  ok('参照玩家实际投资到目标区间后停止重复购买纯宜居设施', E.countOf(s, 'livingCourt') === 5 && close(d.habitabilityMult, 1.1))
+  ok('参照玩家实际投资到目标区间后停止重复购买纯宜居设施', E.countOf(s, 'livingCourt') === 5 && close(d.habitabilityMult, 1.05))
   s.realm = 10
   s.buildings.depot = { count: 20, on: true }
   E.recompute(s, d)
@@ -3329,7 +3440,7 @@ section('宜居配套：入住覆盖、实际投资与目标增产')
     Object.assign(s.resources, E.buildingCost(s, 'livingCourt', 1))
     bot.act()
   }
-  ok('中后期参照玩家允许继续建设并超过前期20%目标', E.countOf(s, 'livingCourt') === 20 && close(d.habitabilityMult, 1.4))
+  ok('中后期参照玩家允许继续建设并达到20%增产', E.countOf(s, 'livingCourt') === 20 && close(d.habitabilityMult, 1.2))
 }
 
 section('缺料、长期断粮与首颗道果')
@@ -3939,6 +4050,77 @@ for (const [id, parent, building, count, realm] of [
   ok(`${id}同时满足研究与建筑条件才开放`, E.isUpgradeUnlocked(s, UPGRADE_MAP[id]))
   s.realm = 0
   ok(`${id}不设境界门槛`, E.isUpgradeUnlocked(s, UPGRADE_MAP[id]))
+}
+
+section('疾炼法与自动调速')
+{
+  const makeGame = () => {
+    const game = newGame()
+    game.state.realm = 5
+    game.state.buildings.quarry = { count: 1, on: true }
+    Object.assign(game.state.upgrades, { intuition: true, waterworkshop: true, liquidArt: true })
+    E.recompute(game.state, game.derived)
+    return game
+  }
+  const { state: s, derived: d } = makeGame()
+  ok('研究前不能绕过解锁调速', !E.setAutoCraftSpeed(s, d, 'infuseStone', 10) && d.autoCraftSpeeds.infuseStone === 1)
+  s.settings.autoCraftSpeeds.infuseStone = 10
+  E.recompute(s, d)
+  ok('未解锁时存档中的高速设置不生效', d.autoCraftSpeeds.infuseStone === 1)
+  s.settings.autoCraftSpeeds.infuseStone = 1
+  Object.assign(s.resources, UPGRADE_MAP.craftTempo.cost)
+  ok('疾炼法可通过正常参悟解锁并扣料', E.research(s, d, 'craftTempo') && d.autoCraftSpeedUnlocked && Object.keys(UPGRADE_MAP.craftTempo.cost).every(res => s.resources[res] === 0))
+  Object.assign(s.resources, { qi: 1500, rock: 300, stone: 0 })
+  s.autoCraft.infuseStone = true
+  E.recompute(s, d)
+  const beforeRate = E.eventResourceRate(s, d, 'stone')
+  const step = E.autoCraftStatus(s, d, 'infuseStone').step
+  const yieldBefore = E.craftYield(d, CRAFT_MAP.infuseStone)
+  const woodStep = E.autoCraftStatus(s, d, 'growWood').step
+  s.craftTimers.growWood = { t: woodStep / 2, made: 0 }
+  s.craftTimers.infuseStone = { t: step / 2, made: 0 }
+  ok('十倍速度叠加境界节拍', E.setAutoCraftSpeed(s, d, 'infuseStone', 10) && close(E.autoCraftStatus(s, d, 'infuseStone').step, step / 10))
+  ok('切换速度保持半份进度且不立即产出', close(s.craftTimers.infuseStone.t, step / 20) && s.resources.stone === 0)
+  ok('调节灵石不会改变其他配方的节拍与进度', d.autoCraftSpeeds.growWood === 1 && close(E.autoCraftStatus(s, d, 'growWood').step, woodStep) && close(s.craftTimers.growWood.t, woodStep / 2))
+  ok('另一配方可独立设为两倍且保留进度', E.setAutoCraftSpeed(s, d, 'growWood', 2) && close(E.autoCraftStatus(s, d, 'growWood').step, woodStep / 2) && close(s.craftTimers.growWood.t, woodStep / 4) && d.autoCraftSpeeds.infuseStone === 10)
+  ok('调速不改变每份收益或事件产能报价', E.craftYield(d, CRAFT_MAP.infuseStone) === yieldBefore && E.eventResourceRate(s, d, 'stone') === beforeRate)
+  ok('耗料明细同步十倍自动节拍', close(d.autoCraftDrain.qi.find(row => row.id === 'infuseStone').value, -15 / (step / 10)))
+  const loaded = normalizeState(JSON.parse(JSON.stringify(s))), ld = E.createDerived()
+  E.recompute(loaded, ld)
+  ok('存档保留已解锁速度与加工进度', ld.autoCraftSpeeds.infuseStone === 10 && close(loaded.craftTimers.infuseStone.t, step / 20))
+  ok('非法速度不会改变设置或计时', [0, -1, NaN, Infinity, 100].every(speed => !E.setAutoCraftSpeed(s, d, 'infuseStone', speed)) && s.settings.autoCraftSpeeds.infuseStone === 10 && close(s.craftTimers.infuseStone.t, step / 20))
+  ok('旧存档与非法存档默认一倍', normalizeState({}).settings.autoCraftSpeeds.infuseStone === 1 && normalizeState({ settings: { autoCraftSpeed: 100 } }).settings.autoCraftSpeeds.infuseStone === 1)
+  const migrated = normalizeState({ settings: { autoCraftSpeed: 5, autoCraftSpeeds: { growWood: 2, infuseStone: 100, unknown: 10 } } })
+  ok('旧统一速度迁移且合法独立设置优先', migrated.settings.autoCraftSpeeds.condenseLiquid === 5 && migrated.settings.autoCraftSpeeds.growWood === 2 && migrated.settings.autoCraftSpeeds.infuseStone === 1 && !('unknown' in migrated.settings.autoCraftSpeeds) && !('autoCraftSpeed' in migrated.settings))
+  ok('未知或未解锁配方拒绝调速', !E.setAutoCraftSpeed(s, d, 'unknown', 2) && !E.setAutoCraftSpeed(s, d, 'refinePill', 2))
+  s.craftTimers.infuseStone.t = 0
+  loaded.craftTimers.infuseStone.t = 0
+  E.runAutoCraft(s, d, step)
+  for (let i = 0; i < 100; i++) E.runAutoCraft(loaded, ld, step / 100)
+  ok('高速整批与小步制作耗料、产出一致', s.resources.stone === 10 && loaded.resources.stone === 10 && s.resources.qi === loaded.resources.qi && s.resources.rock === loaded.resources.rock)
+  s.craftTargets.infuseStone = 12
+  E.runAutoCraft(s, d, step * 100)
+  ok('高速制作遵守库存目标且不多扣料', s.resources.stone === 12 && s.resources.qi === 1500 - 12 * 15)
+  s.craftTargets.infuseStone = 0
+  s.settings.craftReserves.qi = s.resources.qi - 30
+  E.runAutoCraft(s, d, step * 100)
+  ok('高速批量保留指定原料', s.resources.stone === 14 && s.resources.qi === s.settings.craftReserves.qi)
+  delete s.settings.craftReserves.qi
+  s.resources.stone = d.max.stone
+  const qiBefore = s.resources.qi
+  E.runAutoCraft(s, d, step * 100)
+  ok('高速满仓暂停且只保留一份等待', s.resources.qi === qiBefore && close(s.craftTimers.infuseStone.t, step / 10))
+  const offline = makeGame(), online = makeGame()
+  for (const game of [offline, online]) {
+    game.state.upgrades.craftTempo = true
+    game.state.settings.autoCraftSpeeds.infuseStone = 10
+    game.state.autoCraft.infuseStone = true
+    Object.assign(game.state.resources, { qi: 1500, rock: 300, stone: 0 })
+    E.recompute(game.state, game.derived)
+  }
+  E.simulateOffline(offline.state, offline.derived, 3)
+  for (let i = 0; i < 3; i++) E.tick(online.state, online.derived, 1, { offline: true, events: false })
+  ok('离线推进采用相同高速和用料规则', offline.state.resources.stone > 0 && ['qi', 'rock', 'stone'].every(res => close(offline.state.resources[res], online.state.resources[res])))
 }
 
 section('境界加工速度与数量级分层')

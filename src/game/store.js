@@ -10,12 +10,17 @@ import { ACHIEVEMENTS } from '@/data/achievements'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { createInitialState, normalizeState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
+import { atLeast } from './numbers'
 import {
   saveToStorage,
   loadFromStorage,
   clearStorage,
   exportSave,
   parseImport,
+  backupBeforeCheatClear,
+  loadCheatClearBackup,
+  saveLoadError,
+  allowSaveAfterRecovery,
 } from './save'
 
 // ============================================================
@@ -28,6 +33,7 @@ export const derived = reactive(E.createDerived())
 
 /** 临时 UI 状态（不存档） */
 export const ui = reactive({
+  saveLoadError,
   debug: false,
   offlineReport: null,
   toast: null,
@@ -57,7 +63,7 @@ export function highlightCost(cost) {
   const need = Object.keys(cost || {})
   ui.highlight = {
     need,
-    lack: need.filter((res) => (state.resources[res] || 0) < cost[res]),
+    lack: need.filter((res) => !atLeast(state.resources[res] || 0, cost[res])),
   }
 }
 
@@ -165,6 +171,7 @@ function onBeforeUnload() {
 }
 
 export function startLoop() {
+  if (saveLoadError) return
   if (handle) return
   last = Date.now()
   handle = setInterval(step, CONFIG.TICK_MS)
@@ -195,6 +202,55 @@ function afterAction(text, kind = 'good') {
 export function toast(text, kind = 'info') {
   ui.toast = { text, kind, at: Date.now() }
   ui.message = text
+}
+
+/** 控制台作弊：直接修改库存，允许超过仓储；正常生产仍遵守仓储规则。 */
+function cheatResources(resources, amount, replace = false, backup = false) {
+  if (saveLoadError) throw new Error('存档读取失败，请先导入有效存档或执行 CHEAT.restore()，资源未改动')
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || amount > Number.MAX_SAFE_INTEGER) {
+    throw new RangeError('数量必须是非负有限数字，且不超过 Number.MAX_SAFE_INTEGER')
+  }
+  // 先校验整批，避免错误输入只改动一部分资源。
+  const updates = resources.map(resource => {
+    const meta = RESOURCES.find(r => r.id === resource || r.name === resource)
+    if (!meta) throw new Error(`未知资源：${resource}；使用 CHEAT.list() 查看资源列表`)
+    const value = replace ? amount : (state.resources[meta.id] || 0) + amount
+    if (!Number.isFinite(value) || value > Number.MAX_SAFE_INTEGER) throw new RangeError(`${meta.name}数量超出安全范围`)
+    return [meta.id, meta.integer ? Math.floor(value) : value]
+  })
+  if (backup && !backupBeforeCheatClear(state)) throw new Error('清空前备份失败，资源未改动')
+  for (const [id, value] of updates) {
+    state.resources[id] = value
+    if (value > 0) state.seen[id] = true
+  }
+  ui.debug = true
+  E.trackPeak(state)
+  E.recompute(state, derived)
+  saveNow()
+  toast('作弊资源已更新并保存', 'good')
+  return Object.fromEntries(updates)
+}
+
+export const cheats = Object.freeze({
+  add(resource, amount) { return cheatResources([resource], amount) },
+  set(resource, amount) { return cheatResources([resource], amount, true) },
+  clear(resource) {
+    return cheatResources(resource === undefined ? RESOURCES.filter(r => !['karma', 'dao'].includes(r.id)).map(r => r.id) : [resource], 0, true, true)
+  },
+  restore() {
+    const backup = loadCheatClearBackup()
+    if (!backup) throw new Error('没有清空前备份；旧版清空操作无法通过此命令恢复')
+    actions.importText(backup)
+    toast('已恢复最近一次清空前的存档', 'good')
+    return true
+  },
+  all(amount = 1000000) { return cheatResources(RESOURCES.map(r => r.id), amount) },
+  list() { return RESOURCES.map(r => ({ id: r.id, name: r.name, amount: state.resources[r.id] || 0, max: derived.max[r.id] })) },
+  help() { return 'CHEAT.add("灵石", 100000)：增加资源；CHEAT.set("qi", 5000)：设置库存；CHEAT.all(1000000)：增加所有资源；CHEAT.clear("灵石")：清空单种资源；CHEAT.clear()：清空普通库存，保留仙缘与道果；CHEAT.restore()：恢复最近一次清空前的备份；console.table(CHEAT.list())：资源列表。允许超过仓储，立即保存；整件资源向下取整。' },
+})
+
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'CHEAT', { configurable: true, value: cheats })
 }
 
 // ============================================================
@@ -375,24 +431,38 @@ export const actions = {
     }
     Object.assign(state, next)
     E.recompute(state, derived)
+    const recovering = !!ui.saveLoadError
+    allowSaveAfterRecovery()
+    ui.saveLoadError = ''
     saveNow()
+    if (recovering) startLoop()
     toast('读档成功', 'good')
     return true
   },
   resetGame() {
-    clearStorage()
+    if (!clearStorage()) return false
+    const recovering = !!ui.saveLoadError
+    ui.saveLoadError = ''
     const fresh = createInitialState()
     const keys = Object.keys(state)
     for (const k of keys) if (!(k in fresh)) delete state[k]
     Object.assign(state, fresh)
     E.recompute(state, derived)
     saveNow()
+    if (recovering) startLoop()
     ui.offlineReport = null
     toast('已重新开山立派', 'good')
   },
   setSetting(key, value) {
+    if (key === 'autoCraftSpeeds' || key === 'autoCraftSpeed') return false
     state.settings[key] = value
     saveNow()
+  },
+  setAutoCraftSpeed(recipeId, speed) {
+    if (!E.setAutoCraftSpeed(state, derived, recipeId, speed)) return false
+    saveNow()
+    toast(`${CRAFT_MAP[recipeId].name}自动速度 ×${speed}`, 'good')
+    return true
   },
   toggleUpkeepUpgrade(id) {
     if (!E.toggleUpkeepUpgrade(state, derived, id)) return false

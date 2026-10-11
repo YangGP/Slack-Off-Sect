@@ -1,14 +1,16 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { JOBS } from '@/data/jobs'
 import { idleDisciples, nextArrivalIn, jobOutputs } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
+import HabitabilityTip from './HabitabilityTip.vue'
 
 const idle = computed(() => idleDisciples(state))
 const waitNext = computed(() => nextArrivalIn(state, derived))
+const jobDrafts = reactive({})
 
 const rows = computed(() =>
   JOBS.map((job) => {
@@ -28,9 +30,20 @@ const rows = computed(() =>
   }),
 )
 
-function setJob(jobId, value) {
+function editJob(jobId, event) {
+  const value = event.target.value
+  jobDrafts[jobId] = value
+  // 原生增减按钮首先发 input；立即结算，避免等待 change 时被实时刷新改回。
+  if (value.trim() === '') return
   const n = Number(value)
-  actions.setJob(jobId, Number.isFinite(n) ? n : 0)
+  if (Number.isFinite(n)) actions.setJob(jobId, n)
+}
+
+function commitJob(jobId, event) {
+  const value = event.target.value
+  if (value.trim() !== '' && Number.isFinite(Number(value))) actions.setJob(jobId, Number(value))
+  delete jobDrafts[jobId]
+  event.target.value = String(state.disciples.jobs[jobId] || 0)
 }
 </script>
 
@@ -79,8 +92,13 @@ function setJob(jobId, value) {
                   class="qty"
                   type="number"
                   min="0"
-                  :value="job.count"
-                  @change="setJob(job.id, $event.target.value)"
+                  step="1"
+                  :max="job.count + idle"
+                  :aria-label="`${job.name}分配人数`"
+                  :value="jobDrafts[job.id] ?? job.count"
+                  @input="editJob(job.id, $event)"
+                  @change="commitJob(job.id, $event)"
+                  @blur="commitJob(job.id, $event)"
                 />
                 <button class="btn" :disabled="idle <= 0" @click="actions.shiftJob(job.id, 1)">
                   +1
@@ -104,15 +122,15 @@ function setJob(jobId, value) {
 
       <div class="small dim">
         弟子总数 {{ state.disciples.total }} / {{ derived.maxDisciples }}，闲散 {{ idle }}；
-        每人 灵气 -{{ fmt(derived.upkeep / Math.max(1, state.disciples.total)) }}/秒，宜居度
-        {{ fmt(derived.habitability) }}（基础20，建筑 / 修真 +{{ fmt(derived.habitabilityBonus) }}，断供惩罚 {{ fmt(state.habitabilityPenalty) }}）。
+        每人 灵气 -{{ fmt(derived.upkeep / Math.max(1, state.disciples.total)) }}/秒，
+        <HabitabilityTip />（基础20，建筑 / 修真 +{{ fmt(derived.habitabilityBonus) }}，断供惩罚 {{ fmt(state.habitabilityPenalty) }}）。
         <template v-if="derived.housingHabitability > 0">其中入住配套 +{{ fmt(derived.housingHabitability) }}。</template>
       </div>
       <div class="small dim">
         宜居度全局倍率 ×{{ derived.habitabilityMult.toFixed(2) }}，弟子岗位倍率 ×{{ derived.discipleMult.toFixed(2) }}。
-        低于0每点全局减产1%；超过弟子数+20后每点全局增产0.5%，两者最多50%。
+        低于0每点全局减产1%；超过弟子数+20后每点全局增产0.25%，两者最多50%。
         弟子不少于20人且宜居度低于弟子数−20时，岗位产出减半。
-        前期宜居度维持在弟子数+40～60，可获得10%～20%的全局增产；清风小院和膳养堂可改善起居。中后期可继续建设，最高增产50%。
+        前期宜居度维持在弟子数+40～60，可获得5%～10%的全局增产；清风小院和膳养堂可改善起居。中后期可继续建设，最高增产50%。
       </div>
       <div class="small dim">
         弟子不少于50人且宜居度低于弟子数−50时，每60秒按缺口×2%的概率离开1人（最高50%），期间暂停来人。长期断供仍会独立导致离开。

@@ -3,6 +3,7 @@
  * 中文数量级优先（万/亿/兆…），超过常用单位就退回科学计数法。
  */
 import { RESOURCE_MAP } from '@/data/resources'
+import { floorNumber, ceilNumber } from './numbers'
 
 const UNITS = [
   { v: 1e4, s: '万' },
@@ -106,12 +107,12 @@ export function fmtInt(value) {
 
 /** 存量：整数（向下取整，不虚报家底）—— 左栏资源表以外的地方都用它 */
 export function fmtStock(value) {
-  return intCore(Math.floor((value || 0) + 1e-9))
+  return intCore(floorNumber(value || 0))
 }
 
 /** 花费 / 上限：整数（向上取整）—— 看到的需求一定够用，不会出现「看着够其实不够」 */
 export function fmtCost(value) {
-  return intCore(Math.ceil((value || 0) - 1e-9))
+  return intCore(ceilNumber(value || 0))
 }
 
 /** 累计量 / 事件增减：整数（四舍五入） */
@@ -128,7 +129,7 @@ export function fmtAmount(value) {
  * 这里再兜一层，免得旧存档或异常数据在界面上露出「4.5 枚灵石」。
  */
 export function fmtResource(resId, value) {
-  return RESOURCE_MAP[resId]?.integer ? fmt(Math.floor((value || 0) + 1e-9)) : fmtFixed(value)
+  return RESOURCE_MAP[resId]?.integer ? fmt(floorNumber(value || 0)) : fmtFixed(value)
 }
 
 /** 每秒速率，带正负号（统一用「/秒」，与效果文案、猫国中文版一致） */

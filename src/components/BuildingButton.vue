@@ -6,7 +6,7 @@
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
-import { buildingCost, canAfford, maxAffordable } from '@/game/engine'
+import { buildingCost, canAfford } from '@/game/engine'
 import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
 import { costLabel, enough as enoughOf } from '@/game/pricing'
@@ -26,7 +26,6 @@ const active = computed(() => enabled.value * supply.value)
 // 建筑始终一次一座（批量选择只留给炼制页）
 const price = computed(() => buildingCost(state, props.meta.id, 1))
 const affordable = computed(() => canAfford(state, price.value))
-const maxCount = computed(() => maxAffordable(state, props.meta.id))
 
 /**
  * 效果逐条成行：**每种资源（每项效果）自己一行** ——
@@ -116,10 +115,6 @@ onBeforeUnmount(clearHighlight)
           <div v-for="(amount, res) in price" :key="res" class="tip-row">
             <span class="k">{{ resName(res) }}</span>
             <span class="v" :class="{ bad: !enough(res, amount) }">{{ priceText(res, amount) }}</span>
-          </div>
-          <div class="tip-row">
-            <span class="k">最多可建</span>
-            <span class="v">{{ maxCount }}</span>
           </div>
 
           <div class="tip-section">效果<template v-if="!count">（建成后）</template></div>

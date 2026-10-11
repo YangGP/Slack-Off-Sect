@@ -14,6 +14,7 @@ import {
   startLoop,
   stopLoop,
   saveNow,
+  cheats,
 } from '../src/game/store.js'
 
 export function mount(target) {
@@ -22,4 +23,4 @@ export function mount(target) {
   return app
 }
 
-export { App, createApp, state, derived, ui, actions, engine, startLoop, stopLoop, saveNow }
+export { App, createApp, state, derived, ui, actions, engine, startLoop, stopLoop, saveNow, cheats }

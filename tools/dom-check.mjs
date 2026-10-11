@@ -467,6 +467,7 @@ state.resources.qi = affordabilityQi
   const btxt = btip?.textContent || ''
   ok('建筑悬停弹出提示', !!btip)
   ok('提示里有「价格」与「效果」分节', btxt.includes('价格') && btxt.includes('效果'))
+  ok('建筑提示移除最多可建', !btxt.includes('最多可建'))
   ok('提示里有风味小字', !!btip?.querySelector('.tip-flavor'), btip?.querySelector('.tip-flavor')?.textContent || '')
   ok(
     '不足的资源显示「现有 / 需要」并标红',
@@ -572,7 +573,7 @@ ok(
 state.ui.tab = 'disciples'
 await new Promise((r) => setTimeout(r, 50))
 ok('切换到弟子面板', html().includes('职位分配'))
-ok('弟子页提示日常10%至20%增产及前期宜居设施', text().includes('弟子数+40～60') && text().includes('清风小院和膳养堂'))
+ok('弟子页提示日常5%至10%增产及前期宜居设施', text().includes('弟子数+40～60') && text().includes('5%～10%') && text().includes('清风小院和膳养堂'))
 
 // 注意：顶部通栏里也有一张 table.grid，所以这里要限定到中列（.main）里找职位表
 const jobRows = doc.querySelectorAll('.main table.grid tbody tr').length
@@ -603,6 +604,36 @@ ok(
 )
 
 actions.setJob('farmer', 0)
+await new Promise(r => setTimeout(r, 50))
+{
+  const jobInput = firstJobRow.querySelector('input[type="number"]')
+  jobInput.focus()
+  jobInput.stepUp()
+  jobInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('人数输入框原生增加按钮立即分配，刷新不回退', state.disciples.jobs.farmer === 1 && jobInput.value === '1' && document.activeElement === jobInput)
+  jobInput.stepDown()
+  jobInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  await new Promise(r => setTimeout(r, 50))
+  ok('人数输入框原生减少按钮立即释放弟子', state.disciples.jobs.farmer === 0 && jobInput.value === '0')
+  jobInput.value = ''
+  jobInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('清空编辑草稿时实时刷新不补回数字', jobInput.value === '' && state.disciples.jobs.farmer === 0)
+  jobInput.value = '999'
+  jobInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  jobInput.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await new Promise(r => setTimeout(r, 50))
+  ok('输入过大人数按可用弟子限制并归一化显示', state.disciples.jobs.farmer === 6 && jobInput.value === '6' && engine.idleDisciples(state) === 0)
+  jobInput.value = '2.9'
+  jobInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+  jobInput.blur()
+  await new Promise(r => setTimeout(r, 50))
+  ok('结束编辑时人数按整数显示', state.disciples.jobs.farmer === 2 && jobInput.value === '2')
+  actions.setJob('farmer', 0)
+}
 actions.shiftJob('farmer', 2)
 ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.jobs.farmer}`)
 {
@@ -616,10 +647,18 @@ ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.j
   const cells = doc.querySelector('.main table.grid tbody tr')?.querySelectorAll('td')
   ok('岗位表显示减半后的实际单人产出', derived.discipleMult === 0.5 && Math.abs(parseFloat(cells?.[2].textContent.trim()) - farmerSource.value / 2) < 0.005)
   ok('弟子页说明宜居度阈值和当前岗位倍率', text().includes('弟子岗位倍率 ×0.50') && text().includes('每60秒'))
+  const habitabilityTrigger = doc.querySelector('[data-habitability]')?.closest('.tip-trigger')
+  habitabilityTrigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const habitabilityTip = () => [...doc.querySelectorAll('.tip')].find(el => el.textContent.includes('宜居度 · 当前效果'))
+  ok('宜居度悬停展示当前减产与来源', habitabilityTip()?.textContent.includes('拥挤减产') &&
+    habitabilityTip()?.textContent.includes('弟子岗位综合倍率') && habitabilityTip()?.textContent.includes('×0.50') && habitabilityTip()?.textContent.includes('宜居度来源'))
   state.disciples.total = 71
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))
   ok('离开风险显示概率并说明暂停来人', text().includes('当前每次检查离开概率 2%') && text().includes('改善居住环境后恢复弟子前来') && !doc.querySelector('.stat-line')?.textContent.includes('下一位'))
+  ok('宜居度提示实时更新离开风险及来人状态', habitabilityTip()?.textContent.includes('2.0% / 1分0秒') && habitabilityTip()?.textContent.includes('宜居度不足 · 暂停来人'))
+  habitabilityTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
   state.disciples.total = previousPopulation
   state.habitabilityPenalty = previousPenalty
   engine.recompute(state, derived)
@@ -1230,8 +1269,102 @@ debugEventButton.click()
 ok('调试入口点击触发奇遇', state.stats.eventsSeen === eventsBeforeDebug + 1)
 ui.debug = false
 
+console.log('\n== 控制台作弊资源 ==')
+{
+  const previous = actions.exportText()
+  ok('控制台提供资源列表与帮助', window.CHEAT.list().some(r => r.id === 'stone' && r.name === '灵石') && window.CHEAT.help().includes('CHEAT.add'))
+  window.CHEAT.set('灵石', 0)
+  window.CHEAT.add('stone', 100000.9)
+  ok('中英文资源名通用且整件取整、允许超仓', state.resources.stone === 100000 && state.resources.stone > derived.max.stone && state.peak.stone >= 100000 && state.seen.stone)
+  const cheatSave = actions.exportText()
+  window.CHEAT.set('stone', 1)
+  actions.importText(cheatSave)
+  ok('作弊资源立即保存且读档保留超仓库存', state.resources.stone === 100000 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).resources.stone === 100000)
+  engine.tick(state, derived, 1, { offline: true, events: false })
+  ok('后续结算不会将超仓作弊库存截断', state.resources.stone === 100000)
+  const before = JSON.stringify(state.resources)
+  const rejected = [() => window.CHEAT.add('unknown', 10), ...[-1, NaN, Infinity, '100', Number.MAX_SAFE_INTEGER + 1].map(n => () => window.CHEAT.all(n)), () => window.CHEAT.add('stone', Number.MAX_SAFE_INTEGER)]
+  ok('无效输入不污染库存', rejected.every(call => { try { call(); return false } catch { return true } }) && JSON.stringify(state.resources) === before)
+  const beforeAll = { ...state.resources }
+  window.CHEAT.all(10)
+  ok('一条命令增加全部资源', window.CHEAT.list().every(r => r.amount === beforeAll[r.id] + 10))
+  const qiBeforeClear = state.resources.qi
+  const stonePeak = state.peak.stone
+  state.realm = 5
+  state.buildings.quarry = { count: 3, on: true }
+  state.upgrades.intuition = true
+  state.disciples = { total: 3, jobs: { ...state.disciples.jobs, miner: 2 } }
+  state.karma = 123
+  state.dao = 4
+  engine.recompute(state, derived)
+  const progressFields = ['realm', 'buildings', 'upgrades', 'disciples', 'achievements', 'peak', 'karma', 'dao', 'log']
+  const progressBefore = Object.fromEntries(progressFields.map(key => [key, JSON.stringify(state[key])]))
+  window.CHEAT.clear('灵石')
+  ok('清空单种资源保留其他库存及历史峰值', state.resources.stone === 0 && state.resources.qi === qiBeforeClear && state.peak.stone === stonePeak)
+  const resourcesBeforeClear = JSON.stringify(state.resources)
+  window.CHEAT.clear()
+  const clearedSave = JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1'))
+  ok('清空普通库存并立即保存，永久资源保留', window.CHEAT.list().every(r => ['karma', 'dao'].includes(r.id) ? r.amount === JSON.parse(resourcesBeforeClear)[r.id] && clearedSave.resources[r.id] === r.amount : r.amount === 0 && clearedSave.resources[r.id] === 0))
+  ok('清空和保存不重置境界建筑修真弟子及永久进度', progressFields.every(key => JSON.stringify(state[key]) === progressBefore[key] && JSON.stringify(clearedSave[key]) === progressBefore[key]))
+  ok('作弊指令不写入玩家版本日志', !CHANGELOG.some(entry => entry.changes.some(change => /CHEAT\.|作弊/.test(change))))
+  actions.importText(actions.exportText())
+  ok('清空后读档仍保留宗门进度', progressFields.every(key => JSON.stringify(state[key]) === progressBefore[key]))
+  window.CHEAT.restore()
+  ok('主存档被覆盖后仍可恢复清空前完整备份', JSON.stringify(state.resources) === resourcesBeforeClear && progressFields.every(key => JSON.stringify(state[key]) === progressBefore[key]))
+  const storageSetItem = window.Storage.prototype.setItem
+  let backupRejected = false
+  try {
+    window.Storage.prototype.setItem = function(key, value) {
+      if (key.endsWith('.before-cheat-clear')) throw new Error('storage full')
+      return storageSetItem.call(this, key, value)
+    }
+    try { window.CHEAT.clear() } catch { backupRejected = true }
+  } finally {
+    window.Storage.prototype.setItem = storageSetItem
+  }
+  ok('备份失败时拒绝清空且不改动库存', backupRejected && JSON.stringify(state.resources) === resourcesBeforeClear)
+  window.localStorage.removeItem('slack-off-sect.save.v1.before-cheat-clear')
+  let missingBackupRejected = false
+  try { window.CHEAT.restore() } catch { missingBackupRejected = true }
+  ok('缺少备份时明确报错且不重置存档', missingBackupRejected && JSON.stringify(state.resources) === resourcesBeforeClear)
+  actions.importText(previous)
+  ui.debug = false
+}
+
 // ---------- 5. 存档 ----------
 console.log('\n== 存档 ==')
+{
+  const previousRaw = window.localStorage.getItem('slack-off-sect.save.v1')
+  const debugDescriptor = Object.getOwnPropertyDescriptor(window, 'DEBUG')
+  const brokenRaw = '{invalid save'
+  window.localStorage.setItem('slack-off-sect.save.v1', brokenRaw)
+  const warningHandler = console.warn
+  let recoveryModule
+  try {
+    console.warn = () => {}
+    recoveryModule = await import(pathToFileURL(bundlePath).href + '?broken-save-recovery')
+  } finally {
+    console.warn = warningHandler
+  }
+  const recoveryRoot = document.createElement('div')
+  document.body.appendChild(recoveryRoot)
+  const recoveryApp = recoveryModule.mount(recoveryRoot)
+  recoveryModule.startLoop()
+  await new Promise(r => setTimeout(r, 150))
+  ok('读档失败显示提示并阻止空白进度覆盖原存档', !!recoveryModule.ui.saveLoadError && recoveryRoot.textContent.includes('原存档未被覆盖') && !recoveryModule.saveNow() && window.localStorage.getItem('slack-off-sect.save.v1') === brokenRaw && recoveryModule.state.totalDays === 0)
+  const backupBeforeFailure = window.localStorage.getItem('slack-off-sect.save.v1.before-cheat-clear')
+  let clearRejected = false
+  try { window.CHEAT.clear() } catch { clearRejected = true }
+  ok('读档失败期间禁止作弊清空覆盖备份', clearRejected && window.localStorage.getItem('slack-off-sect.save.v1.before-cheat-clear') === backupBeforeFailure)
+  recoveryModule.actions.importText(previousRaw)
+  ok('导入有效存档解除保护并恢复进度', !recoveryModule.ui.saveLoadError && recoveryModule.state.realm === state.realm && JSON.stringify(recoveryModule.state.buildings) === JSON.stringify(state.buildings) && recoveryModule.saveNow())
+  recoveryModule.stopLoop()
+  recoveryApp.unmount()
+  recoveryRoot.remove()
+  Object.defineProperty(window, 'CHEAT', { configurable: true, value: mod.cheats })
+  Object.defineProperty(window, 'DEBUG', debugDescriptor)
+  window.localStorage.setItem('slack-off-sect.save.v1', previousRaw)
+}
 const saved = saveNow()
 ok('写入 localStorage 成功', saved === true && !!window.localStorage.getItem('slack-off-sect.save.v1'))
 const exported = actions.exportText()
@@ -1319,6 +1452,49 @@ console.log('\n== 凝灵诀状态 ==')
   doc.querySelector('.left .craft-open')?.click()
   await new Promise((r) => setTimeout(r, 50))
   ok('快捷入口能打开完整炼制页', state.ui.tab === 'craft' && !!doc.querySelector('.main .craft-full'))
+  const speedControl = doc.querySelector('select[aria-label="点石成灵自动炼制速度"]')
+  const originalStep = engine.autoCraftStatus(state, derived, 'infuseStone').step
+  ok('疾炼法解锁四档自动速度', !!speedControl && [...speedControl.options].map(option => option.value).join(',') === '1,2,5,10')
+  speedControl.value = '10'
+  speedControl.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await new Promise(r => setTimeout(r, 50))
+  ok('页面调速立即生效并保存', derived.autoCraftSpeeds.infuseStone === 10 && Math.abs(engine.autoCraftStatus(state, derived, 'infuseStone').step - originalStep / 10) < 1e-8 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).settings.autoCraftSpeeds.infuseStone === 10)
+  const speedRow = speedControl.closest('.craft-row')
+  speedRow.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  ok('配方行仍可悬停查看明细', !!document.querySelector('.tip'))
+  speedControl.dispatchEvent(new window.Event('pointerdown', { bubbles: true }))
+  speedControl.focus()
+  await new Promise(r => setTimeout(r, 180))
+  ok('操作速度下拉框时隐藏配方提示', !document.querySelector('.tip'))
+  const stockBeforeSpeedRefresh = speedRow.querySelector('.have').textContent
+  // 模拟原生菜单中尚未提交的档位；后台刷新不能强制改回已保存的值。
+  speedControl.value = '5'
+  for (let i = 0; i < 3; i++) {
+    state.resources.stone += 1
+    engine.recompute(state, derived)
+    await new Promise(r => setTimeout(r, 50))
+  }
+  ok('库存刷新不重写正在选择的档位或移除焦点', speedControl.value === '5' && derived.autoCraftSpeeds.infuseStone === 10 && document.activeElement === speedControl && doc.querySelector('select[aria-label="点石成灵自动炼制速度"]') === speedControl && speedRow.querySelector('.have').textContent !== stockBeforeSpeedRefresh)
+  speedRow.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  ok('选择档位期间刷新及悬停不会重开提示', !document.querySelector('.tip'))
+  speedControl.value = '10'
+  speedControl.blur()
+  speedRow.dispatchEvent(new window.MouseEvent('mouseleave'))
+  const pillSpeed = doc.querySelector('select[aria-label="采药制丹自动炼制速度"]')
+  pillSpeed.value = '2'
+  pillSpeed.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await new Promise(r => setTimeout(r, 50))
+  ok('灵石与丹药可分别选择速度', derived.autoCraftSpeeds.infuseStone === 10 && derived.autoCraftSpeeds.refinePill === 2 && speedControl.value === '10')
+  const speedSave = actions.exportText()
+  actions.setAutoCraftSpeed('infuseStone', 1)
+  actions.importText(speedSave)
+  await new Promise(r => setTimeout(r, 50))
+  ok('读档恢复各配方速度与选择项', derived.autoCraftSpeeds.infuseStone === 10 && derived.autoCraftSpeeds.refinePill === 2 && doc.querySelector('select[aria-label="点石成灵自动炼制速度"]').value === '10' && doc.querySelector('select[aria-label="采药制丹自动炼制速度"]').value === '2')
+  actions.setAutoCraftSpeed('infuseStone', 1)
+  actions.setAutoCraftSpeed('refinePill', 1)
+  await new Promise(r => setTimeout(r, 50))
   ok('所有配方解锁时完整页仍能全部列出', doc.querySelectorAll('.main .craft-row').length === CRAFTS.length)
   ok('左栏只有三个默认快捷且无目标统筹及未解锁列表', doc.querySelectorAll('.left .craft-row').length === 3 && !doc.querySelector('.left .craft-quick input[type=number], .left .craft-quick select, .left .craft-quick details'))
   ok('快捷按钮简化为制作半料全部', [...doc.querySelectorAll('.left [data-craft="infuseStone"] .btn')].map(el => el.textContent.trim()).join(',') === '制作,½料,全部')
@@ -1381,6 +1557,63 @@ console.log('\n== 凝灵诀状态 ==')
   actions.importText(previous)
   await new Promise((r) => setTimeout(r, 50))
 }
+console.log('\n== 大批灵石合成响应 ==')
+{
+  const previous = actions.exportText()
+  state.ui.tab = 'craft'
+  state.ui.craftFilter = 'all'
+  state.buildings.quarry = { count: 1, on: true }
+  actions.setSetting('quickCrafts', ['infuseStone'])
+  for (const [location, label, expected] of [['.left', '全部', 1000000000], ['.main', '½料', 500000000]]) {
+    engine.recompute(state, derived)
+    derived.craftBonus = 0
+    derived.craftBonusByResource.stone = 0
+    state.resources.qi = 15000000000
+    state.resources.rock = 3000000000
+    state.resources.stone = 0
+    state.craftProgress.infuseStone = 0
+    state.__max.stone = derived.max.stone = 1000000000
+    await new Promise(r => setTimeout(r, 50))
+    const button = [...doc.querySelectorAll(`${location} [data-craft="infuseStone"] .btn`)].find(el => el.textContent.trim() === label)
+    const before = state.stats.craftCount
+    const start = performance.now()
+    button?.click()
+    const elapsed = performance.now() - start
+    await new Promise(r => setTimeout(r, 50))
+    ok(`${location} ${label}大批合成不阻塞且正确扣料`, button && elapsed < 1000 &&
+      state.resources.stone === expected && state.stats.craftCount - before === expected &&
+      state.resources.qi === 15000000000 - expected * 15 && state.resources.rock === 3000000000 - expected * 3,
+      `${Math.round(elapsed)}ms`)
+    const stockText = selector => doc.querySelector(`${selector} [data-craft="infuseStone"] .have`)?.textContent.split('/')[0].trim()
+    ok(`${location} 合成后完整页与快捷栏同步`, !!stockText('.left') && stockText('.left') === stockText('.main'))
+  }
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
+console.log('\n== 采矿场职位效果 ==')
+{
+  const previous = actions.exportText()
+  state.ui.tab = 'sect'
+  state.ui.buildingFilter = 'all'
+  state.buildings.quarry = { count: 3, on: true }
+  state.buildings.lumberYard = { count: 1, on: true }
+  state.buildings.granary = { count: 1, on: true }
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  const quarry = [...doc.querySelectorAll('.build-item')].find(el => el.querySelector('.build-btn')?.textContent.includes('采矿场'))
+  const trigger = quarry?.querySelector('.tip-trigger')
+  trigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
+  await new Promise(r => setTimeout(r, 180))
+  const tip = [...doc.querySelectorAll('.tip')].find(el => el.querySelector('.tip-title')?.textContent.includes('采矿场'))
+  const row = [...(tip?.querySelectorAll('.tip-row') || [])].find(el => el.textContent.includes('矿工 基础产出'))
+  ok('采矿场提示展示矿工职位与每人矿石基础产出', tip?.textContent.includes('开放职位') && row?.textContent.includes('矿石 +0.150/秒·人'))
+  ok('矿工基础产出不随采矿场座数重复叠加', !!row && !row.textContent.includes('合计'))
+  trigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
+
 console.log('\n== 长 tooltip 边界与滚动 ==')
 {
   const originalRect = window.HTMLElement.prototype.getBoundingClientRect
@@ -1469,6 +1702,8 @@ actions.importText(beforeCondense)
 await new Promise((r) => setTimeout(r, 50))
 
 console.log('\n== 事件选择 ==')
+// 前面的随机调试事件可能留下待决选择，独立事件用例先清理它。
+state.pendingChoice = null
 state.resources.wood = 100
 engine.recompute(state, derived)
 engine.fireEvent(state, derived, { id: 'ancientCave', type: 'choice', text: '发现古洞' })

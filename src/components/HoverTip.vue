@@ -62,8 +62,11 @@ function place() {
 }
 
 function show() {
+  // 原生下拉菜单展开时，避免实时变化的提示框与选择控件互相干扰。
+  if (trigger.value?.contains(document.activeElement) && document.activeElement?.matches('select')) return
   clearTimeout(timer)
   timer = setTimeout(async () => {
+    if (trigger.value?.contains(document.activeElement) && document.activeElement?.matches('select')) return
     open.value = true
     await nextTick()
     if (!open.value) return
@@ -76,6 +79,15 @@ function hide() {
   clearTimeout(timer)
   open.value = false
   emit('hide')
+}
+
+function onFocus(e) {
+  if (e.target?.matches('select')) hide()
+  else show()
+}
+
+function onPointerDown(e) {
+  if (e.target?.closest('select')) hide()
 }
 
 function onKey(e) {
@@ -128,7 +140,8 @@ defineExpose({ show, hide, open })
     class="tip-trigger"
     @mouseenter="show"
     @mouseleave="hide"
-    @focusin="show"
+    @focusin="onFocus"
+    @pointerdown="onPointerDown"
     @focusout="hide"
     @wheel="scrollTip"
   >
