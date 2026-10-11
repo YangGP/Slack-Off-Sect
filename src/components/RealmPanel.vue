@@ -185,8 +185,11 @@ function reincarnate() {
           </template>
         </div>
         <div v-if="preview.deathOnFailure" class="small bad" style="padding-bottom: 6px">
-          炼虚起冲关失败：{{ fmtPercent(preview.regressionOnFailure) }} 概率退一境，{{ fmtPercent(preview.deathOnFailure) }} 概率身死道消。
-          本次总退境概率 {{ fmtPercent(preview.regressionRisk, 1) }}，本次总身死概率 {{ fmtPercent(preview.deathRisk, 1) }}。
+          冲关失败：
+          <template v-if="preview.regressionOnFailure">{{ fmtPercent(preview.regressionOnFailure) }} 概率退一境，</template>
+          <template v-else>{{ fmtPercent(1 - preview.deathOnFailure) }} 概率存活且境界不变，</template>
+          {{ fmtPercent(preview.deathOnFailure) }} 概率身死道消。
+          本次总退境概率 {{ fmtPercent(preview.regressionRisk, 1) }}，本次总身死概率 {{ fmtPercent(preview.deathRisk, preview.deathRisk < 0.01 ? 2 : 1) }}。
           身死立即重开，清空范围同转世，保留已有仙缘、道果、成就与累计统计；
           本次可得仙缘减半为 {{ preview.deathKarma }} 点，不结道果。
         </div>

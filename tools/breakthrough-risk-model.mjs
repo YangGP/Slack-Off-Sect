@@ -28,11 +28,14 @@ for (const mode of ['naked', 'aided']) {
   for (let i = 0; i < 10; i++) {
     const base = BREAKTHROUGH.lateBaseChances[i + 1] ?? (i < 3 ? BREAKTHROUGH.earlyChance : i === 3 ? BREAKTHROUGH.goldenCoreChance : BREAKTHROUGH.tribulationChance - (i - 4) * BREAKTHROUGH.chanceDrop)
     p[i] = Math.min(BREAKTHROUGH.chanceCap, base + (mode === 'aided' && i >= 3 ? BREAKTHROUGH_AIDS[i + 1].reduce((sum, aid) => sum + aid.bonus, 0) : 0))
-    const fatal = i >= 7 ? BREAKTHROUGH.deathChance + (i - 7) * BREAKTHROUGH.deathChanceStep : 0
+    const fatal = i >= BREAKTHROUGH.deathRealm ? (BREAKTHROUGH.deathChances[i] || 0) : 0
     death[i] = (1 - p[i]) * fatal
     if (i < 9) transitions[i][i + 1] += p[i]
-    if (i < 7) transitions[i][i] += 1 - p[i]
-    else { transitions[i][0] += death[i]; transitions[i][i - 1] += (1 - p[i]) * (1 - fatal) }
+    transitions[i][0] += death[i]
+    const survivor = (1 - p[i]) * (1 - fatal)
+    if (i < BREAKTHROUGH.regressionRealm) transitions[i][i] += survivor
+    else transitions[i][i - 1] += survivor
+    assert(Math.abs(transitions[i].reduce((sum, probability) => sum + probability, 0) + (i === 9 ? p[i] : 0) - 1) < 1e-12)
   }
   const matrix = transitions.map((row, i) => row.map((prob, j) => (i === j ? 1 : 0) - prob))
   const total = solve(matrix, Array(10).fill(1))[0]

@@ -110,9 +110,9 @@ export const BREAKTHROUGH = {
   tribulationChance: 0.60,
   chanceDrop: 0.05,
   chanceCap: 0.99,
-  deathRealm: 7,
-  deathChance: 0.10,
-  deathChanceStep: 0.05,
+  deathRealm: 4,
+  regressionRealm: 7,
+  deathChances: { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }, // 按冲关前境界，失败后身死概率
   stockLoss: 0.02,
   productionLoss: 0.05,
   recoverySeconds: 120,

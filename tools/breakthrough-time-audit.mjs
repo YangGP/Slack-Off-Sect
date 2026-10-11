@@ -2,6 +2,10 @@
  * Usage after SSR bundling: node bundle.js [mode] [seed] [hours]
  * Full aids start at the golden core; earlier 95% realms use no optional materials.
  * Real engine payments, production, deaths, karma and simulated wall time; no events.
+ * Focus mode: node bundle.js focus [seed] [hours] [full|none|pill|equipment|faith] [success|regression|death]
+ * Before entering realm 7 it follows the aided player with real random outcomes. After
+ * entry, the first attempt at realm 8 has the requested outcome; later attempts succeed
+ * to isolate preparation/recovery cost. These forced outcomes are not random samples.
  */
 import fs from 'node:fs'
 import { createInitialState } from '../src/game/state.js'
@@ -11,7 +15,10 @@ import { createBot } from './player-bot.mjs'
 const mode = process.argv[2] || 'baseline'
 const seed = Number(process.argv[3] || 1)
 const hours = Number(process.argv[4] || 72)
-if (!['baseline', 'naked', 'aided'].includes(mode) || !Number.isInteger(seed) || seed < 1 || !Number.isFinite(hours) || hours <= 0 || hours > 168) throw Error('Invalid arguments')
+const selection = process.argv[5] || 'full'
+const outcome = process.argv[6] || 'success'
+if (!['baseline', 'naked', 'aided', 'focus'].includes(mode) || !Number.isInteger(seed) || seed < 1 || !Number.isFinite(hours) || hours <= 0 || hours > 168
+  || !['full', 'none', 'pill', 'equipment', 'faith'].includes(selection) || !['success', 'regression', 'death'].includes(outcome)) throw Error('Invalid arguments')
 let now = 1791676800000, rngState = seed >>> 0
 Date.now = () => now
 Math.random = () => {
@@ -20,13 +27,38 @@ Math.random = () => {
 }
 const s = createInitialState(), d = E.createDerived()
 E.recompute(s, d)
-const options = () => mode === 'aided' && s.realm >= 3
-  ? Object.fromEntries(E.breakthroughPreview(s, d).availableAids.map(a => [a.id, true])) : {}
+const options = () => {
+  if (!['aided', 'focus'].includes(mode) || s.realm < 3) return {}
+  const aids = E.breakthroughPreview(s, d).availableAids
+  return Object.fromEntries(aids.filter((a, index) => mode !== 'focus' || s.realm !== 7 || selection === 'full'
+    || index === { pill: 0, equipment: 1, faith: 2 }[selection]).map(a => [a.id, true]))
+}
 const need = () => E.breakthroughPreview(s, d, options()).cost
 const attempts = Array.from({ length: 11 }, () => ({ tries: 0, success: 0, regression: 0, death: 0, paid: {} }))
 const firstReach = {}, transitions = []
 let elapsed = 0
 let lastAttemptAt = -1
+const focus = { selection, outcome, start: null, readinessMinutes: {}, shortagesSeconds: {}, capacitySeconds: {}, attempts: [], finished: false }
+const snapshot = () => ({ seconds: elapsed, resources: { ...s.resources }, max: { ...d.max },
+  production: { ...d.rates }, netQi: d.netQi, buildings: { ...s.buildings }, upgrades: { ...s.upgrades }, karma: s.karma })
+let lastFocusObservation = -1
+const observeFocus = () => {
+  if (mode !== 'focus' || s.realm !== 7) return
+  if (!focus.start) focus.start = snapshot()
+  if (lastFocusObservation === elapsed || focus.attempts.length) return
+  const dt = lastFocusObservation < 0 ? 0 : elapsed - lastFocusObservation
+  lastFocusObservation = elapsed
+  const preview = E.breakthroughPreview(s, d)
+  const cost = need()
+  for (const [id, amount] of Object.entries(cost)) {
+    if (s.resources[id] < amount) focus.shortagesSeconds[id] = (focus.shortagesSeconds[id] || 0) + dt
+    if (d.max[id] < amount) focus.capacitySeconds[id] = (focus.capacitySeconds[id] || 0) + dt
+  }
+  for (const [label, cost] of [['base', preview.cost], ...preview.availableAids.map(a => [a.name, a.cost]), ['selected', need()],
+    ...Object.entries(need()).map(([id, amount]) => [`resource:${id}`, { [id]: amount }])]) {
+    if (focus.readinessMinutes[label] == null && E.canAfford(s, cost)) focus.readinessMinutes[label] = +((elapsed - focus.start.seconds) / 60).toFixed(2)
+  }
+}
 const attempt = () => {
   const target = s.realm + 1, before = s.realm, cost = need()
   if (lastAttemptAt === elapsed || target > 10 || !E.canAfford(s, cost)) return false
@@ -35,7 +67,16 @@ const attempt = () => {
   record.tries++
   for (const [res, amount] of Object.entries(cost)) record.paid[res] = (record.paid[res] || 0) + amount
   const deaths = s.stats.breakthroughDeaths
-  const ok = E.breakthrough(s, d, options(), mode === 'baseline' ? () => 0 : Math.random)
+  const beforeSnapshot = mode === 'focus' && target === 8 ? snapshot() : null
+  let forced = []
+  if (mode === 'focus' && focus.start) forced = target === 8 && !focus.attempts.length
+    ? { success: [0], regression: [0.99, 0.99], death: [0.99, 0] }[outcome] : [0]
+  const ok = E.breakthrough(s, d, options(), mode === 'baseline' ? () => 0 : forced.length ? () => forced.shift() ?? 0 : Math.random)
+  if (beforeSnapshot) {
+    focus.attempts.push({ minutesFromStart: +((elapsed - focus.start.seconds) / 60).toFixed(2), before: beforeSnapshot,
+      afterRealm: s.realm, karma: s.karma, cost, success: ok })
+    if (ok) focus.finished = true
+  }
   if (ok) record.success++
   else if (s.stats.breakthroughDeaths > deaths) record.death++
   else if (s.realm < before) record.regression++
@@ -81,9 +122,13 @@ for (elapsed = 5; elapsed <= hours * 3600; elapsed += 5) {
   for (let i = 0; i < 5; i++) { now += 1000; E.tick(s, d, 1, { events: false }) }
   if (elapsed % 60 === 0) allocateLabor()
   prepare()
+  observeFocus()
   attempt()
+  if (focus.finished) break
   if (E.canAscend(s)) break
   bot.act()
+  if (focus.finished) break
+  observeFocus()
   if (elapsed % 60 === 0) allocateLabor()
   if (E.canAscend(s)) break
   if (elapsed % 21600 === 0) console.log(`${mode} seed=${seed} t=${elapsed / 3600}h realm=${s.realm} deaths=${s.stats.breakthroughDeaths}`)
@@ -92,6 +137,8 @@ const result = { mode, seed, strategy: 'rush + active labor', limitHours: hours,
   finalRealm: s.realm, bestRealm: s.stats.bestRealm, karma: s.karma, deaths: s.stats.breakthroughDeaths,
   firstReach, attempts: attempts.slice(1), transitions,
   buildings: s.buildings, upgrades: s.upgrades,
-  next: Object.fromEntries(Object.entries(need()).map(([id, amount]) => [id, { need: amount, stock: s.resources[id], max: d.max[id] }])) }
-fs.writeFileSync(`.breakthrough-time-${mode}-${seed}.json`, JSON.stringify(result, null, 2))
-console.log(JSON.stringify(result))
+  next: Object.fromEntries(Object.entries(need()).map(([id, amount]) => [id, { need: amount, stock: s.resources[id], max: d.max[id] }])),
+  ...(mode === 'focus' ? { focus } : {}) }
+fs.writeFileSync(`.breakthrough-time-${mode}-${seed}${mode === 'focus' ? `-${selection}-${outcome}` : ''}.json`, JSON.stringify(result, null, 2))
+console.log(mode === 'focus' ? JSON.stringify({ seed, selection, outcome, finished: focus.finished, readiness: focus.readinessMinutes,
+  attempts: focus.attempts.map(a => ({ minutes: a.minutesFromStart, afterRealm: a.afterRealm, karma: a.karma })), finalRealm: s.realm }) : JSON.stringify(result))

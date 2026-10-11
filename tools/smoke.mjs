@@ -4669,7 +4669,7 @@ section('破境概率与失败结算')
     const [s, d] = setup(realm)
     const p = E.breakthroughPreview(s, d)
     ok(`境界${realm}基础概率遵守阶段`, close(p.baseChance, realm < 3 ? 0.95 : realm === 3 ? 0.70 : realm >= 7 ? 0.20 - (realm - 7) * 0.05 : 0.6 - (realm - 4) * 0.05))
-    ok(`境界${realm}身死风险遵守炼虚分界`, realm < 7 ? p.deathRisk === 0 : p.deathRisk > 0)
+    ok(`境界${realm}身死风险遵守金丹分界`, realm < 4 ? p.deathRisk === 0 : p.deathRisk > 0)
     ok(`境界${realm}退境风险遵守炼虚分界`, realm < 7 ? p.regressionRisk === 0 : close(p.regressionOnFailure + p.deathOnFailure, 1))
     const options = Object.fromEntries(p.availableAids.map(aid => [aid.id, true]))
     const aided = E.breakthroughPreview(s, d, options)
@@ -4718,7 +4718,22 @@ section('破境概率与失败结算')
   ok('失败减产5%且有恢复期限', s.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05 && b.until > Date.now()))
   E.breakthrough(s, d, {}, () => 0.99)
   ok('连续失败减产不叠加', s.buffs.filter(b => b.id === 'breakthroughInjury').length === 1)
-  for (let realm = 7; realm <= 9; realm++) {
+  for (let realm = 4; realm <= 9; realm++) {
+    const fatal = { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }[realm]
+    const [below, bd] = setup(realm)
+    const full = Object.fromEntries(BREAKTHROUGH_AIDS[realm + 1].map(aid => [aid.id, true]))
+    const preview = E.breakthroughPreview(below, bd, full)
+    ok(`境界${realm}满配身死风险符合调参`, close(preview.deathOnFailure, fatal) && close(preview.deathRisk, (1 - preview.chance) * fatal))
+    let deathRoll = 0
+    ok(`境界${realm}低于身死边界时强制重开`, !E.breakthrough(below, bd, full, () => deathRoll++ === 0 ? 0.99 : fatal - 0.001) && below.realm === 0 && below.stats.breakthroughDeaths === 1)
+    const [edge, edgeDerived] = setup(realm)
+    let edgeRoll = 0
+    ok(`境界${realm}身死边界及以上存活且遵守退境分界`, !E.breakthrough(edge, edgeDerived, full, () => edgeRoll++ === 0 ? 0.99 : fatal) && edge.realm === (realm < 7 ? realm : realm - 1) && edge.stats.breakthroughDeaths === 0)
+    if (realm < 7) {
+      ok(`境界${realm}身死同样减半仙缘且保留永久进度`, below.karma === 50 + preview.deathKarma && below.dao === 2 && below.stats.reincarnations === 0 && below.stats.ascensions === 0 && below.resources.qi === 0)
+      ok(`境界${realm}存活失败只减产扣料不退境`, edge.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && edge.stats.lifeInsight === 200000)
+      continue
+    }
     const [alive, ad] = setup(realm)
     alive.stats.bestRealm = realm
     const cost = E.realmCost(alive, ad, realm + 1)

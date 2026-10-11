@@ -1503,9 +1503,8 @@ export function breakthroughPreview(state, derived, options = {}) {
     for (const [res, amount] of Object.entries(aid.cost)) cost[res] = (cost[res] || 0) + amount
   }
   const chance = Math.min(rules.chanceCap, baseChance + aids.reduce((sum, aid) => sum + aid.bonus, 0))
-  const deathOnFailure = state.realm >= rules.deathRealm
-    ? rules.deathChance + (state.realm - rules.deathRealm) * rules.deathChanceStep : 0
-  const regressionOnFailure = deathOnFailure > 0 ? 1 - deathOnFailure : 0
+  const deathOnFailure = state.realm >= rules.deathRealm ? (rules.deathChances[state.realm] || 0) : 0
+  const regressionOnFailure = state.realm >= rules.regressionRealm ? 1 - deathOnFailure : 0
   const maxChance = Math.min(rules.chanceCap, baseChance + availableAids.reduce((sum, aid) => sum + aid.bonus, 0))
   return { baseChance, chance, maxChance, availableAids, cost, tribulation, deathOnFailure, regressionOnFailure,
     regressionRisk: (1 - chance) * regressionOnFailure, deathRisk: (1 - chance) * deathOnFailure,

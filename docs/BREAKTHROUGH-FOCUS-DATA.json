@@ -1,0 +1,1441 @@
+{
+  "date": "2026-10-11",
+  "version": "0.3.0",
+  "conditions": "events off; decisions 5s; labor 60s; aided before realm 7; forced first realm-8 outcome and subsequent successes; real payments, production, storage and rebirth",
+  "results": [
+    {
+      "seed": 1,
+      "selection": "full",
+      "outcome": "success",
+      "startHours": 15.79,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:insight": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0,
+        "香火祈愿": 1.67,
+        "resource:faith": 1.67,
+        "resource:spiritLiquid": 6.25,
+        "resource:crystal": 8.92,
+        "resource:artifact": 10.42,
+        "resource:arrayBase": 11.17,
+        "银器共鸣": 46.08,
+        "resource:mithril": 46.08,
+        "base": 140.58,
+        "selected": 140.58,
+        "resource:qi": 140.58
+      },
+      "shortageMinutes": {
+        "qi": 140.5,
+        "spiritLiquid": 24.92,
+        "crystal": 41.42,
+        "artifact": 22.42,
+        "arrayBase": 22,
+        "mithril": 46,
+        "faith": 1.58,
+        "insight": 10
+      },
+      "capacityBlockedMinutes": {
+        "qi": 134.08
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 3791.5583253890954,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 3.8475458633402013,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 1,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 180,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 65,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 29,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 5,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 14,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1980,
+          "max": 3180
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 140.58,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 2,
+      "selection": "full",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:arrayBase": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.83,
+        "resource:faith": 1.83,
+        "resource:spiritLiquid": 3.17,
+        "resource:insight": 3.58,
+        "银器共鸣": 44.75,
+        "resource:mithril": 44.75,
+        "base": 102.33,
+        "selected": 102.33,
+        "resource:qi": 102.33
+      },
+      "shortageMinutes": {
+        "insight": 14.42,
+        "qi": 102.25,
+        "spiritLiquid": 16.42,
+        "artifact": 25.58,
+        "mithril": 44.67,
+        "spiritArtifact": 0,
+        "faith": 1.75,
+        "arrayBase": 26.17,
+        "crystal": 24.42
+      },
+      "capacityBlockedMinutes": {
+        "qi": 94.25
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 7,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1860,
+          "max": 3060
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 102.33,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 3,
+      "selection": "full",
+      "outcome": "success",
+      "startHours": 15.772,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.67,
+        "resource:insight": 1.67,
+        "resource:faith": 1.67,
+        "resource:spiritLiquid": 7.33,
+        "resource:arrayBase": 20.33,
+        "银器共鸣": 44.25,
+        "resource:mithril": 44.25,
+        "base": 48.58,
+        "selected": 48.58,
+        "resource:qi": 48.58
+      },
+      "shortageMinutes": {
+        "insight": 6.83,
+        "qi": 48.5,
+        "spiritLiquid": 7.25,
+        "artifact": 22.42,
+        "arrayBase": 23.58,
+        "mithril": 44.17,
+        "spiritArtifact": 0,
+        "faith": 1.58
+      },
+      "capacityBlockedMinutes": {
+        "qi": 17
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 2720,
+          "stock": 1317.8999072341803,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 25500,
+          "stock": 77.52540550301273,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 306,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 238,
+          "stock": 253,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 272,
+          "stock": 92,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 34,
+          "stock": 10,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 6,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1980,
+          "max": 3180
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 48.58,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 2720,
+            "qi": 25500,
+            "spiritLiquid": 306,
+            "crystal": 238,
+            "artifact": 272,
+            "arrayBase": 34,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 4,
+      "selection": "full",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:arrayBase": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.83,
+        "resource:faith": 1.83,
+        "resource:spiritLiquid": 3.17,
+        "resource:insight": 3.58,
+        "银器共鸣": 44.75,
+        "resource:mithril": 44.75,
+        "base": 102.33,
+        "selected": 102.33,
+        "resource:qi": 102.33
+      },
+      "shortageMinutes": {
+        "insight": 14.42,
+        "qi": 102.25,
+        "spiritLiquid": 16.42,
+        "artifact": 25.58,
+        "mithril": 44.67,
+        "spiritArtifact": 0,
+        "faith": 1.75,
+        "arrayBase": 26.17,
+        "crystal": 24.42
+      },
+      "capacityBlockedMinutes": {
+        "qi": 94.25
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 7,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1860,
+          "max": 3060
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 102.33,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 5,
+      "selection": "full",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:arrayBase": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.83,
+        "resource:faith": 1.83,
+        "resource:spiritLiquid": 3.17,
+        "resource:insight": 3.58,
+        "银器共鸣": 44.75,
+        "resource:mithril": 44.75,
+        "base": 102.33,
+        "selected": 102.33,
+        "resource:qi": 102.33
+      },
+      "shortageMinutes": {
+        "insight": 14.42,
+        "qi": 102.25,
+        "spiritLiquid": 16.42,
+        "artifact": 25.58,
+        "mithril": 44.67,
+        "spiritArtifact": 0,
+        "faith": 1.75,
+        "arrayBase": 26.17,
+        "crystal": 24.42
+      },
+      "capacityBlockedMinutes": {
+        "qi": 94.25
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 7,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1860,
+          "max": 3060
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 102.33,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 6,
+      "selection": "full",
+      "outcome": "success",
+      "startHours": 15.79,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:insight": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0,
+        "香火祈愿": 1.67,
+        "resource:faith": 1.67,
+        "resource:spiritLiquid": 6.25,
+        "resource:crystal": 8.92,
+        "resource:artifact": 10.42,
+        "resource:arrayBase": 11.17,
+        "银器共鸣": 46.08,
+        "resource:mithril": 46.08,
+        "base": 140.58,
+        "selected": 140.58,
+        "resource:qi": 140.58
+      },
+      "shortageMinutes": {
+        "qi": 140.5,
+        "spiritLiquid": 24.92,
+        "crystal": 41.42,
+        "artifact": 22.42,
+        "arrayBase": 22,
+        "mithril": 46,
+        "faith": 1.58,
+        "insight": 10
+      },
+      "capacityBlockedMinutes": {
+        "qi": 134.08
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 3791.5583253890954,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 3.8475458633402013,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 1,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 180,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 65,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 29,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 5,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 14,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1980,
+          "max": 3180
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 140.58,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 2,
+      "selection": "none",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "香火祈愿": 1.83,
+        "base": 131,
+        "selected": 131
+      },
+      "shortageMinutes": null,
+      "capacityBlockedMinutes": null,
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 131,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 2,
+      "selection": "pill",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:arrayBase": 0,
+        "resource:nineTurnPill": 0,
+        "resource:artifact": 0.08,
+        "香火祈愿": 1.83,
+        "resource:spiritLiquid": 3.17,
+        "resource:insight": 3.58,
+        "base": 131,
+        "selected": 131,
+        "resource:qi": 131
+      },
+      "shortageMinutes": {
+        "insight": 12.67,
+        "qi": 130.92,
+        "spiritLiquid": 19.75,
+        "artifact": 25.92,
+        "arrayBase": 16.67,
+        "crystal": 28
+      },
+      "capacityBlockedMinutes": {
+        "qi": 122
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 7,
+          "max": 10
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 131,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 2,
+      "selection": "equipment",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:arrayBase": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.83,
+        "resource:spiritLiquid": 3.17,
+        "resource:insight": 3.58,
+        "银器共鸣": 44.75,
+        "resource:mithril": 44.75,
+        "base": 102.33,
+        "selected": 102.33,
+        "resource:qi": 102.33
+      },
+      "shortageMinutes": {
+        "insight": 14.42,
+        "qi": 102.25,
+        "spiritLiquid": 16.42,
+        "artifact": 25.58,
+        "mithril": 44.67,
+        "spiritArtifact": 0,
+        "arrayBase": 26.17,
+        "crystal": 24.42
+      },
+      "capacityBlockedMinutes": {
+        "qi": 94.25
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 102.33,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "mithril": 12,
+            "spiritArtifact": 3
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 2,
+      "selection": "faith",
+      "outcome": "success",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:arrayBase": 0,
+        "resource:artifact": 0.08,
+        "香火祈愿": 1.83,
+        "resource:faith": 1.83,
+        "resource:spiritLiquid": 3.17,
+        "resource:insight": 3.58,
+        "base": 131,
+        "selected": 131,
+        "resource:qi": 131
+      },
+      "shortageMinutes": {
+        "insight": 12.67,
+        "qi": 130.92,
+        "spiritLiquid": 19.75,
+        "artifact": 25.92,
+        "faith": 1.75,
+        "arrayBase": 16.67,
+        "crystal": 28
+      },
+      "capacityBlockedMinutes": {
+        "qi": 122
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1860,
+          "max": 3060
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 131,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": null
+    },
+    {
+      "seed": 2,
+      "selection": "full",
+      "outcome": "regression",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "香火祈愿": 1.83,
+        "银器共鸣": 44.75,
+        "base": 102.33,
+        "selected": 102.33
+      },
+      "shortageMinutes": null,
+      "capacityBlockedMinutes": null,
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 7,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1860,
+          "max": 3060
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 102.33,
+          "afterRealm": 6,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        },
+        {
+          "minutesFromStart": 134.92,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": 32.59
+    },
+    {
+      "seed": 2,
+      "selection": "full",
+      "outcome": "death",
+      "startHours": 15.643,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "香火祈愿": 1.83,
+        "银器共鸣": 44.75,
+        "base": 102.33,
+        "selected": 102.33
+      },
+      "shortageMinutes": null,
+      "capacityBlockedMinutes": null,
+      "startInventory": {
+        "insight": {
+          "cost": 3200,
+          "stock": 306.6399849491231,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 30000,
+          "stock": 83.48665026331582,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 360,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 280,
+          "stock": 285,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 320,
+          "stock": 67,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 40,
+          "stock": 49,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 7,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1860,
+          "max": 3060
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 102.33,
+          "afterRealm": 0,
+          "karma": 16,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        },
+        {
+          "minutesFromStart": 712.67,
+          "afterRealm": 8,
+          "karma": 16,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": 610.34
+    },
+    {
+      "seed": 3,
+      "selection": "full",
+      "outcome": "regression",
+      "startHours": 15.772,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.67,
+        "resource:insight": 1.67,
+        "resource:faith": 1.67,
+        "resource:spiritLiquid": 7.33,
+        "resource:arrayBase": 20.33,
+        "银器共鸣": 44.25,
+        "resource:mithril": 44.25,
+        "base": 48.58,
+        "selected": 48.58,
+        "resource:qi": 48.58
+      },
+      "shortageMinutes": {
+        "insight": 6.83,
+        "qi": 48.5,
+        "spiritLiquid": 7.25,
+        "artifact": 22.42,
+        "arrayBase": 23.58,
+        "mithril": 44.17,
+        "spiritArtifact": 0,
+        "faith": 1.58
+      },
+      "capacityBlockedMinutes": {
+        "qi": 17
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 2720,
+          "stock": 1317.8999072341803,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 25500,
+          "stock": 77.52540550301273,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 306,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 238,
+          "stock": 253,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 272,
+          "stock": 92,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 34,
+          "stock": 10,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 6,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1980,
+          "max": 3180
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 48.58,
+          "afterRealm": 6,
+          "karma": 0,
+          "cost": {
+            "insight": 2720,
+            "qi": 25500,
+            "spiritLiquid": 306,
+            "crystal": 238,
+            "artifact": 272,
+            "arrayBase": 34,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        },
+        {
+          "minutesFromStart": 135.67,
+          "afterRealm": 8,
+          "karma": 0,
+          "cost": {
+            "insight": 2720,
+            "qi": 25500,
+            "spiritLiquid": 306,
+            "crystal": 238,
+            "artifact": 272,
+            "arrayBase": 34,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": 87.09
+    },
+    {
+      "seed": 3,
+      "selection": "full",
+      "outcome": "death",
+      "startHours": 15.772,
+      "readinessMinutes": {
+        "九转合真": 0,
+        "resource:crystal": 0,
+        "resource:nineTurnPill": 0,
+        "resource:spiritArtifact": 0.08,
+        "resource:artifact": 0.17,
+        "香火祈愿": 1.67,
+        "resource:insight": 1.67,
+        "resource:faith": 1.67,
+        "resource:spiritLiquid": 7.33,
+        "resource:arrayBase": 20.33,
+        "银器共鸣": 44.25,
+        "resource:mithril": 44.25,
+        "base": 48.58,
+        "selected": 48.58,
+        "resource:qi": 48.58
+      },
+      "shortageMinutes": {
+        "insight": 6.83,
+        "qi": 48.5,
+        "spiritLiquid": 7.25,
+        "artifact": 22.42,
+        "arrayBase": 23.58,
+        "mithril": 44.17,
+        "spiritArtifact": 0,
+        "faith": 1.58
+      },
+      "capacityBlockedMinutes": {
+        "qi": 17
+      },
+      "startInventory": {
+        "insight": {
+          "cost": 2720,
+          "stock": 1317.8999072341803,
+          "max": 35500
+        },
+        "qi": {
+          "cost": 25500,
+          "stock": 77.52540550301273,
+          "max": 25392
+        },
+        "spiritLiquid": {
+          "cost": 306,
+          "stock": 2,
+          "max": 2120
+        },
+        "crystal": {
+          "cost": 238,
+          "stock": 253,
+          "max": 2700
+        },
+        "artifact": {
+          "cost": 272,
+          "stock": 92,
+          "max": 11570
+        },
+        "arrayBase": {
+          "cost": 34,
+          "stock": 10,
+          "max": 1720
+        },
+        "nineTurnPill": {
+          "cost": 4,
+          "stock": 6,
+          "max": 10
+        },
+        "mithril": {
+          "cost": 12,
+          "stock": 0,
+          "max": 1050
+        },
+        "spiritArtifact": {
+          "cost": 3,
+          "stock": 0,
+          "max": 1710
+        },
+        "faith": {
+          "cost": 2400,
+          "stock": 1980,
+          "max": 3180
+        }
+      },
+      "attempts": [
+        {
+          "minutesFromStart": 48.58,
+          "afterRealm": 0,
+          "karma": 13,
+          "cost": {
+            "insight": 2720,
+            "qi": 25500,
+            "spiritLiquid": 306,
+            "crystal": 238,
+            "artifact": 272,
+            "arrayBase": 34,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        },
+        {
+          "minutesFromStart": 775.58,
+          "afterRealm": 8,
+          "karma": 13,
+          "cost": {
+            "insight": 3200,
+            "qi": 30000,
+            "spiritLiquid": 360,
+            "crystal": 280,
+            "artifact": 320,
+            "arrayBase": 40,
+            "nineTurnPill": 4,
+            "mithril": 12,
+            "spiritArtifact": 3,
+            "faith": 2400
+          }
+        }
+      ],
+      "recoveryMinutes": 727
+    }
+  ]
+}
