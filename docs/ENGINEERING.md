@@ -1,10 +1,12 @@
 # 工程约定与工具
 
-更新：2026-10-11。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
+更新：2026-10-12。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
+
+个人天赋首版配置在 `data/talents.js`，26条词条按修炼、岗位、突破类别互斥。`members[].talents`保存固定ID与Lv.1，`disciples.talentSeed`使用独立随机序列，`talentVersion:1`标记当前结构。旧档不补发，归一化保留合法身份并清理异常；升级触发和更高等级待设计。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`及DOM检查。完整规则见 [DISCIPLE-TALENTS.md](DISCIPLE-TALENTS.md)。
 
 v0.32（界面）：所有tooltip统一使用`HoverTip`，不再使用`RuleTip`或原生`title`提示。组件负责正文外壳和标题：简单规则用`label`自动生成可聚焦的点状下划线入口；按钮与表格保留默认触发插槽，用`title`或`#heading`提供标题、`description`提供说明、`#tip`提供明细。所有内容共用`tip-desc`、`tip-section`、`tip-row`（左标签／右数值）及`tip-note`／`tip-flavor`（分隔线后的淡色左对齐备注），不在业务组件重复创建`tip-body`或`tip-title`。默认宽360px，复杂明细可指定宽度，均受视口约束；支持悬停、键盘聚焦、Escape关闭及触发器滚轮阅读，下拉框操作期间暂停提示。重复说明与开发信息从默认界面移除；实时数值、操作条件、缺料原因、身死总风险和读档覆盖提醒保留，重修确认流程不变。DOM检查验证默认隐藏、统一结构、提示内容与风险可见性。
 
-弟子管理的四个原生下拉框通过`StableSelect`隔离父页高频刷新；筛选选项固定，人数在栏外显示。岗位选项仅在解锁集合改变时更新，集合未变则复用数组；子组件不使用原生`v-model`每帧同步值，避免操作期间被页面刷新重写。DOM检查验证选项无额外变更、节点与焦点保留，以及尚未提交的选择不被重置。
+弟子管理的五个原生下拉框通过`StableSelect`隔离父页高频刷新；筛选选项固定，人数在栏外显示。岗位选项仅在解锁集合改变时更新，集合未变则复用数组；子组件不使用原生`v-model`每帧同步值，避免操作期间被页面刷新重写。DOM检查验证选项无额外变更、节点与焦点保留，以及尚未提交的选择不被重置。
 
 建筑效果的资源条目由`describeEffects`和`describeJobEffects`携带`resource`标识，`BuildingButton`按`view.visibleResources`过滤每座效果；全局效果、职位开放和工位容量保留。过滤只影响展示，不改效果结算；合计仍按相同标签对应原始总效果。新增资源效果时沿用资源标识，避免按中文文案判断解锁。
 

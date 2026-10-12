@@ -5,6 +5,7 @@ import { JOBS } from '@/data/jobs'
 import { idleDisciples, nextArrivalIn, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, canAfford } from '@/game/engine'
 import { REALMS } from '@/data/realms'
 import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, discipleResidenceYears, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples } from '@/data/disciples'
+import { TALENT_MAP, TALENT_TIERS, TALENT_TIER_MAP, talentBonus, talentMatches } from '@/data/talents'
 import { costLabel } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
 import { describeNeeds } from '@/game/effectsText'
@@ -27,6 +28,7 @@ async function toggleManagement() {
 }
 const realmFilter = ref('all')
 const rootFilter = ref('all')
+const talentFilter = ref('all')
 const sortOrder = ref('arrival')
 const page = ref(0)
 const selected = ref([])
@@ -34,7 +36,8 @@ const targetRole = ref('idle')
 const selectedSet = computed(() => new Set(selected.value))
 const filtered = computed(() => sortDisciples(state.disciples.members.filter(member =>
   (realmFilter.value === 'all' || member.realm === Number(realmFilter.value)) &&
-  (rootFilter.value === 'all' || member.spiritualRoot === rootFilter.value)), sortOrder.value))
+  (rootFilter.value === 'all' || member.spiritualRoot === rootFilter.value) &&
+  talentMatches(member, talentFilter.value)), sortOrder.value))
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 30)))
 const visible = computed(() => filtered.value.slice(Math.min(page.value, pages.value - 1) * 30, (Math.min(page.value, pages.value - 1) + 1) * 30))
 const selectedIds = computed(() => filtered.value.filter(member => selectedSet.value.has(member.id)).map(member => member.id))
@@ -43,16 +46,22 @@ const filteredReady = computed(() => filtered.value.filter(member => discipleBre
 const canBatchBreakthrough = computed(() => filtered.value.some(member => selectedSet.value.has(member.id) && discipleBreakthroughPreview(state, member).ready))
 const realmOptions = [{ value: 'all', label: '全部境界' }, ...REALMS.map((realm, index) => ({ value: String(index), label: realm.name }))]
 const rootOptions = [{ value: 'all', label: '全部灵根' }, ...SPIRITUAL_ROOTS.map(root => ({ value: root.id, label: root.name }))]
+const talentOptions = [{ value: 'all', label: '全部天赋' }, { value: 'none', label: '无天赋' },
+  { value: 'cultivation', label: '修炼天赋' }, { value: 'breakthrough', label: '突破天赋' },
+  { value: 'job', label: '岗位专长' }, ...JOBS.map(job => ({ value: `job:${job.id}`, label: `${job.name}专长` }))]
 const sortOptions = [{ value: 'arrival', label: '入门先后' }, { value: 'progress', label: '进度优先' }, { value: 'rate', label: '速度优先' }]
 const roleOptions = computed(previous => {
   const options = [{ value: 'idle', label: '闲散' }, ...JOBS.filter(job => derived.unlockedJobs.includes(job.id)).map(job => ({ value: job.id, label: job.name }))]
   // 派生数据每帧重新计算，但实际可用岗位未变时保留选项数组身份。
   return previous?.length === options.length && options.every((option, index) => option.value === previous[index].value) ? previous : options
 })
-watch([realmFilter, rootFilter], () => { page.value = 0; selected.value = [] })
+watch([realmFilter, rootFilter, talentFilter], () => { page.value = 0; selected.value = [] })
 watch(sortOrder, () => { page.value = 0 })
 const managementRows = computed(() => visible.value.map(member => ({
   ...member, factor: discipleFactor(member, state.realm),
+  jobFactor: discipleFactor(member, state.realm) * (1 + talentBonus(member, 'job')),
+  talentRows: (member.talents || []).map(entry => ({ ...TALENT_MAP[entry.id], level: entry.level })),
+  talentTier: [...TALENT_TIERS].reverse().find(tier => member.talents?.some(entry => TALENT_MAP[entry.id]?.tier === tier.id))?.name,
   rate: cultivationRate(member), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
   upkeep: derived.discipleWeight > 0 ? derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight : 0,
   preview: discipleBreakthroughPreview(state, member),
@@ -120,6 +129,7 @@ function commitJob(jobId, event) {
       <HoverTip v-if="!managementOpen" label="职位分配"><template #tip><p>人数来自门中弟子，闲散弟子不产出；分配岗位不影响自动修炼。</p></template></HoverTip>
       <HoverTip v-else label="弟子管理"><template #tip>
           <p>工作时也自动修炼，灵根影响修炼速度，修满后等待突破；目标境界不能超过宗门。</p>
+          <p>天赋类型固定，修炼、岗位专长和突破效果只作用于本人。宗门每高于突破目标一境，成功率增加10个百分点，最高99%。</p>
           <p>突破失败消耗材料，损失20%本境修为并调息60秒。批量突破逐人扣料，材料不足即停止。</p>
           <p>宗门退境保留弟子境界，岗位加成与口粮暂按较低的宗门境界计算；宗门恢复后加成恢复。</p>
           <p>逐出费用＝该弟子累计灵气消耗×（在宗门待满的游戏年数＋1），每人向上取整。消耗包括个人口粮与突破支付的灵气；在线与离线都累计，旧档从更新后开始记录。确认后移除个人成长与岗位，整批灵气不足则不执行。</p>
@@ -221,6 +231,9 @@ function commitJob(jobId, event) {
         <label class="management-field"><span>灵根</span>
           <StableSelect v-model="rootFilter" label="弟子灵根筛选" :options="rootOptions" />
         </label>
+        <label class="management-field"><span>天赋</span>
+          <StableSelect v-model="talentFilter" label="弟子天赋筛选" :options="talentOptions" />
+        </label>
         <label class="management-field"><span>排序</span>
           <StableSelect v-model="sortOrder" label="弟子排序" :options="sortOptions" />
         </label>
@@ -259,7 +272,7 @@ function commitJob(jobId, event) {
             <tr v-for="member in managementRows" :key="member.id" @mouseenter="memberTip($event, 'mouseenter')" @mouseleave="memberTip($event, 'mouseleave')">
               <td><input v-model="selected" type="checkbox" :value="member.id" :aria-label="`选择弟子${member.id}`" /></td>
               <td class="nowrap">
-                <HoverTip :width="360">
+                <HoverTip :width="360" anchor="tr">
                   <span class="disciple-name" tabindex="0" :aria-label="`${member.name}（弟子${member.id}）详情`">{{ member.name }}</span>
                   <template #heading>{{ member.name }}<span class="tip-right">#{{ member.id }} · {{ REALMS[member.realm].name }}</span></template>
                   <template #tip>
@@ -272,9 +285,15 @@ function commitJob(jobId, event) {
                     <div class="tip-row"><span class="k">状态</span><span class="v">{{ member.preview.status }}<template v-if="member.cooldown > 0"> · 剩余{{ fmtTime(member.cooldown) }}</template><template v-else-if="member.preview.status === '修炼中'"> · 约{{ fmtTime((member.preview.required - member.cultivation) / member.rate) }}修满</template></span></div>
                     <div class="tip-section">岗位</div>
                     <div class="tip-row"><span class="k">当前岗位</span><span class="v">{{ JOBS.find(job => job.id === member.roleId)?.name || '闲散' }}</span></div>
-                    <div class="tip-row"><span class="k">个人岗位系数</span><span class="v">×{{ member.factor.toFixed(2) }}</span></div>
+                    <div class="tip-row"><span class="k">个人岗位系数</span><span class="v">×{{ member.jobFactor.toFixed(2) }}</span></div>
                     <div class="tip-row"><span class="k">口粮</span><span class="v">灵气 {{ fmtRate(-member.upkeep) }}</span></div>
                     <div v-if="member.realm > state.realm" class="tip-desc">宗门退境，个人境界保留；岗位系数与口粮暂按宗门境界计算。</div>
+                    <div class="tip-section">天赋</div>
+                    <div v-if="!member.talentRows.length" class="tip-desc">无天赋</div>
+                    <template v-for="talent in member.talentRows" :key="talent.id">
+                      <div class="tip-row"><span class="k">{{ talent.name }}</span><span class="v">{{ TALENT_TIER_MAP[talent.tier]?.name }}级 · Lv.{{ talent.level }}</span></div>
+                      <div class="tip-desc">{{ talent.description }}<span v-if="talent.jobId && talent.jobId !== member.roleId" class="dim">（当前岗位未生效）</span></div>
+                    </template>
                     <template v-if="member.realm < REALMS.length - 1">
                       <div class="tip-section">突破</div>
                       <div class="tip-row"><span class="k">目标 / 成功率</span><span class="v">{{ REALMS[member.preview.target].name }} · {{ fmt(member.preview.chance * 100) }}%</span></div>
@@ -285,6 +304,7 @@ function commitJob(jobId, event) {
                   </template>
                 </HoverTip>
                 <div class="small dim">{{ REALMS[member.realm].name }}</div>
+                <div class="small dim">{{ member.talentRows.length ? `${member.talentTier}级 · ${member.talentRows.length}条天赋` : '无天赋' }}</div>
               </td>
               <td class="nowrap">{{ member.root?.name || '三灵根' }}</td>
               <td>{{ JOBS.find(job => job.id === member.roleId)?.name || '闲散' }}</td>

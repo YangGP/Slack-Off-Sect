@@ -1,6 +1,7 @@
 import { JOBS } from '@/data/jobs'
 import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval } from './core'
 import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
+import { talentBonus, gainBreakthroughTalent, TALENT_MAP } from '@/data/talents'
 import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
@@ -72,8 +73,8 @@ export function discipleBreakthroughPreview(state, member) {
   const required = cultivationRequired(member.realm)
   const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
     [id, Math.max(1, Math.ceil(amount * DISCIPLE_GROWTH.costFactor))]))
-  const chance = Math.min(BREAKTHROUGH.chanceCap, 1 - (1 - realmBaseChance(target)) * DISCIPLE_GROWTH.failureFactor +
-    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance)
+  const chance = Math.min(BREAKTHROUGH.chanceCap, realmBaseChance(target) * DISCIPLE_GROWTH.successFactor +
+    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough'))
   const status = target >= REALMS.length ? '已至最高境界' : member.cooldown > 0 ? '突破调息中' :
     member.cultivation < required ? '修炼中' : target > state.realm ? '受宗门境界限制' : '待突破'
   return { target, required, cost, chance, status, ready: status === '待突破', affordable: canAfford(state, cost) }
@@ -94,6 +95,8 @@ export function breakthroughDisciples(state, derived, ids, random = () => gameRa
       member.realm++
       member.cultivation = 0
       result.success++
+      const talent = gainBreakthroughTalent(state.disciples, member)
+      if (talent) pushLog(state, `${member.name}突破后领悟天赋【${TALENT_MAP[talent.id].name}】`, 'good')
     } else {
       member.cultivation *= 1 - DISCIPLE_GROWTH.failureLoss
       member.cooldown = DISCIPLE_GROWTH.cooldown

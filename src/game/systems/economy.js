@@ -12,6 +12,7 @@ import { PROCESSING_STATIONS } from '@/data/industry'
 import { CRAFTS } from '@/data/crafts'
 import { computeAutoCraftDrain } from './craftingRules'
 import { discipleFactor } from '@/data/disciples'
+import { talentBonus } from '@/data/talents'
 
 export function applyEffects(ef, mult, targets, src) {
   if (!ef) return
@@ -502,7 +503,7 @@ export function recompute(state, derived, seconds = 1) {
   for (const member of state.disciples.members) {
     const factor = discipleFactor(member, state.realm)
     derived.discipleWeight += factor
-    if (member.roleId) derived.discipleJobWeights[member.roleId] += factor
+    if (member.roleId) derived.discipleJobWeights[member.roleId] += factor * (1 + talentBonus(member, 'job'))
   }
   const dt = Math.max(0.001, seconds)
   const supply = {}

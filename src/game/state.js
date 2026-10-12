@@ -31,7 +31,8 @@ export function createInitialState(now = Date.now()) {
     // 各资源的历史最高水位：建筑「渐进露出」用它判定（对标猫国 unlockRatio）
     peak: {},
 
-    disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: now >>> 0 },
+    disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: now >>> 0,
+      talentSeed: (now ^ 0x6d2b79f5) >>> 0, talentVersion: 1 },
     // 弟子自动前来的计时（秒）
     arrivalTimer: 0,
     // 历法：已经过去的天数（小数，1 天 = CALENDAR.DAY_SECONDS 秒）

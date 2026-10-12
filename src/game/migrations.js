@@ -26,6 +26,8 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   // 采石工并入矿工，原有分配相加，人口总数保持不变。
   merged.disciples.jobs.miner = (merged.disciples.jobs.miner || 0) + (merged.disciples.jobs.stonecutter || 0)
   delete merged.disciples.jobs.stonecutter
+  // 旧档的天赋序列从原灵根种子派生，不随每次读取时的新档时间变化。
+  merged.disciples.talentSeed = state.disciples?.talentSeed ?? ((state.disciples?.rootSeed ?? 1) ^ 0x6d2b79f5) >>> 0
   normalizeDisciples(merged.disciples, { preferMembers })
   // 老档补「飞升层」与「转世计数」
   merged.dao = state.dao || 0

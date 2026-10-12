@@ -29,6 +29,7 @@ import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP, craftCost } from '../src/data/crafts.js'
 import { runIndustryChecks } from './industry-check.mjs'
 import { runDiscipleChecks } from './disciple-check.mjs'
+import { runTalentChecks } from './talent-check.mjs'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
@@ -4885,6 +4886,7 @@ runIndustryChecks(E, ok, close, newGame)
 
 section('弟子成长、分工与突破')
 runDiscipleChecks(E, ok, close)
+runTalentChecks(E, ok, close)
 
 runArchitectureChecks()
 

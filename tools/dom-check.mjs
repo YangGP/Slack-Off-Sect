@@ -795,6 +795,26 @@ ok('分配职位生效', state.disciples.jobs.farmer === 2, `${state.disciples.j
     clickNamed('选择本分类')
     await new Promise(r => setTimeout(r, 30))
     ok('选择本分类只包含当前灵根筛选人选', text().includes('已选 1 人'))
+    fast.talents = [{ id: 'cultivation_xuan', level: 1 }, { id: 'job_woodcutter_huang', level: 1 }]
+    engine.recompute(state, derived)
+    await new Promise(r => setTimeout(r, 30))
+    const talentSelect = doc.querySelector('[aria-label="弟子天赋筛选"]')
+    talentSelect.value = 'cultivation'
+    talentSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('天赋筛选与境界灵根组合并清除选择', doc.querySelectorAll('.disciple-list tbody tr').length === 1 && text().includes('已选 0 人') && doc.querySelector('.disciple-list tbody tr').textContent.includes('2条天赋'))
+    doc.querySelector('.disciple-list tbody tr').dispatchEvent(new window.MouseEvent('mouseenter'))
+    await new Promise(r => setTimeout(r, 180))
+    ok('弟子天赋详情显示固定词条、品级等级和真实修炼速度', memberDetails()?.textContent.includes('修炼奇才') && memberDetails()?.textContent.includes('识木') && memberDetails()?.textContent.includes('玄级 · Lv.1') && memberDetails()?.textContent.includes('2.4修为/秒'))
+    doc.querySelector('.disciple-list tbody tr').dispatchEvent(new window.MouseEvent('mouseleave'))
+    talentSelect.value = 'job:miner'
+    talentSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 30))
+    ok('岗位专长筛选不将樵夫天赋误归为矿工', !doc.querySelectorAll('.disciple-list tbody tr').length)
+    talentSelect.value = 'all'
+    talentSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+    fast.talents = []
+    engine.recompute(state, derived)
     rootSelect.value = 'all'
     rootSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
     await new Promise(r => setTimeout(r, 30))

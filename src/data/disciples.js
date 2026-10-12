@@ -1,12 +1,13 @@
 import { REALMS, BREAKTHROUGH } from './realms'
 import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
+import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,
   hours: [1, 3, 8, 16, 24, 36, 48, 72, 96, 120],
-  failureFactor: 0.5,
-  guidance: 0.05,
+  successFactor: 0.5,
+  guidance: 0.1,
   costFactor: 0.01,
   failureLoss: 0.2,
   cooldown: 60,
@@ -48,7 +49,7 @@ function rootRandom(data) {
 }
 
 export function cultivationRate(member) {
-  return DISCIPLE_GROWTH.rate * (SPIRITUAL_ROOT_MAP[member.spiritualRoot]?.rate ?? 1)
+  return DISCIPLE_GROWTH.rate * (SPIRITUAL_ROOT_MAP[member.spiritualRoot]?.rate ?? 1) * (1 + talentBonus(member, 'cultivation'))
 }
 
 export function sortDisciples(members, order) {
@@ -77,22 +78,23 @@ export function discipleFactor(member, sectRealm) {
   return REALMS[Math.min(member.realm, sectRealm)]?.mult ?? 1
 }
 
-export function newDisciple(data, spiritualRoot = null) {
+export function newDisciple(data, spiritualRoot = null, { legacy = false } = {}) {
   const id = data.nextId++
   const surnames = ['林', '陈', '沈', '陆', '叶', '苏', '顾', '白', '许', '孟', '谢', '江']
   const names = ['清禾', '云舟', '知秋', '明尘', '望舒', '青岚', '怀瑾', '听雨', '景行', '若水', '星河', '长宁', '松雪']
   return { id, name: surnames[(id * 7) % surnames.length] + names[(id * 11) % names.length],
     realm: 0, cultivation: 0, roleId: null, cooldown: 0, residenceSeconds: 0, totalQiConsumed: 0,
-    spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)) }
+    spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)),
+    talents: legacy ? [] : birthTalents(() => talentRandom(data)) }
 }
 
 /** 保留旧的人数接口，个体记录跟随总人口与岗位数量调整。 */
-export function syncDisciples(data, { defaultRoot = null } = {}) {
+export function syncDisciples(data, { defaultRoot = null, legacy = false } = {}) {
   data.members ||= []
   data.nextId ||= 1
   const total = Number.isSafeInteger(data.total) && data.total > 0 ? data.total : 0
   data.total = total
-  while (data.members.length < total) data.members.push(newDisciple(data, defaultRoot))
+  while (data.members.length < total) data.members.push(newDisciple(data, defaultRoot, { legacy }))
   if (data.members.length > total) data.members.splice(total)
   let remaining = total
   const counts = {}
@@ -127,13 +129,17 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
         cooldown: Number.isFinite(member.cooldown) ? Math.max(0, Math.min(DISCIPLE_GROWTH.cooldown, member.cooldown)) : 0,
         residenceSeconds: Number.isFinite(member.residenceSeconds) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.residenceSeconds)) : 0,
         totalQiConsumed: Number.isFinite(member.totalQiConsumed) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.totalQiConsumed)) : 0,
-        spiritualRoot: Object.hasOwn(SPIRITUAL_ROOT_MAP, member.spiritualRoot) ? member.spiritualRoot : 'triple' }
+        spiritualRoot: Object.hasOwn(SPIRITUAL_ROOT_MAP, member.spiritualRoot) ? member.spiritualRoot : 'triple',
+        talents: normalizeTalents(member.talents) }
     })
   data.nextId = data.members.reduce((next, member) => Math.max(next, member.id + 1),
     Number.isSafeInteger(data.nextId) && data.nextId > 0 ? data.nextId : 1)
   data.rootSeed = Number.isInteger(data.rootSeed) && data.rootSeed >= 0 && data.rootSeed <= 4294967295 ? data.rootSeed : 1
+  data.talentSeed = Number.isInteger(data.talentSeed) && data.talentSeed >= 0 && data.talentSeed <= 4294967295
+    ? data.talentSeed : (data.rootSeed ^ 0x6d2b79f5) >>> 0
+  data.talentVersion = 1
   if (preferMembers) recountDisciples(data)
-  else syncDisciples(data, { defaultRoot: 'triple' })
+  else syncDisciples(data, { defaultRoot: 'triple', legacy: true })
 }
 
 export function cultivateDisciple(member, seconds) {

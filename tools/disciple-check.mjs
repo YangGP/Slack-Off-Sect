@@ -46,13 +46,33 @@ export function runDiscipleChecks(E, ok, close) {
   ok('原岗位人数操作保留个体成长', first.realm === 4 && first.roleId === null)
   other.realm = 3
   other.cultivation = cultivationRequired(3)
+  const baseChances = [0.475, 0.475, 0.475, 0.35, 0.30, 0.275, 0.25, 0.10, 0.075, 0.05]
+  for (const [index, base] of baseChances.entries()) {
+    const target = index + 1
+    const candidate = { ...other, realm: target - 1, cultivation: cultivationRequired(target - 1) }
+    s.realm = target
+    ok(`目标境界${target}弟子基础成功率为宗门基础的一半`, close(E.discipleBreakthroughPreview(s, candidate).chance, base))
+    s.realm = REALMS.length - 1
+    ok(`目标境界${target}指导加成按每境10个百分点计算且封顶99%`, close(E.discipleBreakthroughPreview(s, candidate).chance, Math.min(0.99, base + (s.realm - target) * 0.1)))
+  }
+  for (const [roll, success] of [[0.349999, true], [0.35, false]]) {
+    const [boundary, boundaryDerived] = setup(1, 4)
+    const member = boundary.disciples.members[0]
+    member.realm = 3
+    member.cultivation = cultivationRequired(3)
+    const cost = E.discipleBreakthroughPreview(boundary, member).cost
+    Object.assign(boundary.resources, cost)
+    const outcome = E.breakthroughDisciples(boundary, boundaryDerived, [member.id], () => roll)
+    ok(`结丹35%实际判定边界 ${roll}`, success ? outcome.success === 1 : outcome.failed === 1)
+  }
+  s.realm = 4
   let preview = E.discipleBreakthroughPreview(s, other)
-  ok('弟子结丹基础成功率85%', close(preview.chance, 0.85))
+  ok('弟子结丹基础成功率为宗门70%的一半，即35%', close(preview.chance, 0.35))
   s.realm = 5
   preview = E.discipleBreakthroughPreview(s, other)
-  ok('宗门指导按突破目标境界加成', close(preview.chance, 0.90))
+  ok('宗门指导按突破目标境界加成', close(preview.chance, 0.45))
   const guided = { ...other, realm: 0 }
-  ok('宗门指导成功率不超过99%', close(E.discipleBreakthroughPreview(s, guided).chance, 0.99))
+  ok('元婴宗门指导引气弟子为47.5%加40个百分点', close(E.discipleBreakthroughPreview(s, guided).chance, 0.875))
   s.realm = 3
   const before = JSON.stringify(s.resources)
   let result = E.breakthroughDisciples(s, d, [other.id], () => 0)
