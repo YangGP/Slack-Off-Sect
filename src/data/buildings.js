@@ -130,19 +130,6 @@ export const BUILDINGS = [
     upkeep: { qi: 1 },
     needs: { realm: 5, upgrades: ['crystalTheory'] },
   },
-  {
-    id: 'beastGarden',
-    name: '灵兽园',
-    glyph: '兽',
-    group: 'produce',
-    cost: { wood: 6000, plank: 30, herb: 4000, stone: 6000 },
-    priceRatio: 1.45,
-    desc: '养几只懂事的灵兽，弟子照料时也能舒缓心神，提高宗门宜居度。',
-    effects: { habitability: 2 },
-    upkeep: { herb: 0.05 }, // 灵兽要喂
-
-    needs: { upgrades: ['beastTaming'] },
-  },
 
   // ============ 居所 ============
   {
@@ -605,7 +592,7 @@ export const BUILDING_DISPLAY_ORDER = [
   'communalHall', 'alchemyRoom', 'forge', 'talismanHall', 'gate',
   'crystalArray', 'academy', 'cleansingBath', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
   'depot', 'mysticVault', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
-  'quietGarden', 'beastGarden', 'caveDwelling', 'grotto', 'spiritLockArray',
+  'quietGarden', 'caveDwelling', 'grotto', 'spiritLockArray',
   'heavenTower', 'splitArray', 'polarizeArray', 'annihilationFurnace', 'karmaPool',
 ]
 

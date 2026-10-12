@@ -82,6 +82,40 @@ export function runArchitectureChecks() {
   delete earlyLegacy.qiLiquidVersion
   assert.equal(normalizeState(earlyLegacy).upgrades.qiLiquid, undefined)
 
+  // 先补偿已移除的驯养投入，再过滤旧条目；重复读档与重修不能重复发放。
+  assert.equal(E.BUILDING_MAP.beastGarden, undefined)
+  assert.equal(E.UPGRADE_MAP.beastTaming, undefined)
+  assert.equal(E.UPGRADE_MAP.beastBell, undefined)
+  const beastLegacy = createInitialState(startAt)
+  delete beastLegacy.beastRetirementVersion
+  beastLegacy.buildings.beastGarden = { count: 1, on: false }
+  beastLegacy.upgrades.beastTaming = true
+  beastLegacy.upgrades.beastBell = true
+  beastLegacy.treasureLevels.beastBell = 1
+  const originalBeastSave = JSON.stringify(beastLegacy)
+  const retiredBeasts = normalizeState(beastLegacy)
+  assert.equal(JSON.stringify(beastLegacy), originalBeastSave)
+  assert.equal(retiredBeasts.beastRetirementVersion, 1)
+  assert.equal(retiredBeasts.buildings.beastGarden, undefined)
+  assert.equal(retiredBeasts.upgrades.beastTaming, undefined)
+  assert.equal(retiredBeasts.upgrades.beastBell, undefined)
+  assert.equal(retiredBeasts.treasureLevels.beastBell, undefined)
+  for (const [resource, amount] of Object.entries({ wood: 3000, plank: 15, herb: 13500,
+    stone: 13800, insight: 65200, pill: 40 })) assert.equal(retiredBeasts.resources[resource], amount)
+  const beastReloaded = parseImport(exportJson(retiredBeasts))
+  assert.deepEqual(beastReloaded.resources, retiredBeasts.resources)
+  assert.equal(beastReloaded.log.length, retiredBeasts.log.length)
+  const extremeBeasts = createInitialState(startAt)
+  delete extremeBeasts.beastRetirementVersion
+  extremeBeasts.buildings.beastGarden = { count: Number.MAX_SAFE_INTEGER, on: true }
+  extremeBeasts.upgrades.beastBell = true
+  extremeBeasts.treasureLevels.beastBell = Number.MAX_SAFE_INTEGER
+  assert.ok(Object.values(normalizeState(extremeBeasts).resources).every(Number.isFinite))
+  const unownedBell = createInitialState(startAt)
+  delete unownedBell.beastRetirementVersion
+  unownedBell.treasureLevels.beastBell = 5
+  assert.equal(normalizeState(unownedBell).resources.insight, 0)
+
   // 加工耗尽维护材料后，收徒与事件必须读取刷新后的供给，不能沿用加工前的设施效果。
   const markAchievements = state => {
     state.achievements = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, true]))
@@ -90,13 +124,13 @@ export function runArchitectureChecks() {
     const seed = createInitialState(startAt)
     seed.dao = 1
     seed.settings.craftReservePercent = 0
-    seed.buildings = { hut: { count: 40, on: true }, beastGarden: { count: 1, on: true },
-      alchemyRoom: { count: 1, on: true } }
-    seed.disciples.total = 71
-    Object.assign(seed.resources, { qi: 1000, wood: 1000, herb: 100.05 })
+    seed.buildings = { hut: { count: 40, on: true }, incenseCauldron: { count: 1, on: true },
+      talismanHall: { count: 1, on: true } }
+    seed.disciples.total = 72
+    Object.assign(seed.resources, { qi: 1000, wood: 125.32 })
     seed.arrivalTimer = 14
-    seed.autoCraft.refinePill = true
-    seed.craftTimers.refinePill = { t: 1, made: 0 }
+    seed.autoCraft.drawTalisman = true
+    seed.craftTimers.drawTalisman = { t: 1, made: 0 }
     markAchievements(seed)
     const state = normalizeState(seed), derived = E.createDerived()
     withGameContext(state, { now: () => startAt, random: () => 0.9 }, () => {
@@ -105,11 +139,11 @@ export function runArchitectureChecks() {
       if (offlineMode) E.simulateOffline(state, derived, 1, { startAt })
       else E.tick(state, derived, 1, { startAt, events: false })
     })
-    assert.equal(state.resources.pill, 1)
-    assert.equal(state.resources.herb, 0)
-    assert.equal(state.disciples.total, 71)
+    assert.equal(state.resources.talisman, 1)
+    assert.equal(state.resources.wood, 0)
+    assert.equal(state.disciples.total, 72)
     assert.equal(state.stats.recruits, 0)
-    assert.equal(derived.leaveChance, 0.02)
+    assert.equal(derived.leaveChance, 0.04)
   }
   const disasterState = createInitialState(startAt), disasterDerived = E.createDerived()
   disasterState.dao = 1

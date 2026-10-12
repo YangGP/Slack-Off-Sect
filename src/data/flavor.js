@@ -12,7 +12,6 @@ export const BUILDING_FLAVOR = {
   mine: '往下挖，总能挖到点什么。',
   herbGarden: '识得百草，方敢下锅。',
   gatheringArray: '风都往山门里灌。',
-  beastGarden: '它们干活，我们摸鱼。',
   granary: '有粮，心就不慌。',
   warehouse: '堆到塞不下为止。',
   depot: '整座山腹都是咱家的。',

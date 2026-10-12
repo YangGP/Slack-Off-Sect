@@ -376,7 +376,7 @@ export const EVENTS = [
     weight: 6,
     kind: 'event',
     minRealm: 6,
-    text: '灵兽园外卧着一只受伤的幼兽，见了人也不躲。',
+    text: '山道旁卧着一只受伤的幼兽，见了人也不躲。',
     options: [
       {
         label: '带回医治',

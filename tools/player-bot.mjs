@@ -52,7 +52,6 @@ export const PRIORITY = [
   'trialTower',
   'mountainArray',
   'ancestorHall',
-  'beastGarden',
   'grotto',
   'caveDwelling',
   'spiritLockArray',

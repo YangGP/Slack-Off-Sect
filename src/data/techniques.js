@@ -410,17 +410,6 @@ export const TECHNIQUES = [
     needs: { realm: 6, upgrades: ['compositeRune', 'calmMind'] },
   },
   {
-    id: 'beastBell',
-    name: '驭兽铃',
-    glyph: '铃',
-    kind: 'treasure',
-    cost: { insight: 1200, herb: 5000, pill: 20, stone: 4000 },
-    refine: { insight: 4000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '铃一响，园里的灵兽自己去采药、刨矿。采药人与矿工产出 +30%。',
-    effects: { jobRatio: { herbalist: 0.3, miner: 0.3 } },
-    needs: { upgrades: ['beastTaming'] },
-  },
-  {
     id: 'mountainPlate',
     name: '护山阵盘',
     glyph: '盘',

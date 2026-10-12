@@ -124,6 +124,59 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   if (Array.isArray(merged.settings.quickCrafts)) merged.settings.quickCrafts = merged.settings.quickCrafts.map(id => id === 'condenseStone' ? 'infuseStone' : id)
   merged.settings.quickCrafts = normalizeQuickCrafts(merged.settings.quickCrafts)
   merged.ui = { ...fresh.ui, ...(state.ui || {}) }
+  retireBeastTaming(merged, state)
   // 读档保留增益，由在线/离线时间轴处理到期。
   return merged
+}
+
+/** 移除驯养支线前先补偿旧档；未知条目过滤发生在这之后。 */
+function retireBeastTaming(merged, original) {
+  const retired = original.beastRetirementVersion !== 1
+  const refunds = {}
+  const add = (resource, amount) => {
+    refunds[resource] = Math.min(Number.MAX_SAFE_INTEGER, (refunds[resource] || 0) + amount)
+  }
+  const count = value => Number.isSafeInteger(value) && value > 0 ? value : 0
+  // 参考历史造价逐项向上取整，溢出或极端数量在有限次迭代内饱和。
+  const sum = (base, ratio, times) => {
+    let total = 0, next = base
+    for (let index = 0; index < times && total < Number.MAX_SAFE_INTEGER; index++) {
+      total = Math.min(Number.MAX_SAFE_INTEGER, total + Math.min(Number.MAX_SAFE_INTEGER, Math.ceil(next)))
+      next *= ratio
+    }
+    return total
+  }
+  if (retired) {
+    const gardens = count(original.buildings?.beastGarden?.count)
+    for (const [resource, base] of Object.entries({ wood: 6000, plank: 30, herb: 4000, stone: 6000 })) {
+      if (gardens) add(resource, Math.floor(sum(base, 1.45, gardens) / 2))
+    }
+    if (original.upgrades?.beastTaming === true) {
+      for (const [resource, amount] of Object.entries({ insight: 60000, stone: 2800, herb: 1500 })) add(resource, amount)
+    }
+    if (original.upgrades?.beastBell === true) {
+      const levels = count(original.treasureLevels?.beastBell)
+      for (const [resource, base] of Object.entries({ insight: 1200, herb: 5000, pill: 20, stone: 4000 })) {
+        add(resource, base + sum(resource === 'insight' ? 4000 : base, 1.7, levels))
+      }
+    }
+    for (const [resource, amount] of Object.entries(refunds)) {
+      const have = Number.isFinite(merged.resources[resource]) ? Math.max(0, merged.resources[resource]) : 0
+      // 允许保留超仓补偿库存，正常消费；不让满仓吞掉旧投入。
+      merged.resources[resource] = Math.min(Number.MAX_SAFE_INTEGER, have + amount)
+    }
+    if (Object.keys(refunds).length) {
+      const sequence = Number.isSafeInteger(merged.logSeq) && merged.logSeq >= 0 ? merged.logSeq : 0
+      merged.logSeq = Math.min(Number.MAX_SAFE_INTEGER, sequence + 1)
+      merged.log.unshift({ id: merged.logSeq, at: merged.lastSaveAt,
+        text: '驯养支线已移除：灵兽园按参考建造费用返还一半，灵兽驯养与驭兽铃按参考研究、炼成及祭炼费用补偿；超仓材料可正常消费。', kind: 'info' })
+    }
+  }
+  delete merged.buildings.beastGarden
+  delete merged.upgrades.beastTaming
+  delete merged.upgrades.beastBell
+  delete merged.upgradeEnabled.beastBell
+  merged.treasureLevels = { ...merged.treasureLevels }
+  delete merged.treasureLevels.beastBell
+  merged.beastRetirementVersion = 1
 }

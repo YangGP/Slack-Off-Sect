@@ -295,9 +295,9 @@ section('数据完整性')
   )
   const treasures = TECHNIQUES.filter((t) => t.kind === 'treasure')
   ok(
-    '每件法宝都有祭炼基数，新增宜居法宝后合计71,150灵机',
+    '每件法宝都有祭炼基数，移除驭兽铃后合计67,150灵机',
     treasures.every((t) => (t.refine?.insight || 0) > 0) &&
-      treasures.reduce((s, t) => s + t.refine.insight, 0) === 71150,
+      treasures.reduce((s, t) => s + t.refine.insight, 0) === 67150,
     `${treasures.reduce((s, t) => s + (t.refine?.insight || 0), 0)}（${treasures.length} 件）`,
   )
   ok(
@@ -867,7 +867,7 @@ section('基础资源由人力生产，普通聚灵阵例外')
   ok('只有普通聚灵阵自带人力资源产出', BUILDINGS.every(b =>
     b.id === 'spiritField' || Object.keys(b.effects.prod || {}).every(id => !humanResources.has(id))))
   const { state: s, derived: d } = newGame()
-  for (const id of ['lumberYard', 'quarry', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'library', 'gate', 'beastGarden', 'gatheringArray', 'crystalArray']) {
+  for (const id of ['lumberYard', 'quarry', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'library', 'gate', 'gatheringArray', 'crystalArray']) {
     s.buildings[id] = { count: 1, on: true }
   }
   s.resources.qi = 1000
