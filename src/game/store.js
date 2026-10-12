@@ -1,7 +1,7 @@
 import { reactive, computed } from 'vue'
 import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, normalizeQuickCrafts } from '@/data/crafts'
-import { RESOURCES, VISIBLE_RESOURCES } from '@/data/resources'
+import { RESOURCES, VISIBLE_RESOURCES, resourceName } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { BUILDINGS } from '@/data/buildings'
 import { CULTIVATION, ALL_UPGRADES } from '@/data/upgrades'
@@ -100,7 +100,7 @@ function applyOfflineProgress() {
   const gains = Object.entries(result.gains)
     .map(([id, amount]) => ({
       id,
-      name: RESOURCES.find((r) => r.id === id)?.name || id,
+      name: resourceName(id),
       amount,
     }))
     .sort((a, b) => b.amount - a.amount)
@@ -139,7 +139,7 @@ export function advance(dt) {
 function reportAdvance(dt, result) {
   if (!result || dt <= 60) return
   const parts = Object.entries(result.gains).slice(0, 4)
-    .map(([id, amount]) => `${RESOURCES.find(r => r.id === id)?.name || id}+${Math.round(amount)}`)
+    .map(([id, amount]) => `${resourceName(id)}+${Math.round(amount)}`)
   E.pushLog(state, `挂机 ${Math.round(dt)} 秒${parts.length ? '，' + parts.join('，') : ''}`, 'info')
 }
 

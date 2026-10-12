@@ -4,7 +4,7 @@ import { recompute } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
 import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
-import { RESOURCES, RESOURCE_MAP } from '@/data/resources'
+import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { runAutoCraft, runAutoCondense } from './crafting'
@@ -49,7 +49,7 @@ export function advanceTicks(state, derived, seconds, opts) {
   const end = now + seconds * 1000
   return withGameContext(state, { now: () => now }, () => {
     while (end - now > 1e-6) {
-      let next = Math.min(end, now + 1000)
+      let next = Math.min(end, now + CONFIG.TICK_SLICE_MS)
       for (const buff of state.buffs) {
         if (buff.until > now && buff.until < next) next = buff.until
       }
@@ -67,7 +67,7 @@ export function advanceTicks(state, derived, seconds, opts) {
 
 export function tickStep(state, derived, dt, opts) {
   const { offline = false, events = true } = opts
-  const cap = dt > 60 ? 60 : dt
+  const cap = dt > CONFIG.MAX_STEP_SECONDS ? CONFIG.MAX_STEP_SECONDS : dt
   recompute(state, derived, cap)
   for (const member of state.disciples.members) cultivateDisciple(member, cap)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
@@ -165,7 +165,8 @@ export function tickStep(state, derived, dt, opts) {
   }
 
   // 5) 自动制作：勾了「自动」的配方每 time 秒一份，离线也照做（挂着就一直做）
-  if (runAutoCraft(state, derived, cap)) recompute(state, derived)
+  //    材料消耗可能使维护设施断供，收徒和事件结算前必须刷新宜居度与灾害防护。
+  if (runAutoCraft(state, derived, cap)) recompute(state, derived, cap)
 
   // 6) 历法推进：天数累加
   //    一天 3 秒（见 CALENDAR.DAY_SECONDS），所以 1 节气只有 45 秒 —— 节气变化**不写纪事**
@@ -210,7 +211,7 @@ export function tickStep(state, derived, dt, opts) {
 /** 把季节影响写成人话（纪事里用） */
 export function seasonEffectText(ratio) {
   const parts = Object.entries(ratio || {}).map(([res, v]) => {
-    const name = RESOURCE_MAP[res]?.name || res
+    const name = resourceName(res)
     return `${name} ${v > 0 ? '+' : ''}${Math.round(v * 100)}%`
   })
   return parts.length ? parts.join('、') : '无影响'

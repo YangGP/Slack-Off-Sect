@@ -11,7 +11,7 @@ export function runIndustryChecks(E = Engine,
   const setup = () => {
     const game = newGame(), s = game.state, d = game.derived
     s.realm = 5
-    for (const id of ['intuition', 'woodworking', 'steelWorking', 'arrayAssembly', 'liquidArt', 'crystalCraft', 'capacityRune', 'spiritMortarArt']) s.upgrades[id] = true
+    for (const id of ['intuition', 'woodworking', 'steelWorking', 'arrayAssembly', 'qiLiquid', 'liquidArt', 'crystalCraft', 'capacityRune', 'spiritMortarArt']) s.upgrades[id] = true
     for (const id of ['forge', 'workshop', 'talismanHall', 'alchemyRoom']) s.buildings[id] = { count: 1, on: true }
     s.buildings.warehouse = { count: 10, on: true }
     Object.assign(s.resources, { wood: 10000, ore: 10000, rock: 10000, qi: 10000, stone: 1000, herb: 1000, plank: 100, spiritLiquid: 10, steel: 0, faith: 1000 })

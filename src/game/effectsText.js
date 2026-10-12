@@ -1,7 +1,7 @@
 /**
  * 效果文案：把数据层的 effects 对象翻译成人话，供建筑卡 / 参悟表复用。
  */
-import { RESOURCE_MAP } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { BUILDING_MAP } from '@/data/buildings'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { JOBS, JOB_MAP } from '@/data/jobs'
@@ -9,10 +9,6 @@ import { REALMS } from '@/data/realms'
 import { PROCESSING_STATIONS, PROCESSING_STATION_MAP } from '@/data/industry'
 import { CRAFT_MAP } from '@/data/crafts'
 import { fmt, fmtPercent } from './format'
-
-function resName(id) {
-  return RESOURCE_MAP[id]?.name || id
-}
 
 /**
  * 按“已建成数量 count / 启用数量 active”把建筑效果折算成当前总贡献。
@@ -88,20 +84,20 @@ export function describeEffects(ef) {
   /** 一条效果：`text` 是给人看的整句，`label` / `value` 拆开是为了让界面「一个资源一行」 */
   const push = (label, value, tone, resource) => out.push({ label, value, text: `${label} ${value}`.trim(), tone, ...(resource ? { resource } : {}) })
   if (ef.prod) {
-    for (const k in ef.prod) push(`${resName(k)} 产出`, `+${fmt(ef.prod[k])}/秒`, 'good', k)
+    for (const k in ef.prod) push(`${resourceName(k)} 产出`, `+${fmt(ef.prod[k])}/秒`, 'good', k)
   }
   if (ef.ratio) {
-    for (const k in ef.ratio) push(`${resName(k)} 产出`, `+${fmtPercent(ef.ratio[k])}`, 'good', k)
+    for (const k in ef.ratio) push(`${resourceName(k)} 产出`, `+${fmtPercent(ef.ratio[k])}`, 'good', k)
   }
   if (ef.ratioAll) push('全局产出', `+${fmtPercent(ef.ratioAll)}`, 'good')
   if (ef.jobRatio) {
     for (const k in ef.jobRatio) push(`${JOB_MAP[k]?.name || k} 产出`, `+${fmtPercent(ef.jobRatio[k])}`, 'good', JOB_MAP[k]?.resource)
   }
   if (ef.storage) {
-    for (const k in ef.storage) push(`${resName(k)} 上限`, `+${fmt(ef.storage[k])}`, 'muted', k)
+    for (const k in ef.storage) push(`${resourceName(k)} 上限`, `+${fmt(ef.storage[k])}`, 'muted', k)
   }
   if (ef.storageRatio) {
-    for (const k in ef.storageRatio) push(`${resName(k)} 上限`, `+${fmtPercent(ef.storageRatio[k])}`, 'muted', k)
+    for (const k in ef.storageRatio) push(`${resourceName(k)} 上限`, `+${fmtPercent(ef.storageRatio[k])}`, 'muted', k)
   }
   if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（成品按层级折算）`, 'muted')
   if (ef.maxDisciples) push('弟子上限', `+${ef.maxDisciples}`, 'good')
@@ -111,7 +107,7 @@ export function describeEffects(ef) {
   if (ef.craftBonus) push('制作产出', `+${fmtPercent(ef.craftBonus)}`, 'good')
   if (ef.craftBonusByResource) {
     for (const [res, value] of Object.entries(ef.craftBonusByResource)) {
-      push(`${resName(res)} 制作产出`, `+${fmtPercent(value)}`, 'good', res)
+      push(`${resourceName(res)} 制作产出`, `+${fmtPercent(value)}`, 'good', res)
     }
   }
   for (const [id, value] of Object.entries(ef.processingCapacityRatio || {})) {
@@ -126,7 +122,7 @@ export function describeEffects(ef) {
   if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
   if (ef.disasterGuardByResource) {
     for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {
-      push(`${resName(res)} 灾损额外减免`, `${fmtPercent(value)}（合计上限80%）`, 'good', res)
+      push(`${resourceName(res)} 灾损额外减免`, `${fmtPercent(value)}（合计上限80%）`, 'good', res)
     }
   }
   if (ef.ascendBonus) push('飞升仙缘', `+${fmtPercent(ef.ascendBonus)}`, 'good')
@@ -136,7 +132,7 @@ export function describeEffects(ef) {
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
   if (ef.autoCraftSpeedControl) push('各配方自动速限', '1× / 2× / 5× / 10×（金丹起受工位容量约束）', 'unlock')
-  if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝液法》', 'good')
+  if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝气化液》', 'good')
   if (ef.energyCraft) push('灵能应用', '解锁工位灵能驱动，按额外负荷耗能', 'unlock')
   if (ef.processingPowerCapacity != null) push('加工供能容量', `+${fmt(ef.processingPowerCapacity)}`, 'good')
   if (ef.processingCoolingRatio) push('晶核阵冷却容量', `+${fmtPercent(ef.processingCoolingRatio)}`, 'good')
@@ -173,19 +169,19 @@ export function describeJobEffects(buildingId, count = 1) {
     if (job.building === buildingId || job.needs?.building?.id === buildingId) {
       push('开放职位', job.name, 'unlock')
       // 基础产出按每名弟子结算，建筑数量不会将它重复叠加。
-      push(`${job.name} 基础产出`, `${resName(job.resource)} +${fmt(count > 0 ? job.base : 0)}/秒·人`, 'good', job.resource)
+      push(`${job.name} 基础产出`, `${resourceName(job.resource)} +${fmt(count > 0 ? job.base : 0)}/秒·人`, 'good', job.resource)
     }
     // 由本建筑开启的额外产出（按人数结算，不随建筑座数叠加）
     for (const output of job.additionalOutputs || []) {
       if (output.building === buildingId) {
-        push(`${job.name} 额外产出`, `${resName(output.resource)} +${fmt(output.base)}/秒·人`, 'good', output.resource)
+        push(`${job.name} 额外产出`, `${resourceName(output.resource)} +${fmt(output.base)}/秒·人`, 'good', output.resource)
       }
     }
     // 本建筑让该职位多加的副产出（灵石矿 → 矿工产灵石，可多座叠加）
     const sec = job.secondary
     if (sec && sec.building === buildingId) {
       const base = sec.base * (sec.perBuilding ? count : 1)
-      push(`${job.name} 额外产出`, `${resName(sec.resource)} +${fmt(base)}/秒·人`, 'good', sec.resource)
+      push(`${job.name} 额外产出`, `${resourceName(sec.resource)} +${fmt(base)}/秒·人`, 'good', sec.resource)
     }
   }
   return out

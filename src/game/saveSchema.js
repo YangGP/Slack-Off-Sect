@@ -10,7 +10,7 @@ export const SAVE_VERSION = 2
 export const SAVE_FIELDS = [
   'version', 'createdAt', 'lastTickAt', 'lastSaveAt', 'resources', 'seen', 'peak',
   'disciples', 'arrivalTimer', 'totalDays', 'treasureLevels', 'craftTimers', 'craftOrders',
-  'industryVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
+  'industryVersion', 'qiLiquidVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',

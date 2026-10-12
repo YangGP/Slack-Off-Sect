@@ -2,7 +2,7 @@ import { PROCESSING_STATIONS, RECIPE_STATIONS, PROCESSING_POWER_COST, allocatePr
 import { CRAFTS, craftCost, CRAFT_MAP, autoCraftTime, craftTime } from '@/data/crafts'
 import { floorNumber, atLeast, subtractResource } from '../numbers'
 import { isCraftUnlocked, canAfford, clamp, countOf } from './core'
-import { RESOURCE_MAP } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 
 export const EPS = 1e-9
@@ -168,7 +168,7 @@ export function autoCraftStatus(state, derived, recipeId, plan = processingPlan(
   out.perMinute = out.on && out.ready ? 60 / out.step : 0
   out.outputPerMinute = out.perMinute * craftYield(derived, recipe)
   const missing = Object.entries(costs).filter(([res, cost]) => !atLeast(state.resources[res] || 0, cost))
-    .map(([res]) => RESOURCE_MAP[res]?.name || res)
+    .map(([res]) => resourceName(res))
   out.reason = !hasCraftOrder(state, derived, recipeId) && out.target > 0 && (state.resources[recipe.out] || 0) >= out.target
     ? '目标已达 · 暂停'
     : atLeast(state.resources[recipe.out] || 0, derived.max[recipe.out]) ? '成品满仓 · 暂停'
@@ -217,10 +217,9 @@ export function resourceFlow(derived, resId) {
 }
 
 /** 当前节拍下的投入缺口与库存缓冲；不是未来产能承诺。 */
-export function processingBottleneck(state, derived, recipeId, plan = processingPlan(state, derived)) {
+export function processingBottleneck(state, derived, recipeId, plan = processingPlan(state, derived), status = autoCraftStatus(state, derived, recipeId, plan)) {
   const recipe = CRAFT_MAP[recipeId]
   if (!recipe) return { reason: '', inputs: [] }
-  const status = autoCraftStatus(state, derived, recipeId, plan)
   const inputs = Object.keys(craftCost(derived, recipe)).map(res => {
     const flow = resourceFlow(derived, res)
     const deficit = Math.max(0, -flow.net)

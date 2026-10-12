@@ -340,6 +340,8 @@ section('数据完整性')
     'steelWorking', 'swordFlight', 'spiritSmelting',
     'arrayAssembly', 'crystalCraft', 'crystalPolishing', 'alchemyFire',
     'arrayRefine', 'mahayanaArt', 'flowField', 'qiRune', 'craftTempo',
+    // 主线数值节点：灵气纯化的纯度增益
+    'qiPurify',
   ]
   const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
   ok(
@@ -1117,7 +1119,9 @@ section('还差多久买得起')
     ok('参悟凝灵诀后置位 autoCondenseLiquidUnlocked', d4.autoCondenseLiquidUnlocked === true)
     ok('凝灵诀开放库存目标但不提前解锁常驻自动', d4.autoCraftUnlocked === false && d4.craftTargetsUnlocked === true)
     s4.resources.qi = d4.max.qi
-    ok('未掌握凝液法时不提前凝液或凝石', !E.runAutoCondense(s4, d4) && s4.resources.spiritLiquid === 0 && s4.resources.stone === 0)
+    ok('未掌握凝气化液时不提前凝液', !E.runAutoCondense(s4, d4) && s4.resources.spiritLiquid === 0 && s4.resources.stone === 0)
+    s4.upgrades.qiMeasure = true
+    s4.upgrades.qiLiquid = true
     s4.upgrades.liquidArt = true
     s4.buildings.granary = { count: 5, on: true }
     s4.upgrades.intuition = true
@@ -1170,6 +1174,8 @@ section('还差多久买得起')
     s5.buildings.quarry = { count: 1, on: true }
     s5.resources.rock = d5.max.rock
     s5.upgrades.condenseArt = true
+    s5.upgrades.qiMeasure = true
+    s5.upgrades.qiLiquid = true
     s5.upgrades.liquidArt = true
     s5.buildings.granary = { count: 5, on: true }
     E.recompute(s5, d5)
@@ -1758,6 +1764,8 @@ section('批量自动炼制')
   s.resources.qi = d.max.qi
   s.resources.rock = 10
   E.recompute(s, d)
+  s.upgrades.qiMeasure = true
+  s.upgrades.qiLiquid = true
   s.upgrades.liquidArt = true
   E.recompute(s, d)
   ok('取消配方自动不影响节气凝液且不需要常驻解锁', E.setAllAutoCraft(s, d, false) && s.settings.autoCraftOn && E.runAutoCondense(s, d) && s.resources.spiritLiquid > 0)
@@ -2715,6 +2723,7 @@ section('灵石矿：天然的灵石来源')
 section('新增加工链与旧存档兼容')
 {
   const legacy = createInitialState()
+  delete legacy.qiLiquidVersion
   delete legacy.resources.qiParticle
   delete legacy.resources.spiritLiquid
   legacy.buildings.splitArray = { count: 2, on: false }
@@ -2724,7 +2733,7 @@ section('新增加工链与旧存档兼容')
   legacy.stats.crafted.immortalHerb = 5
   const restored = normalizeState(legacy)
   ok('旧分灵阵迁移补齐偏极阵并保留数量与停用状态', restored.buildings.polarizeArray?.count === 2 && restored.buildings.polarizeArray.on === false && restored.upgrades.particleTheory)
-  ok('旧凝晶产线补齐凝液法与自动上游', restored.upgrades.liquidArt && restored.autoCraft.condenseLiquid)
+  ok('旧凝晶产线补齐灵气测定、凝气化液、凝液法与自动上游', restored.upgrades.qiMeasure && restored.upgrades.qiLiquid && restored.upgrades.liquidArt && restored.autoCraft.condenseLiquid)
   ok('迁移不改写原始存档对象', !legacy.buildings.polarizeArray && !legacy.upgrades.liquidArt && !legacy.autoCraft.condenseLiquid)
   const twice = normalizeState(restored)
   ok('重复读档不重复发放设施', twice.buildings.polarizeArray.count === 2)
@@ -2732,7 +2741,7 @@ section('新增加工链与旧存档兼容')
   current.buildings.splitArray = { count: 1, on: true }
   current.upgrades.crystalTheory = true
   const unchanged = normalizeState(current)
-  ok('新版存档遵守新产线，不自动补设施或研究', !unchanged.buildings.polarizeArray && !unchanged.upgrades.liquidArt)
+  ok('新版存档遵守新产线，不自动补设施或研究', !unchanged.buildings.polarizeArray && !unchanged.upgrades.liquidArt && !unchanged.upgrades.qiLiquid)
   const herbLegacy = { resources: {}, stats: { crafted: { immortalHerb: 1 } } }
   ok('旧育仙草记录也能补齐凝液法', normalizeState(herbLegacy).upgrades.liquidArt)
   const { state: s, derived: d } = newGame()
@@ -3011,7 +3020,7 @@ section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能
   {
     const liq = CRAFT_MAP.condenseLiquid
     const cry = CRAFT_MAP.condenseCrystal
-    ok('凝气成液由凝液法放行，150 灵气一瓶', liq.needs?.upgrades?.includes('liquidArt') && liq.cost.qi === 150 && liq.out === 'spiritLiquid')
+    ok('凝气成液由凝气化液放行，150 灵气一瓶', liq.needs?.upgrades?.includes('qiLiquid') && liq.cost.qi === 150 && liq.out === 'spiritLiquid')
     ok('凝液法无境界门槛、保留凝灵诀前置', E.UPGRADE_MAP.liquidArt.needs.realm == null && E.UPGRADE_MAP.liquidArt.needs.upgrades.includes('condenseArt'))
     ok('凝晶原理以凝液法为前置（第Ⅱ章成链）', E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('liquidArt'))
     ok('凝气结晶由固形纹直接加工灵液与灵气', cry.cost.spiritLiquid === 3 && !cry.cost.talisman && cry.cost.qi === 300)
@@ -3990,7 +3999,7 @@ section('金丹：修真、工艺、材料与建设闭环')
 {
   const { state: s, derived: d } = newGame()
   s.realm = 3
-  for (const id of ['qiOrigin', 'qiGazing', 'condenseArt', 'liquidArt', 'earthArt', 'woodworking', 'herbStudy', 'talismanArt', 'forgeArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
+  for (const id of ['qiOrigin', 'qiGazing', 'qiMeasure', 'qiLiquid', 'condenseArt', 'liquidArt', 'earthArt', 'woodworking', 'herbStudy', 'talismanArt', 'forgeArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
   s.buildings.talismanHall = { count: 1, on: true }
   s.buildings.forge = { count: 1, on: true }
   Object.assign(s.resources, { insight: 50000, qi: 8000, spiritLiquid: 300, talisman: 1900, ore: 2000, plank: 640, artifact: 10, stone: 1000, wood: 2000 })
@@ -4495,6 +4504,8 @@ section('晶核加工与炼虚防护分工')
 {
   const { state: s, derived: d } = newGame()
   s.realm = 5
+  s.upgrades.qiMeasure = true
+  s.upgrades.qiLiquid = true
   s.upgrades.liquidArt = true
   s.upgrades.crystalCraft = true
   s.buildings.talismanHall = { count: 1, on: true }

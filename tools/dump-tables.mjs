@@ -83,7 +83,7 @@ const effects = (e) => {
   if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')
   if (e.autoCraftSpeedControl) out.push('自动速限1/2/5/10倍（受工位约束）')
-  if (e.autoCondenseLiquid) out.push('节气满仓自动凝液（需凝液法）')
+  if (e.autoCondenseLiquid) out.push('节气满仓自动凝液（需凝气化液）')
   if (e.unlockBuildings?.length) out.push('解锁 ' + e.unlockBuildings.map(bname).join('/'))
   return out.join('；')
 }

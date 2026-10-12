@@ -45,12 +45,23 @@ export const CULTIVATION = [
     needs: { upgrades: ['qiOrigin'] },
   },
   {
+    id: 'qiMeasure',
+    name: '灵气测定',
+    glyph: '测',
+    cost: { insight: 400, wood: 200 },
+    desc: '立「一息」之度，把氤氲灵气按单位量出。聚气、凝液自此有据可依，不再全凭手感。',
+    effectDesc: '因此量得出灵气的分量，为凝气化液与后续计量立下基准。',
+    effects: { unlockBuildings: [] },
+    note: '开启参悟：凝气化液',
+    needs: { upgrades: ['qiGazing'] },
+  },
+  {
     id: 'condenseArt',
     name: '凝灵诀',
     glyph: '凝',
     cost: { insight: 120, wood: 150, stone: 20 },
     desc: '观清气脉后，掌握把灵气压成液态的门径。节气一至，将满仓盈余灵气自行压入玉瓶。',
-    effectDesc: '掌握《凝液法》且达到凝液配方条件后，每逢节气，灵气满仓时自动凝聚灵液；灵气不足则暂停，遵守库存目标与材料保留量。',
+    effectDesc: '掌握《凝气化液》且达到凝液配方条件后，每逢节气，灵气满仓时自动凝聚灵液；灵气不足则暂停，遵守库存目标与材料保留量。',
     // 效果由"自动制作灵石"改为"自动凝聚灵液"：灵石可由点石成灵手动补，灵液才是真的耗灵气。
     effects: { autoCondenseLiquid: true },
     needs: { upgrades: ['qiGazing'], building: { id: 'quarry', count: 1 } },
@@ -68,16 +79,37 @@ export const CULTIVATION = [
 
   // ---------- Ⅱ 凝聚：怎么把灵气存住、存好 ----------
   {
+    id: 'qiLiquid',
+    name: '凝气化液',
+    glyph: '化',
+    cost: { insight: 1500, wood: 200, stone: 60 },
+    desc: '依「一息」之度，把量准的灵气按份压入玉瓶，凝成十年不散的一瓶灵液。',
+    effectDesc: '因此化得出合格灵液：灵气可按标准凝成灵液。',
+    effects: { unlockBuildings: [] },
+    note: '开启配方：凝气成液',
+    needs: { upgrades: ['qiMeasure'] },
+  },
+  {
     id: 'liquidArt',
     name: '凝液法',
     glyph: '液',
     cost: { insight: 6000, wood: 300, stone: 40 },
     desc: '气可凝为石，也可凝为液 —— 灵液压在玉瓶里，十年不散。',
-    effectDesc: '因此掌握《凝气成液》：灵气自此有了存得住的形态。',
+    effectDesc: '因此开得出基础凝聚工位：金丹起可自动凝液、凝晶。',
     effects: { unlockBuildings: [] },
-    note: '开启配方：凝气成液',
+    note: '提供基础凝聚工位',
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
     needs: { upgrades: ['condenseArt'] },
+  },
+  {
+    id: 'qiPurify',
+    name: '灵气纯化',
+    glyph: '纯',
+    cost: { insight: 3000, stone: 300, plank: 20 },
+    desc: '剔去灵气中的浊杂，纯度既高，气机更稳，一份更抵一份。',
+    effectDesc: '因此灵气更纯：灵气产出 +20%。',
+    effects: { ratio: { qi: 0.2 } },
+    needs: { upgrades: ['qiMeasure', 'liquidArt'] },
   },
   {
     id: 'crystalTheory',
@@ -592,7 +624,9 @@ export const CULTIVATION = [
     desc: '把玄之又玄的道理，讲成弟子听得懂的人话。解锁讲经堂。',
     effectDesc: '因此长老可以登坛讲经，灵机的来源不再只有藏书。',
     effects: { unlockBuildings: ['academy'] },
-    needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt', 'woodworking'] },
+    // 符箓入门经炼器术已含木作器械；讲经堂造价又含阵基（要求木作器械与符箓入门）。
+    // 直接列《木作器械》属跨线重复，去掉后由符阵链与建筑造价卡进度。
+    needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt'] },
   },
   {
     id: 'calmMind',
@@ -602,8 +636,9 @@ export const CULTIVATION = [
     desc: '心静则灵气自聚。解锁静心池。',
     effectDesc: '因此弟子坐得住：静心池让心神与仓储都稳下来。',
     effects: { unlockBuildings: ['meditationPool'] },
-    // 静心池的仙草用料仍要求实际发展凝液与育草产业。
-    needs: { building: { id: 'herbGarden', count: 3 }, upgrades: ['talismanArt', 'woodworking'] },
+    // 静心池造价含阵基与仙草；符箓入门经炼器术已含木作器械，仙草要求凝液与育草产业。
+    // 去掉直接列出的跨线《木作器械》，由符阵链与建筑造价卡进度。
+    needs: { building: { id: 'herbGarden', count: 3 }, upgrades: ['talismanArt'] },
   },
   {
     id: 'flowField',
@@ -779,13 +814,13 @@ export const CULTIVATION_STAGES = [
     key: 'qiSense',
     label: '灵气研究 Ⅰ 观气',
     hint: '灵气是什么、在哪、怎么聚',
-    ids: ['qiOrigin', 'qiGazing', 'condenseArt', 'breakthroughArt'],
+    ids: ['qiOrigin', 'qiGazing', 'qiMeasure', 'condenseArt', 'breakthroughArt'],
   },
   {
     key: 'qiCondense',
     label: '灵气研究 Ⅱ 凝聚',
     hint: '怎么把灵气存住、存好',
-    ids: ['liquidArt', 'crystalTheory'],
+    ids: ['qiLiquid', 'liquidArt', 'qiPurify', 'crystalTheory'],
   },
   {
     key: 'qiControl',

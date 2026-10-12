@@ -11,11 +11,12 @@ import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisibl
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
-import { costLabel, enough as enoughOf } from '@/game/pricing'
-import { RESOURCE_MAP } from '@/data/resources'
+import { enough as enoughOf } from '@/game/pricing'
+import { resourceName } from '@/data/resources'
 import { CULTIVATION, CULTIVATION_STAGE_OF } from '@/data/upgrades'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
+import CostRows from './CostRows.vue'
 
 const props = defineProps({
   /** 本页负责的那一层：CULTIVATION（修真）或 TECHNIQUES（技艺 + 法宝） */
@@ -126,10 +127,6 @@ const forged = computed(() =>
     }),
 )
 
-function resName(id) {
-  return RESOURCE_MAP[id]?.name || id
-}
-
 /** 花费列只写「需要多少」；排版与建筑（宗门）的悬停提示完全一致 */
 function costText(res, amount) {
   void res
@@ -187,7 +184,7 @@ function kindName(meta) {
                     :key="res"
                     :class="{ lack: !enoughOf(state, res, amount) }"
                   >
-                    {{ resName(res) }} {{ costText(res, amount) }}
+                    {{ resourceName(res) }} {{ costText(res, amount) }}
                   </span>
                 </span>
                 <template #heading>
@@ -198,16 +195,10 @@ function kindName(meta) {
                   <div class="tip-desc">{{ item.meta.desc }}</div>
                   <div v-if="item.meta.refine?.materials" class="tip-row">
                     <span class="k">进阶祭炼</span>
-                    <span class="v">第{{ (item.meta.refine.materialFromLevel || 0) + 1 }}次起需{{ Object.keys(item.meta.refine.materials).map(resName).join('、') }}，用量随层数增加</span>
+                    <span class="v">第{{ (item.meta.refine.materialFromLevel || 0) + 1 }}次起需{{ Object.keys(item.meta.refine.materials).map(resourceName).join('、') }}，用量随层数增加</span>
                   </div>
 
-                  <div class="tip-section">价格</div>
-                  <div v-for="(amount, res) in item.cost" :key="res" class="tip-row">
-                    <span class="k">{{ resName(res) }}</span>
-                    <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
-                      {{ costLabel(state, derived, res, amount) }}
-                    </span>
-                  </div>
+                  <CostRows :cost="item.cost" />
 
                   <div class="tip-section">效果</div>
                   <div v-for="(row, ri) in item.effects" :key="ri" class="tip-row">
@@ -222,7 +213,7 @@ function kindName(meta) {
                   <template v-if="item.upkeep.length">
                     <div class="tip-section">维护</div>
                     <div v-for="row in item.upkeep" :key="row.resource" class="tip-row">
-                      <span class="k">满供消耗 · {{ resName(row.resource) }}</span>
+                      <span class="k">满供消耗 · {{ resourceName(row.resource) }}</span>
                       <span class="v bad">{{ row.value }}</span>
                     </div>
                     <div class="tip-note">供能不足按比例运行，当前效果已计入实际供能。</div>
@@ -272,7 +263,7 @@ function kindName(meta) {
                     :key="res"
                     :class="{ lack: !enoughOf(state, res, amount) }"
                   >
-                    {{ resName(res) }} {{ costText(res, amount) }}
+                    {{ resourceName(res) }} {{ costText(res, amount) }}
                   </span>
                 </span>
                 <template #heading>
@@ -282,13 +273,7 @@ function kindName(meta) {
                 <template #tip>
                   <div class="tip-desc">{{ item.meta.desc }}</div>
 
-                  <div class="tip-section">价格</div>
-                  <div v-for="(amount, res) in item.meta.cost" :key="res" class="tip-row">
-                    <span class="k">{{ resName(res) }}</span>
-                    <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
-                      {{ costLabel(state, derived, res, amount) }}
-                    </span>
-                  </div>
+                  <CostRows :cost="item.meta.cost" />
 
                   <div class="tip-section">效果</div>
                   <!-- 数值、规则和解锁清单均按单个效果成行。 -->

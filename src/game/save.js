@@ -59,22 +59,6 @@ export function createSaveRepository({ storage = browserStorage, now = () => Dat
   }
 }
 
-// 保留已有工具的函数入口；实例化本身不会读取存储。
-const defaultRepository = createSaveRepository()
-export let saveLoadError = ''
-export function allowSaveAfterRecovery() { defaultRepository.allowRecovery(); saveLoadError = '' }
-export function saveToStorage(state) { return defaultRepository.save(state) }
-export function loadFromStorage() {
-  const state = defaultRepository.load()
-  saveLoadError = defaultRepository.loadError
-  return state
-}
-export function clearStorage() {
-  const ok = defaultRepository.clear()
-  saveLoadError = defaultRepository.loadError
-  return ok
-}
-
 /** 导出为便于复制粘贴的 base64 文本 */
 export function exportSave(state) {
   const json = JSON.stringify(serialize(state))
@@ -95,10 +79,6 @@ export function parseImport(text) {
   }
   const data = JSON.parse(json)
   return restoreSave(data)
-}
-
-export function freshState() {
-  return createInitialState()
 }
 
 /** 旧档尽量完整恢复；未知版本或结构冲突只继承仙缘和道果。 */

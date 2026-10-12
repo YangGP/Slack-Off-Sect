@@ -56,6 +56,12 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
       merged.upgrades.liquidArt = true
     }
   }
+  // 凝液配方前置迁移独立于灵气分子迁移；新档按新研究链推进，不因凝液法免费获得化液。
+  if (state.qiLiquidVersion !== 1 && merged.upgrades.liquidArt) {
+    merged.upgrades.qiMeasure = true
+    merged.upgrades.qiLiquid = true
+  }
+  merged.qiLiquidVersion = 1
   merged.achievements = state.achievements || {}
   merged.craftProgress = state.craftProgress || {}
   merged.autoCraft = state.autoCraft || {}

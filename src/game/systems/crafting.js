@@ -24,7 +24,7 @@ export function requestCraft(state, derived, recipeId, times = 1) {
   if (!derived.industrial || !RECIPE_STATIONS[recipeId]) return craft(state, derived, recipeId, { times })
   const available = maxCraftable(state, derived, recipeId)
   const current = state.craftOrders?.[recipeId]?.remaining || 0
-  const count = Math.max(0, Math.min(times, available - current, 1000000 - current))
+  const count = Math.max(0, Math.min(times, available - current, CONFIG.CRAFT_ORDER_CAP - current))
   if (!count) return 0
   state.craftOrders ||= {}
   state.craftOrders[recipeId] = { remaining: current + count, paused: state.craftOrders[recipeId]?.paused === true }
@@ -118,6 +118,8 @@ export function runAutoCraft(state, derived, dt) {
 export function runIndustrialCraft(state, derived, dt, recipes) {
   let remaining = dt
   let made = false
+  // derived 在本函数内不变，单件耗时只与配方和 derived 有关，先算一次复用。
+  const steps = Object.fromEntries(recipes.map(recipe => [recipe.id, craftTime(recipe, derived)]))
   while (remaining > EPS) {
     const plan = processingPlan(state, derived)
     const active = recipes.filter(recipe => plan[recipe.id]?.speed > 0)
@@ -132,7 +134,7 @@ export function runIndustrialCraft(state, derived, dt, recipes) {
     }
     for (const recipe of active) {
       const timer = state.craftTimers[recipe.id] ||= { t: 0, made: 0 }
-      const step = craftTime(recipe, derived)
+      const step = steps[recipe.id]
       timer.t = clamp(Number.isFinite(timer.t) ? timer.t : 0, 0, step)
       next = Math.min(next, Math.max(0, step - timer.t) / plan[recipe.id].speed)
     }
@@ -144,7 +146,7 @@ export function runIndustrialCraft(state, derived, dt, recipes) {
     let completed = false
     for (const recipe of active) {
       const timer = state.craftTimers[recipe.id]
-      const step = craftTime(recipe, derived)
+      const step = steps[recipe.id]
       timer.t += next * plan[recipe.id].speed
       if (timer.t + EPS < step) continue
       const target = craftTarget(state, derived, recipe.id)
@@ -168,7 +170,7 @@ export function runIndustrialCraft(state, derived, dt, recipes) {
 
 /**
  * 《凝灵诀》：每逢节气，若灵气满仓，把仓内一定比例（AUTO_CONDENSE_RATIO）的灵气
- * 一次凝成灵液；需先掌握《凝液法》，仓库没满时不动手，不要求整节气收支累计。
+ * 一次凝成灵液；需先掌握《凝气化液》，仓库没满时不动手，不要求整节气收支累计。
  * 由 tick 的历法推进在节气变化的那一刻调用（离线模拟同样逐步过 tick，所以离线也照做）。
  * 与《心有灵犀》的常驻自动制作互不冲突：那是照节奏一直做，这只在节气收盈余。
  */

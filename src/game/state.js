@@ -49,6 +49,7 @@ export function createInitialState(now = Date.now()) {
     craftTimers: {},
     craftOrders: {},
     industryVersion: 1,
+    qiLiquidVersion: 1,
 
     buildings: {},
     starterHutBuilt: false,

@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { state, derived } from '@/game/store'
 import { TERMS, CALENDAR, DAYS_PER_SEASON } from '@/data/calendar'
 import { fmtTime } from '@/game/format'
-import { RESOURCE_MAP } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import HoverTip from './HoverTip.vue'
 
 const cal = computed(() => derived.calendar || null)
@@ -16,7 +16,7 @@ const cal = computed(() => derived.calendar || null)
 const effects = computed(() => {
   const ratio = cal.value?.seasonRatio || {}
   return Object.entries(ratio).map(([res, v]) => ({
-    name: RESOURCE_MAP[res]?.name || res,
+    name: resourceName(res),
     text: `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`,
     good: v > 0,
   }))

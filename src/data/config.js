@@ -96,4 +96,18 @@ export const CONFIG = {
   AUTO_CONDENSE_RATIO: 0.5,
   // 日志上限
   LOG_LIMIT: 220,
+  // 建筑渐进露出：资源峰值达到初始造价的这个比例才可见（单栋可用 unlockRatio 覆盖）
+  BUILDING_UNLOCK_RATIO: 0.3,
+  // 维护费供给迭代的收敛上限（防死循环）；供给不足时按实际比例缩放
+  SUPPLY_ITERATION_MAX: 40,
+  // 弟子口粮的耗料减免合计上限；灾损减免合计上限（对应提示里的「合计上限」）
+  UPKEEP_REDUCTION_CAP: 0.85,
+  DISASTER_GUARD_CAP: 0.8,
+  // 阵基冷却容量 = 全部工位容量之和的这个比例（晶核阵另加）
+  PROCESSING_COOLING_CAPACITY_RATIO: 0.25,
+  // 时间推进：切片步长（毫秒，用于逐秒结算）与单步时长上限（秒）
+  TICK_SLICE_MS: 1000,
+  MAX_STEP_SECONDS: 60,
+  // 旧版订单兼容：单个配方未完成订单的份数上限
+  CRAFT_ORDER_CAP: 1000000,
 }

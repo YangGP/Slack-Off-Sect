@@ -186,7 +186,7 @@ export function isBuildingUnlocked(state, id) {
   if (!meta) return false
   if (countOf(state, id) > 0) return true
   if (!checkNeeds(state, meta.needs)) return false
-  const ratio = meta.unlockRatio == null ? 0.3 : meta.unlockRatio
+  const ratio = meta.unlockRatio == null ? CONFIG.BUILDING_UNLOCK_RATIO : meta.unlockRatio
   if (ratio <= 0) return true
   const revealCost = id === 'hut' && !state.starterHutBuilt ? { qi: meta.cost.qi } : meta.cost
   for (const res in revealCost || {}) {

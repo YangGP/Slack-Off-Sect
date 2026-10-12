@@ -5,6 +5,9 @@ import { exportJson, parseImport, restoreSave, createSaveRepository, SAVE_KEY } 
 import { withGameContext } from '../src/game/context.js'
 import { SAVE_VERSION } from '../src/game/saveSchema.js'
 import { createGame, createRuntime } from '../src/game/runtime.js'
+import { ACHIEVEMENTS } from '../src/data/achievements.js'
+import { EVENTS } from '../src/data/events.js'
+import { eventEligible } from '../src/game/systems/events.js'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
@@ -48,6 +51,90 @@ export function runArchitectureChecks() {
   E.simulateOffline(fractional.state, fractional.derived, 0.75, { startAt })
   assert.equal(fractional.state.stats.playTime, 0.75)
   assert.equal(E.simulateOffline(fractional.state, fractional.derived, Infinity).seconds, 0)
+
+  // 新配方前置只补历史凝液能力，迁移标记独立于灵气分子字段并随存档持久化。
+  for (const hasParticle of [false, true]) {
+    const legacy = createInitialState(startAt)
+    delete legacy.qiLiquidVersion
+    if (!hasParticle) delete legacy.resources.qiParticle
+    legacy.upgrades.liquidArt = true
+    legacy.autoCraft.condenseLiquid = true
+    const migrated = normalizeState(legacy)
+    assert.ok(migrated.upgrades.qiMeasure && migrated.upgrades.qiLiquid)
+    assert.ok(E.isCraftUnlocked(migrated, E.CRAFT_MAP.condenseLiquid))
+    assert.equal(migrated.autoCraft.condenseLiquid, true)
+    assert.equal(legacy.upgrades.qiLiquid, undefined)
+    assert.equal(legacy.qiLiquidVersion, undefined)
+    const reloaded = parseImport(exportJson(migrated))
+    assert.equal(reloaded.qiLiquidVersion, 1)
+    assert.deepEqual(reloaded.upgrades, migrated.upgrades)
+  }
+  for (const liquidArt of [false, true]) {
+    const current = createInitialState(startAt)
+    current.upgrades.liquidArt = liquidArt
+    const reloaded = parseImport(exportJson(current))
+    assert.equal(reloaded.qiLiquidVersion, 1)
+    assert.equal(reloaded.upgrades.qiMeasure, undefined)
+    assert.equal(reloaded.upgrades.qiLiquid, undefined)
+    assert.equal(E.isCraftUnlocked(reloaded, E.CRAFT_MAP.condenseLiquid), false)
+  }
+  const earlyLegacy = createInitialState(startAt)
+  delete earlyLegacy.qiLiquidVersion
+  assert.equal(normalizeState(earlyLegacy).upgrades.qiLiquid, undefined)
+
+  // 加工耗尽维护材料后，收徒与事件必须读取刷新后的供给，不能沿用加工前的设施效果。
+  const markAchievements = state => {
+    state.achievements = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, true]))
+  }
+  for (const offlineMode of [false, true]) {
+    const seed = createInitialState(startAt)
+    seed.dao = 1
+    seed.settings.craftReservePercent = 0
+    seed.buildings = { hut: { count: 40, on: true }, beastGarden: { count: 1, on: true },
+      alchemyRoom: { count: 1, on: true } }
+    seed.disciples.total = 71
+    Object.assign(seed.resources, { qi: 1000, wood: 1000, herb: 100.05 })
+    seed.arrivalTimer = 14
+    seed.autoCraft.refinePill = true
+    seed.craftTimers.refinePill = { t: 1, made: 0 }
+    markAchievements(seed)
+    const state = normalizeState(seed), derived = E.createDerived()
+    withGameContext(state, { now: () => startAt, random: () => 0.9 }, () => {
+      E.recompute(state, derived)
+      assert.equal(derived.leaveChance, 0)
+      if (offlineMode) E.simulateOffline(state, derived, 1, { startAt })
+      else E.tick(state, derived, 1, { startAt, events: false })
+    })
+    assert.equal(state.resources.pill, 1)
+    assert.equal(state.resources.herb, 0)
+    assert.equal(state.disciples.total, 71)
+    assert.equal(state.stats.recruits, 0)
+    assert.equal(derived.leaveChance, 0.02)
+  }
+  const disasterState = createInitialState(startAt), disasterDerived = E.createDerived()
+  disasterState.dao = 1
+  disasterState.settings.craftReservePercent = 0
+  disasterState.buildings.mountainArray = { count: 1, on: true }
+  Object.assign(disasterState.resources, { qi: 8, wood: 100, herb: 100, ore: 100 })
+  disasterState.autoCraft.growWood = true
+  disasterState.nextEventAt = startAt
+  markAchievements(disasterState)
+  const pool = EVENTS.filter(event => eventEligible(disasterState, event))
+  const disaster = pool.find(event => event.id === 'beastRaid')
+  assert.ok(disaster)
+  const preceding = pool.slice(0, pool.indexOf(disaster)).reduce((sum, event) => sum + event.weight, 0)
+  const roll = (preceding + disaster.weight / 2) / pool.reduce((sum, event) => sum + event.weight, 0)
+  let draws = 0
+  withGameContext(disasterState, { now: () => startAt, random: () => draws++ === 0 ? roll : 0 }, () => {
+    E.recompute(disasterState, disasterDerived)
+    assert.equal(disasterDerived.disasterGuard, 0.15)
+    E.tick(disasterState, disasterDerived, 1, { startAt })
+  })
+  assert.equal(disasterState.resources.qi, 0)
+  assert.equal(disasterDerived.disasterGuard, 0)
+  assert.equal(disasterState.stats.disasters, 1)
+  assert.equal(disasterState.resources.ore, 94)
+  assert.ok(!disasterState.log.some(entry => entry.text.includes('大阵挡下')))
 
   const loaded = normalizeState({ buffs: make().state.buffs, lastSaveAt: startAt })
   assert.equal(loaded.buffs.length, 1)

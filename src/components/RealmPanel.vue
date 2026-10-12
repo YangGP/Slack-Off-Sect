@@ -4,10 +4,11 @@ import { state, derived, view, actions, highlightCost, clearHighlight } from '@/
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { breakthroughPreview, canAfford } from '@/game/engine'
 import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
-import { costLabel, enough as enoughOf } from '@/game/pricing'
-import { RESOURCE_MAP } from '@/data/resources'
+import { enough as enoughOf } from '@/game/pricing'
+import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
+import CostRows from './CostRows.vue'
 
 const next = computed(() => REALMS[state.realm + 1] || null)
 const aids = reactive({})
@@ -35,10 +36,6 @@ const canReincarnate = computed(() => view.canReincarnate.value)
 
 /** 飞升的唯一条件是渡劫期（转世不是门槛，只是常见路线） */
 const ascendRealmOk = computed(() => state.realm >= ASCEND_REALM_INDEX)
-
-function resName(id) {
-  return RESOURCE_MAP[id]?.name || id
-}
 
 function ascend() {
   const ok = window.confirm(
@@ -175,7 +172,7 @@ function reincarnate() {
           <label v-for="aid in preview.availableAids" :key="aid.id">
             <input v-model="aids[aid.id]" type="checkbox">
             {{ aid.name }} +{{ fmtPercent(aid.bonus) }}：
-            <span v-for="(amount, res) in aid.cost" :key="res" :class="{ lack: !enoughOf(state, res, amount) }" style="margin-right: 6px">{{ resName(res) }} {{ fmtCost(amount) }}</span>
+            <span v-for="(amount, res) in aid.cost" :key="res" :class="{ lack: !enoughOf(state, res, amount) }" style="margin-right: 6px">{{ resourceName(res) }} {{ fmtCost(amount) }}</span>
           </label>
         </div>
         <div v-if="preview.deathOnFailure" class="small bad" style="padding-bottom: 6px">
@@ -200,7 +197,7 @@ function reincarnate() {
                       :key="res"
                       :class="{ lack: !enoughOf(state, res, amount) }"
                     >
-                      {{ resName(res) }} {{ fmtCost(amount) }}
+                      {{ resourceName(res) }} {{ fmtCost(amount) }}
                     </span>
                   </span>
                   <template #heading>
@@ -210,13 +207,7 @@ function reincarnate() {
       <template #tip>
                     <div class="tip-desc">{{ next.desc }}</div>
 
-                    <div class="tip-section">价格</div>
-                    <div v-for="(amount, res) in cost" :key="res" class="tip-row">
-                      <span class="k">{{ resName(res) }}</span>
-                      <span class="v" :class="{ bad: !enoughOf(state, res, amount) }">
-                        {{ costLabel(state, derived, res, amount) }}
-                      </span>
-                    </div>
+                    <CostRows :cost="cost" />
 
                     <div class="tip-section">效果</div>
                     <div class="tip-row">

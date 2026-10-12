@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { fmtClock, fmtAmount, fmtTime } from '@/game/format'
 import { EVENT_MAP, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
-import { RESOURCE_MAP } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { eventOutcome, eventEffect } from '@/game/engine'
 import HoverTip from './HoverTip.vue'
 
@@ -42,10 +42,10 @@ function preview(effect) {
   const { rows, recruits, required, affordable } = eventOutcome(state, derived, effect || {})
   if (!affordable) return '材料不足：' + Object.entries(required)
     .filter(([res, amount]) => (state.resources[res] || 0) < amount)
-    .map(([res, amount]) => `${RESOURCE_MAP[res].name} 需${fmtAmount(amount)}`).join('，')
+    .map(([res, amount]) => `${resourceName(res)} 需${fmtAmount(amount)}`).join('，')
   const parts = []
   for (const row of rows) {
-    const name = RESOURCE_MAP[row.res]?.name || row.res
+    const name = resourceName(row.res)
     if (row.lost > 0) parts.push(`${name} −${fmtAmount(row.lost)}`)
     if (row.gained > 0) parts.push(`${name} +${fmtAmount(row.gained)}`)
     if (row.overflow > 0) parts.push(`${name} ${fmtAmount(row.overflow)} 装不下`)

@@ -12,7 +12,7 @@ function assert(label, condition) {
 function fixture() {
   const s = createInitialState(), d = E.createDerived()
   s.realm = 9
-  for (const id of ['intuition', 'craftTempo', 'woodworking', 'steelWorking', 'arrayAssembly', 'liquidArt', 'crystalCraft', 'energyApplication', 'energyCore', 'yinyangSplit', 'annihilationArt']) s.upgrades[id] = true
+  for (const id of ['intuition', 'craftTempo', 'woodworking', 'steelWorking', 'arrayAssembly', 'qiLiquid', 'liquidArt', 'crystalCraft', 'energyApplication', 'energyCore', 'yinyangSplit', 'annihilationArt']) s.upgrades[id] = true
   for (const id of ['forge', 'workshop', 'talismanHall', 'alchemyRoom', 'crystalArray']) s.buildings[id] = { count: 1, on: true }
   s.buildings.warehouse = { count: 500, on: true }
   s.buildings.granary = { count: 500, on: true }

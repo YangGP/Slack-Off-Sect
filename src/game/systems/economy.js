@@ -334,7 +334,7 @@ export function recomputeRaw(state, derived, supply) {
    */
   const discipleUpkeep = CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
   const rawUpkeep = derived.discipleWeight * discipleUpkeep
-  const reduction = rawUpkeep * Math.min(0.85, acc.consumeReduction)
+  const reduction = rawUpkeep * Math.min(CONFIG.UPKEEP_REDUCTION_CAP, acc.consumeReduction)
   const upkeep = rawUpkeep - reduction
 
   // 把来源折算成最终数值（所有来源共享同一组乘区，所以按比例缩放即可对上总额）
@@ -450,9 +450,9 @@ export function recomputeRaw(state, derived, supply) {
   derived.processingPowerCapacity = acc.processingPowerCapacity || 0
   const crystalArray = state.buildings.crystalArray
   const coolingArrays = crystalArray?.on ? crystalArray.count * (supply.crystalArray ?? 1) : 0
-  derived.processingCoolingCapacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0) * 0.25
+  derived.processingCoolingCapacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0) * CONFIG.PROCESSING_COOLING_CAPACITY_RATIO
     + coolingArrays * 2 * (1 + (acc.processingCoolingRatio || 0))
-  derived.disasterGuard = Math.min(0.8, acc.disasterGuard)
+  derived.disasterGuard = Math.min(CONFIG.DISASTER_GUARD_CAP, acc.disasterGuard)
   derived.disasterGuardByResource = acc.disasterGuardByResource
   derived.ascendBonus = acc.ascendBonus
   derived.consumeReduction = acc.consumeReduction
@@ -511,7 +511,7 @@ export function recompute(state, derived, seconds = 1) {
   const consumers = [...buildingConsumers, ...upgradeConsumers]
   for (const b of consumers) supply[b.id] = 1
   recomputeRaw(state, derived, supply)
-  for (let pass = 0; pass < 40; pass++) {
+  for (let pass = 0; pass < CONFIG.SUPPLY_ITERATION_MAX; pass++) {
     let changed = false
     // 双极分流同时产生两种灵子；任一侧满仓时，只为下游实际消耗补料。
     if (supply.polarizeArray > 0) {

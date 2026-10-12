@@ -5,13 +5,13 @@ import { state, derived, actions, highlightCost, clearHighlight } from '@/game/s
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
 import { PROCESSING_STATIONS } from '@/data/industry'
 import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield, isProgressionVisible, processingPlan, processingBottleneck } from '@/game/engine'
-import { costLabel } from '@/game/pricing'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
-import { RESOURCE_MAP } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { CALENDAR } from '@/data/calendar'
 import HoverTip from './HoverTip.vue'
+import CostRows from './CostRows.vue'
 import CraftSpeedSelect from './CraftSpeedSelect.vue'
 
 const props = defineProps({ compact: Boolean })
@@ -22,14 +22,19 @@ const targetDrafts = reactive({})
 const reserveDrafts = reactive({})
 const weightDrafts = reactive({})
 const plan = computed(() => processingPlan(state, derived))
-const stationRows = computed(() => PROCESSING_STATIONS.map(station => ({
-  ...station, capacity: derived.processingCapacity[station.id] || 0,
-  used: Object.values(plan.value).filter(line => line.station === station.id).reduce((sum, line) => sum + line.work, 0),
-  boost: Object.values(plan.value).find(line => line.station === station.id)?.boost || 0,
-  mode: Object.values(plan.value).find(line => line.station === station.id)?.mode || 'normal',
-  powerReason: Object.values(plan.value).find(line => line.station === station.id)?.powerReason || '',
-  drain: Object.values(plan.value).filter(line => line.station === station.id).reduce((sum, line) => sum + Object.values(line.powerDrain).reduce((a, b) => a + b, 0), 0),
-})).filter(station => station.capacity > 0 || allRows.value.some(row => row.autoStatus.line?.station === station.id)))
+const stationRows = computed(() => PROCESSING_STATIONS.map(station => {
+  const lines = Object.values(plan.value).filter(line => line.station === station.id)
+  const first = lines[0]
+  return {
+    ...station,
+    capacity: derived.processingCapacity[station.id] || 0,
+    used: lines.reduce((sum, line) => sum + line.work, 0),
+    boost: first?.boost || 0,
+    mode: first?.mode || 'normal',
+    powerReason: first?.powerReason || '',
+    drain: lines.reduce((sum, line) => sum + Object.values(line.powerDrain).reduce((a, b) => a + b, 0), 0),
+  }
+}).filter(station => station.capacity > 0 || allRows.value.some(row => row.autoStatus.line?.station === station.id)))
 
 function updateWeight(id, event) {
   actions.setCraftWeight(id, event.target.value)
@@ -47,6 +52,7 @@ const BATCHES = [
 const allRows = computed(() =>
   CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => {
     const canMake = maxCraftable(state, derived, c.id)
+    const autoStatus = autoCraftStatus(state, derived, c.id, plan.value)
     return {
       meta: c,
       cost: craftCost(derived, c),
@@ -56,8 +62,8 @@ const allRows = computed(() =>
       auto: !!state.autoCraft[c.id],
       have: state.resources[c.out] || 0,
       max: derived.max[c.out],
-      autoStatus: autoCraftStatus(state, derived, c.id, plan.value),
-      bottleneck: processingBottleneck(state, derived, c.id, plan.value),
+      autoStatus,
+      bottleneck: processingBottleneck(state, derived, c.id, plan.value, autoStatus),
       batches: BATCHES.map((b) => ({ ...b, count: Math.floor(canMake * b.frac) })),
     }
   }),
@@ -89,10 +95,6 @@ const locked = computed(() =>
   })),
 )
 
-function resName(id) {
-  return RESOURCE_MAP[id]?.name || id
-}
-
 function updateTarget(id, event) {
   actions.setCraftTarget(id, event.target.value)
   delete targetDrafts[id]
@@ -104,7 +106,7 @@ function updateQuick(id, event) {
 }
 const condenseStatus = computed(() => {
   if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
-  if (!state.upgrades.liquidArt) return '凝灵诀 · 需元婴期凝液法'
+  if (!state.upgrades.qiLiquid) return '凝灵诀 · 需凝气化液'
   const target = autoCraftStatus(state, derived, 'condenseLiquid').target
   if (target > 0 && state.resources.spiritLiquid >= target) return '凝灵诀 · 目标已达'
   if (state.resources.spiritLiquid >= derived.max.spiritLiquid) return '凝灵诀 · 灵液满仓'
@@ -161,9 +163,9 @@ const condenseStatus = computed(() => {
       </div>
       <div v-if="!compact && state.buildings.polarizeArray?.count" class="processing-overview small" aria-label="双极供料状态">
         <div><HoverTip label="双极分流"><template #tip><p>正负灵子同时分流，任一侧满仓时只补下游实际用量；断供则降载。</p></template></HoverTip> · 负荷 {{ fmtPercent(derived.buildingSupply.polarizeArray || 0) }}</div>
-        <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ fmt((derived.rates[id] || 0) * 60) }}/分 · 设施消耗 {{ fmt(-(derived.expense[id] || 0) * 60) }}/分</span></div>
+        <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resourceName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ fmt((derived.rates[id] || 0) * 60) }}/分 · 设施消耗 {{ fmt(-(derived.expense[id] || 0) * 60) }}/分</span></div>
       </div>
-      <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.liquidArt" class="small dim">凝灵诀 · 需元婴期凝液法</div>
+      <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.qiLiquid" class="small dim">凝灵诀 · 需凝气化液</div>
       <div v-if="!compact && derived.autoCraftUnlocked" class="small craft-settings">
         <div class="good">
           <HoverTip :label="derived.daoAutomation ? '道果统筹' : '百工统筹'"><template #tip>
@@ -184,8 +186,8 @@ const condenseStatus = computed(() => {
         </label>
         <details>
           <summary>逐项保留材料</summary>
-          <label v-for="id in reserveResources" :key="id">{{ resName(id) }}
-            <input type="number" min="0" step="any" :aria-label="`${resName(id)}保留数量`"
+          <label v-for="id in reserveResources" :key="id">{{ resourceName(id) }}
+            <input type="number" min="0" step="any" :aria-label="`${resourceName(id)}保留数量`"
               :value="reserveDrafts[id] ?? (state.settings.craftReserves[id] || 0)"
               @input="reserveDrafts[id] = $event.target.value" @change="updateReserve(id, $event)" />
           </label>
@@ -208,21 +210,21 @@ const condenseStatus = computed(() => {
       >
         <div class="craft-line">
           <span class="craft-name">{{ row.meta.name }}</span>
-          <span class="have">{{ resName(row.meta.out) }} {{ fmtStock(row.have) }}<template v-if="!compact"> / {{ fmtStock(row.max) }}</template></span>
+          <span class="have">{{ resourceName(row.meta.out) }} {{ fmtStock(row.have) }}<template v-if="!compact"> / {{ fmtStock(row.max) }}</template></span>
           <label v-if="!compact" class="craft-pin small"><input type="checkbox" :checked="state.settings.quickCrafts.includes(row.meta.id)" :aria-label="`${row.meta.name}快捷炼制`" @change="updateQuick(row.meta.id, $event)" />快捷</label>
         </div>
         <div v-if="!compact" class="craft-cost small">
-          <template v-for="(amount, res, index) in row.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: (state.resources[res] || 0) < amount }">{{ resName(res) }} {{ fmtCost(amount) }}</span></template>
-          <span class="dim"> → </span><span class="good">{{ resName(row.meta.out) }} {{ fmt(row.yield) }}</span>
+          <template v-for="(amount, res, index) in row.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: (state.resources[res] || 0) < amount }">{{ resourceName(res) }} {{ fmtCost(amount) }}</span></template>
+          <span class="dim"> → </span><span class="good">{{ resourceName(row.meta.out) }} {{ fmt(row.yield) }}</span>
           <span v-if="derived.craftBonusByResource[row.meta.out]" class="dim"> · 专业加成 +{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
         </div>
         <div v-if="!compact && row.autoStatus.line" class="processing-line small" :data-processing="row.meta.id">
           <span>{{ row.autoStatus.line.name }} · 容量分配 {{ fmtPercent(row.autoStatus.line.share) }}</span>
           <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
-          <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resName(row.meta.out) }}/分</span>
-          <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resName(res) }} {{ fmt(amount * row.autoStatus.perMinute) }}/分</template></span>
+          <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
+          <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resourceName(res) }} {{ fmt(amount * row.autoStatus.perMinute) }}/分</template></span>
           <span class="dim">瓶颈：{{ row.bottleneck.reason }}</span>
-          <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resName(input.res) }} {{ fmt(input.deficit * 60) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
+          <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ fmt(input.deficit * 60) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
         </div>
         <div class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
@@ -287,24 +289,17 @@ const condenseStatus = computed(() => {
 
         <template #heading>
           {{ row.meta.name }}
-                        <span class="tip-right">{{ resName(row.meta.out) }} ×{{ row.meta.amount }}</span>
+                        <span class="tip-right">{{ resourceName(row.meta.out) }} ×{{ row.meta.amount }}</span>
         </template>
       <template #tip>
           <div class="tip-desc">{{ row.meta.desc }}</div>
 
-          <div class="tip-section">价格</div>
-          <div v-for="(amount, res) in row.cost" :key="res" class="tip-row">
-            <span class="k">{{ resName(res) }}</span>
-            <span
-              class="v"
-              :class="{ bad: (state.resources[res] || 0) < amount }"
-            >{{ costLabel(state, derived, res, amount) }}</span>
-          </div>
+          <CostRows :cost="row.cost" />
 
           <div class="tip-section">产出</div>
           <div class="tip-row">
             <span class="k">现有</span>
-            <span class="v">{{ resName(row.meta.out) }} {{ fmtStock(row.have) }}</span>
+            <span class="v">{{ resourceName(row.meta.out) }} {{ fmtStock(row.have) }}</span>
           </div>
           <div class="tip-row">
             <span class="k">每次得到</span>

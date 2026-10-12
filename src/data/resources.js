@@ -321,5 +321,10 @@ export const RESOURCES = [
 
 export const RESOURCE_MAP = Object.fromEntries(RESOURCES.map((r) => [r.id, r]))
 
+/** 资源显示名，未知 id 原样返回；各组件与效果文案统一走这里。 */
+export function resourceName(id) {
+  return RESOURCE_MAP[id]?.name || id
+}
+
 /** 顶栏显示顺序（隐藏资源另算） */
 export const VISIBLE_RESOURCES = RESOURCES.filter((r) => !r.hidden).map((r) => r.id)

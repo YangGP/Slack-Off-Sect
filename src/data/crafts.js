@@ -48,7 +48,8 @@ export const CRAFTS = [
     cost: { qi: 150 },
     time: 3,
     desc: '灵气受压凝成灵液，压在玉瓶里十年不散 —— 这是灵气第一种存得住的形态。',
-    needs: { upgrades: ['liquidArt'] },
+    // 依标准计量并掌握凝气化液（《凝气化液》）后才凝得出合格灵液；凝聚工位另由《凝液法》提供。
+    needs: { upgrades: ['qiLiquid'] },
   },
   {
     id: 'refinePill',

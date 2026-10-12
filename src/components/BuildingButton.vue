@@ -9,10 +9,10 @@ import { state, derived, view, actions, highlightCost, clearHighlight } from '@/
 import { buildingCost, canAfford } from '@/game/engine'
 import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects, describeProcessingEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
-import { costLabel, enough as enoughOf } from '@/game/pricing'
-import { RESOURCE_MAP } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { BUILDING_FLAVOR } from '@/data/flavor'
 import HoverTip from './HoverTip.vue'
+import CostRows from './CostRows.vue'
 
 const props = defineProps({
   meta: { type: Object, required: true },
@@ -60,24 +60,11 @@ const flavor = computed(() => BUILDING_FLAVOR[props.meta.id] || '')
 const upkeepRows = computed(() =>
   Object.entries(props.meta.upkeep || {}).map(([res, v]) => ({
     key: res,
-    label: RESOURCE_MAP[res]?.name || res,
+    label: resourceName(res),
     unit: fmtRate(-v),
     total: enabled.value > 0 ? fmtRate(-v * active.value * (props.meta.throughput ? derived.globalMult : 1)) : '',
   })),
 )
-
-function resName(id) {
-  return RESOURCE_MAP[id]?.name || id
-}
-
-/** 够就只显示价格；不够就显示「现有 / 需要（还差多久）」——与参悟表共用同一套写法 */
-function priceText(res, amount) {
-  return costLabel(state, derived, res, amount)
-}
-
-function enough(res, amount) {
-  return enoughOf(state, res, amount)
-}
 
 function sell() {
   if (window.confirm(`确定拆除一座${props.meta.name}吗？只返还一半材料。`)) {
@@ -112,11 +99,7 @@ onBeforeUnmount(clearHighlight)
         <div class="tip-desc">{{ meta.desc }}</div>
         <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
 
-        <div class="tip-section">价格</div>
-        <div v-for="(amount, res) in price" :key="res" class="tip-row">
-          <span class="k">{{ resName(res) }}</span>
-          <span class="v" :class="{ bad: !enough(res, amount) }">{{ priceText(res, amount) }}</span>
-        </div>
+        <CostRows :cost="price" />
 
         <div class="tip-section">效果<template v-if="!count">（建成后）</template></div>
         <!-- 一条效果一行：多资源的建筑（库房、谷仓…）不再挤成一长串 -->

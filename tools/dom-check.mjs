@@ -2061,12 +2061,12 @@ state.ui.tab = 'craft'
 state.upgrades.condenseArt = true
 state.upgrades.intuition = false
 state.dao = 0
-state.upgrades.liquidArt = false
+state.upgrades.qiLiquid = false
 state.settings.autoCraftOn = true
 engine.recompute(state, derived)
 await new Promise(r => setTimeout(r, 50))
-ok('凝液法解锁前显示等待条件', text().includes('凝灵诀 · 需元婴期凝液法'))
-state.upgrades.liquidArt = true
+ok('凝液配方解锁前显示等待条件', text().includes('凝灵诀 · 需凝气化液'))
+state.upgrades.qiLiquid = true
 state.settings.autoCraftOn = false
 state.resources.spiritLiquid = 0
 engine.recompute(state, derived)
