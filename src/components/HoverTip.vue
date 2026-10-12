@@ -22,6 +22,8 @@ const props = defineProps({
   label: { type: String, default: '' },
   title: { type: String, default: '' },
   description: { type: String, default: '' },
+  /** 按容器定位并避让整个区域，例如表格行中的操作按钮。 */
+  anchor: { type: String, default: '' },
 })
 
 // 让外部可以跟着提示的显隐做事（例如高亮左栏资源行）
@@ -37,7 +39,7 @@ let observer = null
 function place() {
   const el = trigger.value
   if (!el || !tip.value || typeof el.getBoundingClientRect !== 'function') return
-  const rect = el.getBoundingClientRect()
+  const rect = (props.anchor ? el.closest(props.anchor) || el : el).getBoundingClientRect()
   const viewport = window.visualViewport
   const root = document.documentElement
   const viewportLeft = viewport?.offsetLeft || 0
@@ -50,7 +52,7 @@ function place() {
   // 同步限制尺寸，再测量；重定位也同步写入，避免内容变高时闪出底边。
   node.style.maxWidth = Math.max(0, vw - margin * 2) + 'px'
   node.style.maxHeight = Math.max(0, vh - margin * 2) + 'px'
-  const { width, height } = node.getBoundingClientRect()
+  let { width, height } = node.getBoundingClientRect()
   let left = rect.right + margin
   const rightEdge = viewportLeft + vw - margin
   const bottomEdge = viewportTop + vh - margin
@@ -58,8 +60,17 @@ function place() {
     left = rect.left - width - margin
   }
   left = Math.max(viewportLeft + margin, Math.min(left, rightEdge - width))
-  // 竖直方向贴着触发元素，超出视口就上提
-  const top = Math.max(viewportTop + margin, Math.min(rect.top, bottomEdge - height))
+  // 竖直方向贴着触发元素，超出视口就上提。
+  let top = Math.max(viewportTop + margin, Math.min(rect.top, bottomEdge - height))
+  // 整行两侧都放不下时，改用上下空位，限高滚动，避免盖住行内操作。
+  if (props.anchor && rect.right + margin + width > rightEdge && rect.left - width - margin < viewportLeft + margin) {
+    const above = Math.max(0, Math.min(rect.top - margin, bottomEdge) - (viewportTop + margin))
+    const below = Math.max(0, bottomEdge - Math.max(rect.bottom + margin, viewportTop + margin))
+    const useBelow = height <= below || (height > above && below >= above)
+    node.style.maxHeight = Math.min(height, useBelow ? below : above) + 'px'
+    height = node.getBoundingClientRect().height
+    top = useBelow ? Math.max(rect.bottom + margin, viewportTop + margin) : Math.min(rect.top - margin, bottomEdge) - height
+  }
   node.style.top = top + 'px'
   node.style.left = left + 'px'
   node.style.visibility = 'visible'

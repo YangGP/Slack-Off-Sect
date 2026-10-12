@@ -2001,6 +2001,76 @@ console.log('\n== 建筑资源效果按解锁显示 ==')
   await new Promise(r => setTimeout(r, 50))
 }
 
+console.log('\n== 参悟提示避让操作行 ==')
+{
+  const previous = actions.exportText()
+  const originalRect = window.HTMLElement.prototype.getBoundingClientRect
+  const originalWidth = window.innerWidth
+  const originalHeight = window.innerHeight
+  let rowRect = { left: 320, right: 860, top: 240, bottom: 278 }
+  let tipHeight = 180
+  try {
+    actions.importText(JSON.stringify({
+      upgrades: { qiOrigin: true },
+      resources: { insight: 1000, wood: 1000 },
+      buildings: { library: { count: 2, on: true } },
+      ui: { tab: 'skills', skillFilter: 'skill' },
+    }))
+    await new Promise(r => setTimeout(r, 50))
+    const row = [...doc.querySelectorAll('.main .upgrade-table tbody tr')].find(el => el.cells[0]?.textContent.trim() === '引气诀')
+    const button = row?.querySelector('button')
+    window.innerWidth = 1400
+    window.innerHeight = 800
+    window.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.classList.contains('tip')) return { width: Math.min(380, parseFloat(this.style.maxWidth)), height: Math.min(tipHeight, parseFloat(this.style.maxHeight)) }
+      if (this === row) return rowRect
+      return { left: rowRect.left + 100, right: rowRect.right - 100, top: rowRect.top, bottom: rowRect.bottom }
+    }
+    row?.dispatchEvent(new window.MouseEvent('mouseenter'))
+    await new Promise(r => setTimeout(r, 180))
+    const tip = doc.querySelector('.tip')
+    const outsideRow = () => {
+      if (!tip) return false
+      const { width, height } = tip.getBoundingClientRect()
+      const left = parseFloat(tip.style.left), top = parseFloat(tip.style.top)
+      return left >= rowRect.right + 8 || left + width <= rowRect.left - 8 || top >= rowRect.bottom + 8 || top + height <= rowRect.top - 8
+    }
+    ok('参悟详情按整行右侧定位，避开按钮所在列', tip?.style.left === '868px' && outsideRow())
+    rowRect = { left: 500, right: 1000, top: 240, bottom: 278 }
+    window.innerWidth = 1100
+    window.dispatchEvent(new window.Event('resize'))
+    ok('右侧空间不足时放到整行左侧', tip?.style.left === '112px' && outsideRow())
+    window.innerWidth = 500
+    rowRect = { left: 30, right: 470, top: 220, bottom: 258 }
+    tipHeight = 480
+    window.dispatchEvent(new window.Event('resize'))
+    ok('窄屏两侧放不下时在行下方限高展示', tip?.style.top === '266px' && tip.style.maxHeight === '480px' && outsideRow())
+    rowRect = { left: 30, right: 470, top: 620, bottom: 658 }
+    window.dispatchEvent(new window.Event('resize'))
+    ok('底部操作行的详情改放上方，不遮住参悟', tip?.style.top === '132px' && outsideRow())
+    visualViewport.widthOverride = 500
+    visualViewport.heightOverride = 340
+    visualViewport.offsetLeft = 10
+    visualViewport.offsetTop = 20
+    rowRect = { left: 30, right: 470, top: 160, bottom: 198 }
+    visualViewport.dispatchEvent(new window.Event('resize'))
+    ok('可见视口变小时限高滚动并保持避让', tip?.style.top === '206px' && tip.style.maxHeight === '146px' && outsideRow())
+    button?.click()
+    await new Promise(r => setTimeout(r, 30))
+    ok('提示显示期间点击参悟仍正常完成研究', state.upgrades.qiArt === true && !doc.querySelector('.tip'))
+  } finally {
+    window.HTMLElement.prototype.getBoundingClientRect = originalRect
+    window.innerWidth = originalWidth
+    window.innerHeight = originalHeight
+    visualViewport.widthOverride = undefined
+    visualViewport.heightOverride = undefined
+    visualViewport.offsetLeft = 0
+    visualViewport.offsetTop = 0
+    actions.importText(previous)
+    await new Promise(r => setTimeout(r, 50))
+  }
+}
+
 console.log('\n== 长 tooltip 边界与滚动 ==')
 {
   const originalRect = window.HTMLElement.prototype.getBoundingClientRect
@@ -2142,7 +2212,7 @@ console.log('\n== 凝晶工艺与专业收益界面 ==')
   actions.importText(JSON.stringify({
     realm: 5,
     resources: { insight: 20000, qi: 3000, spiritLiquid: 10, talisman: 100, ore: 500, wood: 500, plank: 20 },
-    upgrades: { qiOrigin: true, qiGazing: true, condenseArt: true, liquidArt: true, talismanArt: true, shapeRune: true },
+    upgrades: { qiOrigin: true, qiGazing: true, condenseArt: true, qiMeasure: true, qiLiquid: true, liquidArt: true, qiPurify: true, talismanArt: true, shapeRune: true },
     buildings: { talismanHall: { count: 1, on: true }, workshop: { count: 1, on: true } },
   }))
   actions.research('crystalTheory')

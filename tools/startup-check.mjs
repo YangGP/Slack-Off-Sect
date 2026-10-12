@@ -26,6 +26,9 @@ for (const name of ['window', 'document', 'Element', 'HTMLElement', 'SVGElement'
 const originalNow = Date.now
 const originalSetInterval = globalThis.setInterval
 const originalClearInterval = globalThis.clearInterval
+const originalAnimationFrame = globalThis.requestAnimationFrame
+// jsdom 内部用 setInterval 模拟动画帧；独立模拟帧，避免混入游戏循环计数。
+globalThis.requestAnimationFrame = callback => setTimeout(() => callback(performance.now()), 16)
 let now = originalNow()
 let nextId = 0
 const intervals = new Map()
@@ -58,7 +61,7 @@ try {
   first.state.karma = 44
   first.state.dao = 11
   now += 1000
-  for (const step of intervals.values()) step()
+  for (const step of intervals.values()) await step()
   assert.ok(first.state.totalDays > 0, '真实入口推进历法')
   assert.ok(first.state.resources.qi > 100, '真实入口结算聚灵阵产出')
   const days = first.state.totalDays
@@ -81,16 +84,51 @@ try {
   assert.equal(reloaded.state.resources.qi, qi)
   assert.equal(reloaded.state.totalDays, days)
   now += 1000
-  for (const step of intervals.values()) step()
+  for (const step of intervals.values()) await step()
   assert.ok(reloaded.state.totalDays > days, '热更新后历法继续推进')
   assert.ok(reloaded.state.resources.qi > qi, '热更新后资源继续结算')
+  const beforeCatchup = reloaded.state.stats.playTime
+  now += 600000
+  for (const step of intervals.values()) {
+    const completion = step()
+    assert.equal(reloaded.ui.offlineLoading, true, '补算开始先显示加载提示')
+    assert.equal(reloaded.state.stats.playTime, beforeCatchup, '加载提示显示时收益尚未写回')
+    await Promise.resolve()
+    assert.ok(browser.document.querySelector('.offline-loading'), '补算之前先渲染加载符号')
+    assert.equal(browser.document.querySelector('.wrap').getAttribute('aria-busy'), 'true', '加载期间页面标记为忙碌')
+    await completion
+  }
+  assert.equal(reloaded.ui.offlineLoading, false, '补算结束收起加载提示')
+  assert.equal(reloaded.state.stats.playTime, beforeCatchup + 600, '恢复页面只补算尚未推进的十分钟')
+  assert.ok(reloaded.state.log.some(entry => entry.text.includes('挂机 600 秒')), '真实启动入口补算后生成挂机报告')
+  for (const step of intervals.values()) await step()
+  assert.equal(reloaded.state.stats.playTime, beforeCatchup + 600, '同一恢复时间重复触发循环不会重复领取')
+  now += 1000
+  for (const step of intervals.values()) await step()
+  assert.equal(reloaded.state.stats.playTime, beforeCatchup + 601, '补算之后在线循环继续正常推进')
+  reloaded.saveNow()
+  const savedPlayTime = reloaded.state.stats.playTime
   reloaded.stopLoop()
+  browser.document.getElementById('app').__vue_app__.unmount()
+  now += 600000
+  globalThis.__gameHot = hotContext()
+  const awayReload = await import(url + '?awayReload')
+  assert.equal(awayReload.ui.offlineLoading, true, '读档离线收益也先展示加载提示')
+  assert.equal(intervals.size, 0, '初始离线未完成时不启动在线循环')
+  assert.equal(awayReload.saveNow(), false, '加载期间不覆盖待补算存档')
+  await awayReload.initializeGame()
+  assert.equal(awayReload.ui.offlineLoading, false)
+  assert.equal(awayReload.state.stats.playTime, savedPlayTime + 600, '读档离线只补算一次')
+  assert.equal(intervals.size, 1, '初始离线结束后才启动在线循环')
+  awayReload.stopLoop()
   browser.document.getElementById('app').__vue_app__.unmount()
   console.log('真实启动与热更新回归检查通过：时间、资源、保存和循环重启')
 } finally {
   Date.now = originalNow
   globalThis.setInterval = originalSetInterval
   globalThis.clearInterval = originalClearInterval
+  if (originalAnimationFrame) globalThis.requestAnimationFrame = originalAnimationFrame
+  else delete globalThis.requestAnimationFrame
   delete globalThis.__gameHot
   dom.window.close()
 }

@@ -45,7 +45,11 @@ const status = computed(() => ui.toast?.text || '')
 </script>
 
 <template>
-  <div class="wrap">
+  <div v-if="ui.offlineLoading" class="offline-loading" role="status" aria-live="polite">
+    <span class="loading-spinner" aria-hidden="true"></span>
+    <span>正在结算挂机收益…</span>
+  </div>
+  <div class="wrap" :inert="ui.offlineLoading" :aria-busy="ui.offlineLoading">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
       <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>

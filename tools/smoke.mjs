@@ -23,6 +23,7 @@ import {
   ALL_UPGRADES,
   UPGRADE_MAP,
   CULTIVATION_STAGE_OF,
+  CULTIVATION_STAGES,
 } from '../src/data/upgrades.js'
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { CRAFTS, CRAFT_MAP, craftCost } from '../src/data/crafts.js'
@@ -2468,17 +2469,20 @@ section('修真线第一阶段：先懂原理才能盖')
     JSON.stringify(UPGRADE_MAP.spiritIrrigation.needs),
   )
   const gazing = UPGRADE_MAP.qiGazing
-  ok('新增观气法（解锁聚灵大阵）', !!gazing && (gazing.effects.unlockBuildings || []).includes('gatheringArray'))
+  ok('观气法承接阵法精要，大阵由阵法精要开放', !!gazing && !(gazing.effects.unlockBuildings || []).includes('gatheringArray') && unlockGroups('fieldTillage').buildings.includes('聚灵大阵'))
   ok(
     '聚灵大阵的门槛从「有藏经阁」改成研究放行',
     (BUILDING_MAP.gatheringArray.needs.upgrades || []).includes('qiGazing'),
     JSON.stringify(BUILDING_MAP.gatheringArray.needs),
   )
 
-  // 顺序：数据顺序就是界面顺序（见 CultivationPanel），所以两线分组要体现在数组里
+  // 界面按研究分组排序，同组保持节点数据顺序。
   const ids = CULTIVATION.map((u) => u.id)
   const unstaged = ids.filter((id) => !CULTIVATION_STAGE_OF[id])
-  ok('每个修真节点都归入两线分组之一（主线五章 + 材料六族 + 宗门经营）', unstaged.length === 0, unstaged.join(','))
+  ok('每个修真节点都归入研究分组（灵气五章、心法、材料与经营）', unstaged.length === 0, unstaged.join(','))
+  const groupedIds = CULTIVATION_STAGES.flatMap(stage => stage.ids)
+  ok('研究分组不重复收录节点或引用失效节点', groupedIds.length === new Set(groupedIds).size &&
+    groupedIds.every(id => ids.includes(id)))
   ok(
     '第一章是「观气」（灵源考 + 观气法同章且在最前）',
     ids[0] === 'qiOrigin' &&
@@ -2733,7 +2737,7 @@ section('新增加工链与旧存档兼容')
   legacy.stats.crafted.immortalHerb = 5
   const restored = normalizeState(legacy)
   ok('旧分灵阵迁移补齐偏极阵并保留数量与停用状态', restored.buildings.polarizeArray?.count === 2 && restored.buildings.polarizeArray.on === false && restored.upgrades.particleTheory)
-  ok('旧凝晶产线补齐灵气测定、凝气化液、凝液法与自动上游', restored.upgrades.qiMeasure && restored.upgrades.qiLiquid && restored.upgrades.liquidArt && restored.autoCraft.condenseLiquid)
+  ok('旧凝晶产线补齐测定、化液、凝液、纯化与自动上游', restored.upgrades.qiMeasure && restored.upgrades.qiLiquid && restored.upgrades.liquidArt && restored.upgrades.qiPurify && restored.autoCraft.condenseLiquid)
   ok('迁移不改写原始存档对象', !legacy.buildings.polarizeArray && !legacy.upgrades.liquidArt && !legacy.autoCraft.condenseLiquid)
   const twice = normalizeState(restored)
   ok('重复读档不重复发放设施', twice.buildings.polarizeArray.count === 2)
@@ -3021,8 +3025,8 @@ section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能
     const liq = CRAFT_MAP.condenseLiquid
     const cry = CRAFT_MAP.condenseCrystal
     ok('凝气成液由凝气化液放行，150 灵气一瓶', liq.needs?.upgrades?.includes('qiLiquid') && liq.cost.qi === 150 && liq.out === 'spiritLiquid')
-    ok('凝液法无境界门槛、保留凝灵诀前置', E.UPGRADE_MAP.liquidArt.needs.realm == null && E.UPGRADE_MAP.liquidArt.needs.upgrades.includes('condenseArt'))
-    ok('凝晶原理以凝液法为前置（第Ⅱ章成链）', E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('liquidArt'))
+    ok('凝液法无境界门槛、只承接化液', E.UPGRADE_MAP.liquidArt.needs.realm == null && E.UPGRADE_MAP.liquidArt.needs.upgrades.length === 1 && E.UPGRADE_MAP.liquidArt.needs.upgrades[0] === 'qiLiquid')
+    ok('凝晶原理承接灵气纯化并保留符文条件', E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('qiPurify') && E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('talismanArt'))
     ok('凝气结晶由固形纹直接加工灵液与灵气', cry.cost.spiritLiquid === 3 && !cry.cost.talisman && cry.cost.qi === 300)
     ok('培育仙草以灵液浇灌', CRAFT_MAP.growImmortalHerb.cost.spiritLiquid === 2 && !CRAFT_MAP.growImmortalHerb.cost.qi)
     ok('灵石是含灵矿物：矿工开采与点石成灵并存', JOBS.some(job => job.secondary?.resource === 'stone') && CRAFT_MAP.infuseStone.needs?.building?.id === 'quarry')
@@ -3401,6 +3405,31 @@ section('宜居度：阈值、来源倍率与人口流失')
   } finally {
     Math.random = originalRandom
   }
+}
+
+section('早期建筑：知识前置、分支推进与旧档保留')
+{
+  const { state: s, derived: d } = newGame()
+  for (const [id, count] of Object.entries({ spiritField: 5, hut: 5, library: 2, lumberYard: 1, quarry: 2, granary: 1 })) s.buildings[id] = { count, on: true }
+  Object.assign(s.resources, { insight: 1000, wood: 5000, rock: 5000, stone: 1000, qi: 5000 })
+  E.recompute(s, d)
+  ok('材料足够仍不能跳过木屋、小院和大阵的知识前置', ['logHouse', 'livingCourt', 'gatheringArray'].every(id => !E.isBuildingUnlocked(s, id) && E.buyBuilding(s, d, id) === 0))
+  ok('基础设施可先取得灵源考，无住房和阵法研究循环', E.research(s, d, 'qiOrigin'))
+  ok('灵源考后可先学灵植术，无需观气法', !s.upgrades.qiGazing && E.research(s, d, 'herbStudy'))
+  ok('未研究观气法可建药圃并开放采药职位', E.buyBuilding(s, d, 'herbGarden') === 1 && E.isJobUnlocked(s, JOBS.find(job => job.id === 'herbalist')))
+  ok('居所营造只需起步设施即可研究', E.research(s, d, 'homePlanning'))
+  ok('学会居所营造后开放木屋与清风小院', E.buyBuilding(s, d, 'logHouse') === 1 && E.buyBuilding(s, d, 'livingCourt') === 1)
+  ok('料场仍须凿石要诀，起步设施能满足研究条件', !E.isBuildingUnlocked(s, 'materialYard') && E.research(s, d, 'quarryArt') && E.buyBuilding(s, d, 'materialYard') === 1)
+  ok('只学观气法仍不能建大阵', E.research(s, d, 'qiGazing') && !E.isBuildingUnlocked(s, 'gatheringArray'))
+  ok('阵法精要仍需要引气诀', !E.isUpgradeUnlocked(s, UPGRADE_MAP.fieldTillage) && E.research(s, d, 'qiArt'))
+  ok('掌握阵法精要后才能建聚灵大阵', E.research(s, d, 'fieldTillage') && E.buyBuilding(s, d, 'gatheringArray') === 1)
+
+  const legacy = createInitialState()
+  for (const id of ['logHouse', 'livingCourt', 'gatheringArray']) legacy.buildings[id] = { count: 1, on: true }
+  const restored = normalizeState(legacy)
+  const restoredDerived = E.createDerived()
+  E.recompute(restored, restoredDerived)
+  ok('旧档已建建筑保留显示与效果，不补赠新前置技艺', ['logHouse', 'livingCourt', 'gatheringArray'].every(id => E.isBuildingUnlocked(restored, id)) && restoredDerived.maxDisciples === 6 && !restored.upgrades.homePlanning && !restored.upgrades.fieldTillage)
 }
 
 section('宜居配套：入住覆盖、实际投资与目标增产')
@@ -3995,6 +4024,40 @@ section('事件三级分类与纪事兼容')
   ok('普通操作纪事不被标成事件', s.log[0].eventLevel === undefined && s.log[0].eventId === undefined)
 }
 
+section('凝聚章：逐步研究与能力兑现')
+{
+  const { state: s, derived: d } = newGame()
+  s.realm = 4
+  for (const id of ['qiOrigin', 'qiGazing', 'qiMeasure', 'talismanArt']) s.upgrades[id] = true
+  s.buildings.spiritField = { count: 1, on: true }
+  s.buildings.library = { count: 200, on: true }
+  Object.assign(s.resources, { insight: 25000, wood: 10000, stone: 10000, plank: 100, qi: 10000 })
+  E.recompute(s, d)
+  const chain = ['qiLiquid', 'liquidArt', 'qiPurify', 'crystalTheory']
+  ok('观气后灵植术可学，凝灵诀尚不可学', E.isUpgradeUnlocked(s, UPGRADE_MAP.herbStudy) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt))
+  for (const id of chain) {
+    const available = chain.filter(next => !s.upgrades[next] && E.isUpgradeUnlocked(s, UPGRADE_MAP[next]))
+    ok(`凝聚章当前只放行下一步 ${UPGRADE_MAP[id].name}`, available.length === 1 && available[0] === id)
+    const rate = d.rates.qi
+    ok(`依正常支付研究 ${UPGRADE_MAP[id].name}`, E.research(s, d, id))
+    if (id === 'qiLiquid') {
+      ok('化液先开放手动配方但尚无凝聚工位', E.craft(s, d, 'condenseLiquid') > 0 && d.processingCapacity.condensation === 0)
+      ok('只掌握化液仍不能参悟凝灵诀', !E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt))
+    } else if (id === 'liquidArt') {
+      ok('凝液法接续提供基础凝聚工位', d.processingCapacity.condensation === 1)
+      ok('凝液法后开放凝灵诀但尚未取得自动凝液能力', E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt) && !d.autoCondenseLiquidUnlocked)
+    } else if (id === 'qiPurify') {
+      ok('纯化后灵气产出增加两成', close(d.rates.qi / rate, 1.2))
+      s.upgrades.talismanArt = false
+      ok('主链完成纯化仍不能绕过凝晶所需符文知识', !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory))
+      s.upgrades.talismanArt = true
+    }
+  }
+  ok('串联不额外收费，四项总灵机仍为18500', s.resources.insight === 6500)
+  ok('学完凝晶原理仍需凝晶工艺才能制作灵晶', !E.isCraftUnlocked(s, CRAFT_MAP.condenseCrystal))
+  ok('支付学习凝灵诀后保留节气自动凝液', E.research(s, d, 'condenseArt') && d.autoCondenseLiquidUnlocked && d.craftTargetsUnlocked)
+}
+
 section('金丹：修真、工艺、材料与建设闭环')
 {
   const { state: s, derived: d } = newGame()
@@ -4004,7 +4067,8 @@ section('金丹：修真、工艺、材料与建设闭环')
   s.buildings.forge = { count: 1, on: true }
   Object.assign(s.resources, { insight: 50000, qi: 8000, spiritLiquid: 300, talisman: 1900, ore: 2000, plank: 640, artifact: 10, stone: 1000, wood: 2000 })
   E.recompute(s, d)
-  ok('筑基满足前置即可参悟凝晶与淬玄原理', E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && E.isUpgradeUnlocked(s, UPGRADE_MAP.steelWorking))
+  ok('已掌握凝液仍须先纯化才能参悟凝晶', !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory))
+  ok('筑基参悟纯化后即可继续凝晶与淬玄原理', E.research(s, d, 'qiPurify') && E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && E.isUpgradeUnlocked(s, UPGRADE_MAP.steelWorking))
   s.realm = 4
   E.recompute(s, d)
   ok('金丹档开放阵基装配、淬玄工艺、材料库与灵流要诀', ['arrayAssembly', 'steelWorking', 'earthEssence', 'flowField'].every(id => E.isUpgradeUnlocked(s, UPGRADE_MAP[id])))

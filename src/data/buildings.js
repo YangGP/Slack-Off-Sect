@@ -114,8 +114,8 @@ export const BUILDINGS = [
     },
     upkeep: { qi: 1.2 }, // 大阵自己在引气，也在漏气
 
-    // 先学会「观气」，才画得出大阵（修真 · 观气法）
-    needs: { upgrades: ['qiGazing'] },
+    // 观清气脉并掌握阵纹布置，才可营造大阵。
+    needs: { upgrades: ['qiGazing', 'fieldTillage'] },
   },
   {
     id: 'crystalArray',
@@ -152,7 +152,7 @@ export const BUILDINGS = [
     priceRatio: 1.55,
     desc: '木梁榫卯相扣，灵石嵌入梁柱引气，冬暖夏凉，可容六名弟子。',
     effects: { maxDisciples: 6, storage: { qi: 200, wood: 120 } },
-    needs: { building: { id: 'hut', count: 5 } },
+    needs: { building: { id: 'hut', count: 5 }, upgrades: ['homePlanning'] },
   },
   {
     id: 'mansion',
@@ -187,7 +187,7 @@ export const BUILDINGS = [
     priceRatio: 1.3,
     desc: '石径排水，木廊遮荫，同门劳作之后有处歇脚。每座宜居度 +4。',
     effects: { habitability: 4 },
-    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }] },
+    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }], upgrades: ['homePlanning'] },
   },
   {
     id: 'communalHall',

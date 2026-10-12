@@ -10,8 +10,8 @@
  *   制度、招募、离线等经营节点收进「宗门经营」组。
  *
  * 与 /技艺·法宝/ 的分工：
- *   修真（本文件）：两条研究线 + 宗门经营；主线与经营节点仍只做解锁与系统开关，
- *                   材料研究线携带专业制作与产业增益
+ *   修真（本文件）：灵气与材料研究、心法支线及宗门经营，承接知识解锁、系统与研究成果；
+ *                   材料线强化专业产业，心法线承接心印与修持增益
  *   技艺           ：通用产量、仓储、灵机等增益；法宝（kind: 'treasure'）由修真解锁后炼成
  *
  * 两者共用「灵机」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
@@ -39,9 +39,9 @@ export const CULTIVATION = [
     glyph: '观',
     cost: { insight: 150, wood: 300, stone: 60 },
     desc: '静坐三日，看清明堂之上那一缕白气的来路与去向。已有弟子嘀咕：这气莫不是一粒一粒凑成的？——只是谁也拿不出凭据。聚灵之理自此可画。',
-    effects: { unlockBuildings: ['gatheringArray'] },
-    note: '解锁建筑：聚灵大阵',
-    effectDesc: '因此看得懂气脉走向：聚灵大阵画得出来了。',
+    effects: { unlockBuildings: [] },
+    note: '开启参悟：灵气测定；承接阵法精要',
+    effectDesc: '因此看得懂气脉走向：可继续测定灵气，结合引气诀研习阵法精要。',
     needs: { upgrades: ['qiOrigin'] },
   },
   {
@@ -54,17 +54,6 @@ export const CULTIVATION = [
     effects: { unlockBuildings: [] },
     note: '开启参悟：凝气化液',
     needs: { upgrades: ['qiGazing'] },
-  },
-  {
-    id: 'condenseArt',
-    name: '凝灵诀',
-    glyph: '凝',
-    cost: { insight: 120, wood: 150, stone: 20 },
-    desc: '观清气脉后，掌握把灵气压成液态的门径。节气一至，将满仓盈余灵气自行压入玉瓶。',
-    effectDesc: '掌握《凝气化液》且达到凝液配方条件后，每逢节气，灵气满仓时自动凝聚灵液；灵气不足则暂停，遵守库存目标与材料保留量。',
-    // 效果由"自动制作灵石"改为"自动凝聚灵液"：灵石可由点石成灵手动补，灵液才是真的耗灵气。
-    effects: { autoCondenseLiquid: true },
-    needs: { upgrades: ['qiGazing'], building: { id: 'quarry', count: 1 } },
   },
   {
     id: 'breakthroughArt',
@@ -94,32 +83,32 @@ export const CULTIVATION = [
     name: '凝液法',
     glyph: '液',
     cost: { insight: 6000, wood: 300, stone: 40 },
-    desc: '气可凝为石，也可凝为液 —— 灵液压在玉瓶里，十年不散。',
-    effectDesc: '因此开得出基础凝聚工位：金丹起可自动凝液、凝晶。',
+    desc: '掌握按份化液后，稳定灵压与玉瓶收取，把凝液整理成可持续运转的工艺。',
+    effectDesc: '因此开得出基础凝聚工位：金丹起可自动凝液，后续凝晶配方也共用此工位。',
     effects: { unlockBuildings: [] },
     note: '提供基础凝聚工位',
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['condenseArt'] },
+    needs: { upgrades: ['qiLiquid'] },
   },
   {
     id: 'qiPurify',
     name: '灵气纯化',
     glyph: '纯',
     cost: { insight: 3000, stone: 300, plank: 20 },
-    desc: '剔去灵气中的浊杂，纯度既高，气机更稳，一份更抵一份。',
+    desc: '凝液制程稳定后，进一步剔去灵气中的浊杂，纯度既高，气机更稳，一份更抵一份。',
     effectDesc: '因此灵气更纯：灵气产出 +20%。',
     effects: { ratio: { qi: 0.2 } },
-    needs: { upgrades: ['qiMeasure', 'liquidArt'] },
+    needs: { upgrades: ['liquidArt'] },
   },
   {
     id: 'crystalTheory',
     name: '凝晶原理',
     glyph: '晶',
     cost: { insight: 8000 },
-    desc: '研究用符纹约束灵液，凝成可长期保存的晶核。',
+    desc: '气源纯化后，研究用符纹约束稳定灵液，凝成可长期保存的晶核。',
     effectDesc: '开启凝晶工艺与晶核凝炼阵；学会加工灵晶后才能完成建设。',
     effects: { unlockBuildings: ['crystalArray'] },
-    needs: { upgrades: ['qiGazing', 'talismanArt', 'liquidArt'] },
+    needs: { upgrades: ['qiPurify', 'talismanArt'] },
   },
 
   // ---------- Ⅲ 调控：怎么引导、约束灵气 ----------
@@ -186,38 +175,6 @@ export const CULTIVATION = [
     effects: { unlockBuildings: ['splitArray'] },
     note: '解锁建筑：分灵阵',
     needs: { upgrades: ['arrayMastery'] },
-  },
-  {
-    id: 'mindSeal',
-    name: '心印法',
-    glyph: '印',
-    cost: { insight: 70000, pill: 120, herb: 6000 },
-    desc: '以心印心，不必言语 —— 长老一个念头，弟子便知该如何行气。',
-    effectDesc: '因此破境再省一成半材料。',
-    effects: { breakthroughDiscount: 0.15 },
-    note: '效果：破境花费 −15%',
-    needs: { upgrades: ['hourArt'] },
-  },
-  {
-    id: 'greatVehicleSeal',
-    name: '大乘心印',
-    glyph: '乘',
-    cost: { insight: 140000, artifact: 60, talisman: 120, plank: 40, spiritTreasure: 1 },
-    desc: '把前四境的心法合为一印，才有资格谈大乘。',
-    effectDesc: '因此参悟得出《大乘心经》—— 全局产出再上一阶。',
-    effects: { unlockBuildings: [] },
-    note: '开启参悟：大乘心经',
-    needs: { upgrades: ['mindSeal'] },
-  },
-  // 自技艺页迁入：大乘心印的成果兑现，主线第Ⅳ章的增益出口
-  {
-    id: 'mahayanaArt',
-    name: '大乘心经',
-    glyph: '经',
-    cost: { insight: 160000, artifact: 60, talisman: 60, pill: 60, faith: 6000 },
-    desc: '以心养药，以愿证道。灵机与香火产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。',
-    effects: { ratio: { insight: 1.2, faith: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
-    needs: { upgrades: ['greatVehicleSeal'] },
   },
   {
     id: 'yinyangSplit',
@@ -298,6 +255,51 @@ export const CULTIVATION = [
     needs: { upgrades: ['karmaSense', 'towerPlan'] },
   },
 
+  // ============ 支线 · 心法研究：心印与修持 ============
+  {
+    id: 'condenseArt',
+    name: '凝灵诀',
+    glyph: '凝',
+    cost: { insight: 120, wood: 150, stone: 20 },
+    desc: '掌握凝液制程后，将稳定灵压与收液的法门化为心诀。节气一至，将满仓盈余灵气自行压入玉瓶。',
+    effectDesc: '掌握《凝气化液》且达到凝液配方条件后，每逢节气，灵气满仓时自动凝聚灵液；灵气不足则暂停，遵守库存目标与材料保留量。',
+    // 效果由"自动制作灵石"改为"自动凝聚灵液"：灵石可由点石成灵手动补，灵液才是真的耗灵气。
+    effects: { autoCondenseLiquid: true },
+    needs: { upgrades: ['liquidArt'] },
+  },
+  {
+    id: 'mindSeal',
+    name: '心印法',
+    glyph: '印',
+    cost: { insight: 70000, pill: 120, herb: 6000 },
+    desc: '以心印心，不必言语 —— 长老一个念头，弟子便知该如何行气。',
+    effectDesc: '因此破境再省一成半材料。',
+    effects: { breakthroughDiscount: 0.15 },
+    note: '效果：破境花费 −15%',
+    needs: { upgrades: ['hourArt'] },
+  },
+  {
+    id: 'greatVehicleSeal',
+    name: '大乘心印',
+    glyph: '乘',
+    cost: { insight: 140000, artifact: 60, talisman: 120, plank: 40, spiritTreasure: 1 },
+    desc: '把前四境的心法合为一印，才有资格谈大乘。',
+    effectDesc: '因此参悟得出《大乘心经》—— 全局产出再上一阶。',
+    effects: { unlockBuildings: [] },
+    note: '开启参悟：大乘心经',
+    needs: { upgrades: ['mindSeal'] },
+  },
+  // 自技艺页迁入：大乘心印的成果兑现，心法修持支线的增益出口
+  {
+    id: 'mahayanaArt',
+    name: '大乘心经',
+    glyph: '经',
+    cost: { insight: 160000, artifact: 60, talisman: 60, pill: 60, faith: 6000 },
+    desc: '以心养药，以愿证道。灵机与香火产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。',
+    effects: { ratio: { insight: 1.2, faith: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
+    needs: { upgrades: ['greatVehicleSeal'] },
+  },
+
   // ============ 辅线 · 材料研究：按材料族分「原理 → 工艺 → 精研」 ============
 
   // ---------- 草木族 ----------
@@ -306,11 +308,11 @@ export const CULTIVATION = [
     name: '灵植术',
     glyph: '植',
     cost: { insight: 40, wood: 120 },
-    desc: '掌握灌灵之法后，考察草木如何吸纳灵气，辨识药性，才能开圃种药。',
+    desc: '明白灵气来源后，考察草木如何吸纳灵气，辨识药性，才能开圃种药。',
     effects: { unlockBuildings: ['herbGarden'] },
     note: '解锁建筑：药圃',
     effectDesc: '因此敢开圃种药：有了稳定的灵草来源。',
-    needs: { upgrades: ['condenseArt'], building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
   },
   // 自技艺页迁入（工艺）：木料链第二环，开放刨木成板
   {
@@ -795,7 +797,7 @@ export const CULTIVATION = [
 export const ALL_UPGRADES = [...CULTIVATION, ...TECHNIQUES]
 
 /**
- * 修真页的分组（界面上按它分组显示）：主线五章 + 材料六族 + 宗门经营。
+ * 修真页的分组（界面上按它分组显示）：主线五章 + 心法支线 + 材料六族 + 宗门经营。
  * 主线按「灵气的科学史」分章，章节感来自依赖链、灵机仓容与材料产业推进，分组只是导航；
  * 材料研究按族分「原理 → 工艺 → 精研」三层（方案见 docs/RESEARCH.md）。
  */
@@ -804,7 +806,7 @@ export const CULTIVATION_STAGES = [
     key: 'qiSense',
     label: '灵气研究 Ⅰ 观气',
     hint: '灵气是什么、在哪、怎么聚',
-    ids: ['qiOrigin', 'qiGazing', 'qiMeasure', 'condenseArt', 'breakthroughArt'],
+    ids: ['qiOrigin', 'qiGazing', 'qiMeasure', 'breakthroughArt'],
   },
   {
     key: 'qiCondense',
@@ -822,13 +824,19 @@ export const CULTIVATION_STAGES = [
     key: 'qiSplit',
     label: '灵气研究 Ⅳ 拆解',
     hint: '灵气由什么构成',
-    ids: ['particleTheory', 'mindSeal', 'greatVehicleSeal', 'mahayanaArt', 'yinyangSplit', 'annihilationArt', 'energyApplication'],
+    ids: ['particleTheory', 'yinyangSplit', 'annihilationArt', 'energyApplication'],
   },
   {
     key: 'qiSource',
     label: '灵气研究 Ⅴ 归源',
     hint: '灵气与因果、飞升',
     ids: ['karmaSense', 'towerPlan', 'karmaConcord'],
+  },
+  {
+    key: 'heartCultivation',
+    label: '心法研究 · 心印与修持',
+    hint: '节气凝液、心印承接与修持增益',
+    ids: ['condenseArt', 'mindSeal', 'greatVehicleSeal', 'mahayanaArt'],
   },
   {
     key: 'matHerb',

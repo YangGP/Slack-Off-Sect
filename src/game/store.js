@@ -1,4 +1,4 @@
-import { reactive, computed } from 'vue'
+import { reactive, computed, toRaw, nextTick } from 'vue'
 import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, normalizeQuickCrafts } from '@/data/crafts'
 import { RESOURCES, VISIBLE_RESOURCES, resourceName } from '@/data/resources'
@@ -20,6 +20,8 @@ import { createGame, createRuntime } from './runtime'
 
 let restored = null
 let initialized = false
+let initializing = null
+let loopRequested = false
 export const state = reactive(createInitialState())
 export const derived = reactive(E.createDerived())
 
@@ -30,6 +32,7 @@ export const ui = reactive({
   debug: false,
   debugPage: false,
   offlineReport: null,
+  offlineLoading: false,
   toast: null,
   message: null,
   lastSavedAt: 0,
@@ -41,23 +44,30 @@ export const ui = reactive({
   highlight: { need: [], lack: [] },
 })
 
-const game = createGame({ state, derived })
+const game = createGame({ state, derived,
+  snapshotState: value => JSON.parse(JSON.stringify(toRaw(value))),
+})
 const repository = createSaveRepository()
 const runtime = createRuntime({ game, repository,
   onSaved: at => { ui.lastSavedAt = at },
   onAdvance: reportAdvance,
+  deferAdvance: withOfflineLoading,
 })
 
 /** 明确启动入口；导入 store 不读取存档、不结算离线、不注册浏览器事件。 */
 export function initializeGame() {
-  if (initialized) return
+  if (initialized) return initializing
   initialized = true
   restored = runtime.load()
   ui.saveLoadError = repository.loadError
   ui.saveRecoveryNotice = restored?.__recoveryNotice || ''
   ui.lastSavedAt = restored?.lastSaveAt || 0
-  applyOfflineProgress()
-  runtime.resetClock()
+  initializing = applyOfflineProgress()
+  if (initializing) initializing = initializing.finally(() => {
+    runtime.resetClock()
+    initializing = null
+  })
+  else runtime.resetClock()
   // 控制台执行 DEBUG 开启本次页面的调试入口；刷新后恢复隐藏，不写入存档。
   if (typeof window !== 'undefined') {
     Object.defineProperty(window, 'DEBUG', {
@@ -69,7 +79,7 @@ export function initializeGame() {
       },
     })
   }
-
+  return initializing
 }
 
 /** 悬停某个花费时高亮对应资源；cost 形如 { qi: 100, wood: 20 } */
@@ -96,33 +106,55 @@ function applyOfflineProgress() {
   if (elapsed < 30) return
   const capSeconds = Math.floor((derived.offlineHours || CONFIG.OFFLINE_CAP_HOURS) * 3600)
   const seconds = Math.min(elapsed, capSeconds)
-  const result = game.simulateOffline(seconds, { startAt: restored.lastSaveAt })
-  const gains = Object.entries(result.gains)
-    .map(([id, amount]) => ({
-      id,
-      name: resourceName(id),
-      amount,
-    }))
-    .sort((a, b) => b.amount - a.amount)
-  ui.offlineReport = {
-    awaySeconds: elapsed,
-    simulatedSeconds: seconds,
-    capped: elapsed > capSeconds,
-    gains,
-    disciples: result.disciples || 0,
+  return withOfflineLoading(() => {
+    const result = game.simulateOffline(seconds, { startAt: restored.lastSaveAt })
+    const gains = Object.entries(result.gains)
+      .map(([id, amount]) => ({
+        id,
+        name: resourceName(id),
+        amount,
+      }))
+      .sort((a, b) => b.amount - a.amount)
+    ui.offlineReport = {
+      awaySeconds: elapsed,
+      simulatedSeconds: seconds,
+      capped: elapsed > capSeconds,
+      gains,
+      disciples: result.disciples || 0,
+    }
+    if (gains.length) {
+      state.stats.offlineGains += gains.reduce((s, g) => s + g.amount, 0)
+    }
+    const extra = result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''
+    E.pushLog(
+      state,
+      `闭关 ${E.clamp(Math.floor(elapsed / 60), 0, 999999)} 分钟，弟子们替你干活${
+        gains.length ? '，收获见离线报告' : '，可惜库房已满'
+      }${extra}`,
+      'event',
+    )
+    E.recompute(state, derived)
+  })
+}
+
+async function withOfflineLoading(run) {
+  ui.offlineLoading = true
+  try {
+    await nextTick()
+    // 先让加载提示绘制出来，再开始同步补算；隐藏页面无需等动画帧。
+    await new Promise(resolve => {
+      if (typeof requestAnimationFrame === 'function' && document.visibilityState !== 'hidden') {
+        const fallback = setTimeout(resolve, 100)
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          clearTimeout(fallback)
+          resolve()
+        }))
+      } else setTimeout(resolve, 0)
+    })
+    return run()
+  } finally {
+    ui.offlineLoading = false
   }
-  if (gains.length) {
-    state.stats.offlineGains += gains.reduce((s, g) => s + g.amount, 0)
-  }
-  const extra = result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''
-  E.pushLog(
-    state,
-    `闭关 ${E.clamp(Math.floor(elapsed / 60), 0, 999999)} 分钟，弟子们替你干活${
-      gains.length ? '，收获见离线报告' : '，可惜库房已满'
-    }${extra}`,
-    'event',
-  )
-  E.recompute(state, derived)
 }
 
 
@@ -152,19 +184,23 @@ function onBeforeUnload() {
 }
 
 export function startLoop() {
-  initializeGame()
+  loopRequested = true
+  const ready = initializeGame()
+  if (ready) return ready.then(() => { if (loopRequested) startLoop() })
   if (!runtime.start()) return
   document.addEventListener('visibilitychange', onHide)
   window.addEventListener('beforeunload', onBeforeUnload)
 }
 
 export function stopLoop() {
+  loopRequested = false
   runtime.stop()
   if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide)
   if (typeof window !== 'undefined') window.removeEventListener('beforeunload', onBeforeUnload)
 }
 
 export function saveNow() {
+  if (ui.offlineLoading) return false
   return runtime.save()
 }
 

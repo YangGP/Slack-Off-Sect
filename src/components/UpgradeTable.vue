@@ -69,7 +69,7 @@ function rowLeave(ev) {
   ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseleave'))
 }
 
-/** 修真节点所属的五段主线（技艺 / 法宝没有段，返回 null） */
+/** 修真节点所属的研究分组（技艺 / 法宝没有分组，返回 null） */
 const stageOf = (id) => CULTIVATION_STAGE_OF[id] || null
 
 /** 这一段的第一行（用来插段标题行） */
@@ -83,7 +83,7 @@ const available = computed(() =>
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
     .filter(capacityReady)
-    // 修真页按五段主线排序（同一段内保持数据顺序），界面因此能分组显示
+    // 修真页按研究分组排序，同组保持数据顺序。
     .sort((a, b) => (stageOf(a.id)?.index ?? 99) - (stageOf(b.id)?.index ?? 99))
     .map((u) => ({
       meta: u,
@@ -177,7 +177,7 @@ function kindName(meta) {
               <span v-if="item.upkeep.length" class="small dim"> · {{ state.upgradeEnabled[item.meta.id] === false ? '已停用' : item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span>
             </td>
             <td class="cost nowrap">
-              <HoverTip :width="380">
+              <HoverTip :width="380" anchor="tr">
                 <span class="cost-line" tabindex="0" :aria-label="`${item.meta.name}祭炼详情`">
                   <span
                     v-for="(amount, res) in item.cost"
@@ -256,7 +256,7 @@ function kindName(meta) {
             </td>
             <!-- 花费列只写「需要多少」；明细按建筑（宗门）的排版放进悬停提示 -->
             <td class="cost nowrap">
-              <HoverTip :width="380">
+              <HoverTip :width="380" anchor="tr">
                 <span class="cost-line">
                   <span
                     v-for="(amount, res) in item.meta.cost"
@@ -332,7 +332,7 @@ function kindName(meta) {
           <tbody>
             <tr v-for="item in researched" :key="item.id">
               <td class="nowrap">
-                <HoverTip :width="380">
+                <HoverTip :width="380" anchor="tr">
                   <span class="good">{{ item.name }}</span>
                   <span class="small dim">　{{ kindName(item) }}</span>
                   <template #heading>
