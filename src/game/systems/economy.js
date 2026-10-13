@@ -11,7 +11,7 @@ import { floorNumber } from '../numbers'
 import { PROCESSING_STATIONS } from '@/data/industry'
 import { CRAFTS } from '@/data/crafts'
 import { computeAutoCraftDrain } from './craftingRules'
-import { discipleFactor } from '@/data/disciples'
+import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
 import { talentBonus } from '@/data/talents'
 
 export function applyEffects(ef, mult, targets, src) {
@@ -77,6 +77,7 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.autoCraftSpeedControl) acc.autoCraftSpeedUnlocked = true
   if (ef.autoCondenseLiquid) acc.autoCondenseLiquidUnlocked = true
   if (ef.energyCraft) acc.energyCraftUnlocked = true
+  if (ef.discipleTraining) acc.discipleTrainingUnlocked = true
   for (const field of ['processingPowerCapacity', 'processingCoolingRatio']) {
     if (ef[field]) acc[field] = (acc[field] || 0) + ef[field] * mult
   }
@@ -113,7 +114,7 @@ export function applyEffects(ef, mult, targets, src) {
  * 重算所有派生数据：仓储上限、每秒产出、宜居度、解锁列表、价格折扣等。
  * 任何会改变数值的操作之后都应该调用一次。
  */
-export function recomputeRaw(state, derived, supply) {
+export function recomputeRaw(state, derived, supply, seconds = 1) {
   const max = {}
   for (const r of RESOURCES) max[r.id] = r.baseMax
   const prod = {}
@@ -147,6 +148,7 @@ export function recomputeRaw(state, derived, supply) {
     autoCraftUnlocked: false,
     autoCraftSpeedUnlocked: false,
     autoCondenseLiquidUnlocked: false,
+    discipleTrainingUnlocked: false,
     ratioAll: 0,
   }
   // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目] }
@@ -376,6 +378,25 @@ export function recomputeRaw(state, derived, supply) {
     expense[res] = expenseList[res].reduce((s, x) => s + x.value, 0)
   }
   for (const res in maint) if (expense[res] === undefined) expense[res] = -maint[res]
+  // 传功：按弟子有效境界的持续灵气开销；修为已满不收费，灵气不足（口粮与维护优先）整批暂停、不欠账。
+  let trainingCost = 0
+  {
+    let raw = 0
+    let count = 0
+    for (const member of state.disciples.members) {
+      const cost = discipleTrainingCost(member, state.realm)
+      if (cost > 0) { raw += cost; count++ }
+    }
+    const available = Math.max(0, (state.resources.qi || 0) / seconds + (rates.qi || 0) + (expense.qi || 0))
+    if (acc.discipleTrainingUnlocked && raw > 0 && available + 1e-10 >= raw) {
+      trainingCost = raw
+      if (!expenseList.qi) expenseList.qi = []
+      expenseList.qi.push({ kind: 'upkeep', id: 'training', label: '传功', count, value: -raw })
+      expense.qi = (expense.qi || 0) - raw
+    }
+  }
+  derived.trainingActive = trainingCost > 0
+  derived.trainingCost = trainingCost
   // 净额：产出 − 出项（界面左栏与状态行显示的都是它）
   const net = {}
   for (const r of RESOURCES) {
@@ -468,6 +489,7 @@ export function recomputeRaw(state, derived, supply) {
     return [recipe.id, derived.autoCraftSpeedUnlocked && CONFIG.AUTO_CRAFT_SPEEDS.includes(speed) ? speed : 1]
   }))
   derived.autoCondenseLiquidUnlocked = acc.autoCondenseLiquidUnlocked
+  derived.discipleTrainingUnlocked = !!acc.discipleTrainingUnlocked
   // 满仓凝液与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
   derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseLiquidUnlocked
   derived.ratio = ratio
@@ -511,7 +533,7 @@ export function recompute(state, derived, seconds = 1) {
   const upgradeConsumers = ALL_UPGRADES.filter((u) => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false)
   const consumers = [...buildingConsumers, ...upgradeConsumers]
   for (const b of consumers) supply[b.id] = 1
-  recomputeRaw(state, derived, supply)
+  recomputeRaw(state, derived, supply, dt)
   for (let pass = 0; pass < CONFIG.SUPPLY_ITERATION_MAX; pass++) {
     let changed = false
     // 双极分流同时产生两种灵子；任一侧满仓时，只为下游实际消耗补料。
@@ -528,7 +550,7 @@ export function recompute(state, derived, seconds = 1) {
       if (factor < 1 - 1e-10) {
         supply.polarizeArray *= factor
         if (supply.polarizeArray < 1e-10) supply.polarizeArray = 0
-        recomputeRaw(state, derived, supply)
+        recomputeRaw(state, derived, supply, dt)
         changed = true
       }
     }
@@ -547,7 +569,7 @@ export function recompute(state, derived, seconds = 1) {
       }
     }
     if (!changed) break
-    recomputeRaw(state, derived, supply)
+    recomputeRaw(state, derived, supply, dt)
   }
   derived.buildingSupply = Object.fromEntries(buildingConsumers.map(b => [b.id, supply[b.id]]))
   derived.upgradeSupply = Object.fromEntries(ALL_UPGRADES.filter(u => u.upkeep && state.upgrades[u.id])

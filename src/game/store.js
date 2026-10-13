@@ -305,6 +305,17 @@ export const actions = {
     afterAction(`突破成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient ? 'bad' : 'info')
     return result
   },
+  setMentored(ids, value) {
+    const changed = E.setMentored(state, derived, ids, value)
+    if (changed) afterAction(value ? `已开始传功 ${changed} 人` : `已停止传功 ${changed} 人`, 'info')
+    return changed
+  },
+  applyDiscipleAid(ids) {
+    const result = E.applyDiscipleAid(state, derived, ids)
+    if (result.applied) afterAction(`已为 ${result.applied} 名弟子护道${result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient ? 'info' : 'good')
+    else toast(result.insufficient ? '护道材料不足' : '所选弟子已护道或已至圆满', 'bad')
+    return result
+  },
   dismissDisciples(ids) {
     const preview = E.discipleDismissalPreview(state, ids)
     if (!preview.count) return { dismissed: 0 }

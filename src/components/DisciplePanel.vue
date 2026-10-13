@@ -2,10 +2,10 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { JOBS } from '@/data/jobs'
-import { idleDisciples, nextArrivalIn, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, canAfford } from '@/game/engine'
+import { idleDisciples, nextArrivalIn, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, discipleAidPreview, canAfford } from '@/game/engine'
 import { REALMS } from '@/data/realms'
-import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, discipleResidenceYears, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples } from '@/data/disciples'
-import { TALENT_MAP, TALENT_TIERS, TALENT_TIER_MAP, talentBonus, talentMatches } from '@/data/talents'
+import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, discipleResidenceYears, discipleTrainingCost, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples } from '@/data/disciples'
+import { TALENT_MAP, TALENT_TIERS, TALENT_TIER_MAP, talentBonus, talentMatches, talentDescription } from '@/data/talents'
 import { costLabel } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
 import { describeNeeds } from '@/game/effectsText'
@@ -29,6 +29,7 @@ async function toggleManagement() {
 const realmFilter = ref('all')
 const rootFilter = ref('all')
 const talentFilter = ref('all')
+const trainFilter = ref('all')
 const sortOrder = ref('arrival')
 const page = ref(0)
 const selected = ref([])
@@ -37,7 +38,8 @@ const selectedSet = computed(() => new Set(selected.value))
 const filtered = computed(() => sortDisciples(state.disciples.members.filter(member =>
   (realmFilter.value === 'all' || member.realm === Number(realmFilter.value)) &&
   (rootFilter.value === 'all' || member.spiritualRoot === rootFilter.value) &&
-  talentMatches(member, talentFilter.value)), sortOrder.value))
+  (trainFilter.value === 'all' || (trainFilter.value === 'mentored' ? member.mentored === true : (member.aidBonus || 0) > 0)) &&
+  talentMatches(member, talentFilter.value)), sortOrder.value, derived.trainingActive))
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 30)))
 const visible = computed(() => filtered.value.slice(Math.min(page.value, pages.value - 1) * 30, (Math.min(page.value, pages.value - 1) + 1) * 30))
 const selectedIds = computed(() => filtered.value.filter(member => selectedSet.value.has(member.id)).map(member => member.id))
@@ -49,20 +51,27 @@ const rootOptions = [{ value: 'all', label: '全部灵根' }, ...SPIRITUAL_ROOTS
 const talentOptions = [{ value: 'all', label: '全部天赋' }, { value: 'none', label: '无天赋' },
   { value: 'cultivation', label: '修炼天赋' }, { value: 'breakthrough', label: '突破天赋' },
   { value: 'job', label: '岗位专长' }, ...JOBS.map(job => ({ value: `job:${job.id}`, label: `${job.name}专长` }))]
+const trainOptions = [{ value: 'all', label: '全部培养' }, { value: 'mentored', label: '传功中' }, { value: 'aid', label: '已护道' }]
 const sortOptions = [{ value: 'arrival', label: '入门先后' }, { value: 'progress', label: '进度优先' }, { value: 'rate', label: '速度优先' }]
 const roleOptions = computed(previous => {
   const options = [{ value: 'idle', label: '闲散' }, ...JOBS.filter(job => derived.unlockedJobs.includes(job.id)).map(job => ({ value: job.id, label: job.name }))]
   // 派生数据每帧重新计算，但实际可用岗位未变时保留选项数组身份。
   return previous?.length === options.length && options.every((option, index) => option.value === previous[index].value) ? previous : options
 })
-watch([realmFilter, rootFilter, talentFilter], () => { page.value = 0; selected.value = [] })
+watch([realmFilter, rootFilter, talentFilter, trainFilter], () => { page.value = 0; selected.value = [] })
 watch(sortOrder, () => { page.value = 0 })
 const managementRows = computed(() => visible.value.map(member => ({
   ...member, factor: discipleFactor(member, state.realm),
   jobFactor: discipleFactor(member, state.realm) * (1 + talentBonus(member, 'job')),
-  talentRows: (member.talents || []).map(entry => ({ ...TALENT_MAP[entry.id], level: entry.level })),
+  talentRows: (member.talents || []).map(entry => {
+    const meta = TALENT_MAP[entry.id]
+    return meta ? { ...meta, level: entry.level, description: talentDescription(meta, entry.level) } : null
+  }).filter(Boolean),
   talentTier: [...TALENT_TIERS].reverse().find(tier => member.talents?.some(entry => TALENT_MAP[entry.id]?.tier === tier.id))?.name,
-  rate: cultivationRate(member), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
+  mentored: member.mentored === true,
+  trainingCost: discipleTrainingCost(member, state.realm),
+  aid: discipleAidPreview(state, member),
+  rate: cultivationRate(member, derived.trainingActive), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
   upkeep: derived.discipleWeight > 0 ? derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight : 0,
   preview: discipleBreakthroughPreview(state, member),
   dismissalCost: discipleDismissalCost(member),
@@ -130,6 +139,7 @@ function commitJob(jobId, event) {
       <HoverTip v-else label="弟子管理"><template #tip>
           <p>工作时也自动修炼，灵根影响修炼速度，修满后等待突破；目标境界不能超过宗门。</p>
           <p>天赋类型固定，修炼、岗位专长和突破效果只作用于本人。宗门每高于突破目标一境，成功率增加10个百分点，最高99%。</p>
+          <p>掌握《传功授业》后可对弟子传功：持续耗灵气加速本人修炼、不停岗；也可预付个人护道材料，加成其下一次突破。</p>
           <p>突破失败消耗材料，损失20%本境修为并调息60秒。批量突破逐人扣料，材料不足即停止。</p>
           <p>宗门退境保留弟子境界，岗位加成与口粮暂按较低的宗门境界计算；宗门恢复后加成恢复。</p>
           <p>逐出费用＝该弟子累计灵气消耗×（在宗门待满的游戏年数＋1），每人向上取整。消耗包括个人口粮与突破支付的灵气；在线与离线都累计，旧档从更新后开始记录。确认后移除个人成长与岗位，整批灵气不足则不执行。</p>
@@ -234,6 +244,9 @@ function commitJob(jobId, event) {
         <label class="management-field"><span>天赋</span>
           <StableSelect v-model="talentFilter" label="弟子天赋筛选" :options="talentOptions" />
         </label>
+        <label v-if="derived.discipleTrainingUnlocked" class="management-field"><span>培养</span>
+          <StableSelect v-model="trainFilter" label="弟子培养筛选" :options="trainOptions" />
+        </label>
         <label class="management-field"><span>排序</span>
           <StableSelect v-model="sortOrder" label="弟子排序" :options="sortOptions" />
         </label>
@@ -255,6 +268,11 @@ function commitJob(jobId, event) {
         </div>
         <div class="management-selection-actions">
           <button class="btn" :disabled="!canBatchBreakthrough" @click="actions.breakthroughDisciples(selectedIds)">所选弟子突破</button>
+          <template v-if="derived.discipleTrainingUnlocked">
+            <button class="btn" :disabled="!selectedIds.length" @click="actions.setMentored(selectedIds, true)">所选传功</button>
+            <button class="btn" :disabled="!selectedIds.length" @click="actions.setMentored(selectedIds, false)">所选停功</button>
+            <button class="btn" :disabled="!selectedIds.length" @click="actions.applyDiscipleAid(selectedIds)">所选护道</button>
+          </template>
           <HoverTip title="逐出所选弟子">
             <button class="btn danger" :disabled="!dismissal.count || !dismissal.affordable" @click="dismiss(selectedIds)">逐出所选 · 灵气 {{ fmtCost(dismissal.cost.qi) }}</button>
             <template #tip>
@@ -294,6 +312,11 @@ function commitJob(jobId, event) {
                       <div class="tip-row"><span class="k">{{ talent.name }}</span><span class="v">{{ TALENT_TIER_MAP[talent.tier]?.name }}级 · Lv.{{ talent.level }}</span></div>
                       <div class="tip-desc">{{ talent.description }}<span v-if="talent.jobId && talent.jobId !== member.roleId" class="dim">（当前岗位未生效）</span></div>
                     </template>
+                    <template v-if="derived.discipleTrainingUnlocked">
+                      <div class="tip-section">培养</div>
+                      <div class="tip-row"><span class="k">传功</span><span class="v">{{ member.mentored ? (member.trainingCost > 0 ? `灵气 -${fmt(member.trainingCost)}/秒` : '已开启 · 本境已满') : '未开启' }}</span></div>
+                      <div v-if="member.aid.pending" class="tip-row"><span class="k">个人护道</span><span class="v">下次突破 +{{ fmt(member.aid.bonus * 100) }} 个百分点</span></div>
+                    </template>
                     <template v-if="member.realm < REALMS.length - 1">
                       <div class="tip-section">突破</div>
                       <div class="tip-row"><span class="k">目标 / 成功率</span><span class="v">{{ REALMS[member.preview.target].name }} · {{ fmt(member.preview.chance * 100) }}%</span></div>
@@ -317,6 +340,10 @@ function commitJob(jobId, event) {
                 <span v-else>圆满</span>
               </td>
               <td>
+                <template v-if="derived.discipleTrainingUnlocked">
+                  <button class="btn" :aria-pressed="member.mentored" @click="actions.setMentored([member.id], !member.mentored)">{{ member.mentored ? '停功' : '传功' }}</button>
+                  <button v-if="member.realm < REALMS.length - 1" class="btn" :disabled="member.aid.pending || !member.aid.affordable" @click="actions.applyDiscipleAid([member.id])">{{ member.aid.pending ? '已护道' : '护道' }}</button>
+                </template>
                 <template v-if="member.realm < REALMS.length - 1">
                   <button class="btn" :disabled="!member.preview.ready || !member.preview.affordable" @click="actions.breakthroughDisciples([member.id])">突破</button>
                 </template>

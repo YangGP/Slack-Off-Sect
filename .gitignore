@@ -2,11 +2,14 @@ node_modules
 dist
 dist-ssr
 .smoke*
+.bundle-review/
 *.local
 .DS_Store
 .vite
 # 文档工具的临时产物
 .tables.md
+# 弟子审计原始数据体量较大，按需本地生成，不入库
+docs/DISCIPLE-GROWTH-DATA.json
 # 杂项
 *.log
 .env*

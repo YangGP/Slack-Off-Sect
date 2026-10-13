@@ -13,6 +13,27 @@ export const DISCIPLE_GROWTH = {
   cooldown: 60,
 }
 
+/**
+ * 手动培养：传功（持续灵气加速本人修炼）与个人护道（预付材料加成下一次突破）。
+ * 效果与费用均为试调值，规则见 docs/DISCIPLE-PROGRESSION.md §2.1。
+ */
+export const DISCIPLE_TRAINING = { speed: 0.75, qiPerSecond: 0.4 }
+
+/** 个人护道：按突破目标境界配置，下标即目标境界；材料与加成为试调值。 */
+export const DISCIPLE_AIDS = [
+  null,
+  { cost: { qi: 60 }, bonus: 0.04 },
+  { cost: { herb: 40 }, bonus: 0.04 },
+  { cost: { pill: 4 }, bonus: 0.05 },
+  { cost: { immortalHerb: 2 }, bonus: 0.06 },
+  { cost: { immortalHerb: 5 }, bonus: 0.07 },
+  { cost: { nineTurnPill: 1 }, bonus: 0.08 },
+  { cost: { nineTurnPill: 2 }, bonus: 0.09 },
+  { cost: { mithril: 6 }, bonus: 0.10 },
+  { cost: { qiParticle: 20 }, bonus: 0.10 },
+  { cost: { spiritTreasure: 1 }, bonus: 0.10 },
+]
+
 export const DISCIPLE_DISMISSAL = { yearSeconds: DAYS_PER_YEAR * CALENDAR.DAY_SECONDS }
 
 export function discipleResidenceYears(member) {
@@ -48,17 +69,32 @@ function rootRandom(data) {
   return data.rootSeed / 4294967296
 }
 
-export function cultivationRate(member) {
-  return DISCIPLE_GROWTH.rate * (SPIRITUAL_ROOT_MAP[member.spiritualRoot]?.rate ?? 1) * (1 + talentBonus(member, 'cultivation'))
+/** 传功加速：本人受传功、本境未修满，且整批传功处于供给中时生效。 */
+export function trainingBonus(member, trainingActive = false) {
+  if (!trainingActive || !member.mentored) return 0
+  if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return 0
+  return DISCIPLE_TRAINING.speed
 }
 
-export function sortDisciples(members, order) {
+/** 传功每秒灵气：按弟子有效境界递增；未受传功或本境已修满不收费。 */
+export function discipleTrainingCost(member, sectRealm) {
+  if (!member.mentored) return 0
+  if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return 0
+  return DISCIPLE_TRAINING.qiPerSecond * discipleFactor(member, sectRealm)
+}
+
+export function cultivationRate(member, trainingActive = false) {
+  return DISCIPLE_GROWTH.rate * (SPIRITUAL_ROOT_MAP[member.spiritualRoot]?.rate ?? 1)
+    * (1 + talentBonus(member, 'cultivation')) * (1 + trainingBonus(member, trainingActive))
+}
+
+export function sortDisciples(members, order, trainingActive = false) {
   return [...members].sort((a, b) => {
     if (order === 'progress') {
       const progress = member => cultivationRequired(member.realm) > 0 ? member.cultivation / cultivationRequired(member.realm) : 1
       return progress(b) - progress(a) || a.id - b.id
     }
-    if (order === 'rate') return cultivationRate(b) - cultivationRate(a) || a.id - b.id
+    if (order === 'rate') return cultivationRate(b, trainingActive) - cultivationRate(a, trainingActive) || a.id - b.id
     return a.id - b.id
   })
 }
@@ -84,6 +120,7 @@ export function newDisciple(data, spiritualRoot = null, { legacy = false } = {})
   const names = ['清禾', '云舟', '知秋', '明尘', '望舒', '青岚', '怀瑾', '听雨', '景行', '若水', '星河', '长宁', '松雪']
   return { id, name: surnames[(id * 7) % surnames.length] + names[(id * 11) % names.length],
     realm: 0, cultivation: 0, roleId: null, cooldown: 0, residenceSeconds: 0, totalQiConsumed: 0,
+    mentored: false, aidBonus: 0,
     spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)),
     talents: legacy ? [] : birthTalents(() => talentRandom(data)) }
 }
@@ -130,6 +167,8 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
         residenceSeconds: Number.isFinite(member.residenceSeconds) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.residenceSeconds)) : 0,
         totalQiConsumed: Number.isFinite(member.totalQiConsumed) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.totalQiConsumed)) : 0,
         spiritualRoot: Object.hasOwn(SPIRITUAL_ROOT_MAP, member.spiritualRoot) ? member.spiritualRoot : 'triple',
+        mentored: member.mentored === true,
+        aidBonus: Number.isFinite(member.aidBonus) ? Math.max(0, Math.min(0.2, member.aidBonus)) : 0,
         talents: normalizeTalents(member.talents) }
     })
   data.nextId = data.members.reduce((next, member) => Math.max(next, member.id + 1),
@@ -137,15 +176,15 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
   data.rootSeed = Number.isInteger(data.rootSeed) && data.rootSeed >= 0 && data.rootSeed <= 4294967295 ? data.rootSeed : 1
   data.talentSeed = Number.isInteger(data.talentSeed) && data.talentSeed >= 0 && data.talentSeed <= 4294967295
     ? data.talentSeed : (data.rootSeed ^ 0x6d2b79f5) >>> 0
-  data.talentVersion = 1
+  data.talentVersion = 2
   if (preferMembers) recountDisciples(data)
   else syncDisciples(data, { defaultRoot: 'triple', legacy: true })
 }
 
-export function cultivateDisciple(member, seconds) {
+export function cultivateDisciple(member, seconds, trainingActive = false) {
   member.residenceSeconds = Math.min(Number.MAX_SAFE_INTEGER, (member.residenceSeconds || 0) + seconds)
   member.cooldown = Math.max(0, member.cooldown - seconds)
-  member.cultivation = Math.min(cultivationRequired(member.realm), member.cultivation + seconds * cultivationRate(member))
+  member.cultivation = Math.min(cultivationRequired(member.realm), member.cultivation + seconds * cultivationRate(member, trainingActive))
 }
 
 /** 个体记录是运行时权威状态；总人数和岗位数量仅作兼容视图。 */

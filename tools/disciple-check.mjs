@@ -2,7 +2,7 @@ import { createInitialState, normalizeState, resetForReincarnation } from '../sr
 import { REALMS } from '../src/data/realms.js'
 import { EVENT_MAP } from '../src/data/events.js'
 import { trainDisciples } from './disciple-training.mjs'
-import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, DISCIPLE_DISMISSAL, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, rollSpiritualRoot, newDisciple, cultivateDisciple, sortDisciples } from '../src/data/disciples.js'
+import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, DISCIPLE_DISMISSAL, DISCIPLE_TRAINING, DISCIPLE_AIDS, discipleTrainingCost, trainingBonus, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, rollSpiritualRoot, newDisciple, cultivateDisciple, sortDisciples } from '../src/data/disciples.js'
 
 export function runDiscipleChecks(E, ok, close) {
   const setup = (total = 2, realm = 4) => {
@@ -223,4 +223,90 @@ export function runDiscipleChecks(E, ok, close) {
   ok('逐出弟子不会在刷新或读档时重新补回', expelSave.disciples.members.length === 1 && expelSave.disciples.members[0].id === c.id)
   dismissal = E.dismissDisciples(expel, ed, [c.id])
   ok('逐出最后一名弟子清空人口岗位且不复用身份', dismissal.dismissed === 1 && expel.disciples.total === 0 && Object.values(expel.disciples.jobs).every(value => value === 0) && newDisciple(expel.disciples).id > c.id)
+
+  // ============ 手动培养：传功与个人护道 ============
+  const [ment, mentD] = setup(2, 4)
+  ment.upgrades.mentorship = true
+  const [m1, m2] = ment.disciples.members
+  m1.realm = 4
+  m1.cultivation = 0
+  ok('开关传功写入个体且只影响本人', E.setMentored(ment, mentD, [m1.id], true) === 1 && m1.mentored === true && m2.mentored === false)
+  ok('传功按有效境界计费并进入灵气出项', close(discipleTrainingCost(m1, ment.realm), DISCIPLE_TRAINING.qiPerSecond * 2) &&
+    close(mentD.trainingCost, DISCIPLE_TRAINING.qiPerSecond * 2) && mentD.trainingActive)
+  ok('未受传功的弟子不产生传功开销', discipleTrainingCost(m2, ment.realm) === 0)
+  ok('传功使本人修炼速度提升 75%', close(cultivationRate(m1, true) / cultivationRate(m1, false), 1 + DISCIPLE_TRAINING.speed))
+  m1.cultivation = cultivationRequired(4)
+  E.recompute(ment, mentD)
+  ok('本境修为已满时传功不收费不生效', discipleTrainingCost(m1, ment.realm) === 0 && mentD.trainingCost === 0 && !mentD.trainingActive && trainingBonus(m1, true) === 0)
+  const [dry, dd] = setup(1, 0)
+  dry.upgrades.mentorship = true
+  dry.disciples.jobs.farmer = 0
+  dry.disciples.members[0].mentored = true
+  dry.resources.qi = 0
+  E.recompute(dry, dd)
+  ok('灵气见底且无产出时整批传功暂停、不欠账', dd.trainingCost === 0 && !dd.trainingActive && dry.disciples.members[0].mentored === true)
+  dry.resources.qi = 0.001
+  E.recompute(dry, dd)
+  E.tick(dry, dd, 1, { events: false })
+  ok('少量库存不足支付整批传功时只按普通速度修炼', !dd.trainingActive && close(dry.disciples.members[0].cultivation, cultivationRate(dry.disciples.members[0])) && dry.resources.qi === 0)
+  dry.resources.qi = 0.65
+  E.recompute(dry, dd, 2)
+  ok('传功供给按实际结算时长校验', !dd.trainingActive)
+  E.recompute(dry, dd, 1)
+  ok('库存恰好支付口粮与传功时生效', dd.trainingActive)
+  delete dry.upgrades.mentorship
+  E.recompute(dry, dd)
+  ok('旧偏好不能绕过传功研究门槛', !dd.trainingActive)
+  const [mentEq, mentEqD] = setup(1, 2)
+  mentEq.upgrades.mentorship = true
+  mentEq.disciples.members[0].mentored = true
+  mentEq.disciples.members[0].cultivation = 0
+  E.recompute(mentEq, mentEqD)
+  const trainRows = (mentEqD.expenseSources.qi || []).filter(entry => entry.id === 'training')
+  ok('传功出项唯一且等于 trainingCost，不重复计费', trainRows.length === 1 && close(-trainRows[0].value, mentEqD.trainingCost) &&
+    close(mentEqD.trainingCost, discipleTrainingCost(mentEq.disciples.members[0], mentEq.realm)))
+  const mentOffline = normalizeState(JSON.parse(JSON.stringify(mentEq)))
+  const mentOfflineD = E.createDerived()
+  E.recompute(mentOffline, mentOfflineD)
+  E.tick(mentEq, mentEqD, 10, { events: false })
+  E.simulateOffline(mentOffline, mentOfflineD, 10)
+  ok('传功在线与离线修炼一致且按 +75% 生效', close(mentEq.disciples.members[0].cultivation, mentOffline.disciples.members[0].cultivation) &&
+    close(mentEq.disciples.members[0].cultivation, 10 * cultivationRate(mentEq.disciples.members[0], true)))
+
+  const [aid, aidD] = setup(1, 4)
+  const am = aid.disciples.members[0]
+  am.realm = 3
+  am.cultivation = cultivationRequired(3)
+  const aidPreview = E.discipleAidPreview(aid, am)
+  ok('个人护道按目标境界配置材料与加成', aidPreview.target === 4 && aidPreview.bonus === DISCIPLE_AIDS[4].bonus &&
+    JSON.stringify(aidPreview.cost) === JSON.stringify(DISCIPLE_AIDS[4].cost) && !aidPreview.pending)
+  const aidBase = E.discipleBreakthroughPreview(aid, am).chance
+  aid.resources.immortalHerb = DISCIPLE_AIDS[4].cost.immortalHerb
+  const aidApplied = E.applyDiscipleAid(aid, aidD, [am.id])
+  ok('护道预付材料并立刻提升本人突破概率', aidApplied.applied === 1 && am.aidBonus === DISCIPLE_AIDS[4].bonus && aid.resources.immortalHerb === 0 &&
+    close(E.discipleBreakthroughPreview(aid, am).chance, Math.min(0.99, aidBase + DISCIPLE_AIDS[4].bonus)))
+  ok('已护道不重复支付', E.applyDiscipleAid(aid, aidD, [am.id]).applied === 0)
+  for (const [id, amount] of Object.entries(E.discipleBreakthroughPreview(aid, am).cost)) aid.resources[id] = amount
+  aid.resources.qi = 100000
+  ok('护道在本次成功后清除', E.breakthroughDisciples(aid, aidD, [am.id], () => 0).success === 1 && am.aidBonus === 0)
+  am.realm = 3
+  am.cultivation = cultivationRequired(3)
+  am.cooldown = 0
+  am.aidBonus = DISCIPLE_AIDS[4].bonus
+  for (const [id, amount] of Object.entries(E.discipleBreakthroughPreview(aid, am).cost)) aid.resources[id] = amount
+  aid.resources.qi = 100000
+  ok('护道在本次失败后同样清除', E.breakthroughDisciples(aid, aidD, [am.id], () => 1).failed === 1 && am.aidBonus === 0)
+  const [poor, pd] = setup(2, 4)
+  for (const member of poor.disciples.members) { member.realm = 3; member.cultivation = cultivationRequired(3) }
+  poor.resources.immortalHerb = 0
+  const poorResult = E.applyDiscipleAid(poor, pd, poor.disciples.members.map(m => m.id))
+  ok('护道材料不足即停止且不扣费', poorResult.applied === 0 && poorResult.insufficient && poor.disciples.members.every(m => m.aidBonus === 0))
+
+  const [locked, lockedD] = setup(0, 1)
+  ok('未掌握《传功授业》时不开通培养', !lockedD.discipleTrainingUnlocked)
+  locked.upgrades.mentorship = true
+  E.recompute(locked, lockedD)
+  ok('掌握《传功授业》后开通培养', lockedD.discipleTrainingUnlocked)
+  const legacyTraining = normalizeState({ disciples: { total: 1, jobs: {}, rootSeed: 12345 } })
+  ok('旧档弟子默认未传功、无护道', legacyTraining.disciples.members.every(member => member.mentored === false && member.aidBonus === 0))
 }

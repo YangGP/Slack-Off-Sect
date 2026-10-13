@@ -32,7 +32,7 @@ export function createInitialState(now = Date.now()) {
     peak: {},
 
     disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: now >>> 0,
-      talentSeed: (now ^ 0x6d2b79f5) >>> 0, talentVersion: 1 },
+      talentSeed: (now ^ 0x6d2b79f5) >>> 0, talentVersion: 2 },
     // 弟子自动前来的计时（秒）
     arrivalTimer: 0,
     // 历法：已经过去的天数（小数，1 天 = CALENDAR.DAY_SECONDS 秒）

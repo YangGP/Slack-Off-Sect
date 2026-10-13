@@ -1,13 +1,14 @@
 import { createInitialState, normalizeState } from '../src/game/state.js'
 import { newDisciple, cultivationRate, cultivationRequired, cultivateDisciple } from '../src/data/disciples.js'
 import { TALENTS, TALENT_MAP, TALENT_TIERS, TALENT_RULES, birthTalents, rollTalent,
-  normalizeTalents, talentBonus, talentMatches, gainBreakthroughTalent } from '../src/data/talents.js'
+  normalizeTalents, talentBonus, talentMatches, gainBreakthroughTalent, upgradeTalent, talentValue,
+  talentDescription } from '../src/data/talents.js'
 import { exportJson, parseImport } from '../src/game/save.js'
 
 export function runTalentChecks(E, ok, close) {
   const sequence = values => { let index = 0; return () => values[index++] ?? 0 }
   const categories = list => list.map(entry => TALENT_MAP[entry.id]?.category)
-  ok('天赋库包含26条有效固定身份，品级权重总计100', TALENTS.length === 26 && new Set(TALENTS.map(meta => meta.id)).size === 26 && TALENT_TIERS.reduce((sum, tier) => sum + tier.weight, 0) === 100)
+  ok('天赋库包含32条有效固定身份，品级权重总计100', TALENTS.length === 32 && new Set(TALENTS.map(meta => meta.id)).size === 32 && TALENT_TIERS.reduce((sum, tier) => sum + tier.weight, 0) === 100)
   for (const [roll, count] of [[0, 0], [0.699999, 0], [0.7, 1], [0.949999, 1], [0.95, 2], [0.999999, 2]]) {
     ok(`先天天赋数量边界${roll}`, birthTalents(sequence([roll])).length === count)
   }
@@ -23,16 +24,30 @@ export function runTalentChecks(E, ok, close) {
   let draws = 0
   ok('满三条不抽取、不扰动序列', !rollTalent(full, () => { draws++; return 0 }) && !gainBreakthroughTalent({}, { talents: full }, () => { draws++; return 0 }) && draws === 0)
   const last = rollTalent(full.slice(0, 2), sequence([0.9999, 0]))
-  ok('已占成长和突破类别时排除空天级池后只抽岗位专长', TALENT_MAP[last.id].category === 'job' && TALENT_MAP[last.id].tier === 'di')
+  ok('已占成长和突破类别时只抽岗位专长，天级岗位词条已入池', TALENT_MAP[last.id].category === 'job' &&
+    TALENT_MAP[last.id].tier === 'tian' && !!TALENT_MAP[last.id].jobId && TALENT_MAP[last.id].values.length === 3)
   const normalized = normalizeTalents([{ id: 'constructor', level: 1 }, { id: '__proto__', level: 1 }, { id: 'unknown', level: 1 }, { id: 'cultivation_xuan', level: 999 },
     { id: 'cultivation_tian', level: 1 }, ...full])
-  ok('异常词条归一化保留固定身份并去重类别、限制当前等级', normalized.length === 3 && normalized[0].id === 'cultivation_xuan' && normalized.every(entry => entry.level === 1))
+  ok('异常词条归一化保留固定身份并去重类别、等级封顶Lv.3', normalized.length === 3 && normalized[0].id === 'cultivation_xuan' && normalized[0].level === 3 &&
+    normalized[1].level === 1 && normalized[2].level === 1)
   const normal = { realm: 0, cultivation: 0, cooldown: 60, spiritualRoot: 'triple', talents: [full[0]] }
   const heaven = { ...normal, spiritualRoot: 'heaven', talents: [{ id: 'cultivation_tian', level: 1 }] }
   ok('修炼天赋乘灵根，天灵根与天级词条合计速度3', close(cultivationRate(normal), 1.1) && close(cultivationRate(heaven), 3))
   cultivateDisciple(heaven, 10)
   ok('调息按真实秒数，修炼按天赋加速', heaven.cooldown === 50 && heaven.cultivation === 30)
   ok('天赋筛选区分类别、岗位专长与无天赋', talentMatches({ talents: full }, 'job:miner') && !talentMatches({ talents: full }, 'job:farmer') && talentMatches({ talents: [] }, 'none') && talentMatches({ talents: full }, 'cultivation'))
+  const upgradable = { talents: [{ id: 'cultivation_huang', level: 2 }, { id: 'breakthrough_huang', level: 1 }, { id: 'job_miner_huang', level: 1 }] }
+  ok('升级优先提升等级最低者', upgradeTalent({}, upgradable, () => 0) === upgradable.talents[1] && upgradable.talents[1].level === 2 && upgradable.talents[0].level === 2)
+  const tie = { talents: [{ id: 'cultivation_huang', level: 1 }, { id: 'breakthrough_huang', level: 1 }] }
+  ok('同级升级取获取顺序最早一条', upgradeTalent({}, tie, () => 0) === tie.talents[0] && tie.talents[0].level === 2 && tie.talents[1].level === 1)
+  const maxed = { talents: [{ id: 'cultivation_huang', level: 3 }] }
+  let upgradeDraws = 0
+  ok('已满级不判定升级、不消耗随机数', upgradeTalent({}, maxed, () => { upgradeDraws++; return 0 }) === null && upgradeDraws === 0 && maxed.talents[0].level === 3)
+  const missedUpgrade = { talents: [{ id: 'cultivation_huang', level: 1 }] }
+  ok('未达40%升级边界不提升', upgradeTalent({}, missedUpgrade, () => 0.4) === null && missedUpgrade.talents[0].level === 1)
+  ok('效果值与说明随等级放大，天级岗位词条入池', Math.round(talentValue(TALENT_MAP.cultivation_tian, 3) * 100) === 90 &&
+    talentDescription(TALENT_MAP.job_miner_tian, 1).includes('+50%') && TALENT_MAP.job_miner_tian.name === '山灵共鸣' &&
+    talentDescription(TALENT_MAP.cultivation_di, 2).includes('+52%'))
   const data = { nextId: 1, rootSeed: 12345, talentSeed: 2000 }
   const rootOnly = { ...data }
   const originalRoot = newDisciple(rootOnly, null, { legacy: true })

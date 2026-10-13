@@ -69,7 +69,7 @@ export function tickStep(state, derived, dt, opts) {
   const { offline = false, events = true } = opts
   const cap = dt > CONFIG.MAX_STEP_SECONDS ? CONFIG.MAX_STEP_SECONDS : dt
   recompute(state, derived, cap)
-  for (const member of state.disciples.members) cultivateDisciple(member, cap)
+  for (const member of state.disciples.members) cultivateDisciple(member, cap, derived.trainingActive)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
 
   // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。

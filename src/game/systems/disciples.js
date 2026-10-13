@@ -1,7 +1,7 @@
 import { JOBS } from '@/data/jobs'
 import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval } from './core'
-import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
-import { talentBonus, gainBreakthroughTalent, TALENT_MAP } from '@/data/talents'
+import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, DISCIPLE_AIDS, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
+import { talentBonus, gainBreakthroughTalent, upgradeTalent, TALENT_MAP } from '@/data/talents'
 import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
@@ -74,7 +74,7 @@ export function discipleBreakthroughPreview(state, member) {
   const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
     [id, Math.max(1, Math.ceil(amount * DISCIPLE_GROWTH.costFactor))]))
   const chance = Math.min(BREAKTHROUGH.chanceCap, realmBaseChance(target) * DISCIPLE_GROWTH.successFactor +
-    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough'))
+    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough') + (member.aidBonus || 0))
   const status = target >= REALMS.length ? '已至最高境界' : member.cooldown > 0 ? '突破调息中' :
     member.cultivation < required ? '修炼中' : target > state.realm ? '受宗门境界限制' : '待突破'
   return { target, required, cost, chance, status, ready: status === '待突破', affordable: canAfford(state, cost) }
@@ -91,12 +91,16 @@ export function breakthroughDisciples(state, derived, ids, random = () => gameRa
     if (!preview.affordable) { result.insufficient = true; break }
     payCost(state, preview.cost)
     member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + (preview.cost.qi || 0))
+    // 本次尝试已结算，消耗待生效的个人护道（无论成败）。
+    member.aidBonus = 0
     if (random() < preview.chance) {
       member.realm++
       member.cultivation = 0
       result.success++
       const talent = gainBreakthroughTalent(state.disciples, member)
       if (talent) pushLog(state, `${member.name}突破后领悟天赋【${TALENT_MAP[talent.id].name}】`, 'good')
+      const upgraded = upgradeTalent(state.disciples, member)
+      if (upgraded) pushLog(state, `${member.name}突破后天赋【${TALENT_MAP[upgraded.id].name}】提升至 Lv.${upgraded.level}`, 'good')
     } else {
       member.cultivation *= 1 - DISCIPLE_GROWTH.failureLoss
       member.cooldown = DISCIPLE_GROWTH.cooldown
@@ -150,4 +154,43 @@ export function clearJobs(state, derived) {
   for (const member of state.disciples.members) member.roleId = null
   recountDisciples(state.disciples)
   recompute(state, derived)
+}
+
+/** 个人护道预览：按目标境界的材料与加成，以及是否已护道。 */
+export function discipleAidPreview(state, member) {
+  const target = member.realm + 1
+  const meta = DISCIPLE_AIDS[target]
+  const cost = meta ? { ...meta.cost } : {}
+  return { target, cost, bonus: meta?.bonus || 0, pending: (member.aidBonus || 0) > 0,
+    available: !!meta, affordable: meta ? canAfford(state, cost) : false }
+}
+
+/** 为指定弟子预付个人护道材料；已护道或到顶者跳过，材料不足即停止、不超支。 */
+export function applyDiscipleAid(state, derived, ids) {
+  const selected = new Set(ids)
+  const result = { applied: 0, skipped: 0, insufficient: false }
+  for (const member of state.disciples.members) {
+    if (!selected.has(member.id)) continue
+    if (member.aidBonus > 0) { result.skipped++; continue }
+    const preview = discipleAidPreview(state, member)
+    if (!preview.available) { result.skipped++; continue }
+    if (!preview.affordable) { result.insufficient = true; break }
+    payCost(state, preview.cost)
+    member.aidBonus = preview.bonus
+    result.applied++
+  }
+  recompute(state, derived)
+  return result
+}
+
+/** 开关传功：只记录在个体上，速率与灵气开销在重算时按境界结算。 */
+export function setMentored(state, derived, ids, value) {
+  const selected = new Set(ids)
+  const on = value === true
+  let changed = 0
+  for (const member of state.disciples.members) {
+    if (selected.has(member.id) && (member.mentored === true) !== on) { member.mentored = on; changed++ }
+  }
+  recompute(state, derived)
+  return changed
 }
