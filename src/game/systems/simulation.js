@@ -3,6 +3,7 @@ import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
+import { advanceHunt } from './hunting'
 import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
@@ -75,6 +76,12 @@ export function advanceTicks(state, derived, seconds, opts) {
       }
       const deadline = state.pendingChoice?.deadline
       if (deadline > now && deadline < next) next = deadline
+      // 猎杀任务在到期处切步：在线与离线都在同一边界结算归队
+      for (const mission of Object.values(state.hunting?.missions || {})) {
+        if (mission.status !== 'active') continue
+        const endAt = mission.startedAt + mission.actualDuration * 1000
+        if (endAt > now && endAt < next) next = endAt
+      }
       tickStep(state, derived, (next - now) / 1000, opts)
       now = next
     }
@@ -129,6 +136,10 @@ export function tickStep(state, derived, dt, opts) {
 
   trackPeak(state)
 
+  // 1.2) 猎杀任务推进：归队结算会给资源并释放成员，立即重算派生数据。
+  //      离线同样推进；生态关联首轮关闭，不在此抽来袭。
+  if (advanceHunt(state, derived, cap)) recompute(state, derived, cap)
+
   // 1.5) 灵能逸散：湮灭能不稳定，每秒衰减 QI_ENERGY_DECAY。
   // 于是存量有稳态 —— 稳态 ≈ 产出 ÷ 逸散率（一台湮灭炉 0.06/秒 → 12 灵能）。
   if ((state.resources.qiEnergy || 0) > 0) {
@@ -170,7 +181,7 @@ export function tickStep(state, derived, dt, opts) {
     const jobId = idleDisciples(state) > 0 ? null :
       [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
         .find((job) => (jobs[job.id] || 0) > 0)?.id
-    const index = state.disciples.members.findIndex(member => member.roleId === jobId)
+    const index = state.disciples.members.findIndex(member => member.roleId === jobId && !member.onMission)
     if (index >= 0) state.disciples.members.splice(index, 1)
     recountDisciples(state.disciples)
     pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')

@@ -4,6 +4,7 @@ import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { DEFAULT_QUICK_CRAFTS } from '@/data/crafts'
 import { migrateState } from './migrations'
+import { createHuntingState, rehydrateHuntOccupancy } from './systems/hunting'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -62,6 +63,9 @@ export function createInitialState(now = Date.now()) {
     craftProgress: {},
     autoCraft: {},
     craftTargets: {},
+
+    // 妖兽猎杀：任务、兽材小数累计、猎场状态与统计；随本世重置。
+    hunting: createHuntingState(),
 
     realm: 0,
     karma: 0,
@@ -131,7 +135,10 @@ export function createInitialState(now = Date.now()) {
 export function normalizeState(state, { now = Date.now(), preferMembers = false } = {}) {
   assertSaveShape(state)
   const fresh = createInitialState(now)
-  return validateState(migrateState(state, fresh, { preferMembers }), fresh)
+  const normalized = validateState(migrateState(state, fresh, { preferMembers }), fresh)
+  // 成员占用是运行时字段：读档后按活动任务重新标记出征弟子。
+  rehydrateHuntOccupancy(normalized)
+  return normalized
 }
 
 /**
@@ -188,6 +195,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.buffs = []
   state.pendingChoice = null
   state.affairs = { ...fresh.affairs }
+  state.hunting = fresh.hunting
   state.stats.lifeInsight = 0
   if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
   else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1

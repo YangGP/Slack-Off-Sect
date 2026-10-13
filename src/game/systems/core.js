@@ -112,6 +112,9 @@ export function createDerived() {
     ratio: {},
     jobRatio: {},
     ratioAll: 0,
+    huntSuccessBonus: 0,
+    huntYieldBonus: 0,
+    huntDurationReduction: 0,
   }
 }
 
@@ -155,7 +158,10 @@ export function jobOutputs(state, job) {
 export function idleDisciples(state) {
   let assigned = 0
   for (const j of JOBS) assigned += state.disciples.jobs[j.id] || 0
-  return Math.max(0, state.disciples.total - assigned)
+  // 出征中的弟子既不在岗位，也不可被重新分配，不能算作闲置。
+  let away = 0
+  for (const member of state.disciples.members || []) if (member.onMission) away++
+  return Math.max(0, state.disciples.total - assigned - away)
 }
 
 export function checkNeeds(state, needs) {

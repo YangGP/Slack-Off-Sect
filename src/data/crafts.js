@@ -102,6 +102,18 @@ export const CRAFTS = [
     needs: { building: { id: 'forge', count: 1 } },
   },
   {
+    id: 'forgeArtifactBone',
+    name: '兽骨炼器',
+    out: 'artifact',
+    amount: 1,
+    tier: 1,
+    primary: ['beastBone'],
+    cost: { beastBone: 40, ore: 100, stone: 12 },
+    time: 3,
+    desc: '以兽骨为筋、玄铁为体、灵石点睛，炼出一件更耐用的法器，与《淬炼法器》共用成品。',
+    needs: { realm: 4, upgrades: ['beastMaterialArt', 'forgeArt'], building: { id: 'forge', count: 1 } },
+  },
+  {
     id: 'assembleArrayBase',
     name: '组装阵基',
     out: 'arrayBase',

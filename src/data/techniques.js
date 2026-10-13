@@ -303,6 +303,44 @@ export const TECHNIQUES = [
     needs: { upgrades: ['starReading'], building: { id: 'library', count: 5 } },
   },
 
+  // ---------- 山野猎杀：由《山野猎法》《兽材加工》引出 ----------
+  {
+    id: 'beastTracking',
+    name: '识踪诀',
+    glyph: '踪',
+    cost: { insight: 250, wood: 200, stone: 20 },
+    desc: '辨足迹与兽息，先发制兽。猎杀成功率 +5 个百分点。',
+    effects: { huntSuccessBonus: 0.05 },
+    needs: { upgrades: ['wildHunting'] },
+  },
+  {
+    id: 'mountainStep',
+    name: '踏山步',
+    glyph: '踏',
+    cost: { insight: 200, stone: 20 },
+    desc: '踏石无声，翻山如履平地。猎杀时长 −10%。',
+    effects: { huntDurationReduction: 0.1 },
+    needs: { upgrades: ['wildHunting'] },
+  },
+  {
+    id: 'huntLogistics',
+    name: '筹猎章',
+    glyph: '筹',
+    cost: { insight: 350, wood: 300 },
+    desc: '把弓弩、干粮、缚索列成册子，行前清点不遗漏。猎妖师备猎速度 +25%。',
+    effects: { jobRatio: { huntPlanner: 0.25 } },
+    needs: { upgrades: ['wildHunting'] },
+  },
+  {
+    id: 'skinning',
+    name: '剥取法',
+    glyph: '剥',
+    cost: { insight: 700, beastHide: 30, beastBone: 20 },
+    desc: '下刀循纹理，皮骨不损分毫。猎杀收获 +15%。',
+    effects: { huntYieldBonus: 0.15 },
+    needs: { upgrades: ['beastMaterialArt'] },
+  },
+
   // ============================================================
   // 法宝（kind: 'treasure'）—— 由修真研究解锁，炼成后给一条加成
   // ============================================================

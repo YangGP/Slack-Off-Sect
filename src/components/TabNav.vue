@@ -11,6 +11,7 @@ const TABS = [
   { id: 'cultivation', name: '修真' },
   { id: 'skills', name: '技艺' },
   { id: 'craft', name: '炼制' },
+  { id: 'hunt', name: '猎杀' },
   { id: 'realm', name: '境界' },
   { id: 'achievements', name: '成就' },
   { id: 'settings', name: '设置' },

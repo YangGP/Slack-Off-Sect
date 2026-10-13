@@ -40,7 +40,8 @@ export function fillJob(state, derived, jobId) {
 export function assignDisciples(state, derived, ids, roleId) {
   if (roleId !== null && !JOBS.some(job => job.id === roleId && isJobUnlocked(state, job))) return false
   const selected = new Set(ids)
-  for (const member of state.disciples.members) if (selected.has(member.id)) member.roleId = roleId
+  // 出征中的弟子不能转岗，跳过。
+  for (const member of state.disciples.members) if (selected.has(member.id) && !member.onMission) member.roleId = roleId
   recountDisciples(state.disciples)
   recompute(state, derived)
   return true
@@ -48,7 +49,8 @@ export function assignDisciples(state, derived, ids, roleId) {
 
 export function discipleDismissalPreview(state, ids) {
   const selected = new Set(ids)
-  const members = state.disciples.members.filter(member => selected.has(member.id))
+  // 出征中的弟子不能逐出。
+  const members = state.disciples.members.filter(member => selected.has(member.id) && !member.onMission)
   const qi = members.reduce((total, member) => total + discipleDismissalCost(member), 0)
   return { ids: members.map(member => member.id), count: members.length, cost: { qi },
     affordable: Number.isSafeInteger(qi) && canAfford(state, { qi }) }

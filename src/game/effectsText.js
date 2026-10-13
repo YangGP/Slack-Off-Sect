@@ -119,6 +119,9 @@ export function describeEffects(ef) {
   for (const [id, value] of Object.entries(ef.craftCostReduction || {})) {
     push(`${CRAFT_MAP[id]?.name || id} 每份耗料`, `-${fmtPercent(value)}（整枚向上取整）`, 'good', CRAFT_MAP[id]?.out)
   }
+  if (ef.huntSuccessBonus) push('猎杀成功率', `+${Math.round(ef.huntSuccessBonus * 100)} 个百分点`, 'good')
+  if (ef.huntYieldBonus) push('猎杀收获', `+${fmtPercent(ef.huntYieldBonus)}`, 'good')
+  if (ef.huntDurationReduction) push('猎杀时长', `-${fmtPercent(ef.huntDurationReduction)}`, 'good')
   if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
   if (ef.disasterGuardByResource) {
     for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {

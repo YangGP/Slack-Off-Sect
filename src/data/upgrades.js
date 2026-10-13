@@ -805,13 +805,38 @@ export const CULTIVATION = [
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['arcaneGoldArt', 'crystalPolishing'] },
   },
+
+  // ---------- 山野族 ----------
+  {
+    id: 'wildHunting',
+    name: '山野猎法',
+    glyph: '猎',
+    cost: { insight: 300, wood: 200, stone: 30 },
+    desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建猎杀营地，并布置暖裘居室。',
+    effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
+    note: '解锁建筑：猎杀营地、暖裘居室',
+    effectDesc: '因此敢入山猎兽：有了稳定的兽材来源。',
+    // 承草木（灵植术）与起居（引泉净水）两线：研究可先掌握，实际应用仍需筑基与木屋等条件。
+    needs: { upgrades: ['herbStudy', 'waterSanitation'] },
+  },
+  {
+    id: 'beastMaterialArt',
+    name: '兽材加工',
+    glyph: '兽',
+    cost: { insight: 1500, beastHide: 40, beastBone: 40 },
+    desc: '熟皮硝骨、按纹取料，兽材才堪堪可用。开启《兽骨炼器》，为御寒灵裘备料。',
+    effects: { unlockBuildings: [] },
+    note: '开启配方：兽骨炼器',
+    // 承接山野猎法与炼器术：兽骨入炉成器，兽皮另走起居与护具。
+    needs: { upgrades: ['wildHunting', 'forgeArt'] },
+  },
 ]
 
 /** 两层合起来的完整列表：产出计算、解锁判定、文案都要用它 */
 export const ALL_UPGRADES = [...CULTIVATION, ...TECHNIQUES]
 
 /**
- * 修真页的分组（界面上按它分组显示）：主线五章 + 心法支线 + 材料六族 + 宗门经营。
+ * 修真页的分组（界面上按它分组显示）：主线五章 + 心法支线 + 材料七族 + 宗门经营。
  * 主线按「灵气的科学史」分章，章节感来自依赖链、灵机仓容与材料产业推进，分组只是导航；
  * 材料研究按族分「原理 → 工艺 → 精研」三层（方案见 docs/RESEARCH.md）。
  */
@@ -887,6 +912,12 @@ export const CULTIVATION_STAGES = [
     label: '材料研究 · 土木',
     hint: '原理 → 精研（工艺与草木族共用木作器械）',
     ids: ['earthArt', 'earthEssence', 'spiritMortarArt', 'ironMortarArt', 'buildingCode'],
+  },
+  {
+    key: 'matBeast',
+    label: '材料研究 · 山野',
+    hint: '原理 → 工艺 → 精研',
+    ids: ['wildHunting', 'beastMaterialArt'],
   },
   {
     key: 'sectOps',

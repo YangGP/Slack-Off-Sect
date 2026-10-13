@@ -531,6 +531,38 @@ export const actions = {
     }
     return true
   },
+  huntDepart(fieldId, teamIds) {
+    const result = E.departHunt(state, derived, { fieldId, teamIds })
+    if (!result.ok) { toast(result.reason || '无法出征', 'bad'); return false }
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  huntCancel() {
+    const result = E.cancelHunt(state, derived)
+    if (!result.ok) return false
+    E.recompute(state, derived)
+    saveNow()
+    toast('已召回，弟子归队', 'info')
+    return true
+  },
+  huntSetField(fieldId) {
+    if (!E.setHuntField(state, fieldId)) return false
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  huntSetTeam(ids) {
+    E.setHuntTeam(state, ids)
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  huntSetAutoRepeat(value) {
+    E.setHuntAutoRepeat(state, value)
+    saveNow()
+    return true
+  },
   setTab(tab) {
     if (tab === 'debug') {
       if (ui.debug) ui.debugPage = true
@@ -555,6 +587,8 @@ export const view = {
     ).map((id) => RESOURCES.find((r) => r.id === id)),
   ),
   idle: computed(() => E.idleDisciples(state)),
+  huntMission: computed(() => E.activeMission(state)),
+  huntTeamIds: computed(() => state.hunting?.settings?.teamIds || []),
   // 注意：这几个 computed 统一返回 **id 数组**，与 derived.unlockedBuildings 等保持一致，
   // 避免出现「拿 id 去 includes 一个对象数组」这类判断永远为假的坑。
   assignableJobs: computed(() =>

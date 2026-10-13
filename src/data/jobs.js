@@ -64,6 +64,15 @@ export const JOBS = [
     base: 0.02,
     needs: { building: { id: 'gate', count: 1 } },
   },
+  {
+    id: 'huntPlanner',
+    name: '猎妖师',
+    glyph: '猎',
+    desc: '在营地打理弓弩、干粮与缚兽索，为出征备下猎备。不产兽材——兽材由出征任务带回。',
+    resource: 'huntPreparation',
+    base: 0.2,
+    needs: { building: { id: 'huntingCamp', count: 1 } },
+  },
 ]
 
 export const JOB_MAP = Object.fromEntries(JOBS.map((j) => [j.id, j]))

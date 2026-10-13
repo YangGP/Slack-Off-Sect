@@ -584,6 +584,30 @@ export const BUILDINGS = [
 
     needs: { realm: 8, upgrades: ['karmaConcord'] },
   },
+  {
+    id: 'huntingCamp',
+    name: '猎杀营地',
+    glyph: '猎',
+    group: 'hunt',
+    cost: { wood: 500, rock: 200, stone: 60 },
+    priceRatio: 1.35,
+    desc: '扎在近山处的营寨，弓箭、缚索与兽栏一应俱全。猎妖师在此备猎，也是出征的起点。',
+    // 猎备仓容单独配置，不套通用仓储加成；兽皮兽骨按普通材料计容。
+    effects: { storage: { huntPreparation: 300, beastHide: 200, beastBone: 150 } },
+    needs: { realm: 3, upgrades: ['wildHunting'] },
+  },
+  {
+    id: 'warmFurChamber',
+    name: '暖裘居室',
+    glyph: '裘',
+    group: 'living',
+    cost: { wood: 300, rock: 100, beastHide: 40, beastBone: 20 },
+    priceRatio: 1.35,
+    desc: '以兽皮为壁、兽骨为架的保暖陈设。不增加住额，靠持续供给兽皮维持暖意。',
+    effects: { habitability: 4 },
+    upkeep: { beastHide: 0.1 },
+    needs: { realm: 3, upgrades: ['wildHunting'], building: { id: 'logHouse', count: 1 } },
+  },
 ]
 
 export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
@@ -591,7 +615,7 @@ export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 /** 宗门列表的发展顺序：基础营造先出现，后续按产业与境界阶段排列。 */
 export const BUILDING_DISPLAY_ORDER = [
   'spiritField', 'hut', 'lumberYard', 'quarry', 'granary', 'workshop', 'livingCourt', 'library', 'logHouse',
-  'materialYard', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'warehouse', 'gatheringArray',
+  'materialYard', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'huntingCamp', 'warmFurChamber', 'warehouse', 'gatheringArray',
   'communalHall', 'alchemyRoom', 'forge', 'talismanHall', 'gate',
   'crystalArray', 'academy', 'cleansingBath', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
   'depot', 'mysticVault', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
@@ -608,6 +632,7 @@ export const BUILDING_GROUPS = [
   { id: 'cultivate', name: '修行', hint: '灵机与宜居度' },
   { id: 'craft', name: '炼造', hint: '制作加成' },
   { id: 'incense', name: '香火', hint: '香火与人心' },
+  { id: 'hunt', name: '猎杀', hint: '营地、猎备与兽材' },
   { id: 'array', name: '阵道', hint: '御敌、锁灵' },
   { id: 'wonder', name: '奇观', hint: '改变宗门格局' },
 ]

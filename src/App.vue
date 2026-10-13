@@ -11,6 +11,7 @@ import DisciplePanel from './components/DisciplePanel.vue'
 import CultivationPanel from './components/CultivationPanel.vue'
 import SkillPanel from './components/SkillPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
+import HuntPanel from './components/HuntPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -30,6 +31,7 @@ const panels = {
   cultivation: CultivationPanel,
   skills: SkillPanel,
   craft: CraftPanel,
+  hunt: HuntPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,

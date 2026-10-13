@@ -108,6 +108,9 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.jobRatio) {
     for (const k in ef.jobRatio) jobRatio[k] = (jobRatio[k] || 0) + ef.jobRatio[k] * mult
   }
+  if (ef.huntSuccessBonus) acc.huntSuccessBonus += ef.huntSuccessBonus * mult
+  if (ef.huntYieldBonus) acc.huntYieldBonus += ef.huntYieldBonus * mult
+  if (ef.huntDurationReduction) acc.huntDurationReduction += ef.huntDurationReduction * mult
 }
 
 /**
@@ -150,6 +153,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     autoCondenseLiquidUnlocked: false,
     discipleTrainingUnlocked: false,
     ratioAll: 0,
+    huntSuccessBonus: 0,
+    huntYieldBonus: 0,
+    huntDurationReduction: 0,
   }
   // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目] }
   const bonus = { ratio: {}, ratioAll: [] }
@@ -405,7 +411,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   }
 
   for (const r of RESOURCES) {
-    if (Number.isFinite(max[r.id])) max[r.id] *= karmaStorageMult
+    // 猎备仓容完全独立：不乘仙缘仓储倍率（isolatedStorage），也不套通用扩仓（storageWeight 0）。
+    if (Number.isFinite(max[r.id]) && !r.isolatedStorage) max[r.id] *= karmaStorageMult
     if (r.integer) max[r.id] = floorNumber(max[r.id])
   }
   derived.karmaStorageMult = karmaStorageMult
@@ -474,6 +481,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const coolingArrays = crystalArray?.on ? crystalArray.count * (supply.crystalArray ?? 1) : 0
   derived.processingCoolingCapacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0) * CONFIG.PROCESSING_COOLING_CAPACITY_RATIO
     + coolingArrays * 2 * (1 + (acc.processingCoolingRatio || 0))
+  derived.huntSuccessBonus = acc.huntSuccessBonus
+  derived.huntYieldBonus = acc.huntYieldBonus
+  derived.huntDurationReduction = acc.huntDurationReduction
   derived.disasterGuard = Math.min(CONFIG.DISASTER_GUARD_CAP, acc.disasterGuard)
   derived.disasterGuardByResource = acc.disasterGuardByResource
   derived.ascendBonus = acc.ascendBonus

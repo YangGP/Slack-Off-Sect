@@ -142,11 +142,13 @@ export function syncDisciples(data, { defaultRoot = null, legacy = false } = {})
     counts[job.id] = 0
   }
   for (const member of data.members) {
+    // 出征中的弟子让出岗位，但保留在成员表里，不能被自动补位或重新分配。
+    if (member.onMission) { member.roleId = null; continue }
     if (Object.hasOwn(counts, member.roleId) && counts[member.roleId] < data.jobs[member.roleId]) counts[member.roleId]++
     else member.roleId = null
   }
   for (const member of data.members) {
-    if (member.roleId) continue
+    if (member.roleId || member.onMission) continue
     const job = JOBS.find(job => counts[job.id] < data.jobs[job.id])
     if (!job) break
     member.roleId = job.id

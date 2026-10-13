@@ -18,6 +18,7 @@ import * as E from './engine-fixture.mjs'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
+import { HUNT_FIELDS } from '../src/data/hunting.js'
 import {
   CULTIVATION,
   ALL_UPGRADES,
@@ -254,7 +255,7 @@ section('数据完整性')
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
   const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
-  const pureNumeric = ['storageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio']
+  const pureNumeric = ['storageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntDurationReduction']
   // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
@@ -869,7 +870,7 @@ section('基础资源由人力生产，普通聚灵阵例外')
   ok('只有普通聚灵阵自带人力资源产出', BUILDINGS.every(b =>
     b.id === 'spiritField' || Object.keys(b.effects.prod || {}).every(id => !humanResources.has(id))))
   const { state: s, derived: d } = newGame()
-  for (const id of ['lumberYard', 'quarry', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'library', 'gate', 'gatheringArray', 'crystalArray']) {
+  for (const id of ['lumberYard', 'quarry', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'library', 'gate', 'gatheringArray', 'crystalArray', 'huntingCamp']) {
     s.buildings[id] = { count: 1, on: true }
   }
   s.resources.qi = 1000
@@ -2859,6 +2860,12 @@ section('资源完整性：每个资源都要有来源、有去向')
   }
   for (const u of ALL_UPGRADES) for (const k of Object.keys(u.cost || {})) sunk.add(k)
   for (const r of REALMS) for (const k of Object.keys(r.cost || {})) sunk.add(k)
+  // 兽材由猎杀任务结算产生，猎备由出征消耗 —— 都不在 jobs/crafts 的静态表里，单独补进来。
+  for (const f of HUNT_FIELDS) {
+    for (const k of Object.keys(f.baseYield || {})) sourced.add(k)
+    for (const k of Object.keys(f.advancedYield || {})) sourced.add(k)
+  }
+  sunk.add('huntPreparation')
 
   const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
   const noSink = RESOURCES.filter(
@@ -2866,6 +2873,92 @@ section('资源完整性：每个资源都要有来源、有去向')
   ).map((r) => r.name)
   ok('每个资源都有来源（没有凭空出现的）', noSource.length === 0, noSource.join('、') || '全部有')
   ok('每个资源都有去向（没有死资源）', noSink.length === 0, noSink.join('、') || '全部有')
+}
+
+// ------------------------------------------------------------
+section('猎杀（山麓闭环）')
+// ------------------------------------------------------------
+{
+  const { state: hs, derived: hd } = newGameRunning()
+  hs.realm = 3
+  hs.upgrades.wildHunting = true
+  hs.buildings.huntingCamp = { count: 1, on: true }
+  hs.resources.huntPreparation = 99
+  E.recompute(hs, hd)
+  ok('猎备不足 100 不能出征', E.canDepart(hs, hd, 'foothills', [1]).ok === false)
+
+  hs.resources.huntPreparation = 250
+  E.recompute(hs, hd)
+  const first = E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [1, 2] })
+  ok('250 猎备出发后剩 150', first.ok && Math.abs(hs.resources.huntPreparation - 150) < 1e-9)
+  ok('出征成员让出岗位并被占用', hs.disciples.members.filter(m => m.onMission).length === 2 &&
+    Object.values(hs.hunting.missions).length === 1)
+  ok('同时只能有一支队伍', E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [3] }).ok === false)
+
+  E.tick(hs, hd, first.mission.actualDuration + 1)
+  ok('任务完成后清空活动表', Object.values(hs.hunting.missions).length === 0)
+  ok('归队后成员恢复未占用', hs.disciples.members.every(m => !m.onMission))
+  ok('完成统计记录两名猎人', hs.hunting.statistics.successfulHunters + hs.hunting.statistics.failedHunters === 2)
+  ok('归队获得整数兽材或留不足一件的小数余量',
+    (hs.resources.beastHide || 0) >= 1 || (hs.hunting.yieldRemainders.beastHide || 0) > 0)
+
+  hs.resources.huntPreparation = 100
+  E.recompute(hs, hd)
+  E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [1] })
+  const hideBefore = hs.resources.beastHide
+  E.cancelHunt(hs, hd)
+  ok('取消立即归队、不退猎备、不发半程兽材',
+    Object.values(hs.hunting.missions).length === 0 && hs.resources.huntPreparation === 0 &&
+    hs.resources.beastHide === hideBefore && hs.disciples.members.every(m => !m.onMission))
+
+  // 存档 → 读档：活动任务保留、成员占用重挂、猎备仓容不受仙缘倍率影响
+  hs.resources.huntPreparation = 100
+  E.recompute(hs, hd)
+  E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [1, 2, 3] })
+  const reloaded = normalizeState(JSON.parse(JSON.stringify(hs)))
+  ok('读档保留活动任务', Object.values(reloaded.hunting.missions).filter(m => m.status === 'active').length === 1)
+  ok('读档重挂出征占用', reloaded.disciples.members.filter(m => m.onMission).length === 3)
+  for (const mutation of [
+    m => { m.snapshots = { bad: true } },
+    m => { m.actualDuration = Infinity },
+    m => { m.progressSeconds = -1 },
+    m => { m.snapshots[0].p = NaN },
+    m => { m.snapshots.push(m.snapshots[0]) },
+  ]) {
+    const damaged = JSON.parse(JSON.stringify(hs))
+    mutation(Object.values(damaged.hunting.missions)[0])
+    const repaired = normalizeState(damaged)
+    ok('损坏猎杀任务被过滤而宗门和弟子进度保留', Object.keys(repaired.hunting.missions).length === 0 &&
+      repaired.disciples.total === hs.disciples.total && repaired.disciples.members.every(m => !m.onMission))
+  }
+  const missingTeam = JSON.parse(JSON.stringify(hs))
+  missingTeam.disciples.members = []
+  const missingRestored = normalizeState(missingTeam, { preferMembers: true })
+  ok('成员已不存在的猎杀任务不会卡住或产生幽灵猎获', Object.keys(missingRestored.hunting.missions).length === 0)
+  const repeated = JSON.parse(JSON.stringify(hs))
+  const active = Object.values(repeated.hunting.missions)[0]
+  repeated.hunting.nextMissionId = 1
+  const repeatedRestored = normalizeState(repeated)
+  ok('读档后的任务编号不会覆盖活动任务', repeatedRestored.hunting.nextMissionId > active.id)
+  const clockStart = 1000000
+  const huntOnline = normalizeState(JSON.parse(JSON.stringify(hs)))
+  const huntOffline = normalizeState(JSON.parse(JSON.stringify(hs)))
+  for (const value of [huntOnline, huntOffline]) {
+    const mission = Object.values(value.hunting.missions)[0]
+    mission.startedAt = clockStart
+    value.resources.huntPreparation = 300
+    value.hunting.settings.autoRepeat = true
+  }
+  const hod = E.createDerived(), hfd = E.createDerived()
+  for (let i = 0; i < 370; i++) E.tick(huntOnline, hod, 1, { offline: true, events: false, startAt: clockStart + i * 1000 })
+  E.simulateOffline(huntOffline, hfd, 370, { startAt: clockStart })
+  ok('长离线自动重复猎杀与逐秒参考的任务、随机与收益一致', JSON.stringify(huntOnline.hunting) === JSON.stringify(huntOffline.hunting) &&
+    close(huntOnline.resources.beastHide, huntOffline.resources.beastHide))
+  ok('自动重复出征起点使用真实归队边界', Object.values(huntOffline.hunting.missions)[0]?.startedAt === clockStart + 360000)
+  const rd = E.createDerived()
+  reloaded.karma = 500
+  E.recompute(reloaded, rd)
+  ok('猎备仓容独立于仙缘仓储倍率', rd.karmaStorageMult > 1 && rd.max.huntPreparation === 300)
 }
 
 // ------------------------------------------------------------

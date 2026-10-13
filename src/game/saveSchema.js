@@ -5,6 +5,7 @@ import { CRAFT_MAP } from '@/data/crafts'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { EVENT_MAP } from '@/data/events'
 import { REALMS } from '@/data/realms'
+import { normalizeHuntingState } from '@/game/systems/hunting'
 
 export const SAVE_VERSION = 2
 export const SAVE_FIELDS = [
@@ -13,7 +14,7 @@ export const SAVE_FIELDS = [
   'industryVersion', 'qiLiquidVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
-  'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',
+  'pendingChoice', 'affairs', 'hunting', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',
 ]
 
 export function isRecord(value) {
@@ -29,7 +30,7 @@ export function assertSaveShape(data) {
   if (!isRecord(data)) throw new Error('存档必须是对象')
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
     'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
-    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs']) {
+    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'hunting']) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
   for (const key of ['jobs']) {
@@ -88,6 +89,7 @@ export function validateState(state, fresh) {
     (!buff.target || Object.hasOwn(RESOURCE_MAP, buff.target)))
     .map(buff => ({ id: buff.id, name: typeof buff.name === 'string' ? buff.name : buff.id,
       mult: buff.mult, target: buff.target || null, until: buff.until }))
+  result.hunting = normalizeHuntingState(result.hunting, fresh.hunting)
   if (!Object.hasOwn(EVENT_MAP, result.pendingChoice?.id)) result.pendingChoice = null
   result.log = result.log.filter(entry => isRecord(entry) && typeof entry.text === 'string')
     .map(entry => ({ ...entry, id: safeNumber(entry.id), at: safeNumber(entry.at) }))
