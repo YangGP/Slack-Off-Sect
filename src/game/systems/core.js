@@ -347,7 +347,10 @@ export function maxAffordable(state, id, cap = 500) {
  * 纯函数，方便测试；recompute 与 tick 都用它。
  */
 export function calendarAt(totalDays) {
-  const days = Math.max(0, totalDays || 0)
+  const rawDays = Math.max(0, totalDays || 0)
+  // 逐秒累加 1/3 天可能落在 89.99999999999999，不能因此延迟换季。
+  const nearestDay = Math.round(rawDays)
+  const days = Math.abs(rawDays - nearestDay) < 1e-9 ? nearestDay : rawDays
   const dayInYear = days % DAYS_PER_YEAR
   const termIndex = Math.floor(dayInYear / CALENDAR.DAYS_PER_TERM) % TERMS.length
   const seasonIndex = Math.floor(dayInYear / DAYS_PER_SEASON) % SEASONS.length

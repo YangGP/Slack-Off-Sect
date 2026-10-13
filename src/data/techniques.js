@@ -39,7 +39,8 @@ export const TECHNIQUES = [
     cost: { insight: 2400, steel: 6, arrayBase: 4, crystal: 3 },
     desc: '以预制纹模重复刻制标准构件。符箓与阵基加工效率 +100%；灵符仍需精密刻纹，继续共用符箓堂容量。',
     effects: { craftSpeedByRecipe: { drawTalisman: 1, assembleArrayBase: 1 } },
-    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune'], building: { id: 'talismanHall', count: 2 } },
+    // 造价里的灵晶要「凝晶工艺」才产得出：把该工艺列进前置，避免条目先露面却找不到来源。
+    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft'], building: { id: 'talismanHall', count: 2 } },
   },
   // ---------- 采集与种植：四条基础线 ----------
   {
@@ -163,7 +164,8 @@ export const TECHNIQUES = [
     desc: '分格装箱、依尺寸码放，减少空隙与搬运损耗。通用仓储 +1200，成品按层级折算。',
     // 灵机仓容的百分比一律由技艺提供：定额给建筑，比例给技艺，两者分工明确。
     effects: { storageAll: 1200, storageRatio: { insight: 0.3 } },
-    needs: { building: { id: 'warehouse', count: 1 } },
+    // 造价含符箓，而符箓要「符文入门 → 符箓堂」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['talismanArt'] },
   },
 
   // 仓储·加固线（对标猫国 Reinforced/Titanium/Alloy Warehouse 一条线）：
@@ -268,7 +270,8 @@ export const TECHNIQUES = [
     cost: { insight: 90, wood: 400, faith: 100 },
     desc: '同门腰间都佩一枚结，人心齐了，干活也带劲。宜居度 +4。',
     effects: { habitability: 4 },
-    needs: { building: { id: 'logHouse', count: 3 } },
+    // 造价里的香火要「香火愿 → 山门 → 香使」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { building: { id: 'logHouse', count: 3 }, upgrades: ['incenseVow'] },
   },
 
   // ---------- 灵机 ----------
@@ -327,7 +330,7 @@ export const TECHNIQUES = [
     // 原「凝露瓶」的效果并入此处：灵液制作 +15%（法宝数量收窄，效果不丢）
     // 原「凝露瓶」的灵液 +15% 与原「百草葫芦」的灵草 +30% 都并入此处（法宝收窄，效果不丢）
     effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08, spiritLiquid: 0.15 }, ratio: { herb: 0.3 } },
-    needs: { upgrades: ['alchemyArt'] },
+    needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
 
   {

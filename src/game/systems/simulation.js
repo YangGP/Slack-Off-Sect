@@ -7,6 +7,8 @@ import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disc
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
+import { BUILDINGS } from '@/data/buildings'
+import { ALL_UPGRADES } from '@/data/upgrades'
 import { runAutoCraft, runAutoCondense } from './crafting'
 import { CALENDAR } from '@/data/calendar'
 import { recruitArrivals } from './disciples'
@@ -47,9 +49,27 @@ export function tick(state, derived, dt, opts = {}) {
 export function advanceTicks(state, derived, seconds, opts) {
   let now = opts.startAt ?? gameNow(state)
   const end = now + seconds * 1000
+  // 大步长只用于没有人口、维护、加工与灵能逸散的稳定生产。
+  // 其余场景逐秒结算，避免步内供给、修炼和加工状态变化被提前或延后。
+  recompute(state, derived)
+  const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
+    !(state.resources.qiEnergy > 0) && !(derived.rates.qiEnergy > 0) &&
+    !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
+    !BUILDINGS.some(b => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0) &&
+    !ALL_UPGRADES.some(u => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false) &&
+    (opts.offline || opts.events === false)
+  const maxSliceMs = seconds > CONFIG.OFFLINE_COARSE_AFTER_SECONDS
+    && stableProduction ? CONFIG.MAX_SLICE_SECONDS * 1000
+    : CONFIG.TICK_SLICE_MS
   return withGameContext(state, { now: () => now }, () => {
     while (end - now > 1e-6) {
-      let next = Math.min(end, now + CONFIG.TICK_SLICE_MS)
+      let next = Math.min(end, now + maxSliceMs)
+      // 与逐秒参考结算相同：下一次逐秒采样进入新节气时切步。
+      const termSeconds = CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS
+      const calendarSeconds = state.totalDays * CALENDAR.DAY_SECONDS
+      const untilTerm = termSeconds - (calendarSeconds % termSeconds)
+      const termSteps = Math.max(1, Math.ceil(untilTerm / (CONFIG.TICK_SLICE_MS / 1000) - 1e-9))
+      next = Math.min(next, now + termSteps * CONFIG.TICK_SLICE_MS)
       for (const buff of state.buffs) {
         if (buff.until > now && buff.until < next) next = buff.until
       }

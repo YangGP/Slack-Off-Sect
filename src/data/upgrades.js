@@ -344,7 +344,8 @@ export const CULTIVATION = [
     cost: { insight: 32000, plank: 80, steel: 20, crystal: 15 },
     desc: '以灵纹驱动锯阵。金丹起木作加工容量 +100%，解板加工效率 +50%；每份木板灵木用量减少15%，扩产仍需稳定供料。',
     effects: { processingCapacityRatio: { woodwork: 1 }, craftSpeedByRecipe: { sawPlank: 0.5 }, craftCostReduction: { sawPlank: 0.15 } },
-    needs: { upgrades: ['timberCraft', 'waterworkshop'] },
+    // 造价含灵晶，而灵晶要「凝晶原理 → 凝晶工艺」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { upgrades: ['timberCraft', 'waterworkshop', 'crystalCraft'] },
   },
   // 自技艺页迁入（精研）：化神产业强化之一
   {
@@ -354,7 +355,8 @@ export const CULTIVATION = [
     cost: { insight: 28000, pill: 80, immortalHerb: 15, crystal: 15 },
     desc: '轮作养地，提纯药性。灵草产出 +95%，丹药制作产出 +50%，仙草制作产出 +30%。',
     effects: { ratio: { herb: 0.95 }, craftBonusByResource: { pill: 0.5, immortalHerb: 0.3 } },
-    needs: { upgrades: ['herbRotation', 'alchemyFire'] },
+    // 造价含灵晶，而灵晶要「凝晶原理 → 凝晶工艺」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { upgrades: ['herbRotation', 'alchemyFire', 'crystalCraft'] },
   },
 
   // ---------- 金铁族 ----------
@@ -614,7 +616,8 @@ export const CULTIVATION = [
     effectDesc: '因此盖得起精舍：青石铺地、灵纹引气，十名弟子各有静修之处。',
     effects: { unlockBuildings: ['mansion'] },
     note: '解锁建筑：精舍',
-    needs: { upgrades: ['earthEssence'] },
+    // 造价含玄钢，而玄钢要「炼器术 → 淬玄工艺」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { upgrades: ['earthEssence', 'steelWorking'] },
   },
 
   // ============ 宗门经营：制度、招募、离线与试炼 ============
@@ -670,7 +673,8 @@ export const CULTIVATION = [
     desc: '把讲经的道理落到人身上：以灵气为人温养经脉，或以天材地宝为一次冲关护法。',
     effectDesc: '因此可以对指定弟子传功加速修炼，或为其下一次突破预付护道材料。',
     effects: { discipleTraining: true },
-    needs: { upgrades: ['preachArt', 'oralTeaching'] },
+    // 造价含香火，而香火要「香火愿 → 山门 → 香使」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { upgrades: ['preachArt', 'oralTeaching', 'incenseVow'] },
   },
   {
     id: 'intuition',

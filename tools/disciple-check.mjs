@@ -2,6 +2,7 @@ import { createInitialState, normalizeState, resetForReincarnation } from '../sr
 import { REALMS } from '../src/data/realms.js'
 import { EVENT_MAP } from '../src/data/events.js'
 import { trainDisciples } from './disciple-training.mjs'
+import { recruitArrivals } from '../src/game/systems/disciples.js'
 import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, DISCIPLE_DISMISSAL, DISCIPLE_TRAINING, DISCIPLE_AIDS, discipleTrainingCost, trainingBonus, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, rollSpiritualRoot, newDisciple, cultivateDisciple, sortDisciples } from '../src/data/disciples.js'
 
 export function runDiscipleChecks(E, ok, close) {
@@ -225,6 +226,15 @@ export function runDiscipleChecks(E, ok, close) {
   ok('逐出最后一名弟子清空人口岗位且不复用身份', dismissal.dismissed === 1 && expel.disciples.total === 0 && Object.values(expel.disciples.jobs).every(value => value === 0) && newDisciple(expel.disciples).id > c.id)
 
   // ============ 手动培养：传功与个人护道 ============
+  const [fractionalRoom, fractionalRoomD] = setup(49, 0)
+  fractionalRoom.buildings.hut = { count: 30, on: true }
+  E.recompute(fractionalRoom, fractionalRoomD)
+  fractionalRoom.habitabilityPenalty += -0.5 - fractionalRoomD.habitability
+  E.recompute(fractionalRoom, fractionalRoomD)
+  fractionalRoom.arrivalTimer = 100000
+  const recruitsBefore = fractionalRoom.stats.recruits
+  const arrivals = recruitArrivals(fractionalRoom, fractionalRoomD, 1, { silent: true })
+  ok('小数宜居度批量收徒的成员、统计与返回人数一致', arrivals === 1 && fractionalRoom.disciples.total === 50 && fractionalRoom.stats.recruits === recruitsBefore + 1)
   const [ment, mentD] = setup(2, 4)
   ment.upgrades.mentorship = true
   const [m1, m2] = ment.disciples.members

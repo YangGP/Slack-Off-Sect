@@ -54,6 +54,20 @@ export function runArchitectureChecks() {
   assert.equal(fractional.state.stats.playTime, 0.75)
   assert.equal(E.simulateOffline(fractional.state, fractional.derived, Infinity).seconds, 0)
 
+  // 超过粗步长门槛的离线结算必须与逐秒参考一致，包括跨季节与库存边界。
+  for (const withHousing of [false, true]) {
+    const coarse = createInitialState(startAt)
+    coarse.buildings.spiritField = { count: 1, on: true }
+    coarse.totalDays = 89
+    if (withHousing) coarse.buildings.hut = { count: 1, on: true }
+    const fine = normalizeState(JSON.parse(JSON.stringify(coarse)), { now: startAt })
+    const cd = E.createDerived(), fd = E.createDerived()
+    E.simulateOffline(coarse, cd, 70, { startAt })
+    for (let i = 0; i < 70; i++) E.tick(fine, fd, 1, { offline: true, events: false, startAt: startAt + i * 1000 })
+    for (const id of Object.keys(coarse.resources)) assert.ok(Math.abs(coarse.resources[id] - fine.resources[id]) < 1e-8, `长离线资源 ${id}, 居所=${withHousing}`)
+    assert.deepEqual(coarse.disciples, fine.disciples)
+  }
+
   // 凝聚迁移只补历史能力的新增上游，标记独立于灵气分子字段并随存档持久化。
   for (const hasParticle of [false, true]) {
     const legacy = createInitialState(startAt)

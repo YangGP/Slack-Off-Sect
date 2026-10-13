@@ -5,6 +5,7 @@ import { talentBonus, gainBreakthroughTalent, upgradeTalent, TALENT_MAP } from '
 import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
+import { CONFIG } from '@/data/config'
 
 export function setJob(state, derived, jobId, value) {
   const job = JOBS.find((j) => j.id === jobId)
@@ -124,20 +125,23 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
     state.arrivalTimer = 0
     return 0
   }
-  state.arrivalTimer = (state.arrivalTimer || 0) + dt
+  const timer = (state.arrivalTimer || 0) + dt
   const interval = arrivalInterval(derived)
-  let arrived = 0
-  while (state.arrivalTimer >= interval && state.disciples.total < derived.maxDisciples && derived.leaveChance === 0) {
-    state.arrivalTimer -= interval
+  // 一次调用内宜居度不变，离开风险只由当前宜居度定死一个人口上限，
+  // 因此可一次算完本轮该来几名，避免「每来一人就全量重算」在长离线里叠加成主要开销。
+  const margin = CONFIG.HABITABILITY_LEAVE_MARGIN
+  const safeTotal = Math.max(margin, Math.floor(margin + derived.habitability) + 1)
+  const room = Math.max(0, Math.min(Math.floor(derived.maxDisciples), safeTotal) - state.disciples.total)
+  const arrived = Math.max(0, Math.min(Math.floor(timer / interval), room))
+  state.arrivalTimer = timer - arrived * interval
+  for (let i = 1; i <= arrived; i++) {
     const member = newDisciple(state.disciples)
-    cultivateDisciple(member, Math.min(dt, state.arrivalTimer))
+    cultivateDisciple(member, Math.min(dt, timer - i * interval))
     state.disciples.members.push(member)
-    recountDisciples(state.disciples)
-    state.stats.recruits += 1
-    arrived += 1
-    recompute(state, derived)
   }
   if (arrived > 0) {
+    recountDisciples(state.disciples)
+    state.stats.recruits += arrived
     if (!silent) {
       const newcomers = state.disciples.members.slice(-arrived)
       const roots = newcomers.map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、')

@@ -186,7 +186,16 @@ function onBeforeUnload() {
 export function startLoop() {
   loopRequested = true
   const ready = initializeGame()
-  if (ready) return ready.then(() => { if (loopRequested) startLoop() })
+  // 离线结算失败也必须启动主循环：否则 error 分支会吞掉后续启动，页面永久卡住。
+  if (ready) {
+    return ready.then(
+      () => { if (loopRequested) startLoop() },
+      error => {
+        console.warn('[摸鱼宗门] 离线结算失败', error)
+        if (loopRequested) startLoop()
+      },
+    )
+  }
   if (!runtime.start()) return
   document.addEventListener('visibilitychange', onHide)
   window.addEventListener('beforeunload', onBeforeUnload)

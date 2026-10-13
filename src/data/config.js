@@ -105,8 +105,13 @@ export const CONFIG = {
   DISASTER_GUARD_CAP: 0.8,
   // 阵基冷却容量 = 全部工位容量之和的这个比例（晶核阵另加）
   PROCESSING_COOLING_CAPACITY_RATIO: 0.25,
-  // 时间推进：切片步长（毫秒，用于逐秒结算）与单步时长上限（秒）
+  // 时间推进：切片步长。短时长（在线补算、短暂离开）保持逐秒精确，与主循环逐 tick
+  // 的结果完全一致；只有超过 OFFLINE_COARSE_AFTER_SECONDS 的长离线才启用自适应大步长
+  // （上限 MAX_SLICE_SECONDS），仅无弟子、维护、加工和灵能逸散时使用，
+  // 并在历法、增益与事务边界切步；其余场景维持逐秒结算。
   TICK_SLICE_MS: 1000,
+  MAX_SLICE_SECONDS: 10,
+  OFFLINE_COARSE_AFTER_SECONDS: 60,
   MAX_STEP_SECONDS: 60,
   // 旧版订单兼容：单个配方未完成订单的份数上限
   CRAFT_ORDER_CAP: 1000000,

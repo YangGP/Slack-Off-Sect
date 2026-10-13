@@ -24,6 +24,7 @@
     "audit:economy": "vite build --ssr tools/economy-audit.mjs --outDir .smoke-economy --emptyOutDir && node .smoke-economy/economy-audit.js",
     "audit:crafts": "vite build --ssr tools/tier-audit.mjs --outDir .smoke-tier --emptyOutDir && node .smoke-tier/tier-audit.js",
     "audit:buildings": "vite build --ssr tools/building-reachability.mjs --outDir .smoke-reachability --emptyOutDir && node .smoke-reachability/building-reachability.js",
+    "audit:sources": "vite build --ssr tools/upgrade-source-audit.mjs --outDir .smoke-source-audit --emptyOutDir && node .smoke-source-audit/upgrade-source-audit.js",
     "audit:pacing": "vite build --ssr tools/pacing-audit.mjs --outDir .smoke-pacing --emptyOutDir && node .smoke-pacing/pacing-audit.js",
     "audit:breakthrough": "vite build --ssr tools/breakthrough-time-audit.mjs --outDir .smoke-breakthrough-time --emptyOutDir && node .smoke-breakthrough-time/breakthrough-time-audit.js",
     "audit:breakthrough-risk": "vite build --ssr tools/breakthrough-risk-model.mjs --outDir .smoke-breakthrough-risk --emptyOutDir && node .smoke-breakthrough-risk/breakthrough-risk-model.js",

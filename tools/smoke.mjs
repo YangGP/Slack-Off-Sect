@@ -3709,7 +3709,7 @@ section('灵能枢供能与早期空间技艺移除')
   s.resources.qiEnergy = 0.5
   E.tick(s, d, 10, { events: false })
   ok('长时间结算不会透支灵能，耗尽后停效', s.resources.qiEnergy === 0 && d.upgradeSupply.energyCore === 0)
-  ok('删除的空间技艺不再出现在研究表，叠匣术只依赖普通库房', !UPGRADE_MAP.storageBag && !UPGRADE_MAP.voidPouch && !UPGRADE_MAP.caseStackArt.needs.upgrades && UPGRADE_MAP.caseStackArt.needs.building.id === 'warehouse')
+  ok('删除的空间技艺不再出现在研究表，叠匣术随符箓线开放', !UPGRADE_MAP.storageBag && !UPGRADE_MAP.voidPouch && UPGRADE_MAP.caseStackArt.needs.upgrades.includes('talismanArt') && UPGRADE_MAP.caseStackArt.needs.building.id === 'warehouse')
   const old = normalizeState({ upgrades: { storageBag: true, voidPouch: true, caseStackArt: true } })
   ok('旧档移除废弃空间记录，保留已学普通仓储技艺', !old.upgrades.storageBag && !old.upgrades.voidPouch && old.upgrades.caseStackArt)
 }
@@ -4093,8 +4093,8 @@ section('金丹：修真、工艺、材料与建设闭环')
   ok('点修真不能直接制作灵晶或建成晶核阵', E.craft(s, d, 'condenseCrystal') === 0 && E.buyBuilding(s, d, 'crystalArray', 1) === 0)
   s.realm = 5
   E.recompute(s, d)
-  ok('元婴研究凝晶原理后能看到建设目标', E.research(s, d, 'crystalTheory') && d.unlockedBuildings.includes('crystalArray'))
-  ok('凝晶工艺在元婴用旧材料即可起步', E.research(s, d, 'crystalCraft'))
+  ok('元婴研究凝晶原理后仍需掌握造价来源才露出晶核阵', E.research(s, d, 'crystalTheory') && !d.unlockedBuildings.includes('crystalArray'))
+  ok('凝晶工艺在元婴用旧材料起步并露出晶核阵', E.research(s, d, 'crystalCraft') && d.unlockedBuildings.includes('crystalArray'))
   const qiBefore = s.resources.qi
   const liquidBefore = s.resources.spiritLiquid
   const talismanBefore = s.resources.talisman

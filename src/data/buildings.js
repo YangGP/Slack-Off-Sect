@@ -128,7 +128,7 @@ export const BUILDINGS = [
     desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座提高灵液、灵晶制作产出各15%，并保存备用晶核。',
     effects: { craftBonusByResource: { spiritLiquid: 0.15, crystal: 0.15 }, storage: { crystal: 15 } },
     upkeep: { qi: 1 },
-    needs: { realm: 5, upgrades: ['crystalTheory'] },
+    needs: { realm: 5, upgrades: ['crystalTheory', 'crystalCraft'] },
   },
 
   // ============ 居所 ============
@@ -347,7 +347,8 @@ export const BUILDINGS = [
     priceRatio: 1.25,
     desc: '长老登坛讲经，一人讲、百人悟。',
     effects: { ratio: { insight: 0.35 }, storage: { insight: 800 } },
-    needs: { upgrades: ['preachArt'] },
+    // 造价含阵基，而阵基要「阵基装配」才产得出：列进前置，避免先露面却找不到来源。
+    needs: { upgrades: ['preachArt', 'arrayAssembly'] },
     unlockRatio: 0,
   },
   {
@@ -374,7 +375,9 @@ export const BUILDINGS = [
     priceRatio: 1.3,
     desc: '池水照心，弟子泡一泡，脾气就小了一圈。',
     effects: { habitability: 6 },
-    needs: { upgrades: ['calmMind'] },
+    // 造价含混灵土与阵基：混灵土要「混灵土工艺」（配方还需境界 5），阵基要「阵基装配」。
+    // 都列进前置（含境界），避免先露面却找不到来源。
+    needs: { realm: 5, upgrades: ['calmMind', 'spiritMortarArt', 'arrayAssembly'] },
     unlockRatio: 0,
   },
   {
