@@ -13,7 +13,8 @@ import * as E from './engine-fixture.mjs'
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
 blockedState.realm = 8
 blockedState.buildings.depot = { count: 2, on: true }
-blockedState.buildings.library = { count: 100, on: true }
+// 此夹具隔离灵气分子仓容；灵机必须足以覆盖洞天造价，不绑定藏经阁单座容量。
+blockedState.buildings.library = { count: Math.ceil(20000 / BUILDING_MAP.library.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
 blockedState.resources.qiParticle = 100
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')

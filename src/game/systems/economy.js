@@ -79,6 +79,7 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.autoCondenseLiquid) acc.autoCondenseLiquidUnlocked = true
   if (ef.energyCraft) acc.energyCraftUnlocked = true
   if (ef.discipleTraining) acc.discipleTrainingUnlocked = true
+  if (ef.autoTalentJobs) acc.autoTalentJobsUnlocked = true
   for (const field of ['processingPowerCapacity', 'processingCoolingRatio']) {
     if (ef[field]) acc[field] = (acc[field] || 0) + ef[field] * mult
   }
@@ -153,6 +154,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     autoCraftSpeedUnlocked: false,
     autoCondenseLiquidUnlocked: false,
     discipleTrainingUnlocked: false,
+    autoTalentJobsUnlocked: false,
     ratioAll: 0,
     huntSuccessBonus: 0,
     huntYieldBonus: 0,
@@ -505,6 +507,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   }))
   derived.autoCondenseLiquidUnlocked = acc.autoCondenseLiquidUnlocked
   derived.discipleTrainingUnlocked = !!acc.discipleTrainingUnlocked
+  derived.autoTalentJobsUnlocked = !!acc.autoTalentJobsUnlocked
   // 满仓凝液与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
   derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseLiquidUnlocked
   derived.ratio = ratio

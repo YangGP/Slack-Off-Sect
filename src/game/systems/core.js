@@ -101,6 +101,7 @@ export function createDerived() {
     autoCraftUnlocked: false,
     autoCondenseLiquidUnlocked: false,
     discipleTrainingUnlocked: false,
+    autoTalentJobsUnlocked: false,
     trainingActive: false,
     trainingCost: 0,
     daoAutomation: false,

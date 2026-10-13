@@ -4,7 +4,7 @@ import { state, derived, actions } from '@/game/store'
 import { JOBS } from '@/data/jobs'
 import { idleDisciples, nextArrivalIn, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, discipleAidPreview, canAfford } from '@/game/engine'
 import { REALMS } from '@/data/realms'
-import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, discipleResidenceYears, discipleTrainingCost, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples } from '@/data/disciples'
+import { cultivationRequired, cultivationRate, discipleFactor, discipleAnnualBaseUpkeep, discipleDismissalCost, discipleResidenceYears, discipleTrainingCost, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples } from '@/data/disciples'
 import { TALENT_MAP, TALENT_TIERS, TALENT_TIER_MAP, talentBonus, talentMatches, talentDescription } from '@/data/talents'
 import { costLabel } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -74,8 +74,9 @@ const managementRows = computed(() => visible.value.map(member => ({
   rate: cultivationRate(member, derived.trainingActive), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
   upkeep: derived.discipleWeight > 0 ? derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight : 0,
   preview: discipleBreakthroughPreview(state, member),
-  dismissalCost: discipleDismissalCost(member),
-  dismissalAffordable: Number.isSafeInteger(discipleDismissalCost(member)) && canAfford(state, { qi: discipleDismissalCost(member) }),
+  annualBaseUpkeep: discipleAnnualBaseUpkeep(member, state.realm),
+  dismissalCost: discipleDismissalCost(member, state.realm),
+  dismissalAffordable: Number.isSafeInteger(discipleDismissalCost(member, state.realm)) && canAfford(state, { qi: discipleDismissalCost(member, state.realm) }),
   residenceYears: discipleResidenceYears(member),
 })))
 function costText(cost) {
@@ -142,11 +143,16 @@ function commitJob(jobId, event) {
           <p>掌握《传功授业》后可对弟子传功：持续耗灵气加速本人修炼、不停岗；也可预付个人护道材料，加成其下一次突破。</p>
           <p>突破失败消耗材料，损失20%本境修为并调息60秒。批量突破逐人扣料，材料不足即停止。</p>
           <p>宗门退境保留弟子境界，岗位加成与口粮暂按较低的宗门境界计算；宗门恢复后加成恢复。</p>
-          <p>逐出费用＝该弟子累计灵气消耗×（在宗门待满的游戏年数＋1），每人向上取整。消耗包括个人口粮与突破支付的灵气；在线与离线都累计，旧档从更新后开始记录。确认后移除个人成长与岗位，整批灵气不足则不执行。</p>
+          <p>逐出费用＝当前每游戏年基础口粮×（在宗门待满的游戏年数＋1），每人向上取整。年基础口粮按当前宗门及弟子有效境界计算，不计减耗、断供、传功或历史突破费用；一年为18分钟。确认后移除个人成长与岗位，整批灵气不足则不执行。</p>
         </template></HoverTip>
       <button ref="managementToggle" class="btn" :aria-expanded="managementOpen" aria-controls="disciple-management" @click="toggleManagement">{{ managementOpen ? '收起管理' : '弟子管理' }}</button>
     </div>
     <div class="box-body disciple-content">
+      <div v-if="derived.autoTalentJobsUnlocked" class="small auto-talent-jobs">
+        <HoverTip title="知人善任" description="启用后持续将有岗位专长的弟子调到对应已开放岗位，包括新入门与突破后领悟专长者。无岗位专长者保持分工，出征者归队后调配；需要手动改派专长弟子时请先暂停。">
+          <label class="sw"><input type="checkbox" aria-label="按天赋自动分工" :checked="state.settings.autoTalentJobs" @change="actions.setSetting('autoTalentJobs', $event.target.checked)" />按天赋自动分工</label>
+        </HoverTip>
+      </div>
       <div v-show="!managementOpen" class="assignment-surface">
       <div v-if="state.disciples.total > derived.maxDisciples" class="small dim">
         现有弟子超过居所容量，原有弟子与分工保留；扩建出空位后继续收徒。
@@ -278,7 +284,7 @@ function commitJob(jobId, event) {
             <template #tip>
               <div class="tip-row"><span class="k">人数</span><span class="v">{{ dismissal.count }} 人</span></div>
               <div class="tip-row"><span class="k">费用</span><span class="v" :class="{ bad: !dismissal.affordable }">{{ costLabel(state, derived, 'qi', dismissal.cost.qi) }}</span></div>
-              <div class="tip-note">逐人按累计灵气消耗×（已满年数＋1）计费、向上取整；确认后移除个人成长与岗位。</div>
+              <div class="tip-note">逐人按当前每年基础口粮×（已满年数＋1）计费、向上取整；确认后移除个人成长与岗位。</div>
             </template>
           </HoverTip>
         </div>
@@ -296,6 +302,7 @@ function commitJob(jobId, event) {
                   <template #tip>
                     <div class="tip-row"><span class="k">在宗门停留</span><span class="v">已满 {{ member.residenceYears }} 年 · {{ fmtTime(member.residenceSeconds) }}</span></div>
                     <div class="tip-row"><span class="k">累计灵气消耗</span><span class="v">{{ fmt(member.totalQiConsumed) }}</span></div>
+                    <div class="tip-row"><span class="k">每年基础口粮</span><span class="v">灵气 {{ fmt(member.annualBaseUpkeep) }}</span></div>
                     <div class="tip-row"><span class="k">逐出费用</span><span class="v">灵气 {{ fmtCost(member.dismissalCost) }}</span></div>
                     <div class="tip-section">修炼</div>
                     <div class="tip-row"><span class="k">灵根 / 速度</span><span class="v">{{ member.root?.name || '三灵根' }} · {{ fmt(member.rate) }}修为/秒</span></div>
@@ -366,6 +373,9 @@ function commitJob(jobId, event) {
 </template>
 
 <style scoped>
+.auto-talent-jobs {
+  margin-bottom: 8px;
+}
 .disciple-head {
   display: flex;
   align-items: center;

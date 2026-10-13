@@ -8,6 +8,7 @@ import { resetForRebirth } from '../state'
 import { floorNumber } from '../numbers'
 import { RESOURCE_MAP } from '@/data/resources'
 import { CONFIG } from '@/data/config'
+import { autoAssignTalentJobs } from './disciples'
 
 export function toggleUpkeepUpgrade(state, derived, id) {
   const up = UPGRADE_MAP[id]
@@ -27,6 +28,7 @@ export function research(state, derived, id) {
   }
   payCost(state, up.cost)
   state.upgrades[id] = true
+  autoAssignTalentJobs(state)
   pushLog(state, `参悟《${up.name}》`, 'good')
   recompute(state, derived)
   return true

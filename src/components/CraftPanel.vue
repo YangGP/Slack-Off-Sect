@@ -124,7 +124,7 @@ const condenseStatus = computed(() => {
           <p>各配方可单独选择自动速限。实际速度受共享工位容量约束，提高速限会增加每分钟耗料，每份收益不变。参悟《疾炼法》解锁速限调整。</p>
           <p>分配权重越高，工位紧张时获得的容量越多；达标、满仓或缺料会释放容量，空闲容量自动分给其他产线。手动制作与节气满仓凝液不占常驻工位。</p>
           <p>库存达到目标后暂停，使用成品后自动补回；0表示不限。手动制作不受目标限制。旧存档的未完成订单继续加工，也可暂停或取消。</p>
-        </template></HoverTip><span class="hint">通用制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
+        </template></HoverTip><span v-if="!compact" class="hint">通用制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
       <button v-if="compact" class="craft-open" @click="actions.setTab('craft')">全部配方 →</button>
     </div>
     <div class="box-body">
@@ -208,7 +208,7 @@ const condenseStatus = computed(() => {
         @show="highlightCost(row.cost)"
         @hide="clearHighlight"
       >
-        <div class="craft-line">
+        <div v-if="!compact" class="craft-line">
           <span class="craft-name">{{ row.meta.name }}</span>
           <span class="have">{{ resourceName(row.meta.out) }} {{ fmtStock(row.have) }}<template v-if="!compact"> / {{ fmtStock(row.max) }}</template></span>
           <label v-if="!compact" class="craft-pin small"><input type="checkbox" :checked="state.settings.quickCrafts.includes(row.meta.id)" :aria-label="`${row.meta.name}快捷炼制`" @change="updateQuick(row.meta.id, $event)" />快捷</label>
@@ -226,7 +226,7 @@ const condenseStatus = computed(() => {
           <span class="dim">瓶颈：{{ row.bottleneck.reason }}</span>
           <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ fmt(input.deficit * 60) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
         </div>
-        <div class="craft-status small">
+        <div v-if="!compact" class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
             {{ row.autoStatus.orderRemaining && !row.autoStatus.orderPaused ? '订单加工中' : '自动中' }} · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
           </span>
@@ -242,6 +242,8 @@ const condenseStatus = computed(() => {
           <span v-if="row.autoStatus.orderRemaining" :class="row.autoStatus.orderPaused ? 'warn' : 'dim'">订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</span>
         </div>
         <div class="craft-line">
+          <span v-if="compact" class="craft-name">{{ resourceName(row.meta.out) }}</span>
+          <span v-if="compact" class="have">{{ fmtStock(row.have) }}</span>
           <button
             class="btn primary"
             :disabled="!row.affordable"
@@ -267,7 +269,7 @@ const condenseStatus = computed(() => {
             />
             自动
           </label>
-          <template v-if="row.autoStatus.orderRemaining">
+          <template v-if="!compact && row.autoStatus.orderRemaining">
             <button class="btn" :aria-label="`${row.meta.name}${row.autoStatus.orderPaused ? '恢复' : '暂停'}订单`" @click="actions.manageCraftOrder(row.meta.id, row.autoStatus.orderPaused ? 'resume' : 'pause')">{{ row.autoStatus.orderPaused ? '恢复订单' : '暂停订单' }}</button>
             <button class="btn" :aria-label="`${row.meta.name}取消订单`" @click="actions.manageCraftOrder(row.meta.id, 'cancel')">取消订单</button>
           </template>
@@ -323,6 +325,15 @@ const condenseStatus = computed(() => {
           </div>
 
           <div class="tip-section">自动制作</div>
+          <div v-if="compact" class="tip-row">
+            <span class="k">状态</span>
+            <span class="v" :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">
+              <template v-if="row.autoStatus.on">{{ row.autoStatus.ready ? '自动中 · 下一份 ' + row.autoStatus.wait.toFixed(1) + '秒' : row.autoStatus.reason }}</template>
+              <template v-else-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked">{{ condenseStatus }}</template>
+              <template v-else>{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</template>
+              <template v-if="row.autoStatus.orderRemaining"> · 订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</template>
+            </span>
+          </div>
           <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="tip-row">
             <span class="k">凝灵诀</span>
             <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>

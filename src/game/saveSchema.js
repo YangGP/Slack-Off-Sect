@@ -1,4 +1,4 @@
-import { RESOURCE_MAP } from '@/data/resources'
+import { RESOURCE_MAP, RESOURCE_GROUPS } from '@/data/resources'
 import { BUILDING_MAP } from '@/data/buildings'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { CRAFT_MAP } from '@/data/crafts'
@@ -102,7 +102,7 @@ export function validateState(state, fresh) {
   if (!Object.hasOwn(EVENT_MAP, result.pendingChoice?.id)) result.pendingChoice = null
   result.log = result.log.filter(entry => isRecord(entry) && typeof entry.text === 'string')
     .map(entry => ({ ...entry, id: safeNumber(entry.id), at: safeNumber(entry.at) }))
-  for (const key of ['autosave', 'autoCraftOn', 'offlineProgress']) {
+  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress']) {
     result.settings[key] = typeof result.settings[key] === 'boolean' ? result.settings[key] : fresh.settings[key]
   }
   result.settings = Object.fromEntries(Object.keys(fresh.settings).map(key => [key, result.settings[key] ?? fresh.settings[key]]))
@@ -110,5 +110,9 @@ export function validateState(state, fresh) {
   result.settings.craftReservePercent = safeNumber(result.settings.craftReservePercent, 20, 100)
   result.settings.autoCraftPriority = Object.hasOwn(CRAFT_MAP, result.settings.autoCraftPriority) ? result.settings.autoCraftPriority : fresh.settings.autoCraftPriority
   result.ui = { ...fresh.ui, ...Object.fromEntries(Object.keys(fresh.ui).map(key => [key, result.ui[key] ?? fresh.ui[key]])) }
+  result.ui.collapsedResourceGroups = flags(
+    isRecord(result.ui.collapsedResourceGroups) ? result.ui.collapsedResourceGroups : {},
+    Object.fromEntries(RESOURCE_GROUPS.map(group => [group.id, group])),
+  )
   return result
 }

@@ -239,19 +239,44 @@ ok(
   `${doc.querySelectorAll('.left .res-table tr').length} 行`,
 )
 ok(
-  '资源行有 存量 / 上限 / 净额 / 加成 四列',
+  '资源行仅显示名称、存量、上限与净额四列',
   (() => {
-    const tds = doc.querySelector('.left .res-table tr')?.querySelectorAll('td') || []
+    const tds = doc.querySelector('.left .res-table .res-group-rows tr')?.querySelectorAll('td') || []
     return (
-      tds.length === 5 &&
+      tds.length === 4 &&
       !!tds[1].classList.contains('res-amount') &&
       !!tds[2].classList.contains('res-max') &&
       !!tds[3].classList.contains('res-rate') &&
-      !!tds[4].classList.contains('res-bonus')
+      !doc.querySelector('.res-bonus')
     )
   })(),
 )
 ok('左列保留快捷炼制入口', !!doc.querySelector('.left .craft-row') && !!doc.querySelector('.left .craft-open'))
+
+// 分组折叠与造价预览共用现有高亮；临时展开不覆盖玩家偏好。
+{
+  const oldCollapsed = { ...state.ui.collapsedResourceGroups }
+  const oldHighlight = ui.highlight
+  const button = () => doc.querySelector('[aria-label="基础资源分组"]')
+  const names = () => [...doc.querySelectorAll('#res-group-basic .res-name')].map(el => el.textContent)
+  ok('基础资源默认展开且木石归在同组', button()?.getAttribute('aria-expanded') === 'true' && names().includes('灵木'))
+  ok('空的后期资源分组不显示', !doc.querySelector('[aria-label="灵子与灵能分组"]'))
+  button()?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('点击分组收起资源行并保存偏好', button()?.getAttribute('aria-expanded') === 'false' && names().length === 0 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).ui.collapsedResourceGroups.basic)
+  ui.highlight = { need: ['wood'], lack: ['wood'] }
+  await new Promise(r => setTimeout(r, 50))
+  ok('造价预览临时展开折叠组并标出缺料', button()?.getAttribute('aria-expanded') === 'true' && !!doc.querySelector('#res-group-basic .res-lack') && button().textContent.includes('查看用料'))
+  ok('临时展开不修改持久化折叠偏好', state.ui.collapsedResourceGroups.basic === true)
+  ui.highlight = { need: [], lack: [] }
+  await new Promise(r => setTimeout(r, 50))
+  ok('离开造价预览后恢复收起', button()?.getAttribute('aria-expanded') === 'false' && names().length === 0)
+  button()?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('再次点击恢复展开且不丢失资源详情', names().includes('灵木') && !!doc.querySelector('#res-group-basic .tip-trigger'))
+  state.ui.collapsedResourceGroups = oldCollapsed
+  ui.highlight = oldHighlight
+}
 
 // 中列：筛选行 + 建筑按钮网格（猫国式的方格按钮）
 ok(
@@ -566,6 +591,7 @@ if (trigger) {
     tipText.replace(/\s+/g, ' ').slice(0, 60),
   )
   ok('tooltip 列出进项来源（阵徒）', tipText.includes('阵徒'), tipText.replace(/\s+/g, ' ').slice(0, 80))
+  ok('资源栏去掉加成列后详情仍展示加成倍率', !doc.querySelector('.res-bonus') && tipText.includes('加成倍率'))
   trigger.dispatchEvent(new window.MouseEvent('mouseleave'))
   await new Promise((r) => setTimeout(r, 50))
   ok('移开后 tooltip 消失', !doc.querySelector('.tip'))
@@ -617,6 +643,26 @@ state.ui.tab = 'disciples'
 await new Promise((r) => setTimeout(r, 50))
 ok('切换到弟子面板', html().includes('职位分配'))
 ok('弟子管理默认隐藏，只显示展开入口', !doc.querySelector('#disciple-management') && !doc.querySelector('.disciple-list') && doc.querySelector('[aria-controls="disciple-management"]')?.getAttribute('aria-expanded') === 'false')
+{
+  const before = actions.exportText()
+  const member = state.disciples.members[0]
+  const toggle = () => doc.querySelector('input[aria-label="按天赋自动分工"]')
+  ok('未掌握知人善任不显示自动分工入口且不能绕过门槛', !toggle() && actions.setSetting('autoTalentJobs', true) === false)
+  state.upgrades.talentAssignment = true
+  member.talents = [{ id: 'job_woodcutter_huang', level: 1 }]
+  engine.recompute(state, derived)
+  await new Promise(r => setTimeout(r, 50))
+  ok('掌握知人善任后显示已启用的自动分工开关', toggle()?.checked)
+  toggle()?.click()
+  actions.assignDisciples([member.id], 'farmer')
+  await new Promise(r => setTimeout(r, 50))
+  ok('暂停自动分工可手动安排岗位并保存暂停偏好', member.roleId === 'farmer' && !state.settings.autoTalentJobs && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).settings.autoTalentJobs === false)
+  toggle()?.click()
+  await new Promise(r => setTimeout(r, 50))
+  ok('恢复自动分工立即将专长弟子调到对应岗位', member.roleId === 'woodcutter' && toggle()?.checked && state.disciples.jobs.woodcutter > 0)
+  actions.importText(before)
+  await new Promise(r => setTimeout(r, 50))
+}
 {
   const trigger = doc.querySelector('.main [data-habitability]')?.closest('.tip-trigger')
   trigger?.dispatchEvent(new window.MouseEvent('mouseenter'))
@@ -855,7 +901,7 @@ console.log('\n== 弟子逐出师门 ==')
       { id: 12, name: '乙弟子', roleId: 'woodcutter', spiritualRoot: 'heaven', residenceSeconds: year, totalQiConsumed: 20 },
       { id: 13, name: '丙弟子', roleId: null, spiritualRoot: 'five', residenceSeconds: year * 2, totalQiConsumed: 30 },
     ] },
-    resources: { qi: 200 },
+    resources: { qi: 1000 },
     ui: { tab: 'disciples' },
   }))
   try {
@@ -869,12 +915,12 @@ console.log('\n== 弟子逐出师门 ==')
     window.confirm = message => { prompt = message; return false }
     single()?.click()
     await new Promise(r => setTimeout(r, 30))
-    ok('单人逐出先确认姓名和精确费用，取消无损', prompt.includes('甲弟子') && prompt.includes('灵气 11') && prompt.includes('无法撤回') && state.disciples.total === 3 && state.resources.qi === 200)
+    ok('单人逐出先确认姓名和精确费用，取消无损', prompt.includes('甲弟子') && prompt.includes('灵气 270') && prompt.includes('当前每年基础口粮') && prompt.includes('无法撤回') && state.disciples.total === 3 && state.resources.qi === 1000)
     window.confirm = () => true
     single()?.click()
     await new Promise(r => setTimeout(r, 30))
     const saved = JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1'))
-    ok('单人逐出扣费并立即保存，人口岗位和列表同步', state.disciples.total === 2 && state.resources.qi === 189 && state.disciples.jobs.farmer === 0 && !single() && saved.disciples.members.every(member => member.id !== 11))
+    ok('单人逐出扣费并立即保存，人口岗位和列表同步', state.disciples.total === 2 && state.resources.qi === 730 && state.disciples.jobs.farmer === 0 && !single() && saved.disciples.members.every(member => member.id !== 11))
     const root = doc.querySelector('[aria-label="弟子灵根筛选"]')
     root.value = 'heaven'
     root.dispatchEvent(new window.Event('change', { bubbles: true }))
@@ -882,22 +928,22 @@ console.log('\n== 弟子逐出师门 ==')
     const detail = doc.querySelector('.disciple-name')
     detail?.focus()
     await new Promise(r => setTimeout(r, 180))
-    ok('弟子明细显示已满年数、累计消耗与逐出费用', doc.querySelector('.tip')?.textContent.includes('已满 1 年') && doc.querySelector('.tip')?.textContent.includes('累计灵气消耗') && doc.querySelector('.tip')?.textContent.includes('逐出费用'))
+    ok('弟子明细显示已满年数、当前年基础口粮与逐出费用', doc.querySelector('.tip')?.textContent.includes('已满 1 年') && doc.querySelector('.tip')?.textContent.includes('每年基础口粮') && doc.querySelector('.tip')?.textContent.includes('逐出费用'))
     detail?.blur()
     ;[...doc.querySelectorAll('.management-selection button')].find(el => el.textContent === '选择本分类')?.click()
     await new Promise(r => setTimeout(r, 30))
-    ok('批量逐出费用只包含筛选内所选弟子', batchButton()?.textContent.includes('灵气 40') && text().includes('已选 1 人'))
-    state.resources.qi = 39
+    ok('批量逐出费用只包含筛选内所选弟子', batchButton()?.textContent.includes('灵气 540') && text().includes('已选 1 人'))
+    state.resources.qi = 539
     await new Promise(r => setTimeout(r, 30))
     let asked = false
     window.confirm = () => { asked = true; return true }
     actions.dismissDisciples([12])
-    ok('灵气不足禁用逐出按钮并拒绝执行，不打开确认', batchButton()?.disabled && doc.querySelector('[aria-label="逐出弟子12"]')?.disabled && !asked && state.disciples.total === 2 && state.resources.qi === 39)
-    state.resources.qi = 200
+    ok('灵气不足禁用逐出按钮并拒绝执行，不打开确认', batchButton()?.disabled && doc.querySelector('[aria-label="逐出弟子12"]')?.disabled && !asked && state.disciples.total === 2 && state.resources.qi === 539)
+    state.resources.qi = 1000
     await new Promise(r => setTimeout(r, 30))
     batchButton()?.click()
     await new Promise(r => setTimeout(r, 30))
-    ok('确认批量逐出只移除所选并清除选择，其他灵根保留', state.disciples.total === 1 && state.disciples.members[0].id === 13 && state.resources.qi === 160 && state.disciples.jobs.woodcutter === 0 && text().includes('已选 0 人') && text().includes('此分类暂无弟子'))
+    ok('确认批量逐出只移除所选并清除选择，其他灵根保留', state.disciples.total === 1 && state.disciples.members[0].id === 13 && state.resources.qi === 460 && state.disciples.jobs.woodcutter === 0 && text().includes('已选 0 人') && text().includes('此分类暂无弟子'))
   } finally {
     window.confirm = originalConfirm
     actions.importText(previous)
@@ -1970,7 +2016,7 @@ console.log('\n== 大批灵石合成响应 ==')
       state.resources.stone === expected && state.stats.craftCount - before === expected &&
       state.resources.qi === 15000000000 - expected * 15 && state.resources.rock === 3000000000 - expected * 3,
       `${Math.round(elapsed)}ms`)
-    const stockText = selector => doc.querySelector(`${selector} [data-craft="infuseStone"] .have`)?.textContent.split('/')[0].trim()
+    const stockText = selector => doc.querySelector(`${selector} [data-craft="infuseStone"] .have`)?.textContent.split('/')[0].trim().replace(/^灵石\s*/, '')
     ok(`${location} 合成后完整页与快捷栏同步`, !!stockText('.left') && stockText('.left') === stockText('.main'))
   }
   actions.importText(previous)
@@ -2367,7 +2413,7 @@ console.log('\n== 修真灵机仓容分组 ==')
   actions.importText(JSON.stringify({
     realm: 0,
     buildings: { library: { count: 2, on: true } },
-    resources: { insight: 600, qi: 1000 },
+    resources: { insight: 360, qi: 1000 },
     upgrades: { talismanArt: true },
     ui: { tab: 'cultivation' },
   }))
@@ -2375,8 +2421,8 @@ console.log('\n== 修真灵机仓容分组 ==')
   const capacityFold = () => [...doc.querySelectorAll('.main details')].find(d => d.querySelector('summary')?.textContent.includes('需扩充灵机上限'))
   const activeRow = () => [...doc.querySelectorAll('.box-body > table.grid tr')].find(r => r.textContent.includes('聚气纹') && r.querySelector('button'))
   ok('仓容不足的符文研究归入扩仓折叠区', capacityFold()?.textContent.includes('聚气纹') && !activeRow())
-  ok('折叠区说明当前上限及研究需求', /600/.test(capacityFold()?.textContent) && /800/.test(capacityFold()?.textContent))
-  state.buildings.library.count = 3
+  ok('折叠区说明当前上限及研究需求', /360/.test(capacityFold()?.textContent) && /800/.test(capacityFold()?.textContent))
+  state.buildings.library.count = 8
   state.resources.insight = 800
   engine.recompute(state, derived)
   await new Promise(r => setTimeout(r, 50))

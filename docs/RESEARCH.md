@@ -1,6 +1,6 @@
 # 修真研究结构与评估原则
 
-更新：2026-10-12（v0.34）。本文描述当前结构；完整节点与前置只在 [TABLES.md](TABLES.md) 维护，过去的重组、配方和测量见 [BALANCE.md](BALANCE.md)，未决定事项见 [ROADMAP.md](ROADMAP.md)。
+更新：2026-10-13（v0.35）。本文描述当前结构；完整节点与前置只在 [TABLES.md](TABLES.md) 维护，过去的重组、配方和测量见 [BALANCE.md](BALANCE.md)，未决定事项见 [ROADMAP.md](ROADMAP.md)。
 
 ## 体系分工
 

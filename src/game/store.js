@@ -1,7 +1,7 @@
 import { reactive, computed, toRaw, nextTick } from 'vue'
 import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, normalizeQuickCrafts } from '@/data/crafts'
-import { RESOURCES, RESOURCE_MAP, VISIBLE_RESOURCES, resourceName } from '@/data/resources'
+import { RESOURCES, RESOURCE_MAP, VISIBLE_RESOURCES, RESOURCE_GROUPS, resourceName } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { BUILDINGS } from '@/data/buildings'
 import { CULTIVATION, ALL_UPGRADES } from '@/data/upgrades'
@@ -337,7 +337,7 @@ export const actions = {
       return { dismissed: 0 }
     }
     const member = preview.count === 1 ? state.disciples.members.find(member => member.id === preview.ids[0]) : null
-    if (!window.confirm(`确定将${member ? member.name : '所选 ' + preview.count + ' 名弟子'}逐出师门？\n需支付灵气 ${preview.cost.qi.toLocaleString('zh-CN')}（累计消耗×（已满年数＋1），每人向上取整）。\n逐出后移除个人成长与岗位，无法撤回。`)) return { dismissed: 0 }
+    if (!window.confirm(`确定将${member ? member.name : '所选 ' + preview.count + ' 名弟子'}逐出师门？\n需支付灵气 ${preview.cost.qi.toLocaleString('zh-CN')}（当前每年基础口粮×（已满年数＋1），每人向上取整）。\n逐出后移除个人成长与岗位，无法撤回。`)) return { dismissed: 0 }
     const result = E.dismissDisciples(state, derived, preview.ids, preview)
     if (result.dismissed) {
       afterAction(`已逐出 ${result.dismissed} 人，支付灵气 ${result.cost.qi}`, 'info')
@@ -501,6 +501,14 @@ export const actions = {
     toast('已重新开山立派', 'good')
   },
   setSetting(key, value) {
+    if (key === 'autoTalentJobs') {
+      if (!derived.autoTalentJobsUnlocked || typeof value !== 'boolean') return false
+      state.settings.autoTalentJobs = value
+      if (value) E.autoAssignTalentJobs(state)
+      E.recompute(state, derived)
+      saveNow()
+      return true
+    }
     if (key === 'autoCraftSpeeds' || key === 'autoCraftSpeed' || key === 'craftWeights' || key === 'processingModes') return false
     state.settings[key] = value
     saveNow()
@@ -577,6 +585,15 @@ export const actions = {
   },
   huntSetAutoRepeat(value) {
     E.setHuntAutoRepeat(state, value)
+    saveNow()
+    return true
+  },
+  toggleResourceGroup(id) {
+    if (!RESOURCE_GROUPS.some(group => group.id === id)) return false
+    const collapsed = { ...state.ui.collapsedResourceGroups }
+    if (collapsed[id]) delete collapsed[id]
+    else collapsed[id] = true
+    state.ui.collapsedResourceGroups = collapsed
     saveNow()
     return true
   },

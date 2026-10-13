@@ -12,7 +12,7 @@ import { BUILDINGS } from '@/data/buildings'
 import { ALL_UPGRADES } from '@/data/upgrades'
 import { runAutoCraft, runAutoCondense } from './crafting'
 import { CALENDAR } from '@/data/calendar'
-import { recruitArrivals } from './disciples'
+import { recruitArrivals, autoAssignTalentJobs } from './disciples'
 
 export function checkAchievements(state, derived) {
   const newly = []
@@ -92,6 +92,7 @@ export function advanceTicks(state, derived, seconds, opts) {
 export function tickStep(state, derived, dt, opts) {
   const { offline = false, events = true } = opts
   const cap = dt > CONFIG.MAX_STEP_SECONDS ? CONFIG.MAX_STEP_SECONDS : dt
+  autoAssignTalentJobs(state)
   recompute(state, derived, cap)
   for (const member of state.disciples.members) cultivateDisciple(member, cap, derived.trainingActive)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)

@@ -15,7 +15,7 @@ import {
 import { createBot, ADVANCED_CRAFTS } from './player-bot.mjs'
 import { fmt, fmtAmount, fmtCost, fmtFixed, fmtInt, fmtResource, fmtStock } from '../src/game/format.js'
 import * as E from './engine-fixture.mjs'
-import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
+import { RESOURCES, RESOURCE_MAP, RESOURCE_GROUPS, VISIBLE_RESOURCES } from '../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
 import { HUNT_FIELDS } from '../src/modules/hunting/data.js'
@@ -32,6 +32,7 @@ import { CRAFTS, CRAFT_MAP, craftCost } from '../src/data/crafts.js'
 import { runIndustryChecks } from './industry-check.mjs'
 import { runDiscipleChecks } from './disciple-check.mjs'
 import { runTalentChecks } from './talent-check.mjs'
+import { runAutoTalentChecks } from './auto-talent-check.mjs'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
@@ -2060,6 +2061,7 @@ section('存档序列化')
   state.achievements.firstHut = true
   state.realm = 3
   state.karma = 12
+  state.ui.collapsedResourceGroups = { basic: true, materials: true }
   state.log = Array.from({ length: 100 }, (_, i) => ({ id: i, at: Date.now(), text: 'x', kind: 'info' }))
 
   const text = exportSave(state)
@@ -2069,6 +2071,7 @@ section('存档序列化')
   ok('导入后建筑一致', parsed.buildings.hut.count === 7)
   ok('导入后境界一致', parsed.realm === 3)
   ok('导入后仙缘一致', parsed.karma === 12)
+  ok('资源折叠偏好随导出导入保留', parsed.ui.collapsedResourceGroups.basic && parsed.ui.collapsedResourceGroups.materials)
   ok('导入后日志被截断到 60 条', parsed.log.length === 60, `实际 ${parsed.log.length}`)
   ok('导入后不含内存字段 __max', parsed.__max === undefined)
 
@@ -2083,6 +2086,19 @@ section('存档序列化')
     threw = true
   }
   ok('非法存档会抛错', threw)
+}
+
+section('资源分组与旧档兼容')
+{
+  const ids = RESOURCE_GROUPS.flatMap(group => group.resources)
+  ok('每个可见资源恰好属于一个分组', ids.length === VISIBLE_RESOURCES.length && new Set(ids).size === ids.length && VISIBLE_RESOURCES.every(id => ids.includes(id)))
+  const old = createInitialState()
+  delete old.ui.collapsedResourceGroups
+  ok('旧档默认展开所有资源组', Object.keys(normalizeState(old).ui.collapsedResourceGroups).length === 0)
+  old.ui.collapsedResourceGroups = { basic: true, materials: 'true', unknown: true }
+  ok('读档过滤未知分组与异常折叠值', JSON.stringify(normalizeState(old).ui.collapsedResourceGroups) === '{"basic":true}')
+  old.ui.collapsedResourceGroups = ['basic']
+  ok('损坏的分组偏好回落默认值且不影响进度', Object.keys(normalizeState(old).ui.collapsedResourceGroups).length === 0)
 }
 
 // ------------------------------------------------------------
@@ -2612,7 +2628,7 @@ section('百工坊：提前到手 + 制作加成')
   // 百工坊用基础原料启动；木板工艺独立解锁。
   ok(
     '百工坊仅使用普通灵木与矿石，不需加工材料',
-    wh.cost.wood === 150 && wh.cost.rock === 100 && Object.keys(wh.cost).length === 2,
+    wh.cost.wood === 100 && wh.cost.rock === 150 && Object.keys(wh.cost).length === 2,
     JSON.stringify(wh.cost),
   )
   ok(
@@ -3980,8 +3996,8 @@ section('仙缘仓储永久加成')
   E.recompute(s, d)
   ok('重复重算不会复利放大仓储', RESOURCES.every(r => d.max[r.id] === enlarged[r.id]))
   ok('仙缘扩仓不会直接增加库存', s.resources.pill === 0 && s.resources.qi === 0)
-  const warehouseWood = E.buildingCost({ ...s, buildings: { warehouse: { count: 45, on: true } } }, 'warehouse', 1).wood
-  // 此截图使用旧版石殿造价；保留历史容量回归，不把旧价当成当前材料库价格。
+  // 此截图使用旧版库房与石殿造价；保留历史容量回归，不绑定当前建筑价格。
+  const warehouseWood = Math.ceil(200 * Math.pow(1.18, 45))
   const depotStone = Math.ceil(1500 * Math.pow(1.25, 25))
   ok('截图下一座库房从容量不足变为可支付', warehouseWood > 336000 && warehouseWood <= 336000 * d.karmaStorageMult)
   ok('历史截图石殿需求落在仙缘增加后的容量内', depotStone > 321000 && depotStone <= 321000 * d.karmaStorageMult)
@@ -4676,11 +4692,15 @@ section('修真由灵机仓容软性推进')
   E.recompute(s, d)
   s.resources.insight = d.max.insight
   ok('凡体满足前置即可开放聚气纹', s.realm === 0 && E.isUpgradeUnlocked(s, UPGRADE_MAP.qiRune))
-  ok('满仓灵机仍不足以支付高档研究', d.max.insight === 600 && !E.research(s, d, 'qiRune'))
-  s.buildings.library.count = 3
+  ok('两座藏经阁仅有360灵机仓容，高档研究仍需扩仓', d.max.insight === 360 && !E.research(s, d, 'qiRune'))
+  s.buildings.library.count = 7
   E.recompute(s, d)
   s.resources.insight = d.max.insight
-  ok('扩仓到费用档位后可在凡体实际研究', d.max.insight === 800 && E.research(s, d, 'qiRune') && s.resources.insight === 0)
+  ok('七座藏经阁仍不足以支付800灵机的聚气纹', d.max.insight === 760 && !E.research(s, d, 'qiRune'))
+  s.buildings.library.count = 8
+  E.recompute(s, d)
+  s.resources.insight = 800
+  ok('扩仓到费用档位后可在凡体实际研究', d.max.insight === 840 && E.research(s, d, 'qiRune') && s.resources.insight === 0)
 }
 
 section('符文研究与载体应用')
@@ -5039,6 +5059,7 @@ runIndustryChecks(E, ok, close, newGame)
 section('弟子成长、分工与突破')
 runDiscipleChecks(E, ok, close)
 runTalentChecks(E, ok, close)
+runAutoTalentChecks(E, ok, close)
 
 runArchitectureChecks()
 

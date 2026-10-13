@@ -198,30 +198,33 @@ export function runDiscipleChecks(E, ok, close) {
   const accountingSave = normalizeState(JSON.parse(JSON.stringify(account)))
   ok('个人停留与累计消耗随存档保留', accountingSave.disciples.members[0].residenceSeconds === full.residenceSeconds && accountingSave.disciples.members[0].totalQiConsumed === full.totalQiConsumed)
   const year = DISCIPLE_DISMISSAL.yearSeconds
-  ok('逐出按游戏已满年数加1倍计费并向上取整', discipleDismissalCost({ residenceSeconds: year - 0.01, totalQiConsumed: 10.1 }) === 11 && discipleDismissalCost({ residenceSeconds: year, totalQiConsumed: 10.1 }) === 21 && discipleDismissalCost({ residenceSeconds: year * 2, totalQiConsumed: 10.1 }) === 31)
-  const [expel, ed] = setup(3, 4)
+  ok('逐出按当前年基础口粮乘已满年数加1并向上取整', discipleDismissalCost({ realm: 1, residenceSeconds: year - 0.01 }, 1) === 358 && discipleDismissalCost({ realm: 1, residenceSeconds: year }, 1) === 715 && discipleDismissalCost({ realm: 1, residenceSeconds: year * 2 }, 1) === 1072)
+  ok('逐出费用不随历史突破或累计口粮增加', discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: 0 }, 0) === 540 && discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: 1000000 }, 0) === 540)
+  ok('宗门退境按当前有效境界计算年基础口粮', discipleDismissalCost({ realm: 4, residenceSeconds: year }, 1) === 715 && discipleDismissalCost({ realm: 4, residenceSeconds: year }, 4) === 2160)
+  const [expel, ed] = setup(3, 0)
   const [a, b, c] = expel.disciples.members
   a.residenceSeconds = year
   a.totalQiConsumed = 10.1
   b.totalQiConsumed = 20
   E.assignDisciples(expel, ed, [b.id], 'woodcutter')
   const ids = [a.id, b.id, a.id, 999999]
-  expel.resources.qi = 40
+  expel.resources.qi = 809
   const populationBefore = JSON.stringify(expel.disciples)
   let dismissal = E.dismissDisciples(expel, ed, ids)
-  ok('逐出费用逐人取整并去重，未知身份不收费', E.discipleDismissalPreview(expel, ids).cost.qi === 41 && E.discipleDismissalPreview(expel, ids).count === 2)
-  ok('整批灵气不足时不扣费且不移除任何弟子', dismissal.dismissed === 0 && dismissal.reason === 'insufficient' && expel.resources.qi === 40 && JSON.stringify(expel.disciples) === populationBefore)
-  expel.resources.qi = 100
+  ok('逐出费用逐人取整并去重，未知身份不收费', E.discipleDismissalPreview(expel, ids).cost.qi === 810 && E.discipleDismissalPreview(expel, ids).count === 2)
+  ok('整批灵气不足时不扣费且不移除任何弟子', dismissal.dismissed === 0 && dismissal.reason === 'insufficient' && expel.resources.qi === 809 && JSON.stringify(expel.disciples) === populationBefore)
+  expel.resources.qi = 1000
   const quote = E.discipleDismissalPreview(expel, ids)
-  a.totalQiConsumed += 1
+  a.residenceSeconds += year
   dismissal = E.dismissDisciples(expel, ed, ids, quote)
-  ok('确认后费用变化时整批拒绝并要求重新确认', dismissal.reason === 'changed' && expel.disciples.total === 3 && expel.resources.qi === 100)
-  a.totalQiConsumed -= 1
+  ok('确认后费用变化时整批拒绝并要求重新确认', dismissal.reason === 'changed' && expel.disciples.total === 3 && expel.resources.qi === 1000)
+  a.residenceSeconds -= year
   dismissal = E.dismissDisciples(expel, ed, ids)
-  ok('逐出支付精确费用并同步人口岗位和口粮', dismissal.dismissed === 2 && expel.resources.qi === 59 && expel.disciples.total === 1 && expel.disciples.members[0].id === c.id && expel.disciples.jobs.farmer === 1 && expel.disciples.jobs.woodcutter === 0 && close(ed.discipleWeight, 1))
+  ok('逐出支付精确费用并同步人口岗位和口粮', dismissal.dismissed === 2 && expel.resources.qi === 190 && expel.disciples.total === 1 && expel.disciples.members[0].id === c.id && expel.disciples.jobs.farmer === 1 && expel.disciples.jobs.woodcutter === 0 && close(ed.discipleWeight, 1))
   E.recompute(expel, ed)
   const expelSave = normalizeState(JSON.parse(JSON.stringify(expel)))
   ok('逐出弟子不会在刷新或读档时重新补回', expelSave.disciples.members.length === 1 && expelSave.disciples.members[0].id === c.id)
+  expel.resources.qi = 270
   dismissal = E.dismissDisciples(expel, ed, [c.id])
   ok('逐出最后一名弟子清空人口岗位且不复用身份', dismissal.dismissed === 1 && expel.disciples.total === 0 && Object.values(expel.disciples.jobs).every(value => value === 0) && newDisciple(expel.disciples).id > c.id)
 

@@ -134,6 +134,7 @@ export function describeEffects(ef) {
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
+  if (ef.autoTalentJobs) push('自动按岗位专长分工', '弟子页可暂停', 'good')
   if (ef.autoCraftSpeedControl) push('各配方自动速限', '1× / 2× / 5× / 10×（金丹起受工位容量约束）', 'unlock')
   if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝气化液》', 'good')
   if (ef.energyCraft) push('灵能应用', '解锁工位灵能驱动，按额外负荷耗能', 'unlock')

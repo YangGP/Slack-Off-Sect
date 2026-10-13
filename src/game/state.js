@@ -110,6 +110,7 @@ export function createInitialState(now = Date.now()) {
     settings: {
       autosave: true,
       autoCraftOn: true,
+      autoTalentJobs: true,
       autoCraftSpeeds: {},
       craftWeights: {},
       processingModes: {},
@@ -130,6 +131,7 @@ export function createInitialState(now = Date.now()) {
       // 技艺页筛选：all / skill / treasure
       skillFilter: 'all',
       craftFilter: 'all',
+      collapsedResourceGroups: {},
     },
   }
 }

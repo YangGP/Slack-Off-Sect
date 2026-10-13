@@ -26,6 +26,7 @@ import {
 } from '../modules/hunting/data.js'
 
 const CORE_BUILDINGS = [
+  // 采矿开放后的基础设施由木架与石基分摊造价；首次扩仓前的首座矿石费用不超过基础上限250。
   // ============ 生产 ============
   {
     id: 'spiritField',
@@ -84,7 +85,7 @@ const CORE_BUILDINGS = [
     group: 'produce',
     // 与炼铁炉同在"寻脉"这一条线上：矿石砌井口、木料搭支架（实物建筑不吃灵气，
     // 也不再用修炼硬通货充当砌石 —— 灵石留给凝灵与交易）
-    cost: { wood: 700, rock: 100, ore: 80 },
+    cost: { wood: 400, rock: 250, ore: 80 },
     // 天然灵石由矿工采出，每座启用矿井叠加固定副产出，不放大矿石或玄铁。
     priceRatio: 1.55,
     desc: '岩层里嵌着天然灵石。每座启用的矿井，让每名矿工额外采出 0.0015 灵石/秒，多座相加；无人采矿时不产出。',
@@ -97,7 +98,7 @@ const CORE_BUILDINGS = [
     glyph: '圃',
     group: 'produce',
     // 普通药圃用木料营造，灵石留给凝灵与交易。
-    cost: { wood: 400, stone: 60 },
+    cost: { wood: 240, rock: 120, stone: 60 },
     priceRatio: 1.15,
     desc: '按四时节气轮种，开放采药人职位；派遣弟子照料和采收后才能取得灵草。每座启用的药圃提高灵草产出10%，多座相加。',
     effects: { ratio: { herb: 0.1 } },
@@ -190,7 +191,7 @@ const CORE_BUILDINGS = [
     name: '清风小院',
     glyph: '院',
     group: 'living',
-    cost: { wood: 120, rock: 80 },
+    cost: { wood: 80, rock: 120 },
     priceRatio: 1.3,
     desc: '石径排水，木廊遮荫，同门劳作之后有处歇脚。每座宜居度 +4。',
     effects: { habitability: 4 },
@@ -201,7 +202,7 @@ const CORE_BUILDINGS = [
     name: '膳养堂',
     glyph: '膳',
     group: 'living',
-    cost: { wood: 300, rock: 120, herb: 100 },
+    cost: { wood: 180, rock: 240, herb: 100 },
     priceRatio: 1.32,
     desc: '分灶炊煮、药膳调养，弟子不必各自操持起居。每座宜居度 +8；灵气口粮照常消耗。',
     effects: { habitability: 8 },
@@ -261,7 +262,7 @@ const CORE_BUILDINGS = [
     glyph: '库',
     group: 'store',
     // 石砌墙基、铁箍木架：矿石承重，灵石不掺和
-    cost: { wood: 200, rock: 150, ore: 60 },
+    cost: { wood: 150, rock: 200, ore: 60 },
     priceRatio: 1.18,
     desc: '石基铁箍木架，专存灵木、灵石、矿石、玄铁、灵草这些基础物资 —— 丹药符箓另有去处。',
     // 库房只存**基础物资**：灵木 / 灵石 / 矿石 / 玄铁 / 灵草。
@@ -342,7 +343,7 @@ const CORE_BUILDINGS = [
     cost: { qi: 200, wood: 60 },
     priceRatio: 1.18,
     desc: '一阁典籍，是宗门最早的学问。弟子在此抄经静坐，念头慢慢熬成灵机。',
-    effects: { ratio: { insight: 0.15 }, storage: { insight: 200 } },
+    effects: { ratio: { insight: 0.15 }, storage: { insight: 80 } },
     needs: { building: { id: 'spiritField', count: 3 } },
   },
   {
@@ -409,7 +410,7 @@ const CORE_BUILDINGS = [
     glyph: '丹',
     group: 'craft',
     // 不再吃灵草：灵草是炼丹房要消耗的原料，建它时先要 200 灵草等于先有鸡还是先有蛋。
-    cost: { wood: 600, stone: 150, ore: 60 },
+    cost: { wood: 360, rock: 240, stone: 150, ore: 60 },
     priceRatio: 1.25,
     desc: '三足鼎立、文武火候，灵草在这里变成丹药。',
     effects: { craftBonusByResource: { pill: 0.05, nineTurnPill: 0.05 }, ratio: { herb: 0.1 }, storage: { pill: 200 } },
@@ -421,7 +422,7 @@ const CORE_BUILDINGS = [
     name: '炼器坊',
     glyph: '器',
     group: 'craft',
-    cost: { ore: 400, wood: 800 },
+    cost: { ore: 400, wood: 500, rock: 240 },
     priceRatio: 1.25,
     desc: '风箱一响，玄铁就有了骨气。',
     effects: { craftBonusByResource: { artifact: 0.05, steel: 0.05, spiritArtifact: 0.05, spiritTreasure: 0.05 }, ratio: { ore: 0.1 }, storage: { artifact: 120 } },
@@ -433,7 +434,7 @@ const CORE_BUILDINGS = [
     name: '符箓堂',
     glyph: '符',
     group: 'craft',
-    cost: { wood: 700, herb: 300 },
+    cost: { wood: 420, rock: 200, herb: 300 },
     priceRatio: 1.25,
     desc: '以灵木与金属为载体，刻纹注灵，制成符箓、灵符与阵法构件。',
     effects: { craftBonusByResource: { talisman: 0.05, spiritTalisman: 0.05 }, storage: { talisman: 200 } },
@@ -445,7 +446,7 @@ const CORE_BUILDINGS = [
     name: '百工坊',
     glyph: '工',
     group: 'craft',
-    cost: { wood: 150, rock: 100 },
+    cost: { wood: 100, rock: 150 },
     priceRatio: 1.3,
     desc: '灵木搭棚、矿石垒台，采木采矿之后即可开张。匠人在此整料、修具并交流工艺，每座制作产出 +6%（可叠加）。',
     // 它**只是加成建筑**：不锁任何配方或条目（数据里没有一条 needs 指向它），
@@ -461,7 +462,7 @@ const CORE_BUILDINGS = [
     name: '山门',
     glyph: '门',
     group: 'incense',
-    cost: { wood: 600, ore: 40 },
+    cost: { wood: 360, rock: 200, ore: 40 },
     priceRatio: 1.3,
     desc: '山门一立，香客便知此处有仙。开放香使职位，派遣弟子接待香客才能收取香火。',
     effects: { storage: { faith: 80 } },

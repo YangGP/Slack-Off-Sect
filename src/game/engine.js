@@ -4,7 +4,7 @@ export { clamp, habitabilityEffects, softCap, createDerived, entryOf, countOf, a
 export { timeToAfford } from './systems/queries'
 export { recompute } from './systems/economy'
 export { buyBuilding, sellBuilding, toggleBuilding } from './systems/buildings'
-export { setJob, shiftJob, fillJob, assignDisciples, discipleDismissalPreview, dismissDisciples, discipleBreakthroughPreview, breakthroughDisciples, discipleAidPreview, applyDiscipleAid, setMentored, recruitArrivals, clearJobs } from './systems/disciples'
+export { setJob, shiftJob, fillJob, assignDisciples, autoAssignTalentJobs, discipleDismissalPreview, dismissDisciples, discipleBreakthroughPreview, breakthroughDisciples, discipleAidPreview, applyDiscipleAid, setMentored, recruitArrivals, clearJobs } from './systems/disciples'
 export { toggleUpkeepUpgrade, research, refineTreasure, breakthroughPreview, breakthrough, lifeInsightOf, canAscend, reincarnationsDone, canReincarnate, ascensionGain, reincarnationGain } from './systems/progression'
 export { craftBatch, requestCraft, manageCraftOrder, setProcessingMode, setCraftWeight, runAutoCraft, runAutoCondense, setAutoCraftSpeed, setCraftTarget, drawQi, craft, setAllAutoCraft, toggleAutoCraft } from './systems/crafting'
 export { eventResourceRate, eventEffect, eventOutcome, fireEvent, resolveChoice, settleExpiredThreat } from './systems/events'

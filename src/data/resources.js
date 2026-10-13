@@ -334,3 +334,13 @@ export function resourceName(id) {
 
 /** 顶栏显示顺序（隐藏资源另算） */
 export const VISIBLE_RESOURCES = RESOURCES.filter((r) => !r.hidden).map((r) => r.id)
+
+/** 左栏按用途分组；混合来源的灵石、玄铁仍属于基础原料。 */
+export const RESOURCE_GROUPS = [
+  { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'faith'] },
+  { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
+  { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
+  { id: 'crafted', name: '丹符器物', resources: ['pill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
+  { id: 'hunting', name: '猎杀物资', resources: ['huntPreparation', 'beastHide', 'beastBone'] },
+  { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'ascensionSeal'] },
+]

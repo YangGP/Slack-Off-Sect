@@ -2,6 +2,7 @@ import { REALMS, BREAKTHROUGH } from './realms'
 import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
+import { CONFIG } from './config'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,
@@ -40,8 +41,15 @@ export function discipleResidenceYears(member) {
   return Math.floor((member.residenceSeconds || 0) / DISCIPLE_DISMISSAL.yearSeconds)
 }
 
-export function discipleDismissalCost(member) {
-  return Math.ceil((member.totalQiConsumed || 0) * (discipleResidenceYears(member) + 1))
+/** 当前一年基础口粮：沿用口粮的境界倍率，不计减耗、供给或其他培养费用。 */
+export function discipleAnnualBaseUpkeep(member, sectRealm) {
+  const realmMult = REALMS[sectRealm]?.mult ?? 1
+  return CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
+    * discipleFactor(member, sectRealm) * DISCIPLE_DISMISSAL.yearSeconds
+}
+
+export function discipleDismissalCost(member, sectRealm) {
+  return Math.ceil(discipleAnnualBaseUpkeep(member, sectRealm) * (discipleResidenceYears(member) + 1))
 }
 
 export const SPIRITUAL_ROOTS = [

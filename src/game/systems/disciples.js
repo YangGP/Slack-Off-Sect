@@ -7,6 +7,23 @@ import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
 
+/** 自动分工属于动作结算，不能放在只读重算中；只改有岗位专长且未出征的弟子。 */
+export function autoAssignTalentJobs(state) {
+  if (!state.upgrades.talentAssignment || state.settings.autoTalentJobs === false) return 0
+  const available = new Set(JOBS.filter(job => isJobUnlocked(state, job)).map(job => job.id))
+  let changed = 0
+  for (const member of state.disciples.members) {
+    if (member.onMission) continue
+    const entry = member.talents?.find(entry => TALENT_MAP[entry.id]?.category === 'job')
+    const talent = TALENT_MAP[entry?.id]
+    if (!talent || !available.has(talent.jobId) || member.roleId === talent.jobId) continue
+    member.roleId = talent.jobId
+    changed++
+  }
+  if (changed) recountDisciples(state.disciples)
+  return changed
+}
+
 export function setJob(state, derived, jobId, value) {
   const job = JOBS.find((j) => j.id === jobId)
   if (!job || !isJobUnlocked(state, job) || !Number.isFinite(value)) return
@@ -51,7 +68,7 @@ export function discipleDismissalPreview(state, ids) {
   const selected = new Set(ids)
   // 出征中的弟子不能逐出。
   const members = state.disciples.members.filter(member => selected.has(member.id) && !member.onMission)
-  const qi = members.reduce((total, member) => total + discipleDismissalCost(member), 0)
+  const qi = members.reduce((total, member) => total + discipleDismissalCost(member, state.realm), 0)
   return { ids: members.map(member => member.id), count: members.length, cost: { qi },
     affordable: Number.isSafeInteger(qi) && canAfford(state, { qi }) }
 }
@@ -110,6 +127,7 @@ export function breakthroughDisciples(state, derived, ids, random = () => gameRa
       result.failed++
     }
   }
+  autoAssignTalentJobs(state)
   if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}`, result.failed ? 'info' : 'good')
   recompute(state, derived)
   return result
@@ -142,6 +160,7 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
     state.disciples.members.push(member)
   }
   if (arrived > 0) {
+    autoAssignTalentJobs(state)
     recountDisciples(state.disciples)
     state.stats.recruits += arrived
     if (!silent) {
