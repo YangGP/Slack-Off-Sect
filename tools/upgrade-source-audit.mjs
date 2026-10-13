@@ -22,6 +22,7 @@ import { BUILDINGS } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
 import { REALMS, ASCEND_REALM_INDEX } from '../src/data/realms.js'
 import { RESOURCE_MAP } from '../src/data/resources.js'
+import { HUNT, HUNT_FIELDS } from '../src/modules/hunting/data.js'
 
 const state = createInitialState()
 const derived = E.createDerived()
@@ -81,6 +82,15 @@ for (let round = 1; round <= MAX_ROUND; round++) {
     }
   }
   // 3) 配方（快照判定供料）
+  // 猎杀是任务来源，不在 jobs/crafts 中；需要实际可达的营地、弟子容量与猎备。
+  if (derived.maxDisciples > 0 && snap.has('huntPreparation') && derived.max.huntPreparation >= HUNT.PREPARATION_COST) {
+    for (const field of HUNT_FIELDS) {
+      if (!E.isHuntUnlocked(state, field.id)) continue
+      for (const res of Object.keys(field.baseYield)) {
+        if (record(res, round, `猎场·${field.name}`)) changed = true
+      }
+    }
+  }
   for (const c of CRAFTS) {
     if (snap.has(c.out)) continue
     if (!E.isCraftUnlocked(state, c)) continue
@@ -224,3 +234,4 @@ if (bUnreach.length) {
 } else {
   console.log('闭包内所有建筑都可营造（不存在硬死锁）。')
 }
+if (unreachable.length || bNoSource.length || bUnreach.length) process.exitCode = 1

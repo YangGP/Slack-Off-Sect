@@ -1,5 +1,7 @@
 # 工程约定与工具
 
+可选模块由 `data/modules.js` 定义开关，`game/moduleRegistry.js` 接入初始化、存档、时间推进与停用清理，`modules/uiRegistry.js` 单独接入界面。猎杀数据与系统集中在 `modules/hunting/`，引擎不依赖 Vue 界面。停用模块读档时先验证并保留切片，再召回活动任务，保留历史和偏好；转世/飞升才重置本世切片。任务存档过滤异常结构与数值并重挂合法成员占用。
+
 更新：2026-10-13。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
 
 个人天赋配置在 `data/talents.js`，32条词条按修炼、岗位、突破类别互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`及DOM检查。完整规则见 [DISCIPLE-TALENTS.md](DISCIPLE-TALENTS.md)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。

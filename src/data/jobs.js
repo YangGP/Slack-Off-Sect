@@ -3,7 +3,9 @@
  * base 是「每名弟子每秒」的基础产出；岗位拥挤倍率仅作用于弟子，全局倍率已包含宜居度增减产。
  * needs 决定解锁条件：{ building: {id, count} } 或 { upgrade: 'id' }
  */
-export const JOBS = [
+import { HUNT_JOBS } from '../modules/hunting/data.js'
+
+const CORE_JOBS = [
   {
     id: 'farmer',
     name: '阵徒',
@@ -64,15 +66,9 @@ export const JOBS = [
     base: 0.02,
     needs: { building: { id: 'gate', count: 1 } },
   },
-  {
-    id: 'huntPlanner',
-    name: '猎妖师',
-    glyph: '猎',
-    desc: '在营地打理弓弩、干粮与缚兽索，为出征备下猎备。不产兽材——兽材由出征任务带回。',
-    resource: 'huntPreparation',
-    base: 0.2,
-    needs: { building: { id: 'huntingCamp', count: 1 } },
-  },
 ]
+
+/** 核心岗位 + 可选模块（猎杀）贡献的岗位（猎妖师，追加在末尾） */
+export const JOBS = [...CORE_JOBS, ...HUNT_JOBS]
 
 export const JOB_MAP = Object.fromEntries(JOBS.map((j) => [j.id, j]))

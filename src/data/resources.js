@@ -3,7 +3,10 @@
  * baseMax 为仓储上限的基数，实际上限 = baseMax + 建筑/修真/技艺提供的仓储。
  * hidden 资源默认不在顶栏显示（例如飞升后才启用的仙缘）。
  */
-export const RESOURCES = [
+import { insertAfter } from './modules.js'
+import { HUNT_RESOURCES, HUNT_RESOURCE_ANCHOR } from '../modules/hunting/data.js'
+
+const CORE_RESOURCES = [
   {
     id: 'qi',
     name: '灵气',
@@ -72,35 +75,6 @@ export const RESOURCES = [
     color: '#a8e07a',
     baseMax: 150,
     desc: '药圃所产，炼丹必需。',
-  },
-  {
-    id: 'huntPreparation',
-    name: '猎备',
-    glyph: '备',
-    color: '#d8b98a',
-    baseMax: 0,
-    // 仓容完全独立：不套通用扩仓（比例为 0），也不乘仙缘仓储倍率（isolatedStorage）。
-    storageWeight: 0,
-    isolatedStorage: true,
-    desc: '弓弩、干粮、缚兽索——猎妖师在营地备下的行装。每趟出征消耗 100，仓容由猎杀营地单独提供。',
-  },
-  {
-    id: 'beastHide',
-    name: '灵兽皮',
-    glyph: '皮',
-    color: '#d0a878',
-    baseMax: 0,
-    integer: true,
-    desc: '山麓妖兽的皮，柔韧耐磨。可作暖裘居室的衬垫与护具。',
-  },
-  {
-    id: 'beastBone',
-    name: '灵兽骨',
-    glyph: '骨',
-    color: '#e0d6c2',
-    baseMax: 0,
-    integer: true,
-    desc: '妖兽的骨，含灵气而不易碎。可炼器，也可入建材。',
   },
   {
     id: 'plank',
@@ -347,6 +321,9 @@ export const RESOURCES = [
     desc: '转世与飞升带走的因果。每点仙缘永久提升全局产出与仓储容量，两种加成分别递减。',
   },
 ]
+
+/** 核心资源 + 可选模块（猎杀）贡献的资源，按锚点插回保持原顺序 */
+export const RESOURCES = insertAfter(CORE_RESOURCES, HUNT_RESOURCE_ANCHOR, HUNT_RESOURCES)
 
 export const RESOURCE_MAP = Object.fromEntries(RESOURCES.map((r) => [r.id, r]))
 

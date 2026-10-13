@@ -3,8 +3,9 @@ import { gameNow, resetRuntimeCounters } from './context'
 import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { DEFAULT_QUICK_CRAFTS } from '@/data/crafts'
+import { defaultModules } from '@/data/modules'
 import { migrateState } from './migrations'
-import { createHuntingState, rehydrateHuntOccupancy } from './systems/hunting'
+import { initialModuleState, rehydrateModules, resetModules } from './moduleRegistry'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -64,8 +65,8 @@ export function createInitialState(now = Date.now()) {
     autoCraft: {},
     craftTargets: {},
 
-    // 妖兽猎杀：任务、兽材小数累计、猎场状态与统计；随本世重置。
-    hunting: createHuntingState(),
+    // 可选模块的状态切片（如猎杀任务的 state.hunting）；随本世重置
+    ...initialModuleState(),
 
     realm: 0,
     karma: 0,
@@ -117,6 +118,8 @@ export function createInitialState(now = Date.now()) {
       craftReserves: {},
       autoCraftPriority: 'infuseStone',
       quickCrafts: [...DEFAULT_QUICK_CRAFTS],
+      // 可选模块开关（默认值与清单见 @/data/modules）
+      modules: defaultModules(),
     },
 
     ui: {
@@ -136,8 +139,8 @@ export function normalizeState(state, { now = Date.now(), preferMembers = false 
   assertSaveShape(state)
   const fresh = createInitialState(now)
   const normalized = validateState(migrateState(state, fresh, { preferMembers }), fresh)
-  // 成员占用是运行时字段：读档后按活动任务重新标记出征弟子。
-  rehydrateHuntOccupancy(normalized)
+  // 成员占用等属于运行时字段：读档后按活动任务重新标记（仅启用的模块）。
+  rehydrateModules(normalized)
   return normalized
 }
 
@@ -195,7 +198,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.buffs = []
   state.pendingChoice = null
   state.affairs = { ...fresh.affairs }
-  state.hunting = fresh.hunting
+  resetModules(state, fresh)
   state.stats.lifeInsight = 0
   if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
   else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1

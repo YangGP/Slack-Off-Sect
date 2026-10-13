@@ -2,15 +2,16 @@
 /**
  * 猎杀页：猎妖师备猎 → 选猎场与弟子 → 出征 → 归队取兽材。
  * 首轮只开放山麓；妖兽来袭关联与生态字段关闭（仅记统计）。
+ * 本组件属于「妖兽猎杀」可选模块，由 src/modules/hunting/ui.js 导出。
  */
 import { computed } from 'vue'
 import { state, derived, view, actions } from '@/game/store'
-import { HUNT, HUNT_FIELDS, HUNT_FIELD_MAP } from '@/data/hunting'
+import { HUNT, HUNT_FIELDS, HUNT_FIELD_MAP } from './data.js'
 import { REALMS } from '@/data/realms'
 import { resourceName } from '@/data/resources'
-import { canDepart, huntableMembers, huntPreview, isHuntUnlocked } from '@/game/engine'
+import { canDepart, huntableMembers, huntPreview } from '@/game/engine'
 import { fmt, fmtInt, fmtPercent, fmtTime } from '@/game/format'
-import HoverTip from './HoverTip.vue'
+import HoverTip from '@/components/HoverTip.vue'
 
 const fieldId = computed(() => state.hunting.settings.selectedFieldId)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])

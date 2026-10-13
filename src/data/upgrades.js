@@ -17,8 +17,9 @@
  * 两者共用「灵机」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
  */
 import { TECHNIQUES } from './techniques.js'
+import { HUNT_UPGRADES } from '../modules/hunting/data.js'
 
-export const CULTIVATION = [
+const CORE_CULTIVATION = [
   // ============ 主线 · 灵气研究：灵气的科学史 ============
 
   // ---------- Ⅰ 观气：灵气是什么、在哪、怎么聚 ----------
@@ -805,32 +806,10 @@ export const CULTIVATION = [
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['arcaneGoldArt', 'crystalPolishing'] },
   },
-
-  // ---------- 山野族 ----------
-  {
-    id: 'wildHunting',
-    name: '山野猎法',
-    glyph: '猎',
-    cost: { insight: 300, wood: 200, stone: 30 },
-    desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建猎杀营地，并布置暖裘居室。',
-    effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
-    note: '解锁建筑：猎杀营地、暖裘居室',
-    effectDesc: '因此敢入山猎兽：有了稳定的兽材来源。',
-    // 承草木（灵植术）与起居（引泉净水）两线：研究可先掌握，实际应用仍需筑基与木屋等条件。
-    needs: { upgrades: ['herbStudy', 'waterSanitation'] },
-  },
-  {
-    id: 'beastMaterialArt',
-    name: '兽材加工',
-    glyph: '兽',
-    cost: { insight: 1500, beastHide: 40, beastBone: 40 },
-    desc: '熟皮硝骨、按纹取料，兽材才堪堪可用。开启《兽骨炼器》，为御寒灵裘备料。',
-    effects: { unlockBuildings: [] },
-    note: '开启配方：兽骨炼器',
-    // 承接山野猎法与炼器术：兽骨入炉成器，兽皮另走起居与护具。
-    needs: { upgrades: ['wildHunting', 'forgeArt'] },
-  },
 ]
+
+/** 核心修真 + 可选模块（猎杀）贡献的山野研究（追加在末尾） */
+export const CULTIVATION = [...CORE_CULTIVATION, ...HUNT_UPGRADES]
 
 /** 两层合起来的完整列表：产出计算、解锁判定、文案都要用它 */
 export const ALL_UPGRADES = [...CULTIVATION, ...TECHNIQUES]

@@ -7,8 +7,10 @@
  *   点「连续」则是下一个长期活儿 —— 按这个节奏一份一份出，直到材料或仓储用尽。
  */
 import { RESOURCE_MAP } from './resources.js'
+import { insertAfter } from './modules.js'
+import { HUNT_CRAFTS, HUNT_CRAFT_ANCHOR } from '../modules/hunting/data.js'
 
-export const CRAFTS = [
+const CORE_CRAFTS = [
   {
     // 搬迁自宗门页的手动按钮：现在它就是炼制页里的一条普通配方，
     // 于是"点一下立刻出一份"（制作是瞬发的）、满仓自动停下、连同自动炼制一并免费得到。
@@ -100,18 +102,6 @@ export const CRAFTS = [
     time: 3,
     desc: '玄铁千锤，灵石点睛，始成一器。',
     needs: { building: { id: 'forge', count: 1 } },
-  },
-  {
-    id: 'forgeArtifactBone',
-    name: '兽骨炼器',
-    out: 'artifact',
-    amount: 1,
-    tier: 1,
-    primary: ['beastBone'],
-    cost: { beastBone: 40, ore: 100, stone: 12 },
-    time: 3,
-    desc: '以兽骨为筋、玄铁为体、灵石点睛，炼出一件更耐用的法器，与《淬炼法器》共用成品。',
-    needs: { realm: 4, upgrades: ['beastMaterialArt', 'forgeArt'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'assembleArrayBase',
@@ -279,6 +269,9 @@ export const CRAFTS = [
     needs: { realm: 9, upgrades: ['annihilationArt'], building: { id: 'annihilationFurnace', count: 1 } },
   },
 ]
+
+/** 核心配方 + 可选模块（猎杀）贡献的配方，按锚点插回保持原顺序 */
+export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 

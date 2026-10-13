@@ -1,18 +1,20 @@
 import { reactive, computed, toRaw, nextTick } from 'vue'
 import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, normalizeQuickCrafts } from '@/data/crafts'
-import { RESOURCES, VISIBLE_RESOURCES, resourceName } from '@/data/resources'
+import { RESOURCES, RESOURCE_MAP, VISIBLE_RESOURCES, resourceName } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { BUILDINGS } from '@/data/buildings'
 import { CULTIVATION, ALL_UPGRADES } from '@/data/upgrades'
 import { TECHNIQUES } from '@/data/techniques'
 import { ACHIEVEMENTS } from '@/data/achievements'
+import { MODULE_MAP, isModuleEnabled } from '@/data/modules'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { createInitialState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
 import { atLeast } from './numbers'
 import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
+import { deactivateModule } from './moduleRegistry'
 
 // ============================================================
 // 单例状态
@@ -188,9 +190,11 @@ export function startLoop() {
   const ready = initializeGame()
   // 离线结算失败也必须启动主循环：否则 error 分支会吞掉后续启动，页面永久卡住。
   if (ready) {
+    // 用 then(ok, err) 而非 catch().then()：少一个微任务跳，离线 Promise 一落定即启动循环，
+    // 与「初始离线结束后才启动在线循环」的对外时序一致（initializeGame 一 resolve 就已在跑）。
     return ready.then(
       () => { if (loopRequested) startLoop() },
-      error => {
+      (error) => {
         console.warn('[摸鱼宗门] 离线结算失败', error)
         if (loopRequested) startLoop()
       },
@@ -501,6 +505,19 @@ export const actions = {
     state.settings[key] = value
     saveNow()
   },
+  /** 开关可选模块：关闭时立即清理该模块状态（如召回出征弟子），并回退页面 */
+  setModuleEnabled(id, enabled) {
+    const meta = MODULE_MAP[id]
+    if (!meta) return false
+    state.settings.modules = { ...(state.settings.modules || {}), [id]: enabled === true }
+    if (enabled !== true) {
+      deactivateModule(state, id)
+      if (meta.tabId && state.ui.tab === meta.tabId) state.ui.tab = 'sect'
+    }
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
   setAutoCraftSpeed(recipeId, speed) {
     if (!E.setAutoCraftSpeed(state, derived, recipeId, speed)) return false
     saveNow()
@@ -583,12 +600,17 @@ export const actions = {
 export const view = {
   visibleResources: computed(() =>
     VISIBLE_RESOURCES.filter(
-      (id) => id === 'qi' || state.seen[id] || (state.resources[id] || 0) > 0 || (state.peak?.[id] || 0) > 0,
+      (id) => {
+        const meta = RESOURCE_MAP[id]
+        // 关闭的可选模块：其资源不在顶栏显示（存量保留在存档里）
+        if (meta?.module && !isModuleEnabled(state, meta.module)) return false
+        return id === 'qi' || state.seen[id] || (state.resources[id] || 0) > 0 || (state.peak?.[id] || 0) > 0
+      },
     ).map((id) => RESOURCES.find((r) => r.id === id)),
   ),
   idle: computed(() => E.idleDisciples(state)),
-  huntMission: computed(() => E.activeMission(state)),
-  huntTeamIds: computed(() => state.hunting?.settings?.teamIds || []),
+  huntMission: computed(() => isModuleEnabled(state, 'hunting') ? E.activeMission(state) : null),
+  huntTeamIds: computed(() => isModuleEnabled(state, 'hunting') ? (state.hunting?.settings?.teamIds || []) : []),
   // 注意：这几个 computed 统一返回 **id 数组**，与 derived.unlockedBuildings 等保持一致，
   // 避免出现「拿 id 去 includes 一个对象数组」这类判断永远为假的坑。
   assignableJobs: computed(() =>

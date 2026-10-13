@@ -13,6 +13,7 @@ import { CRAFTS } from '@/data/crafts'
 import { computeAutoCraftDrain } from './craftingRules'
 import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
 import { talentBonus } from '@/data/talents'
+import { isEntryEnabled } from '@/data/modules'
 
 export function applyEffects(ef, mult, targets, src) {
   if (!ef) return
@@ -163,6 +164,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
 
   // 建筑：仓储类按“已建成数量”，产出类按“启用中的数量”
   for (const meta of BUILDINGS) {
+    // 关闭的可选模块：其建筑的效果与维护费一并失效（已建成的也停用）
+    if (!isEntryEnabled(state, meta)) continue
     const e = state.buildings[meta.id]
     if (!e || !e.count) continue
     const on = e.on ? e.count * (supply[meta.id] ?? 1) : 0
@@ -216,6 +219,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
 
   // 修真 / 技艺 / 法宝（法宝按祭炼等级放大效果）
   for (const up of ALL_UPGRADES) {
+    if (!isEntryEnabled(state, up)) continue
     if (!state.upgrades[up.id]) continue
     const enabled = !up.upkeep || state.upgradeEnabled?.[up.id] !== false
     const mult = treasureMult(state, up) * (supply[up.id] ?? 1) * Number(enabled)
@@ -261,6 +265,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
 
   // 宜居度拥挤惩罚只作用于弟子岗位，建筑和法宝的基础产出不受此项影响。
   for (const job of JOBS) {
+    if (!isEntryEnabled(state, job)) continue
     const n = state.disciples.jobs[job.id] || 0
     if (n > 0) {
       for (const output of jobOutputs(state, job)) {

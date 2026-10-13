@@ -16,6 +16,7 @@ const SKIP_DIRS = new Set([
   'dist',
   'dist-ssr',
   '.vite',
+  '.bundle-review',
 ])
 const TEXT = /\.(js|mjs|cjs|vue|css|html|json|md|txt|yml|yaml)$/i
 const ROOT_DOTFILES = new Set(['.gitignore', '.gitattributes', '.editorconfig'])

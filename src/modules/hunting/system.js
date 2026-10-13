@@ -1,9 +1,10 @@
-import { HUNT, HUNT_FIELD_MAP, DEFAULT_HUNT_FIELD } from '@/data/hunting'
+import { HUNT, HUNT_FIELD_MAP, DEFAULT_HUNT_FIELD } from './data.js'
 import { JOBS } from '@/data/jobs'
 import { RESOURCE_MAP } from '@/data/resources'
 import { REALMS } from '@/data/realms'
-import { clamp, pushLog, addResource, activeOf } from './core'
-import { gameNow, withGameContext } from '../context'
+import { isModuleEnabled } from '@/data/modules'
+import { clamp, pushLog, addResource, activeOf } from '@/game/systems/core'
+import { gameNow, withGameContext } from '@/game/context'
 
 /**
  * 妖兽猎杀系统（首轮：山麓）。
@@ -79,7 +80,7 @@ function sanitizeStats(value) {
 }
 
 function sanitizeSettings(value) {
-  const fieldId = HUNT_FIELD_MAP[value?.selectedFieldId] ? value.selectedFieldId : DEFAULT_HUNT_FIELD
+  const fieldId = Object.hasOwn(HUNT_FIELD_MAP, value?.selectedFieldId) ? value.selectedFieldId : DEFAULT_HUNT_FIELD
   const teamIds = (Array.isArray(value?.teamIds) ? value.teamIds : [])
     .filter(id => Number.isSafeInteger(id) && id > 0).slice(0, HUNT.TEAM_MAX)
   return { selectedFieldId: fieldId, teamIds: [...new Set(teamIds)], autoRepeat: value?.autoRepeat === true }
@@ -90,7 +91,7 @@ function sanitizeMissions(value) {
   if (!value || typeof value !== 'object') return out
   for (const [id, mission] of Object.entries(value)) {
     if (!mission || typeof mission !== 'object') continue
-    const field = HUNT_FIELD_MAP[mission.fieldId]
+    const field = Object.hasOwn(HUNT_FIELD_MAP, mission.fieldId) ? HUNT_FIELD_MAP[mission.fieldId] : null
     if (!field || mission.status !== 'active' || mission.formulaVersion !== HUNT_SCHEMA_VERSION) continue
     if (!Number.isSafeInteger(mission.id) || mission.id <= 0 || mission.id >= Number.MAX_SAFE_INTEGER || String(mission.id) !== id) continue
     if (!Number.isFinite(mission.startedAt) || mission.startedAt < 0 ||
@@ -100,17 +101,20 @@ function sanitizeMissions(value) {
         !Number.isFinite(mission.yieldBonus) || mission.yieldBonus < 1 || mission.yieldBonus > 1 + HUNT.YIELD_BONUS_CAP) continue
     if (!Array.isArray(mission.snapshots) || mission.snapshots.length < HUNT.TEAM_MIN || mission.snapshots.length > HUNT.TEAM_MAX) continue
     const seen = new Set()
-    if (mission.snapshots.some(snap => !snap || !Number.isSafeInteger(snap.id) || snap.id <= 0 ||
-        seen.has(snap.id) || !seen.add(snap.id) ||
-        !Number.isInteger(snap.realm) || snap.realm < 0 || snap.realm >= REALMS.length ||
-        !Number.isInteger(snap.e) || snap.e < 0 || snap.e > snap.realm ||
-        !Number.isFinite(snap.A) || snap.A < 0.25 || snap.A > 2 ||
-        !Number.isFinite(snap.p) || snap.p < HUNT.SUCCESS_FLOOR || snap.p > HUNT.SUCCESS_CAP)) continue
+    if (mission.snapshots.some(snap => {
+      if (!snap || !Number.isSafeInteger(snap.id) || snap.id <= 0 || seen.has(snap.id) ||
+          !Number.isInteger(snap.realm) || snap.realm < 0 || snap.realm >= REALMS.length ||
+          !Number.isInteger(snap.e) || snap.e < 0 || snap.e > snap.realm ||
+          !Number.isFinite(snap.A) || snap.A < 0.25 || snap.A > 2 ||
+          !Number.isFinite(snap.p) || snap.p < HUNT.SUCCESS_FLOOR || snap.p > HUNT.SUCCESS_CAP) return true
+      seen.add(snap.id)
+      return false
+    })) continue
     out[id] = {
       id: mission.id, fieldId: field.id, status: 'active', startedAt: mission.startedAt,
       progressSeconds: Math.min(mission.progressSeconds, mission.actualDuration),
       baseDuration: field.baseDuration, actualDuration: mission.actualDuration,
-      formulaVersion: HUNT_SCHEMA_VERSION, sectRealm: Math.max(0, Math.min(REALMS.length - 1, Math.floor(mission.sectRealm || 0))),
+      formulaVersion: HUNT_SCHEMA_VERSION, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
       support: mission.support, successBonus: Number.isFinite(mission.successBonus) ? Math.max(0, mission.successBonus) : 0,
       yieldBonus: mission.yieldBonus, baseYield: { ...field.baseYield }, advancedYield: field.advancedYield ? { ...field.advancedYield } : null,
       preparationPaid: HUNT.PREPARATION_COST,
@@ -123,24 +127,29 @@ function sanitizeMissions(value) {
 }
 
 function sanitizeOutcome(value) {
-  if (!value || !HUNT_FIELD_MAP[value.fieldId] || !Number.isFinite(value.at) || value.at < 0) return null
+  if (!value || !Object.hasOwn(HUNT_FIELD_MAP, value.fieldId) || !Number.isFinite(value.at) || value.at < 0) return null
   const amounts = values => Object.fromEntries(Object.entries(values || {}).filter(([res, amount]) =>
     Object.hasOwn(HUNT_FIELD_MAP[value.fieldId].baseYield, res) && Number.isFinite(amount) && amount >= 0))
   return { fieldId: value.fieldId, at: value.at, cancelled: value.cancelled === true,
-    teamSize: Math.min(HUNT.TEAM_MAX, Math.max(0, Math.floor(value.teamSize || 0))),
-    successCount: Math.min(HUNT.TEAM_MAX, Math.max(0, Math.floor(value.successCount || 0))),
+    teamSize: finiteCount(value.teamSize, HUNT.TEAM_MAX),
+    successCount: finiteCount(value.successCount, HUNT.TEAM_MAX),
     gains: amounts(value.gains), remainders: amounts(value.remainders),
     rows: (Array.isArray(value.rows) ? value.rows : []).filter(row => row && Number.isSafeInteger(row.id))
       .slice(0, HUNT.TEAM_MAX).map(row => ({ id: row.id, name: typeof row.name === 'string' ? row.name.slice(0, 40) : '', success: row.success === true })),
   }
 }
 
+function finiteCount(value, cap = Number.MAX_SAFE_INTEGER) {
+  return Number.isFinite(value) ? Math.max(0, Math.min(cap, Math.floor(value))) : 0
+}
+
 function sanitizeFieldState(value) {
   const out = {}
   if (!value || typeof value !== 'object') return out
   for (const [id, entry] of Object.entries(value)) {
-    if (!HUNT_FIELD_MAP[id] || !entry || typeof entry !== 'object') continue
-    out[id] = entry
+    if (!Object.hasOwn(HUNT_FIELD_MAP, id) || !entry || typeof entry !== 'object') continue
+    out[id] = Object.fromEntries(['lastHuntAt', 'completedMissions', 'successfulHunters', 'failedHunters']
+      .filter(key => Object.hasOwn(entry, key)).map(key => [key, finiteCount(entry[key])]))
   }
   return out
 }
@@ -184,6 +193,7 @@ export function activeMission(state) {
 }
 
 export function isHuntUnlocked(state, fieldId) {
+  if (!isModuleEnabled(state, 'hunting')) return false
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field || !state.upgrades?.wildHunting) return false
   if (activeOf(state, 'huntingCamp') <= 0) return false
@@ -253,6 +263,7 @@ export function huntDuration(field, durationReduction = 0) {
 
 /** 出征前校验：猎场/设施/境界/成员/猎备都满足才允许出发。 */
 export function canDepart(state, derived, fieldId, teamIds) {
+  if (!isModuleEnabled(state, 'hunting')) return { ok: false, reason: '猎杀模块已关闭' }
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field) return { ok: false, reason: '未知猎场' }
   if (!state.upgrades?.wildHunting) return { ok: false, reason: '尚未掌握《山野猎法》' }
@@ -468,4 +479,31 @@ export function setHuntTeam(state, teamIds) {
 export function setHuntAutoRepeat(state, value) {
   state.hunting.settings.autoRepeat = value === true
   return true
+}
+
+/** 任务期限由剩余进度计算，兼容读档后重新开始的现实时间轴。 */
+export function nextHuntDeadline(state, now) {
+  let earliest = Infinity
+  for (const mission of Object.values(state?.hunting?.missions || {})) {
+    if (mission.status !== 'active') continue
+    const remaining = Math.max(0, mission.actualDuration - mission.progressSeconds)
+    const endAt = now + remaining * 1000
+    if (endAt > now && endAt < earliest) earliest = endAt
+  }
+  return earliest
+}
+
+/** 停用只取消活动任务、释放占用，保留历史、余量、随机序列与队伍偏好。 */
+export function deactivateHunting(state) {
+  const hunting = state.hunting
+  if (!hunting) return
+  for (const mission of Object.values(hunting.missions || {})) {
+    if (mission.status === 'active') releaseMembers(state, mission)
+  }
+  hunting.missions = {}
+  for (const member of state.disciples?.members || []) {
+    member.onMission = false
+    if (member.roleId === 'huntPlanner') member.roleId = null
+  }
+  recount(state)
 }

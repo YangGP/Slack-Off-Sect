@@ -15,15 +15,38 @@ import { resolve, dirname } from 'node:path'
 
 export function runArchitectureChecks() {
   // 依赖约束按实际源码检查，防止拆分后重新出现循环或引擎依赖 Vue。
-  const directory = resolve('src/game/systems')
+  // 扫描 src/game 与 src/modules 下全部 .js；`@/` 与相对路径都解析成绝对路径建图，
+  // 这样跨目录（系统 ↔ 可选模块 ↔ 注册表）的环也能被检出。
+  const srcRoot = resolve('src')
+  const gameRoot = resolve('src/game')
+  const modulesRoot = resolve('src/modules')
+  // 规则「不得依赖 Vue / 引擎出口」只作用于系统层与可选模块（界面组件 .vue 不在此列）
+  const ruleADirs = [resolve('src/game/systems'), modulesRoot]
+  const isRuleA = (path) => ruleADirs.some(dir => path.startsWith(dir))
   const graph = new Map()
-  for (const name of readdirSync(directory).filter(name => name.endsWith('.js'))) {
-    const path = resolve(directory, name)
-    const code = readFileSync(path, 'utf8')
-    const imports = [...code.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1])
-    assert.ok(!imports.some(value => value === 'vue' || /\/engine(?:\.js)?$/.test(value)), name)
-    graph.set(path, imports.filter(value => value.startsWith('./')).map(value => resolve(dirname(path), value + '.js')))
+  const resolveImport = (fromPath, spec) => {
+    let base
+    if (spec.startsWith('./') || spec.startsWith('../')) base = resolve(dirname(fromPath), spec)
+    else if (spec.startsWith('@/')) base = resolve(srcRoot, spec.slice(2))
+    else return null
+    if (base.endsWith('.js') || base.endsWith('.vue')) return base
+    return base + '.js'
   }
+  const collect = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) { collect(full); continue }
+      if (!entry.name.endsWith('.js')) continue
+      const code = readFileSync(full, 'utf8')
+      const specs = [...code.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1])
+      if (isRuleA(full)) {
+        assert.ok(!specs.some(value => value === 'vue' || /\/engine(?:\.js)?$/.test(value)), entry.name)
+      }
+      graph.set(full, specs.map(spec => resolveImport(full, spec)).filter(Boolean))
+    }
+  }
+  collect(gameRoot)
+  collect(modulesRoot)
   function visit(path, chain = []) {
     assert.ok(!chain.includes(path), `循环依赖：${[...chain, path].join(' -> ')}`)
     for (const dependency of graph.get(path) || []) visit(dependency, [...chain, path])

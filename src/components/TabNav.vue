@@ -4,14 +4,15 @@ import { state, view, actions, ui } from '@/game/store'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { canAfford, idleDisciples } from '@/game/engine'
 import { UPGRADE_MAP } from '@/data/upgrades'
+import { isModuleEnabled, insertAfter } from '@/data/modules'
+import { MODULE_UI } from '@/modules/uiRegistry'
 
-const TABS = [
+const CORE_TABS = [
   { id: 'sect', name: '宗门' },
   { id: 'disciples', name: '弟子' },
   { id: 'cultivation', name: '修真' },
   { id: 'skills', name: '技艺' },
   { id: 'craft', name: '炼制' },
-  { id: 'hunt', name: '猎杀' },
   { id: 'realm', name: '境界' },
   { id: 'achievements', name: '成就' },
   { id: 'settings', name: '设置' },
@@ -23,7 +24,15 @@ const badges = computed(() => ({
   skills: view.researchableSkills.value.filter((id) => canAfford(state, UPGRADE_MAP[id].cost)).length,
   achievements: `${Object.keys(state.achievements).length}/${ACHIEVEMENTS.length}`,
 }))
-const tabs = computed(() => ui.debug ? [...TABS, { id: 'debug', name: '调试' }] : TABS)
+/** 核心标签 + 已启用模块标签（按各自锚点插回，关闭则不显示） */
+const tabs = computed(() => {
+  let list = [...CORE_TABS]
+  for (const m of MODULE_UI) {
+    if (!isModuleEnabled(state, m.id)) continue
+    list = insertAfter(list, m.tab.after, [m.tab])
+  }
+  return ui.debug ? [...list, { id: 'debug', name: '调试' }] : list
+})
 
 function badgeOf(id) {
   const b = badges.value[id]

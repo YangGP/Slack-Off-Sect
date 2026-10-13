@@ -9,7 +9,7 @@ export { toggleUpkeepUpgrade, research, refineTreasure, breakthroughPreview, bre
 export { craftBatch, requestCraft, manageCraftOrder, setProcessingMode, setCraftWeight, runAutoCraft, runAutoCondense, setAutoCraftSpeed, setCraftTarget, drawQi, craft, setAllAutoCraft, toggleAutoCraft } from './systems/crafting'
 export { eventResourceRate, eventEffect, eventOutcome, fireEvent, resolveChoice, settleExpiredThreat } from './systems/events'
 export { checkAchievements, tick, simulateOffline } from './systems/simulation'
-export { createHuntingState, normalizeHuntingState, rehydrateHuntOccupancy, activeMission, isHuntUnlocked, huntableMembers, huntPreview, evaluateTeam as huntEvaluation, huntDuration, canDepart, departHunt, cancelHunt, advanceHunt, setHuntField, setHuntTeam, setHuntAutoRepeat, huntPreparation } from './systems/hunting'
+export { createHuntingState, normalizeHuntingState, rehydrateHuntOccupancy, activeMission, isHuntUnlocked, huntableMembers, huntPreview, evaluateTeam as huntEvaluation, huntDuration, canDepart, departHunt, cancelHunt, advanceHunt, setHuntField, setHuntTeam, setHuntAutoRepeat, huntPreparation } from '@/modules/hunting/system'
 export { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 export { JOBS } from '@/data/jobs'
 export { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'

@@ -5,17 +5,20 @@ import { CRAFT_MAP } from '@/data/crafts'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { EVENT_MAP } from '@/data/events'
 import { REALMS } from '@/data/realms'
-import { normalizeHuntingState } from '@/game/systems/hunting'
+import { MODULES } from '@/data/modules'
+import { moduleSaveKeys, normalizeModuleSlices } from '@/game/moduleRegistry'
 
 export const SAVE_VERSION = 2
-export const SAVE_FIELDS = [
+/** 核心存档字段；可选模块的切片键（如 hunting）在末尾动态追加 */
+const CORE_SAVE_FIELDS = [
   'version', 'createdAt', 'lastTickAt', 'lastSaveAt', 'resources', 'seen', 'peak',
   'disciples', 'arrivalTimer', 'totalDays', 'treasureLevels', 'craftTimers', 'craftOrders',
   'industryVersion', 'qiLiquidVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
-  'pendingChoice', 'affairs', 'hunting', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',
+  'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',
 ]
+export const SAVE_FIELDS = [...CORE_SAVE_FIELDS, ...moduleSaveKeys()]
 
 export function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -30,7 +33,7 @@ export function assertSaveShape(data) {
   if (!isRecord(data)) throw new Error('存档必须是对象')
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
     'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
-    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'hunting']) {
+    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', ...moduleSaveKeys()]) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
   for (const key of ['jobs']) {
@@ -46,11 +49,17 @@ const numericMap = (values, catalog, integer = false) => Object.fromEntries(
 )
 const flags = (values, catalog) => Object.fromEntries(Object.entries(values || {})
   .filter(([id, value]) => Object.hasOwn(catalog, id) && value === true))
+/** 模块开关：只保留已知模块，非布尔值一律回落到默认 */
+const sanitizeModuleFlags = (raw) => Object.fromEntries(
+  MODULES.map(m => [m.id, typeof raw?.[m.id] === 'boolean' ? raw[m.id] : m.defaultEnabled]),
+)
 
 /** 迁移后校验：仅持久化已知字段，所有经济数值必须是有限非负数字。 */
 export function validateState(state, fresh) {
   const result = Object.fromEntries(SAVE_FIELDS.map(key => [key, state[key] ?? fresh[key]]))
   result.version = SAVE_VERSION
+  // 先定下模块开关：模块切片归一化要据此判断「关闭时丢弃活动状态」
+  const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {
     result[key] = safeNumber(result[key], fresh[key])
   }
@@ -89,7 +98,7 @@ export function validateState(state, fresh) {
     (!buff.target || Object.hasOwn(RESOURCE_MAP, buff.target)))
     .map(buff => ({ id: buff.id, name: typeof buff.name === 'string' ? buff.name : buff.id,
       mult: buff.mult, target: buff.target || null, until: buff.until }))
-  result.hunting = normalizeHuntingState(result.hunting, fresh.hunting)
+  Object.assign(result, normalizeModuleSlices(state, fresh))
   if (!Object.hasOwn(EVENT_MAP, result.pendingChoice?.id)) result.pendingChoice = null
   result.log = result.log.filter(entry => isRecord(entry) && typeof entry.text === 'string')
     .map(entry => ({ ...entry, id: safeNumber(entry.id), at: safeNumber(entry.at) }))
@@ -97,6 +106,7 @@ export function validateState(state, fresh) {
     result.settings[key] = typeof result.settings[key] === 'boolean' ? result.settings[key] : fresh.settings[key]
   }
   result.settings = Object.fromEntries(Object.keys(fresh.settings).map(key => [key, result.settings[key] ?? fresh.settings[key]]))
+  result.settings.modules = moduleFlags
   result.settings.craftReservePercent = safeNumber(result.settings.craftReservePercent, 20, 100)
   result.settings.autoCraftPriority = Object.hasOwn(CRAFT_MAP, result.settings.autoCraftPriority) ? result.settings.autoCraftPriority : fresh.settings.autoCraftPriority
   result.ui = { ...fresh.ui, ...Object.fromEntries(Object.keys(fresh.ui).map(key => [key, result.ui[key] ?? fresh.ui[key]])) }

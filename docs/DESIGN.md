@@ -1,4 +1,4 @@
-# 游戏设计与当前规则（v0.33）
+# 游戏设计与当前规则（v0.34）
 
 更新：2026-10-12。本文描述当前实现。完整条目、费用与门槛由 [TABLES.md](TABLES.md) 从源码生成；研究结构见 [RESEARCH.md](RESEARCH.md)，符文与建材见 [CRAFT-PROGRESSION.md](CRAFT-PROGRESSION.md)。历史平衡与测量保存在 [BALANCE.md](BALANCE.md)，未实施方向见 [ROADMAP.md](ROADMAP.md)。
 

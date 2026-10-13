@@ -4,6 +4,8 @@ import { state, derived, view, ui, actions } from '@/game/store'
 import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import { CURRENT_VERSION } from '@/data/changelog'
+import { isModuleEnabled } from '@/data/modules'
+import { MODULE_UI } from '@/modules/uiRegistry'
 import ResourcePanel from './components/ResourcePanel.vue'
 import TabNav from './components/TabNav.vue'
 import SectPanel from './components/SectPanel.vue'
@@ -11,7 +13,6 @@ import DisciplePanel from './components/DisciplePanel.vue'
 import CultivationPanel from './components/CultivationPanel.vue'
 import SkillPanel from './components/SkillPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
-import HuntPanel from './components/HuntPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -25,19 +26,27 @@ import ChangelogModal from './components/ChangelogModal.vue'
 import HabitabilityTip from './components/HabitabilityTip.vue'
 import HoverTip from './components/HoverTip.vue'
 
-const panels = {
+const corePanels = {
   sect: SectPanel,
   disciples: DisciplePanel,
   cultivation: CultivationPanel,
   skills: SkillPanel,
   craft: CraftPanel,
-  hunt: HuntPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,
 }
 
-const activePanel = computed(() => ui.debug && ui.debugPage ? DebugPanel : panels[state.ui.tab] || SectPanel)
+/** 核心面板 + 已启用模块贡献的面板（模块关闭时不挂载） */
+const panels = computed(() => {
+  const out = { ...corePanels }
+  for (const m of MODULE_UI) {
+    if (isModuleEnabled(state, m.id)) out[m.tab.id] = m.panel
+  }
+  return out
+})
+
+const activePanel = computed(() => ui.debug && ui.debugPage ? DebugPanel : panels.value[state.ui.tab] || SectPanel)
 const idle = computed(() => idleDisciples(state))
 const qiFlow = computed(() => resourceFlow(derived, 'qi'))
 /** 有空房时顶栏显示「下一位弟子还有多久」 */

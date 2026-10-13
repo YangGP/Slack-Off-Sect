@@ -1618,6 +1618,30 @@ ok('设置保留读档覆盖提醒，移除技术栈与文档路径', text().inc
 ok('挂机设置说明收起且包含道果自动化入口', !text().includes('参悟《心有灵犀》') && (await ruleText('挂机设置')).includes('取得首颗道果'))
 ok('默认隐藏调试入口和手动奇遇', !doc.querySelector('.debug-panel') && !text().includes('来一次奇遇') && ![...doc.querySelectorAll('.tab')].some(b => b.textContent.trim() === '调试'))
 ok('旧控制台 API 已移除', typeof window.CHEAT === 'undefined')
+{
+  const previous = actions.exportText()
+  state.hunting.statistics.completedMissions = 7
+  state.hunting.yieldRemainders.beastHide = 0.75
+  const moduleToggle = () => [...doc.querySelectorAll('.main label')].find(label => label.textContent.includes('妖兽猎杀'))?.querySelector('input')
+  ok('设置中猎杀模块默认开启', moduleToggle()?.checked === true)
+  moduleToggle().checked = false
+  moduleToggle().dispatchEvent(new window.Event('change', { bubbles: true }))
+  await new Promise(r => setTimeout(r, 50))
+  ok('界面关闭猎杀隐藏导航并保存开关', !state.settings.modules.hunting &&
+    ![...doc.querySelectorAll('.tab')].some(b => b.textContent.includes('猎杀')) &&
+    JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).settings.modules.hunting === false)
+  const closed = actions.exportText()
+  actions.importText(closed)
+  await new Promise(r => setTimeout(r, 50))
+  ok('关闭后通过实际导入读档保留历史与兽材余量', state.hunting.statistics.completedMissions === 7 && state.hunting.yieldRemainders.beastHide === 0.75)
+  moduleToggle().checked = true
+  moduleToggle().dispatchEvent(new window.Event('change', { bubbles: true }))
+  await new Promise(r => setTimeout(r, 50))
+  ok('重新开启恢复猎杀导航并保留进度', state.settings.modules.hunting && state.hunting.statistics.completedMissions === 7 &&
+    [...doc.querySelectorAll('.tab')].some(b => b.textContent.includes('猎杀')))
+  actions.importText(previous)
+  await new Promise(r => setTimeout(r, 50))
+}
 const eventsBeforeDebug = state.stats.eventsSeen
 ok('未开启调试时禁止手动修改与奇遇', actions.setDebugResource('stone', 123) === false && actions.triggerEvent() === false && state.stats.eventsSeen === eventsBeforeDebug)
 

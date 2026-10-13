@@ -18,7 +18,8 @@ import * as E from './engine-fixture.mjs'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
-import { HUNT_FIELDS } from '../src/data/hunting.js'
+import { HUNT_FIELDS } from '../src/modules/hunting/data.js'
+import { deactivateModule } from '../src/game/moduleRegistry.js'
 import {
   CULTIVATION,
   ALL_UPGRADES,
@@ -2920,6 +2921,7 @@ section('猎杀（山麓闭环）')
   ok('读档重挂出征占用', reloaded.disciples.members.filter(m => m.onMission).length === 3)
   for (const mutation of [
     m => { m.snapshots = { bad: true } },
+    m => { m.fieldId = '__proto__' },
     m => { m.actualDuration = Infinity },
     m => { m.progressSeconds = -1 },
     m => { m.snapshots[0].p = NaN },
@@ -2959,6 +2961,63 @@ section('猎杀（山麓闭环）')
   reloaded.karma = 500
   E.recompute(reloaded, rd)
   ok('猎备仓容独立于仙缘仓储倍率', rd.karmaStorageMult > 1 && rd.max.huntPreparation === 300)
+}
+
+// ------------------------------------------------------------
+section('可选模块：猎杀开关与解耦')
+// ------------------------------------------------------------
+{
+  const { state: ms, derived: md } = newGameRunning()
+  ms.realm = 4
+  ms.upgrades.wildHunting = true
+  ms.upgrades.beastMaterialArt = true
+  ms.upgrades.forgeArt = true
+  ms.buildings.huntingCamp = { count: 1, on: true }
+  ms.buildings.forge = { count: 1, on: true }
+  ms.resources.huntPreparation = 100
+  E.recompute(ms, md)
+  const hunter = JOBS.find(j => j.id === 'huntPlanner')
+  ok('开启时猎杀建筑/岗位/配方可用',
+    E.isBuildingUnlocked(ms, 'huntingCamp') && E.isJobUnlocked(ms, hunter) &&
+    E.isCraftUnlocked(ms, CRAFT_MAP.forgeArtifactBone))
+  E.departHunt(ms, md, { fieldId: 'foothills', teamIds: [1, 2] })
+  E.recompute(ms, md)
+  ms.disciples.members.find(m => m.id === 3).roleId = 'huntPlanner'
+  ms.hunting.statistics.completedMissions = 7
+  ms.hunting.yieldRemainders.beastHide = 0.75
+  ms.hunting.settings.autoRepeat = true
+  const preservedSeed = ms.hunting.randomSeed
+
+  // 关闭模块
+  ms.settings.modules.hunting = false
+  const closedWhileActive = normalizeState(JSON.parse(JSON.stringify(ms)))
+  ok('读档停用模块只召回任务并保留历史、余量、随机与偏好',
+    Object.keys(closedWhileActive.hunting.missions).length === 0 &&
+    closedWhileActive.hunting.statistics.completedMissions === 7 &&
+    closedWhileActive.hunting.yieldRemainders.beastHide === 0.75 &&
+    closedWhileActive.hunting.randomSeed === preservedSeed && closedWhileActive.hunting.settings.autoRepeat)
+  ok('读档停用模块恢复原岗位并释放猎妖师和占用', closedWhileActive.disciples.members.every(m => !m.onMission && m.roleId !== 'huntPlanner') &&
+    closedWhileActive.disciples.members.find(m => m.id === 1).roleId === ms.hunting.missions[Object.keys(ms.hunting.missions)[0]].snapshots[0].roleId)
+  deactivateModule(ms, 'hunting')
+  E.recompute(ms, md)
+  ok('关闭后猎杀建筑不再解锁', E.isBuildingUnlocked(ms, 'huntingCamp') === false)
+  ok('关闭后猎妖师岗位不可用', E.isJobUnlocked(ms, hunter) === false)
+  ok('关闭后兽材炼器配方锁定', E.isCraftUnlocked(ms, CRAFT_MAP.forgeArtifactBone) === false)
+  ok('关闭后山野研究不可参悟', E.isUpgradeUnlocked(ms, UPGRADE_MAP.wildHunting) === false)
+  ok('关闭后召回出征弟子并释放占用',
+    Object.keys(ms.hunting.missions).length === 0 &&
+    ms.disciples.members.every(m => !m.onMission && m.roleId !== 'huntPlanner'))
+  ok('关闭后猎杀加成与仓储归零',
+    (md.huntSuccessBonus || 0) === 0 && (md.rates.huntPreparation || 0) === 0 &&
+    (md.max.huntPreparation || 0) === 0)
+  ok('关闭后不可出征', E.canDepart(ms, md, 'foothills', [1]).ok === false)
+  const closedReload = normalizeState(JSON.parse(JSON.stringify(ms)))
+  ok('正常关闭后刷新不清空模块存档', JSON.stringify(closedReload.hunting) === JSON.stringify(ms.hunting))
+
+  // 重新开启：建筑与岗位恢复
+  ms.settings.modules.hunting = true
+  E.recompute(ms, md)
+  ok('重新开启恢复建筑与岗位', E.isBuildingUnlocked(ms, 'huntingCamp') && E.isJobUnlocked(ms, hunter))
 }
 
 // ------------------------------------------------------------

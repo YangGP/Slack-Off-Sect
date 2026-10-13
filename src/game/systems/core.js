@@ -8,6 +8,7 @@ import { REALMS } from '@/data/realms'
 import { gameNow } from '../context'
 import { getEventLevel } from '@/data/events'
 import { UPGRADE_MAP } from '@/data/upgrades'
+import { isEntryEnabled } from '@/data/modules'
 
 export function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v
@@ -193,6 +194,8 @@ export function checkNeeds(state, needs) {
 export function isBuildingUnlocked(state, id) {
   const meta = BUILDING_MAP[id]
   if (!meta) return false
+  // 关闭的可选模块：其建筑视同未解锁（含已建成的），不展示、不可购买
+  if (!isEntryEnabled(state, meta)) return false
   if (countOf(state, id) > 0) return true
   if (!checkNeeds(state, meta.needs)) return false
   const ratio = meta.unlockRatio == null ? CONFIG.BUILDING_UNLOCK_RATIO : meta.unlockRatio
@@ -215,12 +218,14 @@ export function trackPeak(state) {
 }
 
 export function isJobUnlocked(state, job) {
+  if (!isEntryEnabled(state, job)) return false
   if ((state.disciples.jobs[job.id] || 0) > 0) return true
   if (job.unlocked) return true
   return checkNeeds(state, job.needs)
 }
 
 export function isUpgradeUnlocked(state, up) {
+  if (!isEntryEnabled(state, up)) return false
   if (state.upgrades[up.id]) return true
   return checkNeeds(state, up.needs)
 }
@@ -240,6 +245,7 @@ export function isProgressionVisible(state, needs) {
 }
 
 export function isCraftUnlocked(state, craft) {
+  if (!isEntryEnabled(state, craft)) return false
   if (craft.unlocked) return true
   return checkNeeds(state, craft.needs)
 }

@@ -3,7 +3,7 @@ import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
-import { advanceHunt } from './hunting'
+import { runModuleTicks, nextModuleDeadline } from '@/game/moduleRegistry'
 import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
@@ -76,12 +76,9 @@ export function advanceTicks(state, derived, seconds, opts) {
       }
       const deadline = state.pendingChoice?.deadline
       if (deadline > now && deadline < next) next = deadline
-      // 猎杀任务在到期处切步：在线与离线都在同一边界结算归队
-      for (const mission of Object.values(state.hunting?.missions || {})) {
-        if (mission.status !== 'active') continue
-        const endAt = mission.startedAt + mission.actualDuration * 1000
-        if (endAt > now && endAt < next) next = endAt
-      }
+      // 可选模块的期限（如猎杀任务归队）在到期处切步：在线与离线都在同一边界结算
+      const moduleDeadline = nextModuleDeadline(state, now)
+      if (moduleDeadline < next) next = moduleDeadline
       tickStep(state, derived, (next - now) / 1000, opts)
       now = next
     }
@@ -136,9 +133,9 @@ export function tickStep(state, derived, dt, opts) {
 
   trackPeak(state)
 
-  // 1.2) 猎杀任务推进：归队结算会给资源并释放成员，立即重算派生数据。
+  // 1.2) 可选模块推进（猎杀任务归队会给资源并释放成员，立即重算派生数据）。
   //      离线同样推进；生态关联首轮关闭，不在此抽来袭。
-  if (advanceHunt(state, derived, cap)) recompute(state, derived, cap)
+  if (runModuleTicks(state, derived, cap)) recompute(state, derived, cap)
 
   // 1.5) 灵能逸散：湮灭能不稳定，每秒衰减 QI_ENERGY_DECAY。
   // 于是存量有稳态 —— 稳态 ≈ 产出 ÷ 逸散率（一台湮灭炉 0.06/秒 → 12 灵能）。

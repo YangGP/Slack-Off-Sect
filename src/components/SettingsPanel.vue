@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { state, derived, actions, ui, saveNow } from '@/game/store'
 import { fmtClock, fmtTime, fmt } from '@/game/format'
 import { CONFIG } from '@/data/config'
+import { MODULES, isModuleEnabled } from '@/data/modules'
 import HoverTip from './HoverTip.vue'
 
 const fileInput = ref(null)
@@ -109,6 +110,17 @@ function doReset() {
       <div class="small dim" style="padding-top: 4px">
         离线收益上限 {{ fmt(derived.offlineHours) }} 小时
       </div>
+      <div class="small dim" style="padding-top: 10px">
+        <HoverTip label="玩法模块"><template #tip><p>可选内容模块，默认开启。关闭后隐藏该模块的页面与相关建筑、岗位、研究，并召回出征中的弟子；主线照常运行，进度保留在存档里，随时可以重新开启。</p></template></HoverTip>
+      </div>
+      <label v-for="m in MODULES" :key="m.id" class="sw">
+        <input
+          type="checkbox"
+          :checked="isModuleEnabled(state, m.id)"
+          @change="actions.setModuleEnabled(m.id, $event.target.checked)"
+        />
+        {{ m.name }}
+      </label>
     </div>
   </div>
 
