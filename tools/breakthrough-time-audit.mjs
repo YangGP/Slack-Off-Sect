@@ -1,6 +1,9 @@
 import { setGameContext } from '../src/game/context.js'
 /** Run the same attentive reference player with guaranteed, naked or fully aided breakthroughs.
- * Usage after SSR bundling: node bundle.js [baseline|naked|aided|focus|power] [seed] [hours]
+ * Usage after SSR bundling: node bundle.js [baseline|naked|aided|focus|power|rush|rush-naked|rush-aided] [seed] [hours]
+ * Rush modes skip optional development, keeping material prerequisites, storage,
+ * housing when full and comfort when crowded. Rush guarantees success;
+ * rush-naked and rush-aided use real random breakthrough outcomes.
  * Power mode guarantees breakthroughs and waits for actual stage production at 5/6/8
  * (two complete chains and the first seal at 8);
  * it measures an intentional investment route, not natural random completion time.
@@ -21,7 +24,7 @@ const seed = Number(process.argv[3] || 1)
 const hours = Number(process.argv[4] || 72)
 const selection = process.argv[5] || 'full'
 const outcome = process.argv[6] || 'success'
-if (!['baseline', 'naked', 'aided', 'focus', 'power'].includes(mode) || !Number.isInteger(seed) || seed < 1 || !Number.isFinite(hours) || hours <= 0 || hours > 168
+if (!['baseline', 'naked', 'aided', 'focus', 'power', 'rush', 'rush-naked', 'rush-aided'].includes(mode) || !Number.isInteger(seed) || seed < 1 || !Number.isFinite(hours) || hours <= 0 || hours > 168
   || !['full', 'none', 'pill', 'equipment', 'faith'].includes(selection) || !['success', 'regression', 'death'].includes(outcome)) throw Error('Invalid arguments')
 let now = 1791676800000, rngState = seed >>> 0
 const random = () => {
@@ -33,7 +36,7 @@ setGameContext(s, { now: () => now, random })
 const d = E.createDerived()
 E.recompute(s, d)
 const options = () => {
-  if (!['aided', 'focus'].includes(mode) || s.realm < 3) return {}
+  if (!['aided', 'focus', 'rush-aided'].includes(mode) || s.realm < 3) return {}
   const aids = E.breakthroughPreview(s, d).availableAids
   return Object.fromEntries(aids.filter((a, index) => mode !== 'focus' || s.realm !== 7 || selection === 'full'
     || index === { pill: 0, equipment: 1, faith: 2 }[selection]).map(a => [a.id, true]))
@@ -88,7 +91,7 @@ const attempt = () => {
   let forced = []
   if (mode === 'focus' && focus.start) forced = target === 8 && !focus.attempts.length
     ? { success: [0], regression: [0.99, 0.99], death: [0.99, 0] }[outcome] : [0]
-  const ok = E.breakthrough(s, d, options(), ['baseline', 'power'].includes(mode) ? () => 0 : forced.length ? () => forced.shift() ?? 0 : random)
+  const ok = E.breakthrough(s, d, options(), ['baseline', 'power', 'rush'].includes(mode) ? () => 0 : forced.length ? () => forced.shift() ?? 0 : random)
   if (beforeSnapshot) {
     focus.attempts.push({ minutesFromStart: +((elapsed - focus.start.seconds) / 60).toFixed(2), before: beforeSnapshot,
       afterRealm: s.realm, karma: s.karma, cost, success: ok })
@@ -104,9 +107,12 @@ const attempt = () => {
   return ok
 }
 const bot = createBot(s, d, { realmCost: need, breakthrough: attempt,
+  onlyBreakthrough: mode.startsWith('rush'),
   focusProjects: () => mode === 'power' && [5, 6, 8].includes(s.realm),
   projects: () => mode === 'power' ? ({ 5: ['splitArray'], 6: ['polarizeArray'],
-    8: ['splitArray', 'polarizeArray', 'annihilationFurnace'].map(id => ({ id, count: 2 })) }[s.realm] || []) : [] })
+    8: ['splitArray', 'polarizeArray', 'annihilationFurnace'].map(id => ({ id, count: 2 })) }[s.realm] || [])
+    : mode.startsWith('rush') && s.realm >= 9
+      ? ['splitArray', 'polarizeArray', 'annihilationFurnace'].map(id => ({ id, count: 2 })) : [] })
 const prepare = () => {
   const fill = (id, amount, path = new Set()) => {
     if ((s.resources[id] || 0) >= amount || amount > d.max[id] || path.has(id)) return
@@ -160,7 +166,8 @@ for (elapsed = 5; elapsed <= hours * 3600; elapsed += 5) {
       facilities: firstFacilities, output: firstOutput }))
   }
 }
-const result = { mode, seed, strategy: mode === 'power' ? 'stage investment + active labor + guaranteed breakthroughs' : 'rush + active labor', limitHours: hours, ascensionHours: E.canAscend(s) ? +(elapsed / 3600).toFixed(3) : null,
+const result = { mode, seed, strategy: mode === 'power' ? 'stage investment + active labor + guaranteed breakthroughs'
+  : mode.startsWith('rush') ? 'breakthrough prerequisites only + active labor' : 'rush + active labor', limitHours: hours, ascensionHours: E.canAscend(s) ? +(elapsed / 3600).toFixed(3) : null,
   finalRealm: s.realm, bestRealm: s.stats.bestRealm, karma: s.karma, deaths: s.stats.breakthroughDeaths,
   firstReach, firstFacilities, firstOutput, attempts: attempts.slice(1), transitions,
   buildings: s.buildings, upgrades: s.upgrades,

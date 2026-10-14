@@ -190,8 +190,8 @@ export const HUNT_UPGRADES = [
     desc: '熟皮硝骨、按纹取料，兽材才堪堪可用。开启《兽骨炼器》，为御寒灵裘备料。',
     effects: { unlockBuildings: [] },
     note: '开启配方：兽骨炼器',
-    // 承接山野猎法与炼器术：兽骨入炉成器，兽皮另走起居与护具。
-    needs: { upgrades: ['wildHunting', 'forgeArt'] },
+    // 掌握淬玄工艺后再研究兽骨入炉成器，兽皮另走起居与护具。
+    needs: { upgrades: ['wildHunting', 'forgeArt', 'steelWorking'] },
     module: 'hunting',
   },
 ]

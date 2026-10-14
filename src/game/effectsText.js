@@ -17,7 +17,7 @@ import { fmt, fmtPercent } from './format'
 export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
   if (!ef) return null
   const out = {}
-  const byCount = upkeep ? ['storage', 'storageRatio', 'storageAll', 'maxDisciples'] : ['storage', 'storageAll', 'maxDisciples', 'habitability', 'disasterGuard', 'ascendBonus']
+  const byCount = upkeep ? ['storage', 'storageRatio', 'buildingStorageRatio', 'storageAll', 'maxDisciples'] : ['storage', 'buildingStorageRatio', 'storageAll', 'maxDisciples', 'habitability', 'disasterGuard', 'ascendBonus']
   const byActive = [
     'prod',
     'ratio',
@@ -98,6 +98,14 @@ export function describeEffects(ef) {
   }
   if (ef.storageRatio) {
     for (const k in ef.storageRatio) push(`${resourceName(k)} 上限`, `+${fmtPercent(ef.storageRatio[k])}`, 'muted', k)
+  }
+  if (ef.buildingStorageRatio) {
+    for (const [id, value] of Object.entries(ef.buildingStorageRatio)) {
+      const building = BUILDING_MAP[id]
+      for (const res of Object.keys(building?.effects?.storage || {})) {
+        push(`${building.name} ${resourceName(res)}上限`, `+${fmtPercent(value)}`, 'muted', res)
+      }
+    }
   }
   if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（成品按层级折算）`, 'muted')
   if (ef.maxDisciples) push('弟子上限', `+${ef.maxDisciples}`, 'good')

@@ -267,13 +267,13 @@ const CORE_BUILDINGS = [
     group: 'store',
     // 石砌墙基、铁箍木架：矿石承重，灵石不掺和
     cost: { wood: 150, rock: 200, ore: 60 },
-    priceRatio: 1.18,
-    desc: '石基铁箍木架，专存灵木、灵石、矿石、玄铁、灵草这些基础物资 —— 丹药符箓另有去处。',
+    priceRatio: 1.22,
+    desc: '石基铁箍木架，专存灵木、矿石、玄铁与灵草，另设少量石匣存放灵石 —— 丹药符箓另有去处。',
     // 库房只存**基础物资**：灵木 / 灵石 / 矿石 / 玄铁 / 灵草。
-    // 份额按「这种资源平时流得多快」分配（8 小时推演：灵木 72/秒、灵草 11、玄铁 7.5；
-    // 灵石没有产出，靠点石成灵现印，按兑换后的灵气量折算）。
+    // 原料保留挂机缓冲；灵石按矿井与点石成灵的实际流量分配，避免低速资源提前扩出数小时空仓。
+    // 涨价率略高于谷仓，批量扩容需与采集、加工扩产一起推进。
     // 灵气上限归「谷仓」，灵机归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
-    effects: { storage: { wood: 1000, stone: 800, rock: 600, ore: 400, herb: 500 } },
+    effects: { storage: { wood: 1000, stone: 250, rock: 600, ore: 400, herb: 500 } },
     needs: { upgrades: ['earthArt'] },
   },
   {
@@ -419,7 +419,8 @@ const CORE_BUILDINGS = [
     cost: { wood: 360, rock: 240, stone: 150, ore: 60 },
     priceRatio: 1.25,
     desc: '三足鼎立、文武火候，灵草在这里变成丹药。',
-    effects: { craftBonusByResource: { pill: 0.05, nineTurnPill: 0.05 }, ratio: { herb: 0.1 }, storage: { pill: 200 } },
+    // 生产设施只留周转仓；大批囤丹由药藏承接，扩建同时提高制作收益与加工容量。
+    effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 }, ratio: { herb: 0.1 }, storage: { pill: 80 } },
     upkeep: { wood: 0.25 }, // 丹炉要一直添柴
     needs: { upgrades: ['alchemyArt'] },
   },
@@ -431,7 +432,7 @@ const CORE_BUILDINGS = [
     cost: { ore: 400, wood: 500, rock: 240 },
     priceRatio: 1.25,
     desc: '风箱一响，玄铁就有了骨气。',
-    effects: { craftBonusByResource: { artifact: 0.05, steel: 0.05, spiritArtifact: 0.05, spiritTreasure: 0.05 }, ratio: { ore: 0.1 }, storage: { artifact: 120 } },
+    effects: { craftBonusByResource: { artifact: 0.08, steel: 0.08, spiritArtifact: 0.08, spiritTreasure: 0.08 }, ratio: { ore: 0.1 }, storage: { artifact: 40 } },
     upkeep: { wood: 0.5 }, // 风箱炭火不熄
     needs: { upgrades: ['forgeArt'] },
   },
@@ -443,7 +444,7 @@ const CORE_BUILDINGS = [
     cost: { wood: 420, rock: 200, herb: 300 },
     priceRatio: 1.25,
     desc: '以灵木与金属为载体，刻纹注灵，制成符箓、灵符与阵法构件。',
-    effects: { craftBonusByResource: { talisman: 0.05, spiritTalisman: 0.05 }, storage: { talisman: 200 } },
+    effects: { craftBonusByResource: { talisman: 0.08, spiritTalisman: 0.08 }, storage: { talisman: 80 } },
     upkeep: { wood: 0.2 }, // 抄符耗纸
     needs: { upgrades: ['talismanArt'] },
   },

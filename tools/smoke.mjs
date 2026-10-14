@@ -257,8 +257,8 @@ section('数据完整性')
 
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
-  const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'breakthroughDiscount', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
-  const pureNumeric = ['storageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntDurationReduction']
+  const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
+  const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntDurationReduction']
   // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
@@ -268,7 +268,7 @@ section('数据完整性')
   )
   const skillLeaks = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok('技艺/法宝层不含任何解锁/系统效果', skillLeaks.length === 0, skillLeaks.map((u) => u.id).join(','))
-  const skillPure = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).every((k) => pureNumeric.includes(k)))
+  const skillPure = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).every((k) => pureNumeric.includes(k) || k === 'breakthroughDiscount'))
   ok('技艺/法宝效果只强化数值，配方由前置条件绑定工艺', skillPure.length === TECHNIQUES.length)
 
 // 技艺层的炼成花费只用「资源 + 高级资源」，不吃灵机；法宝的祭炼仍然要灵机
@@ -342,16 +342,11 @@ section('数据完整性')
   // 数值型研究来自材料工艺、主线成果、金丹增产及聚气纹。
   // 清单用于避免无意把通用技艺迁入修真页，符文原理见 docs/CRAFT-PROGRESSION.md。
   const MIGRATED_NUMERIC_IDS = [
-    'woodworking', 'waterworkshop', 'spiritSaw', 'spiritCultivation',
-    'steelWorking', 'swordFlight', 'spiritSmelting',
-    'arrayAssembly', 'crystalCraft', 'crystalPolishing', 'alchemyFire',
-    'mahayanaArt', 'flowField', 'qiRune', 'craftTempo',
+    'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft', 'crystalPolishing',
+    'mahayanaArt', 'qiRune', 'craftTempo',
     // 主线数值节点：灵气纯化的纯度增益
     'qiPurify',
     // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点
-    'spiritCanal', 'liquidIrrigation', 'veinInfuse',
-    'liquidVault', 'runeVault', 'treasureVault',
-    'particleRecover', 'energyDrive',
     // 修真应用 · 营造（自技艺页迁入）
     'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
   ]
@@ -363,6 +358,16 @@ section('数据完整性')
   )
   ok('数值节点清单全部落在修真页', MIGRATED_NUMERIC_IDS.every((id) => CULTIVATION.some((c) => c.id === id)))
   ok('技艺页不再包含迁移节点', TECHNIQUES.every((t) => !MIGRATED_NUMERIC_IDS.includes(t.id)))
+  const applications = ['breakthroughArt', 'waterworkshop', 'spiritSaw', 'spiritCultivation', 'swordFlight', 'spiritSmelting',
+    'alchemyFire', 'flowField', 'spiritCanal', 'liquidIrrigation', 'veinInfuse', 'liquidVault', 'runeVault',
+    'treasureVault', 'particleRecover', 'energyDrive']
+  ok('16项应用增益在技艺页且不占修真分组', applications.every(id =>
+    TECHNIQUES.some(u => u.id === id) && !CULTIVATION.some(u => u.id === id) && !CULTIVATION_STAGE_OF[id]))
+  for (const id of applications) {
+    const legacy = normalizeState({ upgrades: { [id]: true } })
+    ok(`迁移后的${UPGRADE_MAP[id].name}保留旧档资格与同一数据条目`,
+      legacy.upgrades[id] && E.isUpgradeUnlocked(legacy, UPGRADE_MAP[id]) && ALL_UPGRADES.filter(u => u.id === id).length === 1)
+  }
   // 两线重组的依赖与标注修正
   ok(
     '修真页节点不再引用技艺版探矿术（矿脉经），消除反向跨层依赖',
@@ -635,28 +640,31 @@ section('数字格式（只有左栏资源表保留小数）')
   ok('资源栏的 fmtFixed 仍然固定两位', fmtFixed(12) === '12.00', fmtFixed(12))
 
   // 其它地方：整数
-  ok('存量向下取整', fmtStock(1234.56) === '1234', fmtStock(1234.56))
+  ok('存量向下取整', fmtStock(234.56) === '234', fmtStock(234.56))
   ok('花费向上取整', fmtCost(148.955) === '149', fmtCost(148.955))
-  ok('累计量四舍五入', fmtAmount(1234.6) === '1235', fmtAmount(1234.6))
-  ok('fmtInt 也不会漏出小数', fmtInt(1234.5) === '1235', fmtInt(1234.5))
-  ok('大数用中文数量级且最多一位小数', fmtAmount(123456) === '12.3万', fmtAmount(123456))
-  ok('整万数干净显示', fmtAmount(80000) === '8万', fmtAmount(80000))
+  ok('累计量取整后缩写', fmtAmount(1234.6) === '1.24k', fmtAmount(1234.6))
+  ok('fmtInt 取整后缩写', fmtInt(1234.5) === '1.24k', fmtInt(1234.5))
+  ok('大数用千进制并最多两位小数', fmtAmount(123456) === '123.46k', fmtAmount(123456))
+  ok('整数缩写省略小数尾零', fmtAmount(80000) === '80k', fmtAmount(80000))
   // 缩放后不保留小数时，整数末尾的 0 不能被当作小数尾零删掉。
   for (const [value, expected] of [
-    [1000000, '100万'],
-    [1200000, '120万'],
-    [1204000, '120万'],
-    [10000000, '1000万'],
-    [12000000000, '120亿'],
-    [-1200000, '-120万'],
+    [1000, '1k'],
+    [1000000, '1m'],
+    [1200000, '1.2m'],
+    [1204000, '1.2m'],
+    [10000000, '10m'],
+    [12000000000, '12b'],
+    [-1200000, '-1.2m'],
   ]) {
     for (const format of [fmt, fmtInt, fmtStock, fmtCost, fmtAmount]) {
       ok(`${format.name}(${value}) 保留整数尾零`, format(value) === expected, format(value))
     }
   }
-  ok('资源栏整枚资源保留整数尾零', fmtResource('stone', 1200000) === '120万', fmtResource('stone', 1200000))
-  ok('资源栏连续资源仍固定两位', fmtResource('qi', 1200000) === '120.00万', fmtResource('qi', 1200000))
-  ok('小数尾零仍正确省略', fmt(120000) === '12万' && fmt(125000) === '12.5万')
+  ok('资源栏整枚资源采用千进制缩写', fmtResource('stone', 1200000) === '1.2m', fmtResource('stone', 1200000))
+  ok('资源栏连续资源缩写仍固定两位', fmtResource('qi', 1200000) === '1.20m', fmtResource('qi', 1200000))
+  ok('小数尾零仍正确省略', fmt(120000) === '120k' && fmt(125000) === '125k')
+  ok('舍入进位时切换单位，不出现1000k', fmt(999999) === '1m' && fmtFixed(999999) === '1.00m')
+  ok('超过b级别使用科学计数法', fmt(1e12) === '1.00e+12' && fmtCost(1e48) === '1.00e+48')
   ok('负数也保持整数', fmtStock(-12.7) === '-13', fmtStock(-12.7))
   ok('0 与 Infinity 不出错', fmtStock(0) === '0' && fmtCost(0) === '0' && fmtAmount(Infinity) === '∞')
 }
@@ -963,7 +971,7 @@ section('进项来源明细')
       Object.keys(st).join(','),
     )
     ok('库房不再碰灵气 / 灵机 / 丹药 / 符箓 / 香火 / 法器', ['qi', 'insight', 'pill', 'talisman', 'faith', 'artifact'].every((k) => !st[k]))
-    ok('份额按流量排序（灵木最多、玄铁最少）', st.wood > st.stone && st.stone > st.rock && st.rock > st.herb && st.herb > st.ore, JSON.stringify(st))
+    ok('份额按流量排序（灵木最多、低速灵石最少）', st.wood > st.rock && st.rock > st.herb && st.herb > st.ore && st.ore > st.stone, JSON.stringify(st))
     // 被移出去的那几种资源，各自有专属建筑在给上限
     const capSource = (res) =>
       BUILDINGS.filter(
@@ -1803,6 +1811,7 @@ section('金丹前修真按知识与产业递进')
   s.upgrades.alchemyArt = true
   ok('破境心法需先掌握丹火', !E.isUpgradeUnlocked(s, UPGRADE_MAP.breakthroughArt))
   s.upgrades.alchemyFire = true
+  s.upgrades.qiLiquid = true
   ok('破境心法不强制先发展香火', E.isUpgradeUnlocked(s, UPGRADE_MAP.breakthroughArt) && !s.upgrades.incenseVow)
   s.upgrades.deepShaft = true
   s.buildings.forge = { count: 3, on: true }
@@ -1815,7 +1824,7 @@ section('木作器械后的修真递进链')
   for (const id of ['prospectStudy', 'woodworking', 'alchemyArt']) s.upgrades[id] = true
   s.buildings.ironFurnace = { count: 1, on: true }
   s.buildings.alchemyRoom = { count: 1, on: true }
-  const chain = ['earthArt', 'forgeArt', 'alchemyFire', 'intuition', 'waterworkshop']
+  const chain = ['earthArt', 'forgeArt', 'intuition']
   E.recompute(s, d)
   for (const id of chain) {
     const available = chain.filter(next => !s.upgrades[next] && E.isUpgradeUnlocked(s, E.UPGRADE_MAP[next]))
@@ -1826,9 +1835,77 @@ section('木作器械后的修真递进链')
     for (const [res, cost] of Object.entries(E.UPGRADE_MAP[id].cost)) s.resources[res] = cost
     ok(`${E.UPGRADE_MAP[id].name}可通过正常参悟推进`, E.research(s, d, id))
   }
+  ok('自动制作后流水作坊仍等待阵基装配', !E.isUpgradeUnlocked(s, E.UPGRADE_MAP.waterworkshop))
   const legacy = createInitialState()
   legacy.upgrades.waterworkshop = true
   ok('已掌握流水作坊不因新前置而失效', E.isUpgradeUnlocked(legacy, E.UPGRADE_MAP.waterworkshop))
+}
+
+section('同类修真递进与显示门槛')
+{
+  const edges = [
+    ['qiPurify', 'condenseArt'], ['qiPurify', 'liquidVault'],
+    ['steelWorking', 'artifactLore'], ['conductionRune', 'guardRune'],
+    ['conductionRune', 'capacityRune'], ['crystalCraft', 'precipitateTheory'],
+    ['spiritCanal', 'liquidIrrigation'], ['spiritCanal', 'veinInfuse'],
+    ['incenseStudy', 'recruitDrive'], ['yinyangSplit', 'particleRecover'],
+    ['qiLiquid', 'breakthroughArt'], ['earthEssence', 'steelWorking'],
+    ['arrayAssembly', 'waterworkshop'], ['steelWorking', 'beastMaterialArt'],
+    ['arrayAssembly', 'preachArt'], ['preachArt', 'incenseStudy'],
+  ]
+  for (const [previous, next] of edges) {
+    const { state: s } = newGame()
+    s.realm = ASCEND_REALM_INDEX
+    for (const u of ALL_UPGRADES) s.upgrades[u.id] = true
+    for (const b of BUILDINGS) s.buildings[b.id] = { count: 200, on: true }
+    for (const res of RESOURCES) s.resources[res.id] = 1e9
+    delete s.upgrades[previous]
+    delete s.upgrades[next]
+    const meta = UPGRADE_MAP[next]
+    ok(`库存与建筑充足也不能提前显示或研究${meta.name}`,
+      !E.isProgressionVisible(s, meta.needs) && !E.isUpgradeUnlocked(s, meta))
+    s.upgrades[previous] = true
+    ok(`完成${UPGRADE_MAP[previous].name}后显示并开放${meta.name}`,
+      E.isProgressionVisible(s, meta.needs) && E.isUpgradeUnlocked(s, meta))
+    const legacy = normalizeState({ upgrades: { [next]: true } })
+    ok(`旧档已学${meta.name}无需补学新前置即可保留资格`,
+      legacy.upgrades[next] && E.isUpgradeUnlocked(legacy, meta) && !legacy.upgrades[previous])
+  }
+  const visited = new Set(), active = new Set()
+  const visit = id => {
+    if (active.has(id) || !UPGRADE_MAP[id]) return false
+    if (visited.has(id)) return true
+    active.add(id)
+    const needs = UPGRADE_MAP[id].needs
+    if (![...(needs?.upgrades || []), ...(needs?.upgrade ? [needs.upgrade] : [])].every(visit)) return false
+    active.delete(id)
+    visited.add(id)
+    return true
+  }
+  ok('包含跨页前置的完整研究图没有循环或缺失节点', ALL_UPGRADES.every(u => visit(u.id)))
+}
+
+section('金丹九项研究分成三个入口')
+{
+  const { state: s, derived: d } = newGame()
+  s.realm = 4
+  for (const id of ['qiGazing', 'alchemyArt', 'alchemyFire', 'earthArt', 'woodworking', 'intuition',
+    'forgeArt', 'talismanArt', 'qiRune', 'shapeRune', 'incenseVow', 'wildHunting', 'qiMeasure']) s.upgrades[id] = true
+  for (const b of BUILDINGS) s.buildings[b.id] = { count: 200, on: true }
+  for (const res of RESOURCES) s.resources[res.id] = 1e9
+  E.recompute(s, d)
+  const candidates = ['breakthroughArt', 'qiLiquid', 'waterworkshop', 'steelWorking', 'conductionRune',
+    'incenseStudy', 'earthEssence', 'beastMaterialArt', 'preachArt']
+  const visible = candidates.filter(id => E.isProgressionVisible(s, UPGRADE_MAP[id].needs))
+  ok('金丹同一前置进度的九项只显示化液、导灵、土木三个入口',
+    visible.length === 3 && ['qiLiquid', 'conductionRune', 'earthEssence'].every(id => visible.includes(id)), visible.join(','))
+  ok('化液后才开放破境心法', E.research(s, d, 'qiLiquid') && E.isUpgradeUnlocked(s, UPGRADE_MAP.breakthroughArt))
+  ok('土木精要后才开放淬玄工艺', E.research(s, d, 'earthEssence') && E.isUpgradeUnlocked(s, UPGRADE_MAP.steelWorking))
+  ok('实际淬玄研究后开放兽材加工，作坊走独立工程分支', E.research(s, d, 'steelWorking') &&
+    !E.isUpgradeUnlocked(s, UPGRADE_MAP.waterworkshop) && E.isUpgradeUnlocked(s, UPGRADE_MAP.beastMaterialArt))
+  ok('导灵及阵基装配后才开放讲经', E.research(s, d, 'conductionRune') && E.research(s, d, 'arrayAssembly') &&
+    E.isUpgradeUnlocked(s, UPGRADE_MAP.preachArt) && E.isUpgradeUnlocked(s, UPGRADE_MAP.waterworkshop) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.incenseStudy))
+  ok('讲经后才开放香火志', E.research(s, d, 'preachArt') && E.isUpgradeUnlocked(s, UPGRADE_MAP.incenseStudy))
 }
 
 section('本轮评估问题回归')
@@ -3909,7 +3986,7 @@ section('分层仓储、点击与进阶祭炼')
   const pillBefore = d.max.pill
   s.buildings.alchemyRoom = { count: 1, on: true }
   E.recompute(s, d)
-  ok('专属成品仓储不被通用折算削弱', d.max.pill === pillBefore + 200)
+  ok('专属成品仓储不被通用折算削弱', d.max.pill === pillBefore + BUILDING_MAP.alchemyRoom.effects.storage.pill)
   ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer).every(r => Number.isInteger(d.max[r.id])))
   const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: 1000 } })
   E.recompute(old, d)
@@ -4229,9 +4306,10 @@ section('凝聚章：逐步研究与能力兑现')
       ok('只掌握化液仍不能参悟凝灵诀', !E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt))
     } else if (id === 'liquidArt') {
       ok('凝液法接续提供基础凝聚工位', d.processingCapacity.condensation === 1)
-      ok('凝液法后开放凝灵诀但尚未取得自动凝液能力', E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt) && !d.autoCondenseLiquidUnlocked)
+      ok('凝液法后凝灵诀仍等待纯化，尚未取得自动凝液能力', !E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt) && !d.autoCondenseLiquidUnlocked)
     } else if (id === 'qiPurify') {
       ok('纯化后灵气产出增加两成', close(d.rates.qi / rate, 1.2))
+      ok('纯化后开放凝灵诀与液藏之术', E.isUpgradeUnlocked(s, UPGRADE_MAP.condenseArt) && E.isUpgradeUnlocked(s, UPGRADE_MAP.liquidVault))
       s.upgrades.talismanArt = false
       ok('主链完成纯化仍不能绕过凝晶所需符文知识', !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory))
       s.upgrades.talismanArt = true
@@ -4252,10 +4330,10 @@ section('金丹：修真、工艺、材料与建设闭环')
   Object.assign(s.resources, { insight: 50000, qi: 8000, spiritLiquid: 300, talisman: 1900, ore: 2000, plank: 640, artifact: 10, stone: 1000, wood: 2000 })
   E.recompute(s, d)
   ok('已掌握凝液仍须先纯化才能参悟凝晶', !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory))
-  ok('筑基参悟纯化后即可继续凝晶与淬玄原理', E.research(s, d, 'qiPurify') && E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && E.isUpgradeUnlocked(s, UPGRADE_MAP.steelWorking))
+  ok('筑基参悟纯化后可继续凝晶，淬玄仍等待土木精要', E.research(s, d, 'qiPurify') && E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.steelWorking))
   s.realm = 4
   E.recompute(s, d)
-  ok('金丹档开放阵基装配、淬玄工艺、材料库与灵流要诀', ['arrayAssembly', 'steelWorking', 'earthEssence', 'flowField'].every(id => E.isUpgradeUnlocked(s, UPGRADE_MAP[id])))
+  ok('金丹档先开放阵基装配、土木精要与灵流要诀', ['arrayAssembly', 'earthEssence', 'flowField'].every(id => E.isUpgradeUnlocked(s, UPGRADE_MAP[id])))
   ok('凝晶工艺与御剑术仍需各自研究前置', E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalCraft) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.swordFlight))
   ok('工艺条目显示它实际开放的配方', unlockGroups('arrayAssembly').crafts.includes('组装阵基'))
   // 采药人需要药圃才开工；灵草已有药圃10%加成，灵流要诀的30%与其相加。
@@ -4324,7 +4402,7 @@ section('专业制作：实际产出与设施启停')
   const pillYield = E.craftYield(d, CRAFT_MAP.refinePill)
   s.buildings.alchemyRoom = { count: 10, on: true }
   E.recompute(s, d)
-  ok('炼丹房提高丹药收益而不增加凝石收益', close(E.craftYield(d, CRAFT_MAP.refinePill) - pillYield, 0.5) && close(E.craftYield(d, CRAFT_MAP.infuseStone), stoneYield))
+  ok('炼丹房提高丹药收益而不增加凝石收益', close(E.craftYield(d, CRAFT_MAP.refinePill) - pillYield, 10 * BUILDING_MAP.alchemyRoom.effects.craftBonusByResource.pill) && close(E.craftYield(d, CRAFT_MAP.infuseStone), stoneYield))
   E.toggleBuilding(s, d, 'alchemyRoom')
   ok('专业加成随设施停用停止', close(E.craftYield(d, CRAFT_MAP.refinePill), pillYield))
   const effects = describeEffects(BUILDING_MAP.forge.effects)
@@ -4364,7 +4442,7 @@ section('疾炼法与自动调速')
     const game = newGame()
     game.state.realm = 5
     game.state.buildings.quarry = { count: 1, on: true }
-    Object.assign(game.state.upgrades, { intuition: true, waterworkshop: true, liquidArt: true })
+    Object.assign(game.state.upgrades, { intuition: true, arrayAssembly: true, liquidArt: true })
     E.recompute(game.state, game.derived)
     return game
   }
@@ -4665,7 +4743,7 @@ section('金丹起步与末期产业破境')
   saving.autoCraft.assembleArrayBase = true
   saving.settings.autoCraftOn = true
   E.recompute(saving, sd)
-  const bot = createBot(saving, sd)
+  const bot = createBot(saving, sd, { breakthrough: successfulBreakthrough })
   bot.act()
   ok('攒元婴灵气时已开启的阵基自动制作会暂停', saving.autoCraft.assembleArrayBase === false)
   saving.resources.qi = 50000
@@ -4680,9 +4758,59 @@ section('金丹起步与末期产业破境')
   for (const r of RESOURCES) saving.resources[r.id] = 1e7
   E.recompute(saving, sd)
   bot.act()
-  ok('退出攒料后普通自动制作恢复', saving.autoCraft.assembleArrayBase === true)
+  ok('退出攒料后普通自动制作恢复', saving.autoCraft.assembleArrayBase === true,
+    JSON.stringify({ realm: saving.realm, deaths: saving.stats.breakthroughDeaths, order: saving.craftOrders.assembleArrayBase,
+      resources: saving.resources, max: sd.max, prerequisites: [...bot.prerequisites().buildings] }))
 }
 
+
+section('口传心授的早期灵机仓容增益')
+{
+  const { state: s, derived: d } = newGame()
+  s.upgrades.qiOrigin = true
+  s.buildings.library = { count: 2, on: true }
+  Object.assign(s.resources, { insight: 35, wood: 400 })
+  E.recompute(s, d)
+  const capacity = d.max.insight
+  const productionBonus = d.ratio.insight
+  ok('口传心授正常扣费后仅放大藏经阁容量，不放大基础仓容',
+    E.research(s, d, 'oralTeaching') && close(d.max.insight, capacity + 64) && s.resources.insight === 0 && s.resources.wood === 0)
+  ok('口传心授仍保留一成灵机产出加成', close(d.ratio.insight - productionBonus, 0.1))
+  s.buildings.library.count = 10
+  E.recompute(s, d)
+  ok('十座藏经阁每座只额外提供32灵机容量', close(d.max.insight, 1320))
+  s.buildings.library.count = 2
+  for (const [id, count] of [['academy', 3], ['observatory', 2], ['warehouse', 3], ['depot', 2], ['grotto', 1]]) s.buildings[id] = { count, on: true }
+  s.upgrades.oralTeaching = false
+  E.recompute(s, d)
+  const otherCapacity = d.max.insight
+  s.upgrades.oralTeaching = true
+  E.recompute(s, d)
+  ok('讲经堂、观星台、库房、材料库和洞天容量均不被口传放大', close(d.max.insight - otherCapacity, 64))
+  s.upgrades.starReading = true
+  s.upgrades.caseStackArt = true
+  s.karma = 75
+  s.upgrades.oralTeaching = false
+  E.recompute(s, d)
+  const scaledCapacity = d.max.insight
+  s.upgrades.oralTeaching = true
+  s.buildings.library.on = false
+  E.recompute(s, d)
+  ok('专项容量按实体数量计算，再与仙缘和全局仓容规则一致叠加',
+    close(d.max.insight - scaledCapacity, 64 * d.karmaStorageMult * 1.8))
+  const rows = describeEffects(UPGRADE_MAP.oralTeaching.effects)
+  ok('效果提示明确指向藏经阁灵机上限而非全局上限', rows.some(row => row.label === '藏经阁 灵机上限' && row.value === '+40%') && !rows.some(row => row.label === '灵机 上限'))
+  s.buildings = { library: { count: 2, on: true } }
+  s.upgrades = { qiOrigin: true, oralTeaching: true }
+  s.karma = 0
+  s.buildings.library.count = 2
+  s.resources.insight = 500
+  const restored = parseImport(exportSave(s))
+  const rd = E.createDerived()
+  E.recompute(restored, rd)
+  ok('旧档按新加成计算仓容且保留已学资格和超仓库存',
+    restored.upgrades.oralTeaching && close(rd.max.insight, 424) && restored.resources.insight === 500)
+}
 
 section('修真由灵机仓容软性推进')
 {

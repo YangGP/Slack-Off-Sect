@@ -45,6 +45,12 @@ export function applyEffects(ef, mult, targets, src) {
     if (!acc.storageRatio) acc.storageRatio = {}
     for (const k in ef.storageRatio) acc.storageRatio[k] = (acc.storageRatio[k] || 0) + ef.storageRatio[k] * mult
   }
+  if (ef.buildingStorageRatio) {
+    acc.buildingStorageRatio ||= {}
+    for (const [id, value] of Object.entries(ef.buildingStorageRatio)) {
+      acc.buildingStorageRatio[id] = (acc.buildingStorageRatio[id] || 0) + value * mult
+    }
+  }
   if (ef.storageAll) {
     for (const r of RESOURCES) max[r.id] = (max[r.id] || 0) + ef.storageAll * mult * (r.storageWeight ?? 1)
   }
@@ -195,6 +201,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const countOnly = {}
     if (ef.storage) countOnly.storage = ef.storage
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
+    if (ef.buildingStorageRatio) countOnly.buildingStorageRatio = ef.buildingStorageRatio
     if (ef.storageAll) countOnly.storageAll = ef.storageAll
     if (ef.maxDisciples) countOnly.maxDisciples = ef.maxDisciples
     if (ef.habitability && !counted) countOnly.habitability = ef.habitability
@@ -204,6 +211,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const activeOnly = { ...ef }
     delete activeOnly.storage
     delete activeOnly.storageRatio
+    delete activeOnly.buildingStorageRatio
     delete activeOnly.storageAll
     delete activeOnly.maxDisciples
     if (!counted) {
@@ -446,6 +454,15 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     net[r.id] = (rates[r.id] || 0) - out
   }
 
+  // 专项扩容仅增加指定建筑自身的定额仓储，基础仓容和其他来源不参与。
+  for (const [id, value] of Object.entries(acc.buildingStorageRatio || {})) {
+    const meta = BUILDING_MAP[id]
+    if (!meta || !isEntryEnabled(state, meta)) continue
+    const count = state.buildings[id]?.count || 0
+    for (const [res, amount] of Object.entries(meta.effects?.storage || {})) {
+      max[res] = (max[res] || 0) + amount * count * value
+    }
+  }
   for (const r of RESOURCES) {
     // 猎备仓容完全独立：不乘仙缘仓储倍率（isolatedStorage），也不套通用扩仓（storageWeight 0）。
     if (Number.isFinite(max[r.id]) && !r.isolatedStorage) max[r.id] *= karmaStorageMult

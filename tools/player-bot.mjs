@@ -90,7 +90,7 @@ export const ADVANCED_CRAFTS = {
   fuseCrystalSilver: { floors: {}, cap: 100 },
   // 点石成灵吃矿石：矿要留够盖房砌阵（600 起）。
   // 灵石是硬通货，囤货上限交给需求侧（craftDemand 含破境/奇观费用），cap 只做保底 ——
-  // 因果池单笔要 100 万灵石，cap 低于它就会卡参照玩家（冒烟断言守着这条）。
+  // 因果池单笔要 30 万灵石；保留 100 万囤货目标作为其它建设的余量（冒烟校验最大单笔需求）。
   infuseStone: { base: 'rock', floor: 10, cap: 1000000 },
   // 灵液吃硬通货（灵气），按需炼：灵气富余才凝液，囤到上限就停
   condenseLiquid: { base: 'qi', floor: 600, cap: 360 },
@@ -219,6 +219,12 @@ export function createBot(state, derived, policy = {}) {
       const required = E.countOf(state, id) < (requiredBuildings.get(id) || 0)
       if (!required && !wantsComfortBuilding(E.BUILDING_MAP[id])) continue
       const storageFix = shortRes.some((r) => (E.BUILDING_MAP[id]?.effects?.storage?.[r] || 0) > 0)
+      if (policy.onlyBreakthrough && !required && !storageFix) {
+        const support = ['hut', 'spiritField', 'lumberYard', 'granary', 'quarry'].includes(id) && E.countOf(state, id) === 0
+        const housing = E.BUILDING_MAP[id]?.effects?.maxDisciples > 0 && state.disciples.total >= derived.maxDisciples
+        const comfort = comfortOnly(E.BUILDING_MAP[id]) && normalHabitability() < state.disciples.total
+        if (!support && !housing && !comfort) continue
+      }
       if (reserveCost && !required && !storageFix && Object.keys(cost).some((k) =>
         (state.resources[k] || 0) - cost[k] < (reserveCost[k] || 0))) continue
       // 开局自举期：先伐木场、后谷仓，再攒首座采矿场 —— 避免反复扩屋把开局木料花光。
@@ -319,6 +325,7 @@ export function createBot(state, derived, policy = {}) {
     }
     // 金丹投资本身的材料前置也必须追踪，例如土木精要需要木板工艺。
     for (const id of ['flowField', 'earthEssence']) {
+      if (policy.onlyBreakthrough) continue
       if (derived.availableUpgrades.includes(id)) visit(id)
     }
     for (const res of Object.keys(next)) visitResource(res)
@@ -328,7 +335,7 @@ export function createBot(state, derived, policy = {}) {
       else visitBuilding(project.id, project.count)
     }
     // 土木精要可在低境界掌握；建库前仍须追踪玄钢及其研究用法器。
-    if (state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) visitBuilding('depot')
+    if (!policy.onlyBreakthrough && state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) visitBuilding('depot')
     // 扩仓设施的建材也属于破境前置，不能只追踪破境配方。
     // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
     for (const [res, amount] of Object.entries(capacityDemand(next, chain, buildings))) {
@@ -363,6 +370,36 @@ export function createBot(state, derived, policy = {}) {
       if ((state.upgradeEnabled.energyCore !== false) !== ready) E.toggleUpkeepUpgrade(state, derived, 'energyCore')
     }
     let craftDemand = {}
+    let rushDemand = null
+    if (policy.onlyBreakthrough) {
+      rushDemand = { ...(realmNeed() || {}) }
+      const include = cost => {
+        for (const [res, amount] of Object.entries(cost || {})) rushDemand[res] = Math.max(rushDemand[res] || 0, amount)
+      }
+      const requirements = breakthroughPrereqs()
+      for (const id of requirements.upgrades) include(E.UPGRADE_MAP[id]?.cost)
+      for (const [id, count] of requirements.buildings) if (E.countOf(state, id) < count) include(E.buildingCost(state, id, 1))
+      for (const id of derived.availableUpgrades) {
+        const u = E.UPGRADE_MAP[id]
+        if (u.effects?.storageRatio || u.effects?.buildingStorageRatio || (comfortOnly(u) && normalHabitability() < state.disciples.total)) include(u.cost)
+      }
+      for (const id of derived.unlockedBuildings) {
+        const b = E.BUILDING_MAP[id]
+        if (b.effects?.maxDisciples > 0 || (comfortOnly(b) && normalHabitability() < state.disciples.total)) include(E.buildingCost(state, id, 1))
+      }
+      const visited = new Set()
+      const inputs = res => {
+        if (visited.has(res)) return
+        visited.add(res)
+        const recipe = CRAFTS.find(c => c.out === res)
+        if (!recipe) return
+        const copies = Math.ceil((rushDemand[res] || 0) / E.craftYield(derived, recipe))
+        include(Object.fromEntries(Object.entries(recipe.cost).map(([id, amount]) => [id, amount * copies])))
+        for (const id of Object.keys(recipe.cost)) inputs(id)
+      }
+      for (const res of Object.keys(rushDemand)) inputs(res)
+      craftDemand = rushDemand
+    }
     // 金丹后按近期建筑/研究/破境需求设置加工库存目标，避免把原料无限加工。
     // 这是新目标控件允许玩家执行的策略，手动与自动制作使用同一目标。
     if (derived.craftTargetsUnlocked) {
@@ -376,6 +413,7 @@ export function createBot(state, derived, policy = {}) {
         for (const [res, amount] of Object.entries(E.buildingCost(state, id, 1))) demand[res] = Math.max(demand[res] || 0, amount)
       }
       craftDemand = demand
+      if (rushDemand) craftDemand = rushDemand
       for (const c of CRAFTS) {
         // 灵石（stone）必须在这张名单里：破境与研究都要它，而它的唯一来源就是点石成灵。
         // 早先漏了它，参照玩家于是把矿石与灵气堆到满仓、却一件灵石都不做（实测卡在筑基期/元婴期）。
@@ -388,7 +426,7 @@ export function createBot(state, derived, policy = {}) {
           const floor = policy?.floors?.[c.out] || (policy?.base === c.out ? policy.floor : 0)
           inputDemand = Math.max(inputDemand, recipe.cost[c.out] || 0, floor)
         }
-        E.setCraftTarget(state, derived, c.id, Math.ceil(Math.max(20, demand[c.out] || 0, inputDemand) * 1.25))
+        E.setCraftTarget(state, derived, c.id, Math.ceil(Math.max(20, craftDemand[c.out] || 0, rushDemand ? 0 : inputDemand) * 1.25))
       }
     }
     // —— 财政：灵气要见底时，把吃灵气的建筑停掉；缓过来再开 ——
@@ -427,8 +465,10 @@ export function createBot(state, derived, policy = {}) {
     const shortRes = Object.keys(capacityNeed).filter((r) => (derived.max[r] || 0) < capacityNeed[r])
     const storageFixIds = new Set(
       derived.availableUpgrades.filter((id) => {
-        const sr = E.UPGRADE_MAP[id]?.effects?.storageRatio
-        return !!sr && shortRes.some((r) => (sr[r] || 0) > 0)
+        const effects = E.UPGRADE_MAP[id]?.effects
+        return shortRes.some(r => (effects?.storageRatio?.[r] || 0) > 0) ||
+          Object.entries(effects?.buildingStorageRatio || {}).some(([building, ratio]) => ratio > 0 &&
+            E.countOf(state, building) > 0 && shortRes.some(r => (E.BUILDING_MAP[building]?.effects?.storage?.[r] || 0) > 0))
       }),
     )
     let reserveCost = null
@@ -521,6 +561,8 @@ export function createBot(state, derived, policy = {}) {
     const ups = derived.availableUpgrades
       .map((id) => ALL_UPGRADES.find((u) => u.id === id))
       .filter(Boolean)
+      .filter(u => !policy.onlyBreakthrough || prereq.has(u.id) || storageFixIds.has(u.id) ||
+        (comfortOnly(u) && normalHabitability() < state.disciples.total))
       .filter(u => prereq.has(u.id) || storageFixIds.has(u.id) ||
         (policy.focusProjects?.(state, derived) ? comfortOnly(u) && wantsComfortUpgrade(u) : wantsComfortUpgrade(u)))
       // 并列时不能退化成「数组顺序」—— 否则改一次数据顺序，推演结果就跟着变
@@ -565,6 +607,12 @@ export function createBot(state, derived, policy = {}) {
     // 制作（灵石留一点灵气余量，别把阵徒的口粮也花掉）
     for (const c of CRAFTS) {
       if (!derived.availableCrafts.includes(c.id)) continue
+      if (rushDemand && !rushDemand[c.out]) {
+        if (state.craftOrders?.[c.id] && !state.craftOrders[c.id].paused) E.manageCraftOrder(state, derived, c.id, 'pause')
+        state.autoCraft[c.id] = false
+        continue
+      }
+      if (rushDemand && state.resources[c.out] >= rushDemand[c.out]) continue
       // 攒破境前置期间：跳过会吃掉这些资源的配方（但它本身若产的就是要攒的资源，则放行）。
       const savingWood = !(reserveCost && (reserveCost[c.out] || 0) > (state.resources[c.out] || 0)) &&
         housingNeed && state.resources.wood < housingNeed.wood && c.cost.wood > 0 &&
@@ -587,7 +635,7 @@ export function createBot(state, derived, policy = {}) {
       const adv = ADVANCED_CRAFTS[c.id]
       if (adv) {
         // 进阶品按需炼：料要留够（单料 base/floor，多料 floors），成品囤够就停（一次一份）
-        const floors = adv.floors || { [adv.base]: adv.floor }
+        const floors = rushDemand ? {} : adv.floors || { [adv.base]: adv.floor }
         let enough = true
         for (const [res, need] of Object.entries(floors)) {
           if ((state.resources[res] || 0) < need) enough = false
@@ -628,6 +676,7 @@ export function createBot(state, derived, policy = {}) {
           continue
         }
         state.autoCraft[c.id] = derived.availableCrafts.includes(c.id) &&
+          (!rushDemand || !!rushDemand[c.out]) &&
           !blocksCraft(c) && !(savingForHome && RESERVE_HOUSING.includes(c.id))
       }
     }

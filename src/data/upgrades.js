@@ -6,13 +6,13 @@
  *   灵气的形态阶梯（气 → 液 → 晶 → 灵气分子 → 正负灵子 → 灵能，设定见 docs/SPIRIT-ENERGY.md）
  *   对应每一章的研究问题。
  *   辅线「材料研究」按材料族分「原理 → 工艺 → 精研」三层，承接来源、配方与专业增益，
- *   其中 11 个工艺/精研节点自技艺页迁入（id 不变，存档兼容）。
+ *   配方与能力知识保留修真，16 个纯应用升级归技艺（ID 不变，存档兼容）。
  *   制度、招募、离线等经营节点收进「宗门经营」组。
  *
  * 与 /技艺·法宝/ 的分工：
  *   修真（本文件）：灵气与材料研究、心法支线及宗门经营，承接知识解锁、系统与研究成果；
- *                   材料线强化专业产业，心法线承接心印与修持增益
- *   技艺           ：通用产量、仓储、灵机等增益；法宝（kind: 'treasure'）由修真解锁后炼成
+ *                   知识节点可附带增益；心法线承接心印与修持
+ *   技艺           ：通用及专业产量、工位、节料、仓储与破境优惠；法宝由修真解锁后炼成
  *
  * 两者共用「灵机」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
  */
@@ -55,16 +55,6 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: [] },
     note: '开启参悟：凝气化液',
     needs: { upgrades: ['qiGazing'] },
-  },
-  {
-    id: 'breakthroughArt',
-    name: '破境心法',
-    glyph: '破',
-    cost: { insight: 2000, stone: 1500, pill: 30 },
-    desc: '破境时少走弯路，花费降低 15%。',
-    effectDesc: '因此破境时省下一成半材料，冲关更从容。',
-    effects: { breakthroughDiscount: 0.15 },
-    needs: { upgrades: ['qiGazing', 'alchemyArt', 'alchemyFire', 'earthArt'] },
   },
 
   // ---------- Ⅱ 凝聚：怎么把灵气存住、存好 ----------
@@ -251,11 +241,11 @@ const CORE_CULTIVATION = [
     name: '凝灵诀',
     glyph: '凝',
     cost: { insight: 120, wood: 150, stone: 20 },
-    desc: '掌握凝液制程后，将稳定灵压与收液的法门化为心诀。节气一至，将满仓盈余灵气自行压入玉瓶。',
+    desc: '掌握灵气纯化后，将稳定灵压与收液的法门化为心诀。节气一至，将满仓盈余灵气自行压入玉瓶。',
     effectDesc: '掌握《凝气化液》且达到凝液配方条件后，每逢节气，灵气满仓时自动凝聚灵液；灵气不足则暂停，遵守库存目标与材料保留量。',
     // 效果由"自动制作灵石"改为"自动凝聚灵液"：灵石可由点石成灵手动补，灵液才是真的耗灵气。
     effects: { autoCondenseLiquid: true },
-    needs: { upgrades: ['liquidArt'] },
+    needs: { upgrades: ['qiPurify'] },
   },
   {
     id: 'mindSeal',
@@ -316,38 +306,6 @@ const CORE_CULTIVATION = [
     // 所以它**不能**要百工坊，也不能要木板（否则与"百工坊用木板下料"闭环）。
     needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 2 }, { id: 'ironFurnace', count: 1 }] },
   },
-  // 自技艺页迁入（工艺）
-  {
-    id: 'waterworkshop',
-    name: '流水作坊',
-    glyph: '流',
-    cost: { insight: 900, plank: 30, ore: 600 },
-    desc: '引山泉推水轮，锯木与拌料共用木作工位。金丹起木作加工容量 +50%，原料不足时停机待料。',
-    effects: { processingCapacityRatio: { woodwork: 0.5 } },
-    needs: { upgrades: ['woodworking', 'intuition'] },
-  },
-  // 自技艺页迁入（精研）：化神产业强化之一
-  {
-    id: 'spiritSaw',
-    name: '灵纹锯阵',
-    glyph: '锯',
-    cost: { insight: 32000, plank: 80, steel: 20, crystal: 15 },
-    desc: '以灵纹驱动锯阵。金丹起木作加工容量 +100%，解板加工效率 +50%；每份木板灵木用量减少15%，扩产仍需稳定供料。',
-    effects: { processingCapacityRatio: { woodwork: 1 }, craftSpeedByRecipe: { sawPlank: 0.5 }, craftCostReduction: { sawPlank: 0.15 } },
-    // 造价含灵晶，而灵晶要「凝晶原理 → 凝晶工艺」才产得出：列进前置，避免先露面却找不到来源。
-    needs: { upgrades: ['timberCraft', 'waterworkshop', 'crystalCraft'] },
-  },
-  // 自技艺页迁入（精研）：化神产业强化之一
-  {
-    id: 'spiritCultivation',
-    name: '百草育灵',
-    glyph: '育',
-    cost: { insight: 28000, pill: 80, immortalHerb: 15, crystal: 15 },
-    desc: '轮作养地，提纯药性。灵草产出 +95%，丹药制作产出 +50%，仙草制作产出 +30%。',
-    effects: { ratio: { herb: 0.95 }, craftBonusByResource: { pill: 0.5, immortalHerb: 0.3 } },
-    // 造价含灵晶，而灵晶要「凝晶原理 → 凝晶工艺」才产得出：列进前置，避免先露面却找不到来源。
-    needs: { upgrades: ['herbRotation', 'alchemyFire', 'crystalCraft'] },
-  },
 
   // ---------- 金铁族 ----------
   {
@@ -382,28 +340,7 @@ const CORE_CULTIVATION = [
     desc: '借丹火淬去玄铁杂质，掌握《淬玄成钢》。玄钢用于材料库、试炼塔与高级营造。',
     effects: { craftBonusByResource: { steel: 0.05 } },
     // 淬玄工艺承接材料库的玄钢用料。
-    needs: { upgrades: ['forgeArt'], building: { id: 'forge', count: 1 } },
-  },
-  // 自技艺页迁入（精研）
-  {
-    id: 'swordFlight',
-    name: '御剑术',
-    glyph: '剑',
-    cost: { insight: 12000, ore: 4000, artifact: 18, steel: 6 },
-    desc: '御剑运木探矿，剑火淬炼器胚。灵木与玄铁产出 +20%，法器、灵器与灵宝制作产出 +10%。',
-    effects: { ratio: { wood: 0.2, ore: 0.2 }, craftBonusByResource: { artifact: 0.1, spiritArtifact: 0.1, spiritTreasure: 0.1 } },
-    // 御剑术与灵流要诀分别承接高阶与基础产能投资。
-    needs: { upgrades: ['deepShaft', 'steelWorking', 'infuseTheory'], building: { id: 'forge', count: 3 } },
-  },
-  // 自技艺页迁入（精研）：化神产业强化之一
-  {
-    id: 'spiritSmelting',
-    name: '灵火冶炼',
-    glyph: '冶',
-    cost: { insight: 36000, steel: 25, artifact: 40, crystal: 15 },
-    desc: '灵场调节炉温与淬炼节拍。金丹起炼器加工容量 +100%，淬钢加工效率 +50%；玄钢每份耗料减少15%，法器与灵器减少10%。整枚材料向上取整。',
-    effects: { processingCapacityRatio: { forge: 1 }, craftSpeedByRecipe: { refineSteel: 0.5 }, craftCostReduction: { refineSteel: 0.15, forgeArtifact: 0.1, forgeSpiritArtifact: 0.1 } },
-    needs: { upgrades: ['deepShaft', 'steelWorking', 'swordFlight', 'temperTheory'] },
+    needs: { upgrades: ['forgeArt', 'earthEssence'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'artifactLore',
@@ -414,7 +351,7 @@ const CORE_CULTIVATION = [
     effectDesc: '因此炼得出护山阵盘：阵纹落在器物上，比刻在山石上更灵。',
     effects: { unlockBuildings: [] },
     note: '开启参悟：护山阵盘',
-    needs: { upgrades: ['forgeArt'] },
+    needs: { upgrades: ['steelWorking'] },
   },
 
   // ---------- 符阵族 ----------
@@ -451,7 +388,7 @@ const CORE_CULTIVATION = [
     name: '导灵纹',
     glyph: '纹',
     cost: { insight: 2200, ore: 100, qi: 800 },
-    desc: '用相连的符文引导灵气流向，使不同材料之间能够传导气机。开启阵基装配研究。',
+    desc: '用相连的符文引导灵气流向，使不同材料之间能够传导气机。开启阵基装配、镇守纹与纳灵纹研究。',
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['qiRune', 'shapeRune'] },
   },
@@ -462,7 +399,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 12000, stone: 200, qi: 1200 },
     desc: '将固形结构向外延伸，抵御外部冲击。为炼虚参悟镇岳符与符法精微建立基础。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['shapeRune'] },
+    needs: { upgrades: ['conductionRune'] },
   },
   {
     id: 'capacityRune',
@@ -471,7 +408,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 14000, wood: 250, spiritLiquid: 2 },
     desc: '以层叠符文在金属载体内容纳更多灵气。解锁铭刻灵符，开启复合符文与须弥纳芥研究。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['shapeRune', 'liquidArt', 'steelWorking'] },
+    needs: { upgrades: ['conductionRune', 'liquidArt', 'steelWorking'] },
   },
   {
     id: 'compositeRune',
@@ -536,15 +473,6 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['herbStudy'], buildings: [{ id: 'library', count: 2 }, { id: 'herbGarden', count: 1 }] },
   },
   // 自技艺页迁入（工艺）
-  {
-    id: 'alchemyFire',
-    name: '丹火纯青',
-    glyph: '火',
-    cost: { insight: 270, herb: 900, pill: 6 },
-    desc: '火候拿捏到分毫不差，出炉的成色都不一样。丹药与九转丹制作产出 +5%。',
-    effects: { craftBonusByResource: { pill: 0.05, nineTurnPill: 0.05 } },
-    needs: { upgrades: ['alchemyArt', 'forgeArt'], building: { id: 'alchemyRoom', count: 1 } },
-  },
 
   // ---------- 香火族 ----------
   {
@@ -567,7 +495,7 @@ const CORE_CULTIVATION = [
     effectDesc: '因此立得起香火鼎，把念力一炉炉炼成香火。',
     effects: { unlockBuildings: ['incenseCauldron'] },
     note: '解锁建筑：香火鼎',
-    needs: { upgrades: ['incenseVow'] },
+    needs: { upgrades: ['incenseVow', 'preachArt'] },
   },
 
   // ---------- 土木族 ----------
@@ -631,7 +559,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['academy'] },
     // 符箓入门经炼器术已含木作器械；讲经堂造价又含阵基（要求木作器械与符箓入门）。
     // 直接列《木作器械》属跨线重复，去掉后由符阵链与建筑造价卡进度。
-    needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt'] },
+    needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt', 'arrayAssembly'] },
   },
   {
     id: 'calmMind',
@@ -653,7 +581,7 @@ const CORE_CULTIVATION = [
     desc: '下山贴榜、沿途施粥。弟子前来的间隔缩短 30%。',
     effectDesc: '因此山门名声在外，愿意上山的弟子更勤。',
     effects: { arrivalBonus: 0.3 },
-    needs: { upgrades: ['incenseVow'], building: { id: 'gate', count: 3 } },
+    needs: { upgrades: ['incenseStudy'], building: { id: 'gate', count: 3 } },
   },
   {
     id: 'mentorship',
@@ -674,8 +602,8 @@ const CORE_CULTIVATION = [
     desc: '丹炉火候、木料下刀，不必盯着也知道。解锁自动制作。',
     effectDesc: '因此配方可以自动连做，并可逐项保留材料、指定优先配方。',
     effects: { autoCraft: true },
-    // 器械齐备并掌握丹火后再标准化流程，避免与营造、炼器和流水作坊一起铺开。
-    needs: { upgrades: ['woodworking', 'alchemyFire'] },
+    // 自动制作由基础木作、炼丹与炼器知识承接，不要求购买增产技艺。
+    needs: { upgrades: ['woodworking', 'alchemyArt', 'forgeArt'] },
   },
   {
     id: 'craftTempo',
@@ -685,7 +613,7 @@ const CORE_CULTIVATION = [
     desc: '以阵纹统筹丹火、器械与刻纹节拍。金丹起木作、炼器、刻纹、丹道与凝聚加工容量 +100%，开放各配方自动速限；提速需要更多持续供料。',
     effectDesc: '各配方可选1×、2×、5×、10×自动速限；金丹起受专业设施共享容量约束，扩建工位才能同时扩产。每份收益不因速限改变。',
     effects: { autoCraftSpeedControl: true, processingCapacityRatio: { woodwork: 1, forge: 1, inscription: 1, alchemy: 1, condensation: 1 } },
-    needs: { upgrades: ['intuition', 'waterworkshop', 'liquidArt'] },
+    needs: { upgrades: ['intuition', 'arrayAssembly', 'liquidArt'] },
   },
   {
     id: 'ancestorArt',
@@ -796,48 +724,6 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['arcaneGoldArt', 'crystalPolishing'] },
   },
 
-  // ============ 修真应用 · 灵流采集 ============
-  // 灵流、种植与采集的落地应用；迁入 1（灵流要诀）+ 新增 3。
-  {
-    id: 'flowField',
-    name: '灵流要诀',
-    glyph: '流',
-    cost: { insight: 1800, wood: 200, ore: 120 },
-    desc: '把山间灵流理成沟渠，樵夫、采药人与矿工顺着流势干活，原料自己多出一截。灵木、灵草与玄铁产出各 +30%。',
-    effects: { ratio: { wood: 0.3, herb: 0.3, ore: 0.3 } },
-    // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['woodworking', 'herbStudy'] },
-  },
-  {
-    id: 'spiritCanal',
-    name: '灵渠网络',
-    glyph: '渠',
-    cost: { insight: 6000, wood: 800, rock: 400 },
-    desc: '把山间灵流引成渠网，木、药与矿料顺流而下。灵木、灵草与玄铁产出 +25%。',
-    effectDesc: '因此采集顺着流势走：灵木、灵草与玄铁产出各 +25%。',
-    effects: { ratio: { wood: 0.25, herb: 0.25, ore: 0.25 } },
-    needs: { upgrades: ['flowField'] },
-  },
-  {
-    id: 'liquidIrrigation',
-    name: '灵液灌圃',
-    glyph: '圃',
-    cost: { insight: 9000, spiritLiquid: 8, herb: 800 },
-    desc: '以灵液按节气灌圃，药性更足。灵草产出 +40%。',
-    effectDesc: '因此圃中灵草更盛：灵草产出 +40%。',
-    effects: { ratio: { herb: 0.4 } },
-    needs: { upgrades: ['flowField', 'liquidArt'] },
-  },
-  {
-    id: 'veinInfuse',
-    name: '矿脉通灵',
-    glyph: '脉',
-    cost: { insight: 8000, stone: 600, ore: 400 },
-    desc: '以灵流疏通矿脉，矿石与灵石更易采出。矿石与灵石产出 +25%。',
-    effectDesc: '因此矿脉贯通：矿石与灵石产出各 +25%。',
-    effects: { ratio: { ore: 0.25, stone: 0.25 } },
-    needs: { upgrades: ['prospectStudy', 'flowField'] },
-  },
 
   // ============ 修真应用 · 营造 ============
   // 阵法 / 采石 / 营造的方法性条目：自技艺页迁入 5（id 不变）。
@@ -922,7 +808,7 @@ const CORE_CULTIVATION = [
     effectDesc: '因此析得出匀净晶核：晶纹精修可继续精研，并解锁析晶台。',
     effects: { unlockBuildings: ['crystalBench'] },
     note: '解锁建筑：析晶台；作下游前置资格',
-    needs: { upgrades: ['crystalTheory'] },
+    needs: { upgrades: ['crystalCraft'] },
   },
   {
     id: 'temperTheory',
@@ -936,64 +822,7 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['forgeArt', 'steelWorking'] },
   },
 
-  // ============ 修真应用 · 仓储 ============
-  // 成品专藏应用：用 storageRatio 提高对应成品仓容。
-  {
-    id: 'liquidVault',
-    name: '液藏之术',
-    glyph: '藏',
-    cost: { insight: 12000, spiritLiquid: 12, plank: 20 },
-    desc: '玉瓶封灵、晶格分藏，灵液与灵晶存得更久更多。灵液、灵晶仓容 +100%。',
-    effectDesc: '因此灵液与灵晶存得住：两者仓容 +100%。',
-    effects: { storageRatio: { spiritLiquid: 1, crystal: 1 } },
-    needs: { upgrades: ['liquidArt'] },
-  },
-  {
-    id: 'runeVault',
-    name: '符匣分装',
-    glyph: '匣',
-    cost: { insight: 16000, talisman: 20, plank: 30 },
-    desc: '符匣、阵基与灵符分格收存，互不压损。符箓、灵符与阵基仓容 +100%。',
-    effectDesc: '因此符箓、灵符与阵基存得住：三者仓容 +100%。',
-    effects: { storageRatio: { talisman: 1, spiritTalisman: 1, arrayBase: 1 } },
-    needs: { upgrades: ['arrayAssembly'] },
-  },
-  {
-    id: 'treasureVault',
-    name: '器药藏法',
-    glyph: '龛',
-    cost: { insight: 20000, artifact: 12, pill: 30 },
-    desc: '器架设禁、药龛封灵，法器与丹药各得其所。法器、灵器、灵宝、丹药与九转丹仓容 +100%。',
-    effectDesc: '因此法器与丹药存得住：相关成品仓容 +100%。',
-    effects: { storageRatio: { artifact: 1, spiritArtifact: 1, spiritTreasure: 1, pill: 1, nineTurnPill: 1 } },
-    needs: { upgrades: ['forgeArt', 'alchemyFire'] },
-  },
 
-  // ============ 修真应用 · 灵能高阶 ============
-  // 分子与灵能的高阶应用。
-  {
-    id: 'particleRecover',
-    name: '分子回用',
-    glyph: '回',
-    cost: { insight: 90000, crystal: 20, arrayBase: 8 },
-    desc: '优化输运与回收，减少离析出的分子逸散。灵气分子产出 +30%。分子回用不等于耗气降低。',
-    effectDesc: '因此分子少逸散：灵气分子产出 +30%。',
-    effects: { ratio: { qiParticle: 0.3 } },
-    needs: { upgrades: ['particleTheory'] },
-  },
-  {
-    id: 'energyDrive',
-    name: '灵能引采',
-    glyph: '引',
-    cost: { insight: 150000, steel: 20, crystal: 30 },
-    desc: '以灵能驱动采集法器，灵木、灵草、玄铁、矿石与灵石产出各 +25%；需持续供能，按实际供能缩放，断供停效。',
-    effectDesc: '因此采集靠灵能提速：五类原料产出各 +25%，按供能比例生效。',
-    effects: { ratio: { wood: 0.25, herb: 0.25, ore: 0.25, rock: 0.25, stone: 0.25 } },
-    // 持续用能：接入灵能后消耗 qiEnergy，断供或停用即失效（数值待测）。
-    upkeep: { qiEnergy: 0.05 },
-    note: '持续用能：断供或停用时失效',
-    needs: { upgrades: ['energyApplication'] },
-  },
 ]
 
 /** 核心修真 + 可选模块（猎杀）贡献的山野研究（追加在末尾） */
@@ -1012,7 +841,7 @@ export const CULTIVATION_STAGES = [
     key: 'qiSense',
     label: '灵气研究 Ⅰ 观气',
     hint: '灵气是什么、在哪、怎么聚',
-    ids: ['qiOrigin', 'qiGazing', 'qiMeasure', 'breakthroughArt'],
+    ids: ['qiOrigin', 'qiGazing', 'qiMeasure'],
   },
   {
     key: 'qiCondense',
@@ -1048,13 +877,13 @@ export const CULTIVATION_STAGES = [
     key: 'matHerb',
     label: '材料研究 · 草木',
     hint: '原理 → 工艺 → 精研',
-    ids: ['herbStudy', 'woodworking', 'waterworkshop', 'spiritSaw', 'spiritCultivation'],
+    ids: ['herbStudy', 'woodworking'],
   },
   {
     key: 'matOre',
     label: '材料研究 · 金铁',
     hint: '原理 → 工艺 → 精研',
-    ids: ['prospectStudy', 'forgeArt', 'steelWorking', 'swordFlight', 'spiritSmelting', 'artifactLore', 'mithrilArt', 'arcaneGoldArt', 'crystalSilverArt'],
+    ids: ['prospectStudy', 'forgeArt', 'steelWorking', 'artifactLore', 'mithrilArt', 'arcaneGoldArt', 'crystalSilverArt'],
   },
   {
     key: 'matTalisman',
@@ -1066,7 +895,7 @@ export const CULTIVATION_STAGES = [
     key: 'matAlchemy',
     label: '材料研究 · 丹道',
     hint: '原理 → 工艺',
-    ids: ['alchemyArt', 'alchemyFire'],
+    ids: ['alchemyArt'],
   },
   {
     key: 'matIncense',
@@ -1087,12 +916,6 @@ export const CULTIVATION_STAGES = [
     ids: ['wildHunting', 'beastMaterialArt'],
   },
   {
-    key: 'appFlow',
-    label: '修真应用 · 灵流采集',
-    hint: '灵流、种植与采集的落地应用',
-    ids: ['flowField', 'spiritCanal', 'liquidIrrigation', 'veinInfuse'],
-  },
-  {
     key: 'appBuild',
     label: '修真应用 · 营造',
     hint: '阵法 / 采石 / 营造的方法性条目',
@@ -1103,18 +926,6 @@ export const CULTIVATION_STAGES = [
     label: '修真应用 · 原理',
     hint: '蚀刻 / 注灵等科技原理（资格型，附带解锁建筑）',
     ids: ['etchTheory', 'infuseTheory', 'precipitateTheory', 'temperTheory'],
-  },
-  {
-    key: 'appVault',
-    label: '修真应用 · 仓储',
-    hint: '成品专藏应用',
-    ids: ['liquidVault', 'runeVault', 'treasureVault'],
-  },
-  {
-    key: 'appHigh',
-    label: '修真应用 · 灵能高阶',
-    hint: '分子与灵能的高阶应用',
-    ids: ['particleRecover', 'energyDrive'],
   },
   {
     key: 'sectOps',
