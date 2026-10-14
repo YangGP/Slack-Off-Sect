@@ -141,8 +141,8 @@ export const HUNT_BUILDINGS = [
   },
 ]
 
-/** 建筑插回锚点：保持拆分前位于「药圃」之后 */
-export const HUNT_BUILDING_ORDER_ANCHOR = 'herbGarden'
+/** 建筑显示锚点：猎杀设施接在香火之后，位于阵道之前。 */
+export const HUNT_BUILDING_ORDER_ANCHOR = 'ancestorHall'
 
 /** 建筑分组：猎杀 */
 export const HUNT_BUILDING_GROUP = { id: 'hunt', name: '猎杀', hint: '营地、猎备与兽材' }

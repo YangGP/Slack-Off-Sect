@@ -34,6 +34,14 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   merged.stats = { ...(merged.stats || {}) }
   merged.stats.reincarnations = merged.stats.reincarnations || 0
   merged.buildings = Object.fromEntries(Object.entries(state.buildings || {}).map(([id, entry]) => [id, { ...entry }]))
+  // 首次拆分藏经阁时，原有书架迁入同数量典籍库，保留旧档的仓容与合计产出。
+  if (state.scriptureArchiveVersion !== 1 && !merged.buildings.scriptureArchive) {
+    const library = merged.buildings.library
+    if (Number.isInteger(library?.count) && library.count > 0) {
+      merged.buildings.scriptureArchive = { count: library.count, on: library.on !== false }
+    }
+  }
+  merged.scriptureArchiveVersion = 1
   // 旧档已有人口或建设进度时视为已领取首屋，防止拆屋读档重复免木料。
   merged.starterHutBuilt = typeof state.starterHutBuilt === 'boolean' ? state.starterHutBuilt :
     ((merged.buildings.hut?.count || 0) > 0 || (merged.disciples.total || 0) > 0 || (state.stats?.recruits || 0) > 0 ||
@@ -45,6 +53,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   // 已移除的早期空间技艺不再参与研究、统计或容量计算。
   delete merged.upgrades.storageBag
   delete merged.upgrades.voidPouch
+  delete merged.upgrades.catalogArt
   // v0.14 及更早的存档没有灵气分子字段；只迁移一次，保留旧分灵设施的正负灵子产线。
   if (!Object.hasOwn(state.resources || {}, 'qiParticle')) {
     const split = merged.buildings.splitArray

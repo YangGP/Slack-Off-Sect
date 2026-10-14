@@ -19,8 +19,8 @@ for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
 blockedState.realm = 8
 blockedState.buildings.depot = { count: 2, on: true }
-// 此夹具隔离灵气分子仓容；灵机必须足以覆盖洞天造价，不绑定藏经阁单座容量。
-blockedState.buildings.library = { count: Math.ceil(20000 / BUILDING_MAP.library.effects.storage.insight), on: true }
+// 此夹具隔离灵气分子仓容；灵机必须足以覆盖洞天造价，由典籍库提供。
+blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MAP.scriptureArchive.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
 blockedState.resources.qiParticle = 100
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
@@ -37,7 +37,7 @@ studying.realm = 5
 for (const id of ['qiOrigin', 'woodworking', 'talismanArt', 'shapeRune', 'crystalTheory', 'qiPurify', 'liquidArt', 'qiLiquid',
   'preachArt', 'arrayAssembly', 'homePlanning', 'herbStudy', 'prospectStudy', 'earthArt', 'forgeArt', 'forestryArt',
   'qiArt', 'qiGazing', 'fieldTillage', 'earthEssence', 'flowField', 'oralTeaching']) studying.upgrades[id] = true
-for (const [id, count] of [['hut', 80], ['logHouse', 20], ['library', 150], ['granary', 20], ['talismanHall', 1], ['forge', 1], ['quarry', 1], ['workshop', 1]]) studying.buildings[id] = { count, on: true }
+for (const [id, count] of [['hut', 80], ['logHouse', 20], ['library', 150], ['scriptureArchive', 150], ['granary', 20], ['talismanHall', 1], ['forge', 1], ['quarry', 1], ['workshop', 1]]) studying.buildings[id] = { count, on: true }
 E.recompute(studying, studyDerived)
 studying.disciples.total = studyDerived.maxDisciples
 studying.disciples.jobs.farmer = studying.disciples.total
@@ -56,7 +56,7 @@ assert.ok(studying.upgrades.crystalCraft, '留存符箓后应能真实扣费掌�
 const spiritPrereqs = createBot(studying, studyDerived, { realmCost: () => ({ spiritTalisman: 6 }) }).prerequisites()
 assert.ok(spiritPrereqs.upgrades.has('incenseVow'), '灵符投入需要追踪香火岗位的研究来源')
 assert.ok(spiritPrereqs.buildings.has('gate'), '灵符投入需要建立香火岗位的建筑来源')
-studying.buildings.library.count = 80
+studying.buildings.scriptureArchive.count = 80
 E.recompute(studying, studyDerived)
 delete studying.upgrades.crystalCraft
 const researchExpansion = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }) }).prerequisites()

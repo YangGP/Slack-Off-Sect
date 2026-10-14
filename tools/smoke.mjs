@@ -978,7 +978,7 @@ section('进项来源明细')
         (b) => b.effects?.storage?.[res] || (b.effects?.storageAll && b.id !== 'warehouse'),
       ).map((b) => b.name)
     ok('灵气上限另有来源（谷仓 / 茅屋 / 木屋）', capSource('qi').includes('谷仓') && capSource('qi').includes('茅屋'), capSource('qi').join('、'))
-    ok('灵机上限归藏经阁 / 讲经堂 / 观星台', ['藏经阁', '讲经堂', '观星台'].every((n) => capSource('insight').includes(n)), capSource('insight').join('、'))
+    ok('灵机上限归典籍库 / 讲经堂 / 观星台', ['典籍库', '讲经堂', '观星台'].every((n) => capSource('insight').includes(n)), capSource('insight').join('、'))
     ok('丹药 / 符箓 / 法器各有专属仓（炼丹房 / 符箓堂 / 炼器坊）', ['炼丹房', '符箓堂', '炼器坊'].every((n) => capSource('pill').includes(n) || capSource('talisman').includes(n) || capSource('artifact').includes(n)), `${capSource('pill')} / ${capSource('talisman')} / ${capSource('artifact')}`)
     ok('香火上限归山门 / 香火鼎', capSource('faith').includes('山门') && capSource('faith').includes('香火鼎'), capSource('faith').join('、'))
     // 生效检查：建 1 座库房，基础物资的上限按表抬高，其它资源一律不动
@@ -4764,22 +4764,46 @@ section('金丹起步与末期产业破境')
 }
 
 
+section('典籍库拆分与旧档迁移')
+{
+  const fresh = createInitialState()
+  fresh.buildings.library = { count: 3, on: true }
+  const fd = E.createDerived()
+  E.recompute(fresh, fd)
+  ok('新建藏经阁只增产、不增加灵机容量', fd.max.insight === RESOURCE_MAP.insight.baseMax && close(fd.ratio.insight, 0.3))
+  Object.assign(fresh.resources, { wood: 60, rock: 80 })
+  ok('首座典籍库无需研究或额外灵机即可营造', E.buyBuilding(fresh, fd, 'scriptureArchive', 1) === 1 && fd.max.insight === 280 && close(fd.ratio.insight, 0.35))
+  const legacy = { buildings: { library: { count: 26, on: true } }, upgrades: { oralTeaching: true, caseStackArt: true, catalogArt: true } }
+  const migrated = normalizeState(legacy)
+  const md = E.createDerived()
+  E.recompute(migrated, md)
+  ok('旧档26座藏经阁迁入26座典籍库并保留原仓容和合计产出', migrated.buildings.scriptureArchive.count === 26 && close(md.max.insight, 5605.6) && close(md.ratio.insight, 4))
+  ok('移除典籍编目及旧档已学记录', !UPGRADE_MAP.catalogArt && !migrated.upgrades.catalogArt)
+  E.sellBuilding(migrated, md, 'scriptureArchive', 1)
+  const restored = parseImport(exportSave(migrated))
+  ok('迁移标记进存档，出售后读档不重复补送典籍库', restored.scriptureArchiveVersion === 1 && restored.buildings.scriptureArchive.count === 25)
+  resetForAscension(migrated, 0)
+  const reset = parseImport(exportSave(migrated))
+  ok('转世清空典籍库，新档不补送典籍库', !reset.buildings.scriptureArchive && !normalizeState(createInitialState()).buildings.scriptureArchive)
+}
+
 section('口传心授的早期灵机仓容增益')
 {
   const { state: s, derived: d } = newGame()
   s.upgrades.qiOrigin = true
   s.buildings.library = { count: 2, on: true }
   Object.assign(s.resources, { insight: 35, wood: 400 })
+  s.buildings.scriptureArchive = { count: 2, on: true }
   E.recompute(s, d)
   const capacity = d.max.insight
   const productionBonus = d.ratio.insight
-  ok('口传心授正常扣费后仅放大藏经阁容量，不放大基础仓容',
+  ok('口传心授正常扣费后仅放大典籍库容量，不放大基础仓容',
     E.research(s, d, 'oralTeaching') && close(d.max.insight, capacity + 64) && s.resources.insight === 0 && s.resources.wood === 0)
   ok('口传心授仍保留一成灵机产出加成', close(d.ratio.insight - productionBonus, 0.1))
-  s.buildings.library.count = 10
+  s.buildings.scriptureArchive.count = 10
   E.recompute(s, d)
-  ok('十座藏经阁每座只额外提供32灵机容量', close(d.max.insight, 1320))
-  s.buildings.library.count = 2
+  ok('十座典籍库每座只额外提供32灵机容量', close(d.max.insight, 1320))
+  s.buildings.scriptureArchive.count = 2
   for (const [id, count] of [['academy', 3], ['observatory', 2], ['warehouse', 3], ['depot', 2], ['grotto', 1]]) s.buildings[id] = { count, on: true }
   s.upgrades.oralTeaching = false
   E.recompute(s, d)
@@ -4794,13 +4818,13 @@ section('口传心授的早期灵机仓容增益')
   E.recompute(s, d)
   const scaledCapacity = d.max.insight
   s.upgrades.oralTeaching = true
-  s.buildings.library.on = false
+  s.buildings.scriptureArchive.on = false
   E.recompute(s, d)
   ok('专项容量按实体数量计算，再与仙缘和全局仓容规则一致叠加',
     close(d.max.insight - scaledCapacity, 64 * d.karmaStorageMult * 1.8))
   const rows = describeEffects(UPGRADE_MAP.oralTeaching.effects)
-  ok('效果提示明确指向藏经阁灵机上限而非全局上限', rows.some(row => row.label === '藏经阁 灵机上限' && row.value === '+40%') && !rows.some(row => row.label === '灵机 上限'))
-  s.buildings = { library: { count: 2, on: true } }
+  ok('效果提示明确指向典籍库灵机上限而非全局上限', rows.some(row => row.label === '典籍库 灵机上限' && row.value === '+40%') && !rows.some(row => row.label === '灵机 上限'))
+  s.buildings = { library: { count: 2, on: true }, scriptureArchive: { count: 2, on: true } }
   s.upgrades = { qiOrigin: true, oralTeaching: true }
   s.karma = 0
   s.buildings.library.count = 2
@@ -4833,15 +4857,16 @@ section('修真由灵机仓容软性推进')
   s.upgrades.talismanArt = true
   s.buildings.library = { count: 2, on: true }
   s.resources.qi = 1000
+  s.buildings.scriptureArchive = { count: 2, on: true }
   E.recompute(s, d)
   s.resources.insight = d.max.insight
   ok('凡体满足前置即可开放聚气纹', s.realm === 0 && E.isUpgradeUnlocked(s, UPGRADE_MAP.qiRune))
-  ok('两座藏经阁仅有360灵机仓容，高档研究仍需扩仓', d.max.insight === 360 && !E.research(s, d, 'qiRune'))
-  s.buildings.library.count = 7
+  ok('两座典籍库仅有360灵机仓容，高档研究仍需扩仓', d.max.insight === 360 && !E.research(s, d, 'qiRune'))
+  s.buildings.scriptureArchive.count = 7
   E.recompute(s, d)
   s.resources.insight = d.max.insight
-  ok('七座藏经阁仍不足以支付800灵机的聚气纹', d.max.insight === 760 && !E.research(s, d, 'qiRune'))
-  s.buildings.library.count = 8
+  ok('七座典籍库仍不足以支付800灵机的聚气纹', d.max.insight === 760 && !E.research(s, d, 'qiRune'))
+  s.buildings.scriptureArchive.count = 8
   E.recompute(s, d)
   s.resources.insight = 800
   ok('扩仓到费用档位后可在凡体实际研究', d.max.insight === 840 && E.research(s, d, 'qiRune') && s.resources.insight === 0)

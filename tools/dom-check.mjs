@@ -510,7 +510,7 @@ state.resources.qi = affordabilityQi
     after.filter((n) => before.includes(n)).join('|') === before.join('|'),
     `${before.slice(0, 4).join('/')} → ${after.slice(0, 4).join('/')}`,
   )
-  ok('可见基础建筑按发展顺序排列（聚灵阵、茅屋、伐木场）', after.slice(0, 3).join(',') === '聚灵阵,茅屋,伐木场', after.slice(0, 3).join('/'))
+  ok('可见基础建筑按用途排列（聚灵阵、伐木场在茅屋之前）', after.indexOf('聚灵阵') === 0 && after.indexOf('伐木场') > 0 && after.indexOf('伐木场') < after.indexOf('茅屋'), after.slice(0, 4).join('/'))
   // 恢复成一个「部分买得起」的状态，后面的断言依赖这个
   state.resources.qi = qtBefore
   state.resources.wood = 0
@@ -1936,7 +1936,13 @@ console.log('\n== 凝灵诀状态 ==')
   engine.recompute(state, derived)
   await new Promise((r) => setTimeout(r, 50))
   const buildingNames = [...doc.querySelectorAll('.main .build-btn')].map(el => el.textContent.trim().replace(/\s*·\s*缺料$/, '').replace(/\s*\(\d+\)$/, ''))
-  ok('全解锁时基础居所在矿业前、药藏在精舍前、因果池最后', buildingNames.indexOf('茅屋') < buildingNames.indexOf('炼铁炉') && buildingNames.indexOf('药藏') < buildingNames.indexOf('精舍') && buildingNames.at(-1) === '因果池')
+  ok('全解锁建筑按用途排列，典籍库紧接藏经阁，因果池最后',
+    buildingNames.indexOf('炼铁炉') < buildingNames.indexOf('茅屋') &&
+    buildingNames.indexOf('精舍') < buildingNames.indexOf('药藏') &&
+    buildingNames.indexOf('典籍库') === buildingNames.indexOf('藏经阁') + 1 &&
+    buildingNames.indexOf('祖师殿') < buildingNames.indexOf('猎杀营地') &&
+    buildingNames.indexOf('猎杀营地') < buildingNames.indexOf('护山大阵') &&
+    buildingNames.at(-1) === '因果池')
   doc.querySelector('.left .craft-open')?.click()
   await new Promise((r) => setTimeout(r, 50))
   ok('快捷入口能打开完整炼制页', state.ui.tab === 'craft' && !!doc.querySelector('.main .craft-full'))

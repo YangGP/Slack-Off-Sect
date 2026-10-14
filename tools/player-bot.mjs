@@ -18,6 +18,7 @@ export const PRIORITY = [
   'spiritField',
   'lumberYard',
   'library',
+  'scriptureArchive',
   'granary',
   'logHouse',
   'ironFurnace',

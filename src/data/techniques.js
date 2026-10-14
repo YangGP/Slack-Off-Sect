@@ -429,8 +429,8 @@ const CORE_TECHNIQUES = [
     name: '口传心授',
     glyph: '授',
     cost: { insight: 35, wood: 400 },
-    desc: '不立文字，当面点破。灵机产出 +10%，藏经阁自身提供的灵机上限 +40%。',
-    effects: { ratio: { insight: 0.1 }, buildingStorageRatio: { library: 0.4 } },
+    desc: '当面讲解、抄录归档。灵机产出 +10%，典籍库自身提供的灵机上限 +40%。',
+    effects: { ratio: { insight: 0.1 }, buildingStorageRatio: { scriptureArchive: 0.4 } },
     needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
   },
   {

@@ -347,9 +347,21 @@ const CORE_BUILDINGS = [
     group: 'cultivate',
     cost: { qi: 200, wood: 60 },
     priceRatio: 1.18,
-    desc: '一阁典籍，是宗门最早的学问。弟子在此抄经静坐，念头慢慢熬成灵机。',
-    effects: { ratio: { insight: 0.15 }, storage: { insight: 80 } },
+    desc: '弟子在此研读、论道，把典籍中的道理化为灵机。每座灵机产出 +10%；典籍收存与灵机仓容由典籍库承担。',
+    effects: { ratio: { insight: 0.1 } },
     needs: { building: { id: 'spiritField', count: 3 } },
+  },
+  {
+    id: 'scriptureArchive',
+    name: '典籍库',
+    glyph: '籍',
+    group: 'cultivate',
+    cost: { wood: 60, rock: 80 },
+    priceRatio: 1.14,
+    desc: '书架分格、典籍归档，保存悟道所得，也方便弟子查阅。每座灵机上限 +80、灵机产出 +5%。',
+    effects: { storage: { insight: 80 }, ratio: { insight: 0.05 } },
+    needs: { building: { id: 'library', count: 1 } },
+    unlockRatio: 0,
   },
   {
     id: 'academy',
@@ -665,18 +677,26 @@ export const BUILDINGS = [...CORE_BUILDINGS, ...HUNT_BUILDINGS]
 
 export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 
-/** 宗门列表的发展顺序：基础营造先出现，后续按产业与境界阶段排列。 */
+/** 宗门列表按用途排列，同类建筑内按发展阶段排列；各筛选使用同一顺序。 */
 const CORE_BUILDING_DISPLAY_ORDER = [
-  'spiritField', 'hut', 'lumberYard', 'quarry', 'granary', 'workshop', 'livingCourt', 'library', 'logHouse',
-  'materialYard', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'warehouse', 'gatheringArray',
-  'communalHall', 'alchemyRoom', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'crystalBench', 'temperFurnace', 'gate',
-  'crystalArray', 'academy', 'cleansingBath', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
-  'depot', 'mysticVault', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
-  'quietGarden', 'caveDwelling', 'grotto', 'spiritLockArray',
-  'heavenTower', 'splitArray', 'polarizeArray', 'annihilationFurnace', 'karmaPool',
+  // 生产：基础采集、矿业、药圃与聚灵设施。
+  'spiritField', 'lumberYard', 'quarry', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'gatheringArray', 'crystalArray',
+  // 居所与宜居。
+  'hut', 'logHouse', 'mansion', 'caveDwelling',
+  'livingCourt', 'communalHall', 'cleansingBath', 'quietGarden',
+  // 仓储：基础原料、建材、专藏、洞天。
+  'granary', 'materialYard', 'warehouse', 'depot', 'mysticVault', 'medicineVault', 'arcaneVault', 'grotto',
+  // 修行：研读、典籍收存、讲经观星、静修历练。
+  'library', 'scriptureArchive', 'academy', 'observatory', 'meditationPool', 'trialTower',
+  // 炼造：基础工坊与专业加工。
+  'workshop', 'alchemyRoom', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'crystalBench', 'temperFurnace',
+  // 香火后接猎杀模块，再进入阵道和奇观。
+  'gate', 'incenseCauldron', 'ancestorHall',
+  'mountainArray', 'spiritLockArray',
+  'splitArray', 'polarizeArray', 'annihilationFurnace', 'heavenTower', 'karmaPool',
 ]
 
-/** 展示顺序：把模块建筑按锚点插回，保持与拆分前一致 */
+/** 猎杀设施保持相邻，插在香火设施之后，与用途筛选顺序一致。 */
 export const BUILDING_DISPLAY_ORDER = insertAfter(
   CORE_BUILDING_DISPLAY_ORDER,
   HUNT_BUILDING_ORDER_ANCHOR,
