@@ -79,7 +79,11 @@ export function validateState(state, fresh) {
   result.seen = { qi: true, ...flags(result.seen, RESOURCE_MAP) }
   result.buildings = Object.fromEntries(Object.entries(result.buildings)
     .filter(([id, entry]) => Object.hasOwn(BUILDING_MAP, id) && isRecord(entry))
-    .map(([id, entry]) => [id, { count: Math.floor(safeNumber(entry.count)), on: entry.on !== false }]))
+    .map(([id, entry]) => {
+      const out = { count: Math.floor(safeNumber(entry.count)), on: entry.on !== false }
+      if (entry.power === 'energy') out.power = 'energy'
+      return [id, out]
+    }))
   result.upgrades = flags(result.upgrades, UPGRADE_MAP)
   result.upgradeEnabled = Object.fromEntries(Object.entries(result.upgradeEnabled)
     .filter(([id, enabled]) => result.upgrades[id] && enabled === false))

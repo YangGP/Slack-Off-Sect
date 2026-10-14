@@ -166,6 +166,16 @@ for (const u of ALL_UPGRADES) {
 const relevant = rows.filter((r) => r.costGaps.length > 0)
 const refineOnly = rows.filter((r) => r.costGaps.length === 0 && r.refineGaps.length > 0)
 const unreachable = rows.filter((r) => r.upRound == null)
+// 变更 2 新增内容（营造 / 原理 / 仓储 / 灵能高阶 + 3 条单族技艺）：造价来源必须直达，
+// 出现「来源晚于可见」或无法参悟即视为回归。
+const M2_NEW_IDS = [
+  'spiritCanal', 'liquidIrrigation', 'veinInfuse',
+  'etchTheory', 'infuseTheory', 'precipitateTheory', 'temperTheory',
+  'liquidVault', 'runeVault', 'treasureVault',
+  'particleRecover', 'energyDrive',
+  'runeTools', 'crystalCalib', 'forgeApp',
+]
+const m2Gaps = rows.filter((r) => M2_NEW_IDS.includes(r.id) && (r.costGaps.length > 0 || r.upRound == null))
 
 console.log('=== 修真 / 技艺·法宝 造价来源审计 ===\n')
 console.log(`参悟闭包：${Object.keys(upRound).length} / ${ALL_UPGRADES.length} 条可在闭包内参悟`)
@@ -195,6 +205,17 @@ if (unreachable.length) {
   for (const r of unreachable) console.log(`· [${r.page}] ${r.name} (${r.id})`)
 } else {
   console.log('\n闭包内所有修真 / 技艺·法宝节点均可参悟（不存在硬死锁）。')
+}
+
+// 变更 2 新增节点的造价来源覆盖：要求 0 风险。
+if (m2Gaps.length) {
+  console.log(`\n变更 2 新增节点存在造价来源风险（应为 0）：`)
+  for (const r of m2Gaps) {
+    const gaps = r.costGaps.map((g) => `${RESOURCE_MAP[g.res]?.name || g.res}(${g.kind})`).join('，')
+    console.log(`· ${r.name} (${r.id})  可见层 ${r.gateRound} / 参悟层 ${r.upRound}  ${gaps}`)
+  }
+} else {
+  console.log(`\n变更 2 新增节点（${M2_NEW_IDS.length} 条）造价来源均直达，无「来源晚于可见」。`)
 }
 
 // ---- 建筑 ----
@@ -234,4 +255,4 @@ if (bUnreach.length) {
 } else {
   console.log('闭包内所有建筑都可营造（不存在硬死锁）。')
 }
-if (unreachable.length || bNoSource.length || bUnreach.length) process.exitCode = 1
+if (unreachable.length || bNoSource.length || bUnreach.length || m2Gaps.length) process.exitCode = 1

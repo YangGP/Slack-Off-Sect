@@ -294,6 +294,14 @@ export const actions = {
     afterAction(`${E.BUILDING_MAP[id]?.name} ${on ? '启用' : '停用'}`, 'info')
     return on
   },
+  setBuildingPower(id, mode) {
+    if (!E.setBuildingPower(state, derived, id, mode)) {
+      toast('尚不能接入灵能：需先参悟《灵能输配》', 'bad')
+      return false
+    }
+    afterAction(`${E.BUILDING_MAP[id]?.name} 供能改为${mode === 'energy' ? '灵能高阶' : '灵气基础'}`, 'info')
+    return true
+  },
   shiftJob(jobId, delta) {
     E.shiftJob(state, derived, jobId, delta)
   },

@@ -43,7 +43,37 @@ const CORE_TECHNIQUES = [
     desc: '以预制纹模重复刻制标准构件。符箓与阵基加工效率 +100%；灵符仍需精密刻纹，继续共用符箓堂容量。',
     effects: { craftSpeedByRecipe: { drawTalisman: 1, assembleArrayBase: 1 } },
     // 造价里的灵晶要「凝晶工艺」才产得出：把该工艺列进前置，避免条目先露面却找不到来源。
-    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft'], building: { id: 'talismanHall', count: 2 } },
+    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft', 'etchTheory'], building: { id: 'talismanHall', count: 2 } },
+  },
+  // ---------- 单族技艺：由「修真应用·原理」资格承接 ----------
+  {
+    id: 'runeTools', name: '灵纹器具', glyph: '器',
+    cost: { insight: 10000, talisman: 8, plank: 20 },
+    desc: '以标准灵纹器具批量刻制符箓与阵基。符箓、阵基制作产出 +20%。',
+    effects: { craftBonusByResource: { talisman: 0.2, arrayBase: 0.2 } },
+    needs: { upgrades: ['qiRune', 'arrayAssembly', 'etchTheory'] },
+  },
+  {
+    id: 'crystalCalib', name: '晶纹校准', glyph: '校',
+    cost: { insight: 12000, crystal: 8, talisman: 20 },
+    desc: '校准晶纹间距与灵液配比。灵液、灵晶制作产出 +20%。',
+    effects: { craftBonusByResource: { spiritLiquid: 0.2, crystal: 0.2 } },
+    needs: { upgrades: ['crystalCraft', 'crystalPolishing', 'precipitateTheory'] },
+  },
+  {
+    id: 'forgeApp', name: '灵火锻采', glyph: '锻',
+    cost: { insight: 14000, steel: 6, artifact: 10 },
+    desc: '灵火助锻、灵场选矿。玄铁产出 +20%，玄钢制作产出 +20%。',
+    effects: { ratio: { ore: 0.2 }, craftBonusByResource: { steel: 0.2 } },
+    needs: { upgrades: ['steelWorking', 'spiritSmelting', 'temperTheory'] },
+  },
+  // 自修真页迁入：阵道精通的成果兑现，灵气主线的增益出口
+  {
+    id: 'arrayRefine', name: '阵纹精研', glyph: '纹',
+    cost: { insight: 80000, talisman: 45, artifact: 20, crystal: 20 },
+    desc: '一横一竖都有讲究。灵气产出 +60%，阵基、灵晶与灵符制作产出 +30%，符箓制作产出 +20%。',
+    effects: { ratio: { qi: 0.6 }, craftBonusByResource: { arrayBase: 0.3, crystal: 0.3, spiritTalisman: 0.3, talisman: 0.2 } },
+    needs: { upgrades: ['arrayMastery'] },
   },
   // ---------- 采集与种植：四条基础线 ----------
   {
@@ -83,26 +113,7 @@ const CORE_TECHNIQUES = [
     effects: { ratio: { herb: 0.2 } },
     needs: { building: { id: 'herbGarden', count: 3 } },
   },
-  {
-    id: 'quarryArt',
-    name: '凿石要诀',
-    glyph: '凿',
-    cost: { insight: 30, rock: 120, wood: 220 },
-    desc: '顺纹下凿、量山取料，整块石料运下山也不碎一角。矿石产出 +30%。',
-    effects: { ratio: { rock: 0.3 } },
-    needs: { building: { id: 'quarry', count: 2 } },
-  },
-
   // ---------- 四条线的第二层（链式前置） ----------
-  {
-    id: 'fieldTillage',
-    name: '阵法精要',
-    glyph: '耕',
-    cost: { insight: 45, stone: 60, wood: 400 },
-    desc: '阵纹怎么走更省灵气，阵徒心里最有数。掌握后可营造聚灵大阵。',
-    effects: { ratio: { qi: 0.1 }, jobRatio: { farmer: 0.25 } },
-    needs: { upgrades: ['qiGazing', 'qiArt'], building: { id: 'spiritField', count: 5 } },
-  },
   {
     id: 'timberCraft',
     name: '铁木工艺',
@@ -165,7 +176,7 @@ const CORE_TECHNIQUES = [
     glyph: '叠',
     cost: { insight: 420, stone: 1500, wood: 900, talisman: 3 },
     desc: '分格装箱、依尺寸码放，减少空隙与搬运损耗。通用仓储 +1200，成品按层级折算。',
-    // 灵机仓容的百分比一律由技艺提供：定额给建筑，比例给技艺，两者分工明确。
+    // 灵机仓容百分比：定额给建筑，比例给技艺与研究应用（后者如 upgrades.js 的液藏之术 / 符匣分装），分工明确。
     effects: { storageAll: 1200, storageRatio: { insight: 0.3 } },
     // 造价含符箓，而符箓要「符文入门 → 符箓堂」才产得出：列进前置，避免先露面却找不到来源。
     needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['talismanArt'] },
@@ -173,7 +184,7 @@ const CORE_TECHNIQUES = [
 
   // 仓储·加固线（对标猫国 Reinforced/Titanium/Alloy Warehouse 一条线）：
   // 对**已建成的仓储**再乘一遍上限 —— 同样几座库房，越到后期存得越多，
-  // 不必靠盖几十座谷仓去顶破境要的那笔灵气。定额给建筑，比例给技艺（见 caseStackArt 注）。
+  // 不必靠盖几十座谷仓去顶破境要的那笔灵气。定额给建筑，比例给技艺与研究应用（见 caseStackArt 注）。
   {
     id: 'storeFrameArt',
     name: '加固仓架',
@@ -239,33 +250,6 @@ const CORE_TECHNIQUES = [
   },
 
   // ---------- 宜居度 ----------
-  {
-    id: 'homePlanning',
-    name: '居所营造',
-    glyph: '居',
-    cost: { insight: 25, wood: 120, rock: 40 },
-    desc: '按入住人数布置通风、采光与排水，掌握后可营造木屋与清风小院。居所每个已入住名额提供1点宜居度，空房不计；超出居所容量的弟子不受益。',
-    effects: { habitabilityPerHousing: 1 },
-    needs: { buildings: [{ id: 'hut', count: 2 }, { id: 'library', count: 1 }, { id: 'quarry', count: 1 }] },
-  },
-  {
-    id: 'waterSanitation',
-    name: '引泉净水',
-    glyph: '净',
-    cost: { insight: 180, wood: 300, ore: 40 },
-    desc: '引泉分流，净水与污水各循其道。宜居度 +6，元婴掌握混灵土后可营造净身灵池。',
-    effects: { habitability: 6 },
-    needs: { realm: 3, upgrades: ['homePlanning', 'prospectStudy'] },
-  },
-  {
-    id: 'gardenDesign',
-    name: '园林营造',
-    glyph: '园',
-    cost: { insight: 1200, spiritMortar: 4, plank: 10, crystal: 4 },
-    desc: '顺山势划分静修与劳作区域，配合灵纹隔声。宜居度 +8，掌握玄铁混灵土后可营造清幽园林。',
-    effects: { habitability: 8 },
-    needs: { realm: 6, upgrades: ['waterSanitation', 'calmMind'] },
-  },
   {
     id: 'bondKnot',
     name: '同心结',
@@ -516,7 +500,7 @@ const CORE_TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 1800, spiritArtifact: 3, crystal: 30 },
     refine: { insight: 5600, materials: { qiParticle: 8 }, materialFromLevel: 1 }, // 祭炼追加灵气分子，正合其题
-    desc: '一玉双鲤，首尾相衔。双极场引导解离后的正负灵子分流，减少复合与输送损耗。正灵子与负灵子产出 +20%。',
+    desc: '一玉双鲤，首尾相衔。两极之势引导解离后的正负灵子分流，减少复合与输送损耗。正灵子与负灵子产出 +20%。',
     effects: { ratio: { yangParticle: 0.2, yinParticle: 0.2 } },
     needs: { upgrades: ['yinyangSplit'] },
   },
@@ -527,7 +511,7 @@ const CORE_TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 2200, spiritArtifact: 4, nineTurnPill: 8 },
     refine: { insight: 6800, materials: { yangParticle: 4, yinParticle: 4 }, materialFromLevel: 1 }, // 灯芯吃的就是一对正负灵子
-    desc: '灯芯稳住湮灭场的相位，持续成对供料才能维持灯焰，提高可回收灵能、减少散失。灵能产出 +30%。',
+    desc: '灯芯稳住湮灭之势，持续成对供料才能维持灯焰，提高可回收灵能、减少散失。灵能产出 +30%。',
     effects: { ratio: { qiEnergy: 0.3 } },
     needs: { upgrades: ['annihilationArt'] },
   },
@@ -538,9 +522,9 @@ const CORE_TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 2600, steel: 12, crystal: 25, spiritArtifact: 3 },
     refine: { insight: 8000 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '持续消耗灵能驱动聚灵与参悟设施，并提供4单位加工供能容量。满供时灵气产出 +50%、灵机产出 +25%；基础维持每秒消耗灵能1，加工加速另按实际负荷耗能。效果、供能容量与维持费随祭炼同比增长，断供或停用时失效。',
+    desc: '持续消耗灵能驱动聚灵与参悟设施，并提供4单位加工供能容量。满供时灵气产出 +50%、灵机产出 +25%；基础维持每秒消耗灵能0.1，加工加速另按实际负荷耗能。效果、供能容量与维持费随祭炼同比增长，断供或停用时失效。',
     effects: { ratio: { qi: 0.5, insight: 0.25 }, processingPowerCapacity: 4 },
-    upkeep: { qiEnergy: 1 },
+    upkeep: { qiEnergy: 0.1 },
     needs: { upgrades: ['energyApplication'] },
   },
   {

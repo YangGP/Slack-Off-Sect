@@ -137,7 +137,7 @@ export function describeEffects(ef) {
   if (ef.autoTalentJobs) push('自动按岗位专长分工', '弟子页可暂停', 'good')
   if (ef.autoCraftSpeedControl) push('各配方自动速限', '1× / 2× / 5× / 10×（金丹起受工位容量约束）', 'unlock')
   if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝气化液》', 'good')
-  if (ef.energyCraft) push('灵能应用', '解锁工位灵能驱动，按额外负荷耗能', 'unlock')
+  if (ef.energyCraft) push('灵能输配', '解锁工位灵能驱动，按额外负荷耗能', 'unlock')
   if (ef.processingPowerCapacity != null) push('加工供能容量', `+${fmt(ef.processingPowerCapacity)}`, 'good')
   if (ef.processingCoolingRatio) push('晶核阵冷却容量', `+${fmtPercent(ef.processingCoolingRatio)}`, 'good')
   if (ef.unlockBuildings) {

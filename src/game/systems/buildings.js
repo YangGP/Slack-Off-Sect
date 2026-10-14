@@ -50,14 +50,33 @@ export function sellBuilding(state, derived, id, count = 1) {
   return n
 }
 
+/** 是否具备运行成本（物料维护或持续供能）——只有它们才允许停用 / 切换供能档 */
+function hasRunningCost(meta) {
+  return !!(meta.upkeep || meta.upkeepQi != null || meta.upkeepEnergy != null)
+}
+
 export function toggleBuilding(state, derived, id) {
   const meta = BUILDING_MAP[id]
   // 只有「维持它自己要吃资源」的建筑才能停用：停用即停费，这才是一个真选择。
   // 纯产出/仓储/减耗类建筑没有运行成本，停掉只会白亏，所以不给按钮也不允许停。
-  if (!meta || !meta.upkeep) return null
+  if (!meta || !hasRunningCost(meta)) return null
   const e = entryOf(state, id)
   e.on = !e.on
   pushLog(state, `${meta.name} 已${e.on ? '启用' : '停用'}`, 'info')
   recompute(state, derived)
   return e.on
+}
+
+/** 切换持续供能档：'qi'（灵气基础）或 'energy'（灵能高阶，需已掌握《灵能输配》）。 */
+export function setBuildingPower(state, derived, id, mode) {
+  const meta = BUILDING_MAP[id]
+  if (!meta || meta.upkeepEnergy == null || !['qi', 'energy'].includes(mode)) return false
+  const next = mode
+  if (next === 'energy' && !state.upgrades.energyApplication) return false
+  const e = entryOf(state, id)
+  if (next === 'energy') e.power = 'energy'
+  else delete e.power
+  pushLog(state, `${meta.name} 供能改为${next === 'energy' ? '灵能高阶' : '灵气基础'}`, 'info')
+  recompute(state, derived)
+  return true
 }

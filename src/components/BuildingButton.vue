@@ -23,6 +23,16 @@ const count = computed(() => entry.value.count || 0)
 const enabled = computed(() => (entry.value.on === false ? 0 : count.value))
 const supply = computed(() => derived.buildingSupply?.[props.meta.id] ?? 1)
 const active = computed(() => enabled.value * supply.value)
+const hasPower = computed(() => props.meta.upkeepQi != null || props.meta.upkeepEnergy != null)
+const energyReady = computed(() => !!state.upgrades.energyApplication)
+const powerMode = computed(() => (
+  props.meta.upkeepEnergy != null && entry.value.power === 'energy' && energyReady.value
+    ? 'energy'
+    : props.meta.upkeepQi == null && props.meta.upkeepEnergy != null ? 'energy' : 'qi'
+))
+const powerMult = computed(() => hasPower.value && powerMode.value === 'energy' ? props.meta.powerMult ?? 1 : 1)
+const runningCost = computed(() => !!props.meta.upkeep || hasPower.value)
+const throughputMult = computed(() => props.meta.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
 const price = computed(() => buildingCost(state, props.meta.id, 1))
 const affordable = computed(() => canAfford(state, price.value))
@@ -39,7 +49,7 @@ const effectRows = computed(() => {
   const total =
     count.value > 0
       ? [
-          ...describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value, !!props.meta.upkeep)),
+          ...describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value * powerMult.value, runningCost.value)),
           ...describeJobEffects(props.meta.id, active.value),
           ...describeProcessingEffects(props.meta.id, active.value),
         ]
@@ -62,9 +72,23 @@ const upkeepRows = computed(() =>
     key: res,
     label: resourceName(res),
     unit: fmtRate(-v),
-    total: enabled.value > 0 ? fmtRate(-v * active.value * (props.meta.throughput ? derived.globalMult : 1)) : '',
+    total: enabled.value > 0 ? fmtRate(-v * active.value * throughputMult.value) : '',
   })),
 )
+
+// 持续供能档（变更 4）：默认灵气基础，可切灵能高阶（需已掌握《灵能输配》）。
+const powerRow = computed(() => {
+  if (!hasPower.value) return null
+  const energy = powerMode.value === 'energy'
+  const res = energy ? 'qiEnergy' : 'qi'
+  const unit = energy ? (props.meta.upkeepEnergy || 0) : (props.meta.upkeepQi || 0)
+  return {
+    res,
+    label: resourceName(res),
+    unit: fmtRate(-unit),
+    total: enabled.value > 0 ? fmtRate(-unit * active.value * throughputMult.value) : '',
+  }
+})
 
 function sell() {
   if (window.confirm(`确定拆除一座${props.meta.name}吗？只返还一半材料。`)) {
@@ -115,13 +139,21 @@ onBeforeUnmount(clearHighlight)
           <div class="tip-section">条件</div>
           <div v-for="(condition, ci) in conditions" :key="ci" class="tip-condition">{{ condition }}</div>
         </template>
-        <template v-if="meta.upkeep">
+        <template v-if="meta.upkeep || hasPower">
           <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
           <div v-if="enabled > 0" class="tip-row">
             <span class="k">供应</span>
             <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ Math.round(supply * 100) }}% · 按供应比例发挥效果</span>
           </div>
-          <!-- 维护费同样一种资源一行 -->
+          <!-- 动力与物料维护分开记账，一种资源一行 -->
+          <div v-if="powerRow" class="tip-row">
+            <span class="k">{{ powerRow.label }} 动力</span>
+            <span class="v bad">
+              {{ powerRow.unit }}<template v-if="powerRow.total && powerRow.total !== powerRow.unit"
+                >（合计 {{ powerRow.total }}）</template
+              >
+            </span>
+          </div>
           <div v-for="row in upkeepRows" :key="row.key" class="tip-row">
             <span class="k">{{ row.label }} 消耗</span>
             <span class="v bad">
@@ -130,27 +162,46 @@ onBeforeUnmount(clearHighlight)
               >
             </span>
           </div>
+          <div v-if="hasPower && enabled > 0" class="tip-row">
+            <span class="k">供能档</span>
+            <span class="v" :class="powerMode === 'energy' ? 'good' : 'muted'">
+              {{ powerMode === 'energy' ? '灵能高阶（效果 ×' + fmt(meta.powerMult || 1) + '）' : '灵气基础' }}
+            </span>
+          </div>
           <div v-if="enabled === 0" class="tip-row">
             <span class="k">当前</span>
             <span class="v warn">已停用，暂不计维护费</span>
           </div>
           <div class="tip-row">
             <span class="k">说明</span>
-            <span class="v">只有带维护费的建筑能停用 —— 停用即停费，效果也一起停</span>
+            <span class="v">带维护费或持续供能的建筑可停用 —— 停用即停费，效果也一起停；实体仓储与住房名额保留</span>
           </div>
         </template>
 
         <div v-if="count && entry.on === false" class="tip-row">
           <span class="k">状态</span>
-          <span class="v warn">{{ meta.upkeep ? '已停用：不出产、也不吃维护费' : '已停用：不出产，仓储与人口保留' }}</span>
+          <span class="v warn">{{ meta.upkeep || hasPower ? '已停用：不出产、也不吃维护费' : '已停用：不出产，仓储与人口保留' }}</span>
         </div>
 
         <div v-if="flavor" class="tip-flavor">{{ flavor }}</div>
       </template>
     </HoverTip>
 
-    <!-- 只有带维护费的建筑能停用：停用即停费，这才是一个真选择（§5.4） -->
-    <HoverTip v-if="count > 0 && meta.upkeep" class="side-tip" :title="entry.on === false ? '启用建筑' : '停用建筑'" :description="entry.on === false ? '重新启用，恢复维护费与建筑效果。' : '停用后省下维护费，建筑效果同时停止。'">
+    <!-- 灵能高阶：接入后以灵能驱动、效果 ×倍率；需先参悟《灵能输配》 -->
+    <HoverTip v-if="count > 0 && hasPower && (powerMode === 'energy' || energyReady)" class="side-tip"
+      :title="powerMode === 'energy' ? '改用灵气基础' : '接入灵能高阶'"
+      :description="powerMode === 'energy' ? '回到灵气运行，效果份额降低。' : '以灵能驱动，效果提升；需持续供灵能，断供即降载。'">
+      <button
+        class="side-btn"
+        :class="{ on: powerMode === 'energy' }"
+        @click="actions.setBuildingPower(meta.id, powerMode === 'energy' ? 'qi' : 'energy')"
+      >
+        {{ powerMode === 'energy' ? '灵' : '气' }}
+      </button>
+    </HoverTip>
+
+    <!-- 只有带维护费 / 持续供能的建筑能停用：停用即停费，这才是一个真选择（§5.4） -->
+    <HoverTip v-if="count > 0 && (meta.upkeep || hasPower)" class="side-tip" :title="entry.on === false ? '启用建筑' : '停用建筑'" :description="entry.on === false ? '重新启用，恢复维护费与建筑效果。' : '停用后省下维护费，建筑效果同时停止。'">
       <button
         class="side-btn"
         :class="{ on: entry.on === false }"

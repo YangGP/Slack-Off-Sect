@@ -9,7 +9,7 @@ import * as E from './engine-fixture.mjs'
 import { JOB_MAP } from '../src/data/jobs.js'
 import { CONFIG } from '../src/data/config.js'
 import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
-import { CRAFTS } from '../src/data/crafts.js'
+import { CRAFTS, craftCost } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
 
 /** 建筑采购优先级：先居住，再产出与修行，再仓储/香火，最后奇观 */
@@ -94,14 +94,14 @@ export const ADVANCED_CRAFTS = {
   infuseStone: { base: 'rock', floor: 10, cap: 1000000 },
   // 灵液吃硬通货（灵气），按需炼：灵气富余才凝液，囤到上限就停
   condenseLiquid: { base: 'qi', floor: 600, cap: 360 },
-  condenseCrystal: { floors: { spiritLiquid: 12, talisman: 10 }, cap: 600 },
+  condenseCrystal: { floors: { spiritLiquid: 12 }, cap: 600 },
   // 上限必须**高于游戏里的最大单笔需求**，否则参照玩家会卡在自己设的门槛上：
   // 早先玄钢上限 40、而渡劫期破境要 120，推演就永远停在 大乘期（96 小时都不动）。
   // 这条约束现在由冒烟断言守着（见「参照玩家的囤货上限」一节）。
   refineSteel: { base: 'ore', floor: 300, cap: 600 },
   growImmortalHerb: { floors: { herb: 400, spiritLiquid: 6 }, cap: 200 },
   refineNineTurnPill: { base: 'pill', floor: 160, cap: 100 },
-  drawSpiritTalisman: { base: 'talisman', floor: 220, cap: 300 },
+  drawSpiritTalisman: { floors: { steel: 6, spiritLiquid: 6 }, cap: 300 },
   forgeSpiritArtifact: { base: 'artifact', floor: 160, cap: 100 },
   condenseAscensionSeal: { base: 'qiEnergy', floor: 80, cap: 350 },
   // 组合型进阶：三种料都要留够才动手（floors 支持多料，base/floor 是单料的简写）
@@ -126,6 +126,21 @@ export function createBot(state, derived, policy = {}) {
   const wantsComfortUpgrade = (meta) => !comfortOnly(meta) || meta.effects.habitabilityPerHousing > 0 ||
     normalHabitability() + (meta.effects.habitability || 0) <= comfortCeiling()
   const wantsComfortBuilding = (meta) => !comfortOnly(meta) || normalHabitability() < comfortFloor()
+  const capacityDemand = (next, upgrades, buildings) => {
+    const demand = { ...next }
+    const include = cost => {
+      for (const [res, amount] of Object.entries(cost || {})) demand[res] = Math.max(demand[res] || 0, amount)
+    }
+    for (const id of upgrades) {
+      const u = E.UPGRADE_MAP[id]
+      if (u && E.isUpgradeUnlocked(state, u)) include(u.cost)
+    }
+    for (const [id, count] of buildings) {
+      const b = E.BUILDING_MAP[id]
+      if (b && E.countOf(state, id) < count && E.checkNeeds(state, b.needs)) include(E.buildingCost(state, id, 1))
+    }
+    return demand
+  }
 
   function assignJobs() {
     // 新设施只开放职位，不再自带原料。即使人口住满，也为新开放产业调配一人。
@@ -281,6 +296,16 @@ export function createBot(state, derived, policy = {}) {
         if (producer) {
           visitBuilding(producer.id)
           for (const input of Object.keys(producer.upkeep || {})) visitResource(input)
+        } else {
+          // 香火、灵机等由弟子生产，不能只追踪 effects.prod 的建筑。
+          const job = E.JOBS.find(j => j.resource === res || j.additionalOutputs?.some(o => o.resource === res))
+          if (job) {
+            visitNeeds(job.needs)
+            if (job.building) visitBuilding(job.building)
+            const output = job.additionalOutputs?.find(o => o.resource === res)
+            if (output?.upgrade) visit(output.upgrade)
+            if (output?.building) visitBuilding(output.building)
+          }
         }
       }
     }
@@ -297,11 +322,16 @@ export function createBot(state, derived, policy = {}) {
       if (derived.availableUpgrades.includes(id)) visit(id)
     }
     for (const res of Object.keys(next)) visitResource(res)
+    // 专项审计可主动投资当前阶段的设施；仍走真实研究、材料和建设动作。
+    for (const project of policy.projects?.(state, derived) || []) {
+      if (typeof project === 'string') visitBuilding(project)
+      else visitBuilding(project.id, project.count)
+    }
     // 土木精要可在低境界掌握；建库前仍须追踪玄钢及其研究用法器。
     if (state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) visitBuilding('depot')
     // 扩仓设施的建材也属于破境前置，不能只追踪破境配方。
     // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
-    for (const [res, amount] of Object.entries(next)) {
+    for (const [res, amount] of Object.entries(capacityDemand(next, chain, buildings))) {
       if (amount <= (derived.max[res] || 0)) continue
       const expansion = E.BUILDINGS.filter(b => (b.needs?.realm == null || b.needs.realm <= state.realm) &&
         ((b.effects?.storage?.[res] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
@@ -393,7 +423,8 @@ export function createBot(state, derived, policy = {}) {
     // 入住配套是正常人口发展的基础投资，先学会再持续扩屋。
     if (derived.availableUpgrades.includes('homePlanning')) prereq.add('homePlanning')
     const nextNeed = realmNeed() || {}
-    const shortRes = Object.keys(nextNeed).filter((r) => (derived.max[r] || 0) < nextNeed[r])
+    const capacityNeed = capacityDemand(nextNeed, prereq, requiredBuildings)
+    const shortRes = Object.keys(capacityNeed).filter((r) => (derived.max[r] || 0) < capacityNeed[r])
     const storageFixIds = new Set(
       derived.availableUpgrades.filter((id) => {
         const sr = E.UPGRADE_MAP[id]?.effects?.storageRatio
@@ -454,6 +485,26 @@ export function createBot(state, derived, policy = {}) {
       }
     }
 
+    // 攒研究/设施的成品时同时预留其上游投入，避免基础建设每轮花光木料，
+    // 研究要的符箓永远做不出来。只追踪已开放配方，不虚构解锁或库存。
+    if (reserveCost) {
+      reserveCost = { ...reserveCost }
+      const visited = new Set()
+      const reserveInputs = (res, amount) => {
+        if ((state.resources[res] || 0) >= amount || visited.has(res)) return
+        visited.add(res)
+        const recipe = CRAFTS.find(c => c.out === res && E.isCraftUnlocked(state, c))
+        if (!recipe) return
+        const copies = Math.ceil((amount - (state.resources[res] || 0)) / E.craftYield(derived, recipe))
+        for (const [input, cost] of Object.entries(craftCost(derived, recipe))) {
+          const needed = Math.min(derived.max[input], cost * copies)
+          reserveCost[input] = Math.max(reserveCost[input] || 0, needed)
+          reserveInputs(input, reserveCost[input])
+        }
+      }
+      for (const [res, amount] of Object.entries(reserveCost)) reserveInputs(res, amount)
+    }
+
     // 参悟「最快能凑齐」的那条（修真与技艺·法宝两层合并的口径，所以要用 ALL_UPGRADES 查表）。
     // 注意不能按某一两种资源的数值排序 —— 技艺层不再吃灵机之后，
     // 「按灵机排序」会把所有技艺排在修真前面，机器人就永远不去点修真了（实测 8 小时卡在炼气期）。
@@ -470,7 +521,8 @@ export function createBot(state, derived, policy = {}) {
     const ups = derived.availableUpgrades
       .map((id) => ALL_UPGRADES.find((u) => u.id === id))
       .filter(Boolean)
-      .filter(u => prereq.has(u.id) || wantsComfortUpgrade(u))
+      .filter(u => prereq.has(u.id) || storageFixIds.has(u.id) ||
+        (policy.focusProjects?.(state, derived) ? comfortOnly(u) && wantsComfortUpgrade(u) : wantsComfortUpgrade(u)))
       // 并列时不能退化成「数组顺序」—— 否则改一次数据顺序，推演结果就跟着变
     // （实测：只把修真表按五段重排，12 小时弟子就从 42 变成 70）。
     // 所以并列时用「总花费 → id」做稳定的第二、第三关键字，让参照玩家与数据顺序无关。
@@ -514,7 +566,8 @@ export function createBot(state, derived, policy = {}) {
     for (const c of CRAFTS) {
       if (!derived.availableCrafts.includes(c.id)) continue
       // 攒破境前置期间：跳过会吃掉这些资源的配方（但它本身若产的就是要攒的资源，则放行）。
-      const savingWood = housingNeed && state.resources.wood < housingNeed.wood && c.cost.wood > 0 &&
+      const savingWood = !(reserveCost && (reserveCost[c.out] || 0) > (state.resources[c.out] || 0)) &&
+        housingNeed && state.resources.wood < housingNeed.wood && c.cost.wood > 0 &&
         (state.resources[c.out] || 0) >= (housingNeed[c.out] || 0)
       const blocked = blocksCraft(c) || savingWood
       const order = state.craftOrders?.[c.id]

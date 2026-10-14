@@ -116,6 +116,19 @@ export function applyEffects(ef, mult, targets, src) {
 }
 
 /**
+ * 建筑的持续供能档（变更 4）：返回 { res, amount, mult }，无动力字段则 null。
+ * 默认走灵气基础；仅当建筑选「灵能高阶」且已掌握《灵能输配》(energyApplication) 时改用灵能，效果 ×mult。
+ */
+function buildingPowerDraw(state, meta) {
+  if (meta.upkeepQi == null && meta.upkeepEnergy == null) return null
+  const entry = state.buildings[meta.id]
+  const energyMode = meta.upkeepEnergy != null && entry?.power === 'energy' && !!state.upgrades.energyApplication
+  if (energyMode) return { res: 'qiEnergy', amount: meta.upkeepEnergy, mult: meta.powerMult ?? 1 }
+  if (meta.upkeepQi != null) return { res: 'qi', amount: meta.upkeepQi, mult: 1 }
+  return { res: 'qiEnergy', amount: meta.upkeepEnergy, mult: meta.powerMult ?? 1 }
+}
+
+/**
  * 重算所有派生数据：仓储上限、每秒产出、宜居度、解锁列表、价格折扣等。
  * 任何会改变数值的操作之后都应该调用一次。
  */
@@ -174,9 +187,11 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const ef = meta.effects
     if (!ef) continue
     // 与数量无关的效果（缩放用 count），先把 storage 类用 count 单独处理。
-    // 例外：**带维护费的建筑一切都按「启用数」算** —— 停用即停费，效果也得跟着停，
-    // 否则「停用」会变成纯赚（保住效果还省下维护费）。
-    const counted = !!meta.upkeep
+    // 例外：**带维护费或持续供能的建筑，主动效果按「启用数」算** —— 停用 / 断供即停，
+    // 效果跟着停，否则「停用」会变成纯赚（保住效果还省下费用）。实体容量（仓储 / 住房）仍按已建数保留。
+    const power = buildingPowerDraw(state, meta)
+    const counted = !!(meta.upkeep || power)
+    const powMult = power ? power.mult : 1
     const countOnly = {}
     if (ef.storage) countOnly.storage = ef.storage
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
@@ -196,11 +211,18 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       delete activeOnly.disasterGuard
       delete activeOnly.ascendBonus
     }
-    applyEffects(activeOnly, on, targets, { kind: 'building', id: meta.id, label: meta.name, count: on })
+    applyEffects(activeOnly, on * powMult, targets, { kind: 'building', id: meta.id, label: meta.name, count: on })
     if (ef.prod) {
       for (const k in ef.prod) {
-        addSource(k, { kind: 'building', id: meta.id, label: meta.name, count: on, raw: ef.prod[k] * on })
+        // 炉内自用能（变更 4）：从毛输出扣减，得出净供能；不参与供能门禁，故零库存也能首启。
+        const gross = ef.prod[k] * on * powMult
+        const net = Math.max(0, gross - (meta.selfUse?.[k] || 0) * on)
+        addSource(k, { kind: 'building', id: meta.id, label: meta.name, count: on, raw: net })
       }
+    }
+    // 自用能同样要从实际产出里扣掉（applyEffects 已把毛产出写进 prod）
+    if (meta.selfUse) {
+      for (const k in meta.selfUse) prod[k] = Math.max(0, (prod[k] || 0) - meta.selfUse[k] * on)
     }
     // 维护费：按“启用中的数量”消耗资源（停用即停费 —— 这是「停用」按钮唯一的存在理由）
     if (meta.upkeep && on > 0) {
@@ -216,6 +238,13 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
           value: -amount,
         })
       }
+    }
+    // 持续供能：动力与物料维护分开记账，同一资源不重复结算。
+    if (power && on > 0) {
+      const amount = power.amount * on
+      maint[power.res] = (maint[power.res] || 0) + amount
+      if (!expenseRaw[power.res]) expenseRaw[power.res] = []
+      expenseRaw[power.res].push({ kind: 'upkeep', id: meta.id, label: meta.name, count: on, value: -amount })
     }
   }
 
@@ -547,7 +576,8 @@ export function recompute(state, derived, seconds = 1) {
   }
   const dt = Math.max(0.001, seconds)
   const supply = {}
-  const buildingConsumers = BUILDINGS.filter((b) => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
+  const buildingConsumers = BUILDINGS.filter((b) => (b.upkeep || b.upkeepQi != null || b.upkeepEnergy != null)
+    && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
   const upgradeConsumers = ALL_UPGRADES.filter((u) => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false)
   const consumers = [...buildingConsumers, ...upgradeConsumers]
   for (const b of consumers) supply[b.id] = 1
@@ -579,7 +609,10 @@ export function recompute(state, derived, seconds = 1) {
       shares[res] = demand > 0 ? Math.min(1, available / demand) : 1
     }
     for (const b of consumers) {
-      const factor = Math.min(...Object.keys(b.upkeep).map((res) => shares[res] ?? 1))
+      const drawRes = Object.keys(b.upkeep || {})
+      const p = buildingPowerDraw(state, b)
+      if (p) drawRes.push(p.res)
+      const factor = Math.min(...drawRes.map((res) => shares[res] ?? 1))
       if (factor < 1 - 1e-10 && supply[b.id] > 0) {
         supply[b.id] *= factor
         if (supply[b.id] < 1e-10) supply[b.id] = 0

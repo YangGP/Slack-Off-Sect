@@ -171,6 +171,8 @@ const CORE_BUILDINGS = [
     priceRatio: 1.6,
     desc: '玄铁混灵土筑舍、灵纹引气，十名弟子各有静修之处。',
     effects: { maxDisciples: 10, storage: { qi: 400, wood: 200 }, habitability: 4 },
+    // 持续供能（变更 4，占位数值待测）：住房与定额仓储保留，主动收益随供能缩放；灵能档 ×powerMult。
+    upkeepQi: 0.3, upkeepEnergy: 0.003, powerMult: 1.6,
     needs: { building: { id: 'logHouse', count: 5 }, upgrades: ['buildingCode'] },
   },
   {
@@ -182,6 +184,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.7,
     desc: '玄铁混灵土固壁、玄金储灵，凿山为府，聚灵成池。二十四名弟子分室静修，吐纳有得。',
     effects: { maxDisciples: 24, storage: { qi: 3000, wood: 1200 }, habitability: 6 },
+    upkeepQi: 0.6, upkeepEnergy: 0.006, powerMult: 1.6,
     needs: { upgrades: ['grottoArt'] },
   },
 
@@ -228,6 +231,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.38,
     desc: '玄铁混灵土隔绝喧声，灵木与仙草分庭栽植，洞府之间也有清幽之地。每座宜居度 +14。',
     effects: { habitability: 14 },
+    upkeepQi: 0.5, upkeepEnergy: 0.005, powerMult: 1.6,
     needs: { realm: 6, upgrades: ['gardenDesign', 'ironMortarArt'] },
   },
 
@@ -331,6 +335,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.35,
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
     effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000 }, habitability: 5 },
+    upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
     needs: { upgrades: ['grottoArt'] },
   },
 
@@ -369,7 +374,7 @@ const CORE_BUILDINGS = [
     desc: '夜观天象，把满天星斗读成一部功法。',
     // 后期改"比例 + 定额并存"：比例让仓容随产业一起长，定额保证「首座洞天/通天塔」这类
     // 下游花费仍然买得起（早先只留比例时，渡劫期破境 200000 灵机与通天塔 250000 直接越界）。
-    // 灵机仓容分工：**建筑只给定额（压低）**，百分比一律由技艺提供（见 techniques.js 的叠匣术等）。
+    // 灵机仓容分工：建筑只给定额（压低），百分比由技艺与「修真应用·仓储」研究节点提供（见 techniques.js 的叠匣术等）。
     effects: { ratio: { insight: 0.5 }, storage: { insight: 3000 } },
     needs: { upgrades: ['astrologyArt'] },
     unlockRatio: 0,
@@ -398,6 +403,7 @@ const CORE_BUILDINGS = [
     desc: '层层有险，闯过者心境大进，也练出了辨矿与参悟的本领。灵机产出 +15%，玄铁产出 +10%。',
     effects: { ratio: { insight: 0.15, ore: 0.1 }, habitability: 3 },
     upkeep: { ore: 0.6 }, // 试炼要修机关、耗玄铁
+    upkeepQi: 0.5, upkeepEnergy: 0.005, powerMult: 1.6, // 动力与玄铁修缮分开记账
 
     // 试炼法挂在营造法式（realm 6）下，境界标注与实际门槛对齐
     needs: { realm: 6, upgrades: ['trialArt'] },
@@ -490,6 +496,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.35,
     desc: '历代祖师的牌位在此，弟子路过都要收一收心思。',
     effects: { ratio: { faith: 0.5, insight: 0.1 }, habitability: 8 },
+    upkeepQi: 0.4, upkeepEnergy: 0.004, powerMult: 1.6,
     needs: { upgrades: ['ancestorArt'] },
   },
 
@@ -517,6 +524,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.5,
     desc: '把弟子吐纳时逸散的灵气锁回阵中，一丝也不浪费。',
     effects: { consumeRatio: 0.03, ratio: { qi: 0.15 } },
+    upkeepQi: 0.4, upkeepEnergy: 0.004, powerMult: 1.6, // 保留灵气起步，不依赖下游灵能
     needs: { upgrades: ['arrayMastery'] },
   },
 
@@ -532,6 +540,7 @@ const CORE_BUILDINGS = [
     desc: '塔尖直插云海，聚气存念并镇住灵气分子与正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
     effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000 } },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
+    upkeepQi: 2, upkeepEnergy: 0.02, powerMult: 1.6, // 木材 / 玄铁修缮另计，仓储保留
 
     // 塔院图在 realm 9，境界标注与实际门槛对齐
     needs: { realm: 9, upgrades: ['towerPlan'] },
@@ -543,13 +552,14 @@ const CORE_BUILDINGS = [
     glyph: '分',
     group: 'wonder',
     // 阵要一直烧灵气：把灵气离析成灵气分子，是粒子链的第一步（灵气分子 → 偏极解离 → 正负灵子 → 湮灭）
-    // 首座承担大乘破境的产业入门，容量由元婴玄库承接；重复扩建仍按比例涨价。
-    cost: { arcaneGold: 8, stone: 12000, insight: 16000, artifact: 40, arrayBase: 8 },
+    // 元婴入门（工业滞后理论 1 境），容量由元婴玄库承接；重复扩建仍按比例涨价。
+    cost: { crystal: 12, spiritTalisman: 6, stone: 12000, insight: 16000, artifact: 40, arrayBase: 8 },
     priceRatio: 1.5,
     desc: '阵法从灵气中离析出相抱的灵气分子 —— 拆得越久，越像在跟天地借火。',
     effects: { prod: { qiParticle: 0.04 } },
-    upkeep: { qi: 8 }, // 拆气是要耗气的：这是本作最大的灵气去处
-    needs: { upgrades: ['particleTheory'], realm: 8 },
+    // 灵气基础 8/s；高阶维持 0.02 灵能/s，不超过一条基础湮灭链的净供能。
+    upkeepQi: 8, upkeepEnergy: 0.02, powerMult: 1.6,
+    needs: { upgrades: ['particleTheory'], realm: 5 },
   },
   {
     id: 'polarizeArray',
@@ -557,13 +567,14 @@ const CORE_BUILDINGS = [
     name: '偏极阵',
     glyph: '偏',
     group: 'wonder',
-    // 粒子链第二步：输入解离能，处理分子；一对一供料仅指基础数据的归一化流量。
-    cost: { arcaneGold: 12, mithril: 8, stone: 20000, insight: 24000, artifact: 40, arrayBase: 10, qiParticle: 10 },
+    // 灵子链第二步：输入解离之力，处理分子；化神入门（滞后理论 1 境）。一对一供料仅指基础数据的归一化流量。
+    cost: { crystal: 30, spiritArtifact: 6, stone: 20000, insight: 24000, artifact: 40, arrayBase: 10, qiParticle: 10 },
     priceRatio: 1.5,
-    desc: '输入灵气作为解离能，打开分子束缚；双极场让正负灵子分流，避免重新复合。',
+    desc: '输入灵气作为解离之力，打开分子束缚；两极之势让正负灵子分流，避免重新复合。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
-    upkeep: { qiParticle: 0.04, qi: 1 }, // 物料与解离供能分别结算
-    needs: { upgrades: ['yinyangSplit'], realm: 9 },
+    // 分子是物料，灵气是基础动力，两者分别结算；可切灵能高阶（占位）。
+    upkeep: { qiParticle: 0.04 }, upkeepQi: 1, upkeepEnergy: 0.005, powerMult: 1.6,
+    needs: { upgrades: ['yinyangSplit'], realm: 6 },
   },
   {
     id: 'annihilationFurnace',
@@ -571,12 +582,14 @@ const CORE_BUILDINGS = [
     name: '湮灭炉',
     glyph: '湮',
     group: 'wonder',
-    cost: { arcaneGold: 12, crystalSilver: 6, stone: 30000, artifact: 40, spiritArtifact: 6 },
+    cost: { arcaneGold: 12, mithril: 12, stone: 30000, artifact: 40, spiritArtifact: 6 },
     priceRatio: 1.6,
-    desc: '炉心控制供料、相位与场形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。',
+    desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。',
     effects: { prod: { qiEnergy: 0.06 } },
-    upkeep: { yangParticle: 0.02, yinParticle: 0.02 }, // 成对吃掉正负灵子
-    needs: { upgrades: ['annihilationArt'], realm: 9 },
+    // 正负灵子是燃料；炉内自用能从毛输出扣减（净 = 0.06 − 0.015）。自用能即其稳定后的控制用能，故不再重复收灵气费；不依赖已有灵能库存。
+    upkeep: { yangParticle: 0.02, yinParticle: 0.02 },
+    selfUse: { qiEnergy: 0.015 },
+    needs: { upgrades: ['annihilationArt'], realm: 8 },
   },
   {
     id: 'karmaPool',
@@ -589,8 +602,60 @@ const CORE_BUILDINGS = [
     desc: '池中养着一缕前世因果，飞升时能多带走几分。',
     effects: { ratio: { insight: 0.5, faith: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },
     upkeep: { insight: 4 }, // 养一缕因果要耗灵机
+    upkeepQi: 1.5, upkeepEnergy: 0.015, powerMult: 1.6, // 基础仪式可用灵气，参悟维护另计
 
     needs: { realm: 8, upgrades: ['karmaConcord'] },
+  },
+
+  // ============ 修真应用 · 原理附带建筑（变更 2 草案） ============
+  // 由对应原理节点解锁，按功能列入早期启动职责，不自动转为灵能维护。
+  {
+    id: 'etchTable',
+    name: '蚀刻台',
+    glyph: '刻',
+    group: 'craft',
+    cost: { plank: 20, ore: 300, insight: 600 },
+    priceRatio: 1.3,
+    desc: '灵纹刻蚀成台，符箓、阵基与灵符的刻制更有准头。',
+    effects: { craftBonusByResource: { talisman: 0.08, arrayBase: 0.08, spiritTalisman: 0.08 } },
+    upkeep: { qi: 0.5 },
+    needs: { upgrades: ['etchTheory'] },
+  },
+  {
+    id: 'infusionAltar',
+    name: '注灵台',
+    glyph: '注',
+    group: 'craft',
+    cost: { stone: 500, spiritLiquid: 4, insight: 800 },
+    priceRatio: 1.3,
+    desc: '灵气自台面注入器物与矿料，灵石与玄铁的产出更稳。',
+    effects: { ratio: { stone: 0.08, ore: 0.08 } },
+    upkeep: { spiritLiquid: 0.05 },
+    needs: { upgrades: ['infuseTheory'] },
+  },
+  {
+    id: 'crystalBench',
+    name: '析晶台',
+    glyph: '析',
+    group: 'craft',
+    cost: { crystal: 8, plank: 20, insight: 1000 },
+    priceRatio: 1.3,
+    desc: '稳析晶核、匀分灵液，凝液与结晶成色更齐。',
+    effects: { craftBonusByResource: { spiritLiquid: 0.08, crystal: 0.08 } },
+    upkeep: { qi: 1 },
+    needs: { upgrades: ['precipitateTheory'] },
+  },
+  {
+    id: 'temperFurnace',
+    name: '回火炉',
+    glyph: '回',
+    group: 'craft',
+    cost: { steel: 6, ore: 400, insight: 1200 },
+    priceRatio: 1.3,
+    desc: '灵火回火去杂存精，法器与灵器的锻造成品率更高。',
+    effects: { craftBonusByResource: { artifact: 0.08, spiritArtifact: 0.08 } },
+    upkeep: { ore: 0.6 },
+    needs: { upgrades: ['temperTheory'] },
   },
 ]
 
@@ -603,7 +668,7 @@ export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 const CORE_BUILDING_DISPLAY_ORDER = [
   'spiritField', 'hut', 'lumberYard', 'quarry', 'granary', 'workshop', 'livingCourt', 'library', 'logHouse',
   'materialYard', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'warehouse', 'gatheringArray',
-  'communalHall', 'alchemyRoom', 'forge', 'talismanHall', 'gate',
+  'communalHall', 'alchemyRoom', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'crystalBench', 'temperFurnace', 'gate',
   'crystalArray', 'academy', 'cleansingBath', 'meditationPool', 'medicineVault', 'arcaneVault', 'incenseCauldron',
   'depot', 'mysticVault', 'mansion', 'observatory', 'trialTower', 'ancestorHall', 'mountainArray',
   'quietGarden', 'caveDwelling', 'grotto', 'spiritLockArray',

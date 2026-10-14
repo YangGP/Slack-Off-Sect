@@ -33,6 +33,7 @@ import { runIndustryChecks } from './industry-check.mjs'
 import { runDiscipleChecks } from './disciple-check.mjs'
 import { runTalentChecks } from './talent-check.mjs'
 import { runAutoTalentChecks } from './auto-talent-check.mjs'
+import { runPowerChecks } from './power-check.mjs'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_MAP, EVENT_LEVELS, getEventLevel, isEventInRealm } from '../src/data/events.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
@@ -344,9 +345,15 @@ section('数据完整性')
     'woodworking', 'waterworkshop', 'spiritSaw', 'spiritCultivation',
     'steelWorking', 'swordFlight', 'spiritSmelting',
     'arrayAssembly', 'crystalCraft', 'crystalPolishing', 'alchemyFire',
-    'arrayRefine', 'mahayanaArt', 'flowField', 'qiRune', 'craftTempo',
+    'mahayanaArt', 'flowField', 'qiRune', 'craftTempo',
     // 主线数值节点：灵气纯化的纯度增益
     'qiPurify',
+    // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点
+    'spiritCanal', 'liquidIrrigation', 'veinInfuse',
+    'liquidVault', 'runeVault', 'treasureVault',
+    'particleRecover', 'energyDrive',
+    // 修真应用 · 营造（自技艺页迁入）
+    'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
   ]
   const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
   ok(
@@ -881,6 +888,9 @@ section('基础资源由人力生产，普通聚灵阵例外')
   ok('建好设施但无人时，基础物资与灵机香火均无产出', [...humanResources].every(id => d.rates[id] === 0))
   s.disciples.total = JOBS.length
   for (const job of JOBS) E.setJob(s, d, job.id, 1)
+  // 弟子资质由随机种子生成：清掉天赋，避免随机岗位天赋抬高基准产出，稳定下面的 0.15 断言。
+  s.disciples.members.forEach((m) => { m.talents = [] })
+  E.recompute(s, d)
   ok('派遣弟子后，各职位资源开始生产', JOBS.every(job => d.rates[job.resource] > 0))
   ok('矿工矿石产出记入人力来源', d.sources.rock.some(source => source.kind === 'job' && source.id === 'miner' && close(source.raw, 0.15)))
   E.setJob(s, d, 'miner', 0)
@@ -3201,8 +3211,8 @@ section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能
     ok('灵石是含灵矿物：矿工开采与点石成灵并存', JOBS.some(job => job.secondary?.resource === 'stone') && CRAFT_MAP.infuseStone.needs?.building?.id === 'quarry')
     const split = BUILDING_MAP.splitArray
     const polar = BUILDING_MAP.polarizeArray
-    ok('灵子论在合体开放分灵阵，产出灵气分子', E.UPGRADE_MAP.particleTheory.needs.realm == null && split.needs.realm === 8 && split.needs.upgrades.includes('particleTheory') && split.effects.prod.qiParticle > 0 && !split.effects.prod.yangParticle)
-    ok('阴阳分灵改开偏极阵：吃灵气分子、出正负灵子', polar.needs.upgrades.includes('yinyangSplit') && polar.upkeep.qiParticle > 0 && polar.effects.prod.yangParticle > 0 && polar.effects.prod.yinParticle > 0)
+    ok('灵子论在元婴开放分灵阵，产出灵气分子', E.UPGRADE_MAP.particleTheory.needs.realm == null && split.needs.realm === 5 && split.needs.upgrades.includes('particleTheory') && split.effects.prod.qiParticle > 0 && !split.effects.prod.yangParticle)
+    ok('阴阳分灵在化神开偏极阵：吃灵气分子、出正负灵子', polar.needs.realm === 6 && polar.needs.upgrades.includes('yinyangSplit') && polar.upkeep.qiParticle > 0 && polar.effects.prod.yangParticle > 0 && polar.effects.prod.yinParticle > 0)
     ok('粒子链质量守恒：一分灵阵恰好喂一偏极阵、一偏极阵恰好喂一湮灭炉', close(split.effects.prod.qiParticle, polar.upkeep.qiParticle) && close(polar.effects.prod.yangParticle + polar.effects.prod.yinParticle, BUILDING_MAP.annihilationFurnace.upkeep.yangParticle + BUILDING_MAP.annihilationFurnace.upkeep.yinParticle))
     ok('阴阳分灵仍以灵子论为前置，湮灭链保持连通', E.UPGRADE_MAP.yinyangSplit.needs.upgrades.includes('particleTheory') && E.UPGRADE_MAP.annihilationArt.needs.upgrades.includes('yinyangSplit'))
   }
@@ -3210,7 +3220,7 @@ section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能
   // 分灵阵烧灵气：它是本作最大的灵气去处，且停用即停费
   {
     const wh = BUILDING_MAP.splitArray
-    ok('阴阳分灵阵以灵气为维护费', (wh.upkeep?.qi || 0) > 0, JSON.stringify(wh.upkeep))
+    ok('阴阳分灵阵以灵气为维护费', (wh.upkeepQi || 0) > 0, JSON.stringify(wh.upkeepQi))
     const { state: s, derived: d } = newGame()
     s.upgrades.yinyangSplit = true
     s.buildings.splitArray = { count: 2, on: true }
@@ -3605,6 +3615,7 @@ section('宜居配套：入住覆盖、实际投资与目标增产')
 {
   const { state: s, derived: d } = newGame()
   for (const [id, count] of Object.entries({ hut: 2, library: 1, lumberYard: 1, quarry: 1, granary: 1 })) s.buildings[id] = { count, on: true }
+  s.upgrades.qiOrigin = true
   s.disciples.total = 4
   E.recompute(s, d)
   Object.assign(s.resources, UPGRADE_MAP.homePlanning.cost)
@@ -3659,6 +3670,8 @@ section('宜居配套：入住覆盖、实际投资与目标增产')
   const beforeGarden = d.habitability
   ok('园林营造实际消耗复合建材并增加8点', E.research(s, d, 'gardenDesign') && d.habitability === beforeGarden + 8 && s.resources.spiritMortar === 0)
   s.upgrades.ironMortarArt = true
+  s.resources.qi = 1e6 // 持续供能：清幽园林的宜居收益需要灵气供给
+  E.recompute(s, d)
   Object.assign(s.resources, BUILDING_MAP.quietGarden.cost)
   const beforeQuiet = d.habitability
   ok('清幽园林实际消耗玄铁混灵土并增加14点', E.buyBuilding(s, d, 'quietGarden') === 1 && d.habitability === beforeQuiet + 14 && s.resources.ironMortar === 0)
@@ -3708,7 +3721,7 @@ section('缺料、长期断粮与首颗道果')
   s.resources.yinParticle = 0.005
   E.recompute(s, d)
   ok('供应按最缺的材料缩放', close(d.buildingSupply.annihilationFurnace, 0.25))
-  const fullRate = BUILDING_MAP.annihilationFurnace.effects.prod.qiEnergy * d.globalMult
+  const fullRate = (BUILDING_MAP.annihilationFurnace.effects.prod.qiEnergy - BUILDING_MAP.annihilationFurnace.selfUse.qiEnergy) * d.globalMult
   E.tick(s, d, 1, { events: false })
   ok('部分供应的产出与实际支付一致', close(s.resources.qiEnergy, fullRate * 0.25 * (1 - CONFIG.QI_ENERGY_DECAY)))
   ok('多材料生产不会透支任一种输入', close(s.resources.yangParticle, 0.995) && close(s.resources.yinParticle, 0))
@@ -3781,7 +3794,8 @@ section('缺料、长期断粮与首颗道果')
   ok('精舍保留居所与研究两项前置', BUILDING_MAP.mansion.needs.building.id === 'logHouse' && BUILDING_MAP.mansion.needs.upgrades.includes('buildingCode'))
   ok('石殿保留仓储与研究两项前置', BUILDING_MAP.depot.needs.building.id === 'warehouse' && BUILDING_MAP.depot.needs.upgrades.includes('earthEssence'))
   ok('香火鼎保留山门与研究两项前置', BUILDING_MAP.incenseCauldron.needs.building.id === 'gate' && BUILDING_MAP.incenseCauldron.needs.upgrades.includes('incenseStudy'))
-  ok('湮灭研究无境界门槛、建筑仍在大乘开放', UPGRADE_MAP.annihilationArt.needs.realm == null && BUILDING_MAP.annihilationFurnace.needs.realm === 9)
+  ok('湮灭研究无境界门槛、建筑改在合体开放', UPGRADE_MAP.annihilationArt.needs.realm == null && BUILDING_MAP.annihilationFurnace.needs.realm === 8)
+  ok('飞升阵印配方门槛随湮灭炉前移到合体', CRAFT_MAP.condenseAscensionSeal.needs.realm === 8 && CRAFT_MAP.condenseAscensionSeal.cost.mithril > 0)
 }
 
 section('金丹工艺：阵基与库存目标')
@@ -3850,21 +3864,22 @@ section('灵能枢供能与早期空间技艺移除')
 {
   const { state: s, derived: d } = newGame()
   s.upgrades.energyCore = true
+  const draw = UPGRADE_MAP.energyCore.upkeep.qiEnergy
   E.recompute(s, d)
   ok('灵能枢炼成但无供能时停效，不虚构灵能消耗', d.upgradeSupply.energyCore === 0 && !(d.ratio.qi || 0) && !(d.ratio.insight || 0) && !(d.maintenance.qiEnergy || 0))
   s.resources.qiEnergy = 10
   E.recompute(s, d)
-  ok('满供灵能枢兑现基础效果和每秒耗能', close(d.ratio.qi, 0.5) && close(d.ratio.insight, 0.25) && close(d.maintenance.qiEnergy, 1))
-  ok('灵能消耗账目列出灵能枢', d.expenseSources.qiEnergy.some(x => x.id === 'energyCore' && close(x.value, -1)))
+  ok('满供灵能枢兑现基础效果和每秒耗能', close(d.ratio.qi, 0.5) && close(d.ratio.insight, 0.25) && close(d.maintenance.qiEnergy, draw))
+  ok('灵能消耗账目列出灵能枢', d.expenseSources.qiEnergy.some(x => x.id === 'energyCore' && close(x.value, -draw)))
   E.tick(s, d, 1, { events: false })
-  ok('灵能枢实际扣费且继续计入逸散', close(s.resources.qiEnergy, 9 * (1 - CONFIG.QI_ENERGY_DECAY)))
-  s.resources.qiEnergy = 0.25
+  ok('灵能枢实际扣费且继续计入逸散', close(s.resources.qiEnergy, (10 - draw) * (1 - CONFIG.QI_ENERGY_DECAY)))
+  s.resources.qiEnergy = draw * 0.25
   E.recompute(s, d)
-  ok('不足一秒供能按库存预算缩减效果和耗能', close(d.upgradeSupply.energyCore, 0.25) && close(d.ratio.qi, 0.125) && close(d.ratio.insight, 0.0625) && close(d.maintenance.qiEnergy, 0.25))
+  ok('不足一秒供能按库存预算缩减效果和耗能', close(d.upgradeSupply.energyCore, 0.25) && close(d.ratio.qi, 0.125) && close(d.ratio.insight, 0.0625) && close(d.maintenance.qiEnergy, draw * 0.25))
   s.treasureLevels.energyCore = 2
   s.resources.qiEnergy = 10
   E.recompute(s, d)
-  ok('祭炼同比增加灵能枢效果与持续消耗', close(d.ratio.qi, 0.8) && close(d.ratio.insight, 0.4) && close(d.maintenance.qiEnergy, 1.6))
+  ok('祭炼同比增加灵能枢效果与持续消耗', close(d.ratio.qi, 0.8) && close(d.ratio.insight, 0.4) && close(d.maintenance.qiEnergy, draw * 1.6))
   s.resources.qiEnergy = 0
   s.buildings.annihilationFurnace = { count: 1, on: true }
   s.resources.yangParticle = 10
@@ -3874,7 +3889,7 @@ section('灵能枢供能与早期空间技艺移除')
   s.buildings.annihilationFurnace.on = false
   E.recompute(s, d)
   ok('断料或停炉且无库存时灵能枢停效', d.upgradeSupply.energyCore === 0 && !(d.ratio.qi || 0))
-  s.resources.qiEnergy = 0.5
+  s.resources.qiEnergy = draw * 0.5
   E.tick(s, d, 10, { events: false })
   ok('长时间结算不会透支灵能，耗尽后停效', s.resources.qiEnergy === 0 && d.upgradeSupply.energyCore === 0)
   ok('删除的空间技艺不再出现在研究表，叠匣术随符箓线开放', !UPGRADE_MAP.storageBag && !UPGRADE_MAP.voidPouch && UPGRADE_MAP.caseStackArt.needs.upgrades.includes('talismanArt') && UPGRADE_MAP.caseStackArt.needs.building.id === 'warehouse')
@@ -4671,7 +4686,8 @@ section('金丹起步与末期产业破境')
 
 section('修真由灵机仓容软性推进')
 {
-  ok('全部修真项均无境界条件', CULTIVATION.every(u => u.needs?.realm == null))
+  const realmGated = CULTIVATION.filter(u => u.needs?.realm != null).map(u => u.id).sort()
+  ok('修真保留境界门槛：境界决定可观测与可操作的条目（营造 / 宜居配套）', realmGated.join(',') === 'gardenDesign,waterSanitation')
   const ids = new Set(CULTIVATION.map(u => u.id))
   const parents = u => [...(u.needs?.upgrades || []), ...(u.needs?.upgrade ? [u.needs.upgrade] : [])].filter(id => ids.has(id))
   const reachesRoot = (id, path = new Set()) => {
@@ -4722,7 +4738,13 @@ section('符文研究与载体应用')
   ok('纳灵纹可提前掌握，但灵符仍需元婴', E.research(s, d, 'capacityRune') && !E.isCraftUnlocked(s, CRAFT_MAP.drawSpiritTalisman))
   s.realm = 5
   E.recompute(s, d)
-  ok('元婴掌握纳灵纹才开放灵符', s.upgrades.capacityRune && E.isCraftUnlocked(s, CRAFT_MAP.drawSpiritTalisman))
+  ok('元婴掌握纳灵纹开放首份灵符，未学蚀刻原理也不回锁', s.upgrades.capacityRune && !s.upgrades.etchTheory && E.isCraftUnlocked(s, CRAFT_MAP.drawSpiritTalisman))
+  s.autoCraft.drawSpiritTalisman = true
+  s.craftTargets.drawSpiritTalisman = 12
+  const restored = parseImport(exportSave(s))
+  ok('旧档灵符自动产线读档后保留资格与设置，不补赠蚀刻研究',
+    E.isCraftUnlocked(restored, CRAFT_MAP.drawSpiritTalisman) && !restored.upgrades.etchTheory &&
+    restored.autoCraft.drawSpiritTalisman && restored.craftTargets.drawSpiritTalisman === 12)
   const before = { ...s.resources }
   const made = E.craft(s, d, 'drawSpiritTalisman')
   ok('灵符使用玄钢载体与灵液，不消耗灵木或基础符箓', made === 1 && Object.entries(CRAFT_MAP.drawSpiritTalisman.cost).every(([r, cost]) => s.resources[r] === before[r] - cost) && s.resources.talisman === before.talisman && s.resources.wood === before.wood)
@@ -4865,7 +4887,7 @@ section('分阶段产业、工业吞吐与首飞准备')
   ok('耗能法宝可以暂停且同时停止收益和费用', E.toggleUpkeepUpgrade(s, d, 'energyCore') && d.upgradeSupply.energyCore === 0 && !d.maintenance.qiEnergy && !(d.ratio.qi || 0))
   const restored = parseImport(exportSave(s))
   ok('法宝启停偏好随本世存档保存', restored.upgradeEnabled.energyCore === false && restored.upgrades.energyCore)
-  ok('重新启用耗能法宝恢复收益与费用', E.toggleUpkeepUpgrade(s, d, 'energyCore') && close(d.maintenance.qiEnergy, 1) && close(d.ratio.qi, 0.5))
+  ok('重新启用耗能法宝恢复收益与费用', E.toggleUpkeepUpgrade(s, d, 'energyCore') && close(d.maintenance.qiEnergy, UPGRADE_MAP.energyCore.upkeep.qiEnergy) && close(d.ratio.qi, 0.5))
   ok('不能停用没有维护费的研究', !E.toggleUpkeepUpgrade(s, d, 'qiOrigin'))
   resetForReincarnation(s, 0)
   ok('转世清空本世法宝启停状态', Object.keys(s.upgradeEnabled).length === 0)
@@ -4877,7 +4899,7 @@ section('分阶段产业、工业吞吐与首飞准备')
   for (const id of ['splitArray', 'polarizeArray', 'annihilationFurnace']) s.buildings[id] = { count: 1, on: true }
   E.recompute(s, d)
   ok('高境界一对一粒子产线仍按同速进料出料', close(d.rates.qiParticle, d.maintenance.qiParticle) && close(d.rates.yangParticle, d.maintenance.yangParticle) && close(d.rates.yinParticle, d.maintenance.yinParticle))
-  ok('吞吐提速确实扩大分灵的供气需求', close(d.maintenance.qi, (BUILDING_MAP.splitArray.upkeep.qi + BUILDING_MAP.polarizeArray.upkeep.qi) * d.globalMult))
+  ok('吞吐提速确实扩大分灵的供气需求', close(d.maintenance.qi, (BUILDING_MAP.splitArray.upkeepQi + BUILDING_MAP.polarizeArray.upkeepQi) * d.globalMult))
   s.buildings.annihilationFurnace.count = 2
   E.recompute(s, d)
   ok('一座偏极不能免费供给两座满速湮灭炉', close(d.buildingSupply.annihilationFurnace, 0.5))
@@ -4903,13 +4925,13 @@ section('分阶段产业、工业吞吐与首飞准备')
   s.upgrades.intuition = true
   s.resources.ascensionSeal = 0
   s.resources.qiEnergy = 200
-  s.resources.crystalSilver = 2
+  s.resources.mithril = 4
   s.resources.spiritTalisman = 2
   E.recompute(s, d)
   const seal = CRAFT_MAP.condenseAscensionSeal
   const richer = { ...d, craftBonus: 100, craftBonusByResource: { ascensionSeal: 100 } }
   ok('飞升阵印不能被普通制作增产瞬间放大', E.craftYield(richer, seal) === 1)
-  ok('手动固印实际消耗能量与两种材料', E.craft(s, d, seal.id) === 1 && s.resources.qiEnergy === 120 && s.resources.crystalSilver === 1 && s.resources.spiritTalisman === 1)
+  ok('手动固印实际消耗能量与两种材料', E.craft(s, d, seal.id) === 1 && s.resources.qiEnergy === 120 && s.resources.mithril === 2 && s.resources.spiritTalisman === 1)
   s.autoCraft[seal.id] = true
   E.setCraftTarget(s, d, seal.id, 2)
   E.simulateOffline(s, d, 180)
@@ -5060,6 +5082,7 @@ section('弟子成长、分工与突破')
 runDiscipleChecks(E, ok, close)
 runTalentChecks(E, ok, close)
 runAutoTalentChecks(E, ok, close)
+runPowerChecks(E, ok, close)
 
 runArchitectureChecks()
 

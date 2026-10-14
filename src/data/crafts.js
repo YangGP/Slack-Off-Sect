@@ -173,6 +173,7 @@ const CORE_CRAFTS = [
     cost: { steel: 2, spiritLiquid: 2, qi: 300, faith: 200 },
     time: 5,
     desc: '将纳灵纹铭刻在玄钢符牌上，以灵液注灵，承托更强气机；香火中的稳定意念辅助定纹，成就灵符。',
+    // 原理节点承接精研，不回锁首份灵符配方与旧档自动产线。
     needs: { realm: 5, upgrades: ['capacityRune'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -263,10 +264,10 @@ const CORE_CRAFTS = [
     amount: 1,
     fixedYield: true,
     tier: 3,
-    cost: { qiEnergy: 80, crystalSilver: 1, spiritTalisman: 1 },
+    cost: { qiEnergy: 80, mithril: 2, spiritTalisman: 1 },
     time: 120,
-    desc: '用持续湮灭所得的灵能固结晶银与灵符，每份得到一枚稳定阵印；制作增产不增加阵印数量。可手动或自动炼制。',
-    needs: { realm: 9, upgrades: ['annihilationArt'], building: { id: 'annihilationFurnace', count: 1 } },
+    desc: '用持续湮灭所得的灵能固结秘银与灵符，每份得到一枚稳定阵印；制作增产不增加阵印数量。可手动或自动炼制。',
+    needs: { realm: 8, upgrades: ['annihilationArt'], building: { id: 'annihilationFurnace', count: 1 } },
   },
 ]
 

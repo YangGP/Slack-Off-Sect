@@ -2,7 +2,7 @@
 
 用 Vue 3 + Vite（纯 JavaScript）实现的修仙宗门挂机放置游戏，参考猫国的资源池、劳动力、叠加建筑与研究加工体系。
 
-**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.35 · 资源分组与宗门经营优化**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
+**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.36 · 修真应用与后期建筑供能**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
 
 ## 开发与检查
 
@@ -38,22 +38,16 @@ npm run clean        # 删除构建、测试与审计产物
 
 ## 文档
 
+完整分类与阅读顺序见 [文档导航](docs/README.md)。常用入口：
+
 | 文档 | 用途 |
 | --- | --- |
 | [DESIGN](docs/DESIGN.md) | 当前系统规则、结算公式与存档 |
 | [ENGINEERING](docs/ENGINEERING.md) | 工程分层、交互约定、扩展与工具命令 |
 | [TABLES](docs/TABLES.md) | 从源码生成的全部条目、造价、前置与效果 |
-| [RESEARCH](docs/RESEARCH.md) | 研究结构、依赖原则与评估边界 |
-| [CRAFT-PROGRESSION](docs/CRAFT-PROGRESSION.md) | 符文载体、晶核阵、防护分工与后期建材 |
-| [HABITABILITY](docs/HABITABILITY.md) | 宜居度公式、风险与供给 |
-| [BALANCE](docs/BALANCE.md) | 平衡改动及历史审计结果 |
-| [BREAKTHROUGH-PACING](docs/BREAKTHROUGH-PACING.md) | 渡劫突破对重试、重修与游戏时间的影响 |
-| [ROADMAP](docs/ROADMAP.md) | 尚未实施、待评估的方向 |
-| [SPIRIT-ENERGY](docs/SPIRIT-ENERGY.md) | 灵子与灵能场世界观，区分设定和实现 |
-| [MIDGAME-EVENTS](docs/MIDGAME-EVENTS.md) | 已实现药圃防务与后续事务草案 |
-| [DISCIPLE-PROGRESSION](docs/DISCIPLE-PROGRESSION.md) | 尚未实施的个体养成草案 |
+| [ROADMAP](docs/ROADMAP.md) | 尚未实施、待评估的方向及专题入口 |
 
-现行数值只在源码和生成表维护，历史结果集中在平衡账本；规则文档不复制完整条目表。
+现行数值以源码和生成表为准；专题解释规则与设计边界，后续工作在 ROADMAP 中维护。
 
 ## 目录与分析工具
 

@@ -35,7 +35,7 @@ for (let t = 1; t <= hours * 3600; t++) {
   const marginal = {}
   for (const id of ['arrayRefine', 'mahayanaArt', 'zhenyueSeal']) {
     if (!state.upgrades[id]) continue
-    // 两线重组后 arrayRefine / mahayanaArt 已在修真页，统一按 id 查全表
+    // arrayRefine 属技艺、mahayanaArt 属心法页，统一按 id 查全表
     const technique = UPGRADE_MAP[id]
     const beforeRates = { ...derived.rates }
     const beforeYields = Object.fromEntries(CRAFTS.map(c => [c.out, E.craftYield(derived, c)]))

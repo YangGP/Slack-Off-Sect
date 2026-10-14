@@ -5,9 +5,15 @@ import { JOB_MAP } from '../src/data/jobs.js'
 import { RESOURCE_MAP } from '../src/data/resources.js'
 import { CRAFT_MAP } from '../src/data/crafts.js'
 import { progressionDiagnostics } from './progression-diagnostics.mjs'
-import { createBot } from './player-bot.mjs'
+import { createBot, ADVANCED_CRAFTS } from './player-bot.mjs'
 import { createInitialState } from '../src/game/state.js'
 import * as E from './engine-fixture.mjs'
+
+// 配方改料后不得继续按已经移除的原料暂停模拟加工。
+for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
+  const floors = policy.floors || { [policy.base]: policy.floor }
+  for (const resource of Object.keys(floors)) assert.ok(CRAFT_MAP[id].cost[resource] > 0, `${id} 的模拟保留料 ${resource} 已不在实际配方中`)
+}
 
 // 复现合体材料容量不足：必须追踪尚未解锁的洞天扩仓链。
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
@@ -24,6 +30,37 @@ assert.equal(blocked.producer.id, 'splitArray')
 const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
 assert.ok(prerequisites.upgrades.has('grottoArt'))
 assert.ok(prerequisites.buildings.has('grotto'))
+
+// 满员、等待昂贵新住房时，凝晶研究的符箓和上游木料不能被常规建设抢走。
+const studying = createInitialState(), studyDerived = E.createDerived()
+studying.realm = 5
+for (const id of ['qiOrigin', 'woodworking', 'talismanArt', 'shapeRune', 'crystalTheory', 'qiPurify', 'liquidArt', 'qiLiquid',
+  'preachArt', 'arrayAssembly', 'homePlanning', 'herbStudy', 'prospectStudy', 'earthArt', 'forgeArt', 'forestryArt',
+  'qiArt', 'qiGazing', 'fieldTillage', 'earthEssence', 'flowField', 'oralTeaching']) studying.upgrades[id] = true
+for (const [id, count] of [['hut', 80], ['logHouse', 20], ['library', 150], ['granary', 20], ['talismanHall', 1], ['forge', 1], ['quarry', 1], ['workshop', 1]]) studying.buildings[id] = { count, on: true }
+E.recompute(studying, studyDerived)
+studying.disciples.total = studyDerived.maxDisciples
+studying.disciples.jobs.farmer = studying.disciples.total
+E.recompute(studying, studyDerived)
+studying.resources.qi = 1000000
+studying.resources.insight = 10000
+studying.resources.ore = 80
+const talismanRecipe = CRAFT_MAP.drawTalisman
+const copies = Math.ceil(6 / E.craftYield(studyDerived, talismanRecipe))
+for (const [id, amount] of Object.entries(talismanRecipe.cost)) studying.resources[id] = Math.max(studying.resources[id], amount * copies)
+const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false })
+studyBot.act()
+assert.ok(studying.resources.talisman >= 6, '研究所需符箓应先于住房与其他加工留存')
+studyBot.act()
+assert.ok(studying.upgrades.crystalCraft, '留存符箓后应能真实扣费掌握凝晶工艺')
+const spiritPrereqs = createBot(studying, studyDerived, { realmCost: () => ({ spiritTalisman: 6 }) }).prerequisites()
+assert.ok(spiritPrereqs.upgrades.has('incenseVow'), '灵符投入需要追踪香火岗位的研究来源')
+assert.ok(spiritPrereqs.buildings.has('gate'), '灵符投入需要建立香火岗位的建筑来源')
+studying.buildings.library.count = 80
+E.recompute(studying, studyDerived)
+delete studying.upgrades.crystalCraft
+const researchExpansion = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }) }).prerequisites()
+assert.ok([...researchExpansion.buildings.keys()].some(id => BUILDING_MAP[id].effects?.storage?.insight > 0), '研究费用超过仓容时应追踪扩仓，不能只看破境灵机需求')
 
 const brief = { hours: 1 / 3600 }
 const originalCap = RESOURCE_MAP.qi.baseMax

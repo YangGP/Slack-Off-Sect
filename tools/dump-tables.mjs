@@ -27,7 +27,7 @@ function flush(file) {
     '# 全量数据表（TABLES）',
     '',
     '这份文件由 `npm run docs:tables` 从 `src/data/*.js` **直接生成**，请勿手改；',
-    '设计与规则在 [DESIGN.md](./DESIGN.md)，历次平衡改动在 [BALANCE.md](./BALANCE.md)。',
+    '设计与规则在 [DESIGN.md](./DESIGN.md)，后续工作见 [ROADMAP.md](./ROADMAP.md)。',
     '',
     '---',
     '',
