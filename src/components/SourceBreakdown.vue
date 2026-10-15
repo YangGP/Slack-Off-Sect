@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { state, derived } from '@/game/store'
 import { CRAFTS } from '@/data/crafts'
-import { isCraftUnlocked, resourceFlow } from '@/game/engine'
+import { isCraftUnlocked, resourceFlow, REACTOR_EXCLUDED } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
 
@@ -86,6 +86,16 @@ const bonusRows = computed(() => {
       label: '全局加成',
       text: signed(b.ratioAll.reduce((s, x) => s + x.value, 0)),
       detail: detailOf(b.ratioAll),
+    })
+  }
+  // 湮灭炉增产：独立一层，唯独不作用于粒子链（分子 / 正负灵子 / 灵能）。
+  const reactorList = REACTOR_EXCLUDED.has(res) ? [] : (b.reactorRatio || [])
+  if (reactorList.length) {
+    rows.push({
+      key: 'reactor',
+      label: '湮灭炉增产',
+      text: signed(reactorList.reduce((s, x) => s + x.value, 0)),
+      detail: detailOf(reactorList),
     })
   }
   const season = derived.seasonRatio?.[res] || 0

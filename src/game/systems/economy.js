@@ -15,6 +15,12 @@ import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
 import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
 
+/**
+ * 湮灭炉增产（变更 6）不作用的资源：粒子链（灵气分子／正负灵子／灵能）。
+ * 它们互为燃料与产物，属能源产业闭环；排除后粒子链保持一对一配比，也不会出现燃料自增。
+ */
+export const REACTOR_EXCLUDED = new Set(['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy'])
+
 export function applyEffects(ef, mult, targets, src) {
   if (!ef) return
   const {
@@ -113,6 +119,14 @@ export function applyEffects(ef, mult, targets, src) {
     acc.ratioAll += value
     note(value)
   }
+  // 湮灭炉增产（变更 6）：每座运行给一层全局产出倍率，多座相加；单独成层，便于对灵能燃料跳过。
+  if (ef.ratioReactor) {
+    const value = ef.ratioReactor * mult
+    acc.reactorRatio += value
+    if (src) {
+      bonus.reactorRatio.push({ kind: src.kind, id: src.id, label: src.label, count: src.count || 0, value })
+    }
+  }
   if (ef.jobRatio) {
     for (const k in ef.jobRatio) jobRatio[k] = (jobRatio[k] || 0) + ef.jobRatio[k] * mult
   }
@@ -175,12 +189,13 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     discipleTrainingUnlocked: false,
     autoTalentJobsUnlocked: false,
     ratioAll: 0,
+    reactorRatio: 0,
     huntSuccessBonus: 0,
     huntYieldBonus: 0,
     huntDurationReduction: 0,
   }
-  // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目] }
-  const bonus = { ratio: {}, ratioAll: [] }
+  // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目], reactorRatio: [条目] }
+  const bonus = { ratio: {}, ratioAll: [], reactorRatio: [] }
   const targets = { max, prod, ratio, jobRatio, acc, bonus }
 
   // 建筑：仓储类按“已建成数量”，产出类按“启用中的数量”
@@ -375,7 +390,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       (1 + (ratio[r.id] || 0)) *
       (1 + acc.ratioAll) *
       (1 + (seasonRatio[r.id] || 0))
-    rates[r.id] = base * globalMult * (1 + (buffRes[r.id] || 0))
+    // 湮灭炉增产：作用于持续产出，唯独不作用于粒子链（分子 / 正负灵子 / 灵能），保持一对一配比与燃料自洽。
+    const reactor = REACTOR_EXCLUDED.has(r.id) ? 1 : (1 + acc.reactorRatio)
+    rates[r.id] = base * globalMult * (1 + (buffRes[r.id] || 0)) * reactor
   }
 
   /**
@@ -483,6 +500,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.bonus = {
     ratio: bonus.ratio,
     ratioAll: bonus.ratioAll,
+    reactorRatio: bonus.reactorRatio,
     buffAll: bonusBuffAll,
     buffRes: bonusBuffRes,
     realmMult,
@@ -514,6 +532,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.daoMult = daoMult
   derived.karmaMult = karmaMult
   derived.ratioAll = acc.ratioAll
+  derived.reactorRatio = acc.reactorRatio
   derived.craftBonus = acc.craftBonus
   derived.craftBonusByResource = acc.craftBonusByResource
   derived.industrial = state.realm >= 4

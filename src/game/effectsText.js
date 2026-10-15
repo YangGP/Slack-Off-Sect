@@ -22,6 +22,7 @@ export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
     'prod',
     'ratio',
     'ratioAll',
+    'ratioReactor',
     'jobRatio',
     'consumeRatio',
     'craftBonus',
@@ -90,6 +91,7 @@ export function describeEffects(ef) {
     for (const k in ef.ratio) push(`${resourceName(k)} 产出`, `+${fmtPercent(ef.ratio[k])}`, 'good', k)
   }
   if (ef.ratioAll) push('全局产出', `+${fmtPercent(ef.ratioAll)}`, 'good')
+  if (ef.ratioReactor) push('全局增产（每座）', `+${fmtPercent(ef.ratioReactor)}`, 'good')
   if (ef.jobRatio) {
     for (const k in ef.jobRatio) push(`${JOB_MAP[k]?.name || k} 产出`, `+${fmtPercent(ef.jobRatio[k])}`, 'good', JOB_MAP[k]?.resource)
   }

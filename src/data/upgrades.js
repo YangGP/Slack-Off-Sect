@@ -172,13 +172,13 @@ const CORE_CULTIVATION = [
     id: 'annihilationArt',
     name: '湮灭法',
     glyph: '湮',
-    // 合体首炉由既有观星、试炼与洞天仓储承接，不依赖大乘通天塔。
+    // 化神首炉由既有观星、试炼与库房承接，不依赖洞天／通天塔。需先有偏极阵、有灵子可烧。
     cost: { insight: 90000, nineTurnPill: 20, spiritTalisman: 20 },
     desc: '控制供料、灵势与阵形，让正负灵子越过湮灭门槛，成对消耗为可回收的灵能，并排出废热。',
     effectDesc: '因此铸得起湮灭炉：寻常相撞未必湮灭，炉心的受控阵形才使转换持续发生。',
     effects: { unlockBuildings: ['annihilationFurnace'] },
     note: '解锁建筑：湮灭炉',
-    needs: { upgrades: ['yinyangSplit'] },
+    needs: { upgrades: ['yinyangSplit'], building: { id: 'polarizeArray', count: 1 } },
   },
   {
     id: 'energyApplication',
@@ -189,7 +189,30 @@ const CORE_CULTIVATION = [
     effectDesc: '将灵能接入专业工位。启用灵能驱动后，每单位额外加工容量每秒消耗0.1灵能，受灵能枢供能与冷却回路限制。',
     effects: { energyCraft: true },
     note: '解锁：工位灵能驱动；动力断供自动回落到普通加工',
-    needs: { upgrades: ['annihilationArt'] },
+    // 炼虚才把化神所得的灵能定义并接入应用；此前灵能只积累。
+    needs: { upgrades: ['annihilationArt'], realm: 7 },
+  },
+  {
+    id: 'immortalDiscovery',
+    name: '仙灵初探',
+    glyph: '仙',
+    cost: { insight: 160000, crystal: 40, spiritArtifact: 6 },
+    desc: '炼虚可摄游离灵子，更能托起相激之场：天地间自成的仙灵力，第一次被宗门拢住。',
+    effectDesc: '因此建得起采仙台：以灵气托起相激之场，采聚自然聚成的仙灵力。',
+    effects: { unlockBuildings: ['harvestPlatform'] },
+    note: '解锁建筑：采仙台；发现资源：仙灵力',
+    needs: { upgrades: ['energyApplication'] },
+  },
+  {
+    id: 'immortalIndustry',
+    name: '仙灵聚合',
+    glyph: '聚',
+    cost: { insight: 320000, nineTurnPill: 30, spiritArtifact: 10, arcaneGold: 4 },
+    desc: '不再只靠天然而成：以分子为料、灵能为力，主动引导吸能聚合，仙灵力方能稳定量产。',
+    effectDesc: '因此布得起聚仙阵：料与力齐备，连续凝聚固结仙灵力。',
+    effects: { unlockBuildings: ['immortalArray'] },
+    note: '解锁建筑：聚仙阵',
+    needs: { upgrades: ['immortalDiscovery', 'energyApplication'] },
   },
 
   // ---------- Ⅴ 归源：灵气与因果、飞升 ----------
@@ -859,7 +882,7 @@ export const CULTIVATION_STAGES = [
     key: 'qiSplit',
     label: '灵气研究 Ⅳ 拆解',
     hint: '灵气由什么构成',
-    ids: ['particleTheory', 'yinyangSplit', 'annihilationArt', 'energyApplication'],
+    ids: ['particleTheory', 'yinyangSplit', 'annihilationArt', 'energyApplication', 'immortalDiscovery', 'immortalIndustry'],
   },
   {
     key: 'qiSource',

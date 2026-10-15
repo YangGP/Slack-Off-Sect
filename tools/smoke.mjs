@@ -301,9 +301,9 @@ section('数据完整性')
   )
   const treasures = TECHNIQUES.filter((t) => t.kind === 'treasure')
   ok(
-    '每件法宝都有祭炼基数，移除驭兽铃后合计67,150灵机',
+    '每件法宝都有祭炼基数，移除驭兽铃后合计76,750灵机',
     treasures.every((t) => (t.refine?.insight || 0) > 0) &&
-      treasures.reduce((s, t) => s + t.refine.insight, 0) === 67150,
+      treasures.reduce((s, t) => s + t.refine.insight, 0) === 76750,
     `${treasures.reduce((s, t) => s + (t.refine?.insight || 0), 0)}（${treasures.length} 件）`,
   )
   ok(
@@ -3871,7 +3871,7 @@ section('缺料、长期断粮与首颗道果')
   ok('精舍保留居所与研究两项前置', BUILDING_MAP.mansion.needs.building.id === 'logHouse' && BUILDING_MAP.mansion.needs.upgrades.includes('buildingCode'))
   ok('石殿保留仓储与研究两项前置', BUILDING_MAP.depot.needs.building.id === 'warehouse' && BUILDING_MAP.depot.needs.upgrades.includes('earthEssence'))
   ok('香火鼎保留山门与研究两项前置', BUILDING_MAP.incenseCauldron.needs.building.id === 'gate' && BUILDING_MAP.incenseCauldron.needs.upgrades.includes('incenseStudy'))
-  ok('湮灭研究无境界门槛、建筑改在合体开放', UPGRADE_MAP.annihilationArt.needs.realm == null && BUILDING_MAP.annihilationFurnace.needs.realm === 8)
+  ok('湮灭研究无境界门槛、建筑改在化神开放', UPGRADE_MAP.annihilationArt.needs.realm == null && BUILDING_MAP.annihilationFurnace.needs.realm === 6)
   ok('飞升阵印配方门槛随湮灭炉前移到合体', CRAFT_MAP.condenseAscensionSeal.needs.realm === 8 && CRAFT_MAP.condenseAscensionSeal.cost.mithril > 0)
 }
 
@@ -4839,7 +4839,7 @@ section('口传心授的早期灵机仓容增益')
 section('修真由灵机仓容软性推进')
 {
   const realmGated = CULTIVATION.filter(u => u.needs?.realm != null).map(u => u.id).sort()
-  ok('修真保留境界门槛：境界决定可观测与可操作的条目（营造 / 宜居配套）', realmGated.join(',') === 'gardenDesign,waterSanitation')
+  ok('修真保留境界门槛：境界决定可观测与可操作的条目（营造 / 宜居配套 / 灵能输配）', realmGated.join(',') === 'energyApplication,gardenDesign,waterSanitation')
   const ids = new Set(CULTIVATION.map(u => u.id))
   const parents = u => [...(u.needs?.upgrades || []), ...(u.needs?.upgrade ? [u.needs.upgrade] : [])].filter(id => ids.has(id))
   const reachesRoot = (id, path = new Set()) => {
@@ -5051,7 +5051,7 @@ section('分阶段产业、工业吞吐与首飞准备')
   s.buildings.spiritField = { count: 1000, on: true }
   for (const id of ['splitArray', 'polarizeArray', 'annihilationFurnace']) s.buildings[id] = { count: 1, on: true }
   E.recompute(s, d)
-  ok('高境界一对一粒子产线仍按同速进料出料', close(d.rates.qiParticle, d.maintenance.qiParticle) && close(d.rates.yangParticle, d.maintenance.yangParticle) && close(d.rates.yinParticle, d.maintenance.yinParticle))
+  ok('高境界一对一粒子产线仍按同速进料出料（湮灭炉增产不作用于粒子链）', close(d.rates.qiParticle, d.maintenance.qiParticle) && close(d.rates.yangParticle, d.maintenance.yangParticle) && close(d.rates.yinParticle, d.maintenance.yinParticle))
   ok('吞吐提速确实扩大分灵的供气需求', close(d.maintenance.qi, (BUILDING_MAP.splitArray.upkeepQi + BUILDING_MAP.polarizeArray.upkeepQi) * d.globalMult))
   s.buildings.annihilationFurnace.count = 2
   E.recompute(s, d)

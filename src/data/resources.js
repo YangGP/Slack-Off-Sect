@@ -271,6 +271,15 @@ const CORE_RESOURCES = [
     desc: '正负灵子湮灭时释放的至纯灵力。极不稳定，会自己逸散 —— 所以只能靠持续湮灭维持。',
   },
   {
+    id: 'immortalForce',
+    name: '仙灵力',
+    glyph: '仙',
+    color: '#e6c8ff',
+    baseMax: 100,
+    storageWeight: 0.5,
+    desc: '灵气分子在灵能充沛处吸能聚合而成的稳定高阶结构，飞升前最后一种基础材料。炼虚后发现；稳定不逸散，用于后期研究、营造、法宝与成道准备。',
+  },
+  {
     id: 'ascensionSeal',
     name: '飞升阵印',
     glyph: '印',
@@ -342,5 +351,5 @@ export const RESOURCE_GROUPS = [
   { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
   { id: 'crafted', name: '丹符器物', resources: ['pill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
   { id: 'hunting', name: '猎杀物资', resources: ['huntPreparation', 'beastHide', 'beastBone'] },
-  { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'ascensionSeal'] },
+  { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'immortalForce', 'ascensionSeal'] },
 ]
