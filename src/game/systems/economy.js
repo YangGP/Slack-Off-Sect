@@ -84,6 +84,10 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.ascendBonus) acc.ascendBonus += ef.ascendBonus * mult
   if (ef.arrivalBonus) acc.arrivalBonus += ef.arrivalBonus * mult
   if (ef.breakthroughDiscount) acc.breakthroughDiscount += ef.breakthroughDiscount * mult
+  // 渡劫身死减免（香火线《愿力护道》等）：累加为百分点，progression 结算身死概率时扣减。
+  if (ef.tribulationSafety) acc.tribulationSafety += ef.tribulationSafety * mult
+  // 建筑造价折扣（《营造技艺》）：只作用于建筑建造价，见 core.js 的 buildingPriceAt。
+  if (ef.buildingCostDiscount) acc.buildingCostDiscount += ef.buildingCostDiscount * mult
   if (ef.offlineHours) acc.offlineHours += ef.offlineHours * mult
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
   if (ef.autoCraft) acc.autoCraftUnlocked = true
@@ -181,6 +185,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     ascendBonus: 0,
     arrivalBonus: 0,
     breakthroughDiscount: 0,
+    tribulationSafety: 0,
+    buildingCostDiscount: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     karmaRatio: 0,
     autoCraftUnlocked: false,
@@ -562,6 +568,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.consumeReduction = acc.consumeReduction
   derived.arrivalBonus = acc.arrivalBonus
   derived.breakthroughDiscount = acc.breakthroughDiscount
+  // 暴露给 progression：渡劫身死减免与建筑造价折扣（预览 / 结算同源）。
+  derived.tribulationSafety = acc.tribulationSafety
+  derived.buildingCostDiscount = acc.buildingCostDiscount
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = (state.dao || 0) >= 1
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation

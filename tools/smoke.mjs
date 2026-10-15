@@ -258,7 +258,7 @@ section('数据完整性')
   // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
   ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
   const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
-  const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntDurationReduction']
+  const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntDurationReduction', 'tribulationSafety']
   // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
   const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
   ok(
@@ -349,6 +349,8 @@ section('数据完整性')
     // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点
     // 修真应用 · 营造（自技艺页迁入）
     'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
+    // 土木工艺：《营造技艺》承接建筑造价折扣与专业制作增益（见 MATERIAL-RESEARCH.md §3.1）
+    'masonryArt',
   ]
   const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
   ok(
@@ -4839,7 +4841,7 @@ section('口传心授的早期灵机仓容增益')
 section('修真由灵机仓容软性推进')
 {
   const realmGated = CULTIVATION.filter(u => u.needs?.realm != null).map(u => u.id).sort()
-  ok('修真保留境界门槛：境界决定可观测与可操作的条目（营造 / 宜居配套 / 灵能输配）', realmGated.join(',') === 'energyApplication,gardenDesign,waterSanitation')
+  ok('修真保留境界门槛：境界决定可观测与可操作的条目（营造 / 宜居配套 / 灵能输配 / 香火愿力）', realmGated.join(',') === 'energyApplication,gardenDesign,vowPower,waterSanitation')
   const ids = new Set(CULTIVATION.map(u => u.id))
   const parents = u => [...(u.needs?.upgrades || []), ...(u.needs?.upgrade ? [u.needs.upgrade] : [])].filter(id => ids.has(id))
   const reachesRoot = (id, path = new Set()) => {
@@ -4975,7 +4977,8 @@ section('后期建材：研究、加工与营造')
   ok('五种建材均为整数库存，且各有至少两个建筑用途', ids.every(id => RESOURCE_MAP[id].integer && BUILDINGS.filter(b => b.cost[id] > 0).length >= 2))
   ok('首座材料库和混灵土工艺不依赖新建材，避免自举循环', ids.every(id => !BUILDING_MAP.depot.cost[id] && !UPGRADE_MAP.spiritMortarArt.cost[id]))
   const { state: s, derived: d } = newGame()
-  const research = ['spiritMortarArt', 'ironMortarArt', 'mithrilArt', 'arcaneGoldArt', 'crystalSilverArt']
+  // masonryArt（土木工艺）会给混灵土/玄铁混灵土加工加成并降低建筑造价，会干扰本段对建材净耗的精确断言；此处不预学它。
+  const research = ['spiritMortarArt', 'ironMortarArt', 'mithrilArt', 'arcaneGoldArt', 'crystalSilverArt', 'masonryArt']
   for (const u of ALL_UPGRADES) if (!research.includes(u.id)) s.upgrades[u.id] = true
   s.buildings.depot = { count: 1, on: true }
   s.buildings.logHouse = { count: 5, on: true }
@@ -5191,12 +5194,15 @@ section('破境概率与失败结算')
   ok('连续失败减产不叠加', s.buffs.filter(b => b.id === 'breakthroughInjury').length === 1)
   for (let realm = 4; realm <= 9; realm++) {
     const fatal = { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }[realm]
+    // 护道可带 deathReduce（渡劫「立愿应劫」），满配身死概率相应下调（见 MATERIAL-RESEARCH.md §2.3）。
+    const deathReduce = BREAKTHROUGH_AIDS[realm + 1].reduce((sum, aid) => sum + (aid.deathReduce || 0), 0)
+    const expectedDeath = Math.max(0, fatal - deathReduce)
     const [below, bd] = setup(realm)
     const full = Object.fromEntries(BREAKTHROUGH_AIDS[realm + 1].map(aid => [aid.id, true]))
     const preview = E.breakthroughPreview(below, bd, full)
-    ok(`境界${realm}满配身死风险符合调参`, close(preview.deathOnFailure, fatal) && close(preview.deathRisk, (1 - preview.chance) * fatal))
+    ok(`境界${realm}满配身死风险符合调参`, close(preview.deathOnFailure, expectedDeath) && close(preview.deathRisk, (1 - preview.chance) * expectedDeath))
     let deathRoll = 0
-    ok(`境界${realm}低于身死边界时强制重开`, !E.breakthrough(below, bd, full, () => deathRoll++ === 0 ? 0.99 : fatal - 0.001) && below.realm === 0 && below.stats.breakthroughDeaths === 1)
+    ok(`境界${realm}低于身死边界时强制重开`, !E.breakthrough(below, bd, full, () => deathRoll++ === 0 ? 0.99 : expectedDeath - 0.001) && below.realm === 0 && below.stats.breakthroughDeaths === 1)
     const [edge, edgeDerived] = setup(realm)
     let edgeRoll = 0
     ok(`境界${realm}身死边界及以上存活且遵守退境分界`, !E.breakthrough(edge, edgeDerived, full, () => edgeRoll++ === 0 ? 0.99 : fatal) && edge.realm === (realm < 7 ? realm : realm - 1) && edge.stats.breakthroughDeaths === 0)

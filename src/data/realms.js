@@ -118,7 +118,7 @@ export const BREAKTHROUGH = {
   recoverySeconds: 120,
 }
 
-const aid = (name, cost, bonus) => ({ name, cost, bonus })
+const aid = (name, cost, bonus, extra) => ({ name, cost, bonus, ...(extra || {}) })
 
 /** 按目标境界配置。复合方案必须整组支付；ID带境界，旧勾选不会用于新境界。 */
 export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
@@ -148,7 +148,8 @@ export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
     aid('香火祈愿', { faith: 250 }, 0.07),
   ],
   6: [
-    aid('九转养神', { nineTurnPill: 1 }, 0.08),
+    // 元婴～化神档由三品丹迁到二级丹「凝元丹」（见 docs/MATERIAL-RESEARCH.md §1.2，最小自洽迁移）。
+    aid('凝元养神', { condensePill: 10 }, 0.08),
     aid('晶符凝神', { crystal: 12, spiritTalisman: 4 }, 0.10),
     aid('香火祈愿', { faith: 600 }, 0.07),
   ],
@@ -170,6 +171,8 @@ export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
   10: [
     aid('灵宝挡劫', { spiritTreasure: 2, nineTurnPill: 8 }, 0.16),
     aid('阵印封雷', { ascensionSeal: 60, crystalSilver: 12 }, 0.28),
-    aid('香火祈愿', { faith: 10000 }, 0.06),
+    // 「香火祈愿」升级为「立愿应劫」：渡劫唯一的香火护道，既提高成功率、又降低身死概率（见 §2.3）。
+    // id 仍为 10:2（数组下标不变），旧档勾选不失效。数额与 deathReduce 待校准。
+    aid('立愿应劫', { faith: 20000 }, 0.06, { deathReduce: 0.10 }),
   ],
 }).map(([realm, aids]) => [realm, aids.map((entry, index) => ({ ...entry, id: `${realm}:${index}` }))]))

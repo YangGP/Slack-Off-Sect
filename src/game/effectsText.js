@@ -141,6 +141,10 @@ export function describeEffects(ef) {
   if (ef.ascendBonus) push('飞升仙缘', `+${fmtPercent(ef.ascendBonus)}`, 'good')
   if (ef.arrivalBonus) push('弟子前来速度', `+${fmtPercent(ef.arrivalBonus)}`, 'good')
   if (ef.breakthroughDiscount) push('破境花费', `-${fmtPercent(ef.breakthroughDiscount)}`, 'good')
+  // 身死减免（香火线《愿力护道》等）：作用于所有身死道消境界，与 progression 的 deathReduce 同源。
+  if (ef.tribulationSafety) push('身死概率', `-${fmtPercent(ef.tribulationSafety)}`, 'good')
+  // 建筑造价折扣（《营造技艺》）：只作用于建筑建造价。
+  if (ef.buildingCostDiscount) push('建筑造价', `-${fmtPercent(ef.buildingCostDiscount)}`, 'good')
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
@@ -199,6 +203,12 @@ export function describeJobEffects(buildingId, count = 1) {
     }
   }
   return out
+}
+
+/** 破境护道的附加效果文案（如「立愿应劫」的 deathReduce）；无附加效果时返回空串。 */
+export function aidExtraText(aid) {
+  if (!aid?.deathReduce) return ''
+  return `，身死概率 -${fmtPercent(aid.deathReduce)}`
 }
 
 /** 把解锁条件翻译成人话 */

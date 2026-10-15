@@ -10,7 +10,7 @@ export function buyBuilding(state, derived, id, count = 1) {
   // 注意：这里只判硬条件（needs）。「资源水位到 30% 才露面」是显示层的规则，
   // 不该拦住已经看得到的建造请求（猫国的 unlockRatio 同样只管显示）。
   if (!checkNeeds(state, meta.needs)) return 0
-  const cost = buildingCost(state, id, count)
+  const cost = buildingCost(state, id, count, derived.buildingCostDiscount)
   if (!canAfford(state, cost)) return 0
   payCost(state, cost)
   if (id === 'hut') {
@@ -32,7 +32,7 @@ export function sellBuilding(state, derived, id, count = 1) {
   const e = state.buildings[id]
   if (!meta || !e || e.count <= 0) return 0
   const n = Math.min(count, e.count)
-  const refund = buildingCostFrom(meta, e.count - n, n, !!state.starterHutStanding)
+  const refund = buildingCostFrom(meta, e.count - n, n, !!state.starterHutStanding, derived.buildingCostDiscount)
   if (id === 'hut' && e.count === n) state.starterHutStanding = false
   for (const k in refund) {
     // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」

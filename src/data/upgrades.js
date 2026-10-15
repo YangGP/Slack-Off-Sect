@@ -495,7 +495,19 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['alchemyRoom'] },
     needs: { upgrades: ['herbStudy'], buildings: [{ id: 'library', count: 2 }, { id: 'herbGarden', count: 1 }] },
   },
-  // 自技艺页迁入（工艺）
+  // 自技艺页迁入（工艺）：丹道族自有工艺环，承接「凝元炼丹」与丹鼎（见 docs/MATERIAL-RESEARCH.md §1.1/§1.3）。
+  {
+    id: 'alchemyEssence',
+    name: '丹道精微',
+    glyph: '精',
+    cost: { insight: 3600, herb: 2400, pill: 40, immortalHerb: 10 }, // 待校准
+    desc: '炼丹成术、火候纯青之后，参透君臣佐使的丹性，方能炼二级灵丹、开丹鼎。',
+    effectDesc: '因此炼得出凝元丹，也搭得起丹鼎 —— 高阶丹不再只靠一件法宝。',
+    // 解锁建筑仅为注释：建筑解锁实际看其自身 needs（见 buildings.js 的 pillFurnace）。
+    effects: { unlockBuildings: ['pillFurnace'] },
+    note: '解锁配方：凝元炼丹；解锁建筑：丹鼎',
+    needs: { upgrades: ['alchemyArt', 'alchemyFire'], building: { id: 'alchemyRoom', count: 2 } },
+  },
 
   // ---------- 香火族 ----------
   {
@@ -518,7 +530,22 @@ const CORE_CULTIVATION = [
     effectDesc: '因此立得起香火鼎，把念力一炉炉炼成香火。',
     effects: { unlockBuildings: ['incenseCauldron'] },
     note: '解锁建筑：香火鼎',
-    needs: { upgrades: ['incenseVow', 'preachArt'] },
+    // 原需香火 200，但基础上限仅 100、扩容建筑（香火鼎）又由本节点解锁 → 显式补「山门 ≥ 2」
+    // （100 + 80×2 = 260 ≥ 200），消除隐含前置（见 docs/MATERIAL-RESEARCH.md §2.4）。
+    needs: { upgrades: ['incenseVow', 'preachArt'], building: { id: 'gate', count: 2 } },
+  },
+  // 香火族工艺层：承接渡劫护道机制（见 docs/MATERIAL-RESEARCH.md §2.3），故进修真族而非技艺页。
+  {
+    id: 'vowPower',
+    name: '愿力',
+    glyph: '愿',
+    cost: { insight: 26000, faith: 8000 }, // 待校准
+    desc: '把香客的念力立成可承天劫的大愿：愿力愈厚，渡劫愈稳。',
+    effectDesc: '因此参悟得出《愿力护道》—— 渡劫时多一分护身之力。',
+    // effects 留空并附注释：本节点解锁的是下方护道与技艺，本身不直接加数值。
+    effects: { unlockBuildings: [] },
+    note: '开启参悟：愿力护道',
+    needs: { upgrades: ['ancestorArt'], realm: 9 }, // 大乘档（待校准）
   },
 
   // ---------- 土木族 ----------
@@ -559,6 +586,18 @@ const CORE_CULTIVATION = [
     note: '解锁建筑：精舍',
     // 造价含玄钢，而玄钢要「炼器术 → 淬玄工艺」才产得出：列进前置，避免先露面却找不到来源。
     needs: { upgrades: ['earthEssence', 'steelWorking'] },
+  },
+  // 土木族自有工艺节点：承接「降低建筑造价」这一新机制（见 docs/MATERIAL-RESEARCH.md §3.1），故进修真族。
+  {
+    id: 'masonryArt',
+    name: '营造技艺',
+    glyph: '艺',
+    cost: { insight: 1500, plank: 20, ore: 400 }, // 待校准
+    desc: '料有定尺、工有定法，营造技艺既精，殿宇物料便省下一成。「降低建筑造价」为新机制（待校准）。',
+    effectDesc: '因此建造成本降低，混灵土与玄铁混灵土也浇筑得更省。',
+    // buildingCostDiscount 为建筑造价折扣新字段（0.05 = 5%），只作用于建筑建造价（见 core.js 的 buildingPriceAt）。
+    effects: { buildingCostDiscount: 0.05, craftBonusByResource: { spiritMortar: 0.1, ironMortar: 0.1 } },
+    needs: { upgrades: ['earthArt', 'woodworking'], building: { id: 'warehouse', count: 1 } },
   },
 
   // ============ 宗门经营：制度、招募、离线与试炼 ============
@@ -917,20 +956,22 @@ export const CULTIVATION_STAGES = [
   {
     key: 'matAlchemy',
     label: '材料研究 · 丹道',
-    hint: '原理 → 工艺',
-    ids: ['alchemyArt'],
+    hint: '原理 → 工艺 → 精研',
+    ids: ['alchemyArt', 'alchemyEssence'],
   },
   {
     key: 'matIncense',
     label: '材料研究 · 香火',
-    hint: '原理 → 精研',
-    ids: ['incenseVow', 'incenseStudy'],
+    hint: '原理 → 工艺 → 精研',
+    // ancestorArt 由「宗门经营」归位至此（见 docs/MATERIAL-RESEARCH.md §2.1），链路在族内连成一条。
+    ids: ['incenseVow', 'incenseStudy', 'ancestorArt', 'vowPower'],
   },
   {
     key: 'matEarth',
     label: '材料研究 · 土木',
-    hint: '原理 → 精研（工艺与草木族共用木作器械）',
-    ids: ['earthArt', 'earthEssence', 'spiritMortarArt', 'ironMortarArt', 'buildingCode'],
+    hint: '原理 → 工艺 → 精研',
+    // grottoArt 由「宗门经营」归位至此；masonryArt 为本族自有工艺节点（见 docs/MATERIAL-RESEARCH.md §3.1）。
+    ids: ['earthArt', 'earthEssence', 'masonryArt', 'spiritMortarArt', 'ironMortarArt', 'buildingCode', 'grottoArt'],
   },
   {
     key: 'matBeast',
@@ -962,8 +1003,6 @@ export const CULTIVATION_STAGES = [
       'mentorship',
       'intuition',
       'craftTempo',
-      'ancestorArt',
-      'grottoArt',
       'longBreath',
       'breathArt',
       'trialArt',

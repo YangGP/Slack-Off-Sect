@@ -84,6 +84,9 @@ const effects = (e) => {
   if (e.ascendBonus) out.push(`仙缘 +${pct(e.ascendBonus)}`)
   if (e.arrivalBonus) out.push(`弟子前来间隔 −${pct(e.arrivalBonus)}`)
   if (e.breakthroughDiscount) out.push(`破境 −${pct(e.breakthroughDiscount)}`)
+  // 渡劫身死减免（香火线《愿力护道》）与建筑造价折扣（《营造技艺》）：与 effectsText.js 同步。
+  if (e.tribulationSafety) out.push(`身死概率 −${pct(e.tribulationSafety)}`)
+  if (e.buildingCostDiscount) out.push(`建筑造价 −${pct(e.buildingCostDiscount)}`)
   if (e.offlineHours) out.push(`离线 +${e.offlineHours}h`)
   if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')
@@ -174,7 +177,7 @@ emit('护道费用另加于基础破境费用，不享受破境折扣。各组�
 emit('| 目标境界 | 方案 | 材料要求 | 成功率加成 |')
 emit('| --- | --- | --- | --- |')
 for (const [index, aids] of Object.entries(BREAKTHROUGH_AIDS)) {
-  for (const aid of aids) emit(`| ${REALMS[index].name} | ${aid.name} | ${cost(aid.cost)} | +${Math.round(aid.bonus * 100)} |`)
+  for (const aid of aids) emit(`| ${REALMS[index].name} | ${aid.name} | ${cost(aid.cost)} | +${Math.round(aid.bonus * 100)}${aid.deathReduce ? `（身死 −${Math.round(aid.deathReduce * 100)} 个百分点）` : ''} |`)
 }
 
 emit('\n## A.9 成就\n')
