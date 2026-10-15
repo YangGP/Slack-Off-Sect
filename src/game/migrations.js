@@ -28,6 +28,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   delete merged.disciples.jobs.stonecutter
   // 旧档的天赋序列从原灵根种子派生，不随每次读取时的新档时间变化。
   merged.disciples.talentSeed = state.disciples?.talentSeed ?? ((state.disciples?.rootSeed ?? 1) ^ 0x6d2b79f5) >>> 0
+  merged.disciples.recruitSeed = state.disciples?.recruitSeed ?? ((state.disciples?.rootSeed ?? 1) ^ 0x1b873593) >>> 0
   normalizeDisciples(merged.disciples, { preferMembers })
   // 老档补「飞升层」与「转世计数」
   merged.dao = state.dao || 0

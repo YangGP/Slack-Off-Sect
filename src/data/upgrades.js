@@ -646,6 +646,16 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['incenseStudy'], building: { id: 'gate', count: 3 } },
   },
   {
+    id: 'seekTalents',
+    name: '招贤纳士',
+    glyph: '贤',
+    cost: { insight: 4000, faith: 800, stone: 1200 }, // 待校准
+    desc: '贴榜悬赏、以礼相聘，贤才自会下山。可在弟子页切换「主动招募」，按礼聘档位花费资源招人。',
+    effectDesc: '档位越高，花费越多、越容易招到高品级天赋的弟子，入宗起点境界也越接近宗门。',
+    effects: { recruitMode: true },
+    needs: { upgrades: ['recruitDrive', 'talentAssignment'] },
+  },
+  {
     id: 'mentorship',
     name: '传功授业',
     glyph: '授',
@@ -1000,6 +1010,7 @@ export const CULTIVATION_STAGES = [
       'talentAssignment',
       'calmMind',
       'recruitDrive',
+      'seekTalents',
       'mentorship',
       'intuition',
       'craftTempo',

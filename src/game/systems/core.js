@@ -106,6 +106,7 @@ export function createDerived() {
     autoCondenseLiquidUnlocked: false,
     discipleTrainingUnlocked: false,
     autoTalentJobsUnlocked: false,
+    recruitModeUnlocked: false,
     trainingActive: false,
     trainingCost: 0,
     daoAutomation: false,
@@ -403,8 +404,14 @@ export function arrivalInterval(derived) {
   return CONFIG.DISCIPLE_ARRIVAL_SECONDS * (1 - speedup)
 }
 
-/** 距离下一名弟子的到来还有多少秒（没有空房时返回 null） */
+/** 是否处于主动招募模式：需已解锁《招贤纳士》，避免转世清空研究后被动锁死。 */
+export function isManualRecruit(state, derived) {
+  return !!derived.recruitModeUnlocked && state.settings?.recruitMode === 'manual'
+}
+
+/** 距离下一名弟子的到来还有多少秒（没有空房、离开风险或已切到主动招募时返回 null） */
 export function nextArrivalIn(state, derived) {
+  if (isManualRecruit(state, derived)) return null
   if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) return null
   return Math.max(0, arrivalInterval(derived) - (state.arrivalTimer || 0))
 }

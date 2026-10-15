@@ -69,6 +69,10 @@ export function runDiscipleChecks(E, ok, close) {
   s.realm = 4
   let preview = E.discipleBreakthroughPreview(s, other)
   ok('弟子结丹基础成功率为宗门70%的一半，即35%', close(preview.chance, 0.35))
+  for (const [root, delta] of Object.entries({ heaven: 6, variant: 4, dual: 2, triple: 0, quad: -1, five: -2 })) {
+    const probe = { ...other, spiritualRoot: root }
+    ok(`灵根${SPIRITUAL_ROOT_MAP[root].name}影响突破概率 ${delta > 0 ? '+' : ''}${delta}pt`, close(E.discipleBreakthroughPreview(s, probe).chance, 0.35 + delta / 100))
+  }
   s.realm = 5
   preview = E.discipleBreakthroughPreview(s, other)
   ok('宗门指导按突破目标境界加成', close(preview.chance, 0.45))
@@ -143,7 +147,7 @@ export function runDiscipleChecks(E, ok, close) {
     lower += root.weight
     const member = { realm: 0, cultivation: 0, cooldown: 60, spiritualRoot: root.id }
     cultivateDisciple(member, 10)
-    ok(`${root.name}只改变修为速度，调息按真实时间`, close(member.cultivation, root.rate * 10) && member.cooldown === 50 && discipleFactor(member, 4) === 1)
+    ok(`${root.name}按系数影响修为速度，调息按真实时间`, close(member.cultivation, root.rate * 10) && member.cooldown === 50 && discipleFactor(member, 4) === 1)
   }
   const legacy = createInitialState()
   legacy.disciples.total = 2

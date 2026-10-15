@@ -714,10 +714,41 @@ ok('弟子管理默认隐藏，只显示展开入口', !doc.querySelector('#disc
   await new Promise(r => setTimeout(r, 50))
   ok('暂停自动分工可手动安排岗位并保存暂停偏好', member.roleId === 'farmer' && !state.settings.autoTalentJobs && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).settings.autoTalentJobs === false)
   toggle()?.click()
-  await new Promise(r => setTimeout(r, 50))
+  await new Promise((r) => setTimeout(r, 50))
   ok('恢复自动分工立即将专长弟子调到对应岗位', member.roleId === 'woodcutter' && toggle()?.checked && state.disciples.jobs.woodcutter > 0)
   actions.importText(before)
-  await new Promise(r => setTimeout(r, 50))
+  await new Promise((r) => setTimeout(r, 50))
+}
+{
+  // 主动招募（《招贤纳士》）：切换模式并礼聘一名弟子
+  const before = actions.exportText()
+  const recruitButtons = () => [...doc.querySelectorAll('.main .recruit-block .btn')]
+  state.upgrades.seekTalents = false
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 60))
+  ok('未掌握《招贤纳士》不显示招募入口', !doc.querySelector('.main .recruit-block'))
+  state.upgrades.seekTalents = true
+  state.realm = 4
+  state.resources.qi = 1e6
+  state.resources.faith = 1e6
+  state.resources.insight = 1e6
+  state.disciples.total = 2
+  state.buildings.hut = { count: 3, on: true }
+  engine.recompute(state, derived)
+  await new Promise((r) => setTimeout(r, 60))
+  ok('掌握《招贤纳士》后显示招募方式切换', recruitButtons().some((b) => b.textContent.trim() === '主动招募'))
+  recruitButtons().find((b) => b.textContent.trim() === '主动招募')?.click()
+  await new Promise((r) => setTimeout(r, 60))
+  ok('切到主动招募后显示三档礼聘并保存模式', state.settings.recruitMode === 'manual' && doc.querySelectorAll('.main .recruit-tiers .btn').length === 3)
+  const countBefore = state.disciples.total
+  doc.querySelector('.main .recruit-tiers .btn:not([disabled])')?.click()
+  await new Promise((r) => setTimeout(r, 60))
+  ok('点击礼聘立即招募一名弟子', state.disciples.total === countBefore + 1)
+  actions.setRecruitMode('auto')
+  await new Promise((r) => setTimeout(r, 60))
+  ok('切回自动前来后隐藏礼聘按钮', state.settings.recruitMode === 'auto' && !doc.querySelector('.main .recruit-tiers'))
+  actions.importText(before)
+  await new Promise((r) => setTimeout(r, 60))
 }
 {
   const trigger = doc.querySelector('.main [data-habitability]')?.closest('.tip-trigger')
