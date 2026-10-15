@@ -8,9 +8,9 @@
 import * as E from './engine-fixture.mjs'
 import { JOB_MAP } from '../src/data/jobs.js'
 import { CONFIG } from '../src/data/config.js'
-import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
+import { ALL_UPGRADES } from '../src/data/upgrades.js'
 import { CRAFTS, craftCost } from '../src/data/crafts.js'
-import { REALMS } from '../src/data/realms.js'
+
 
 /** 建筑采购优先级：先居住，再产出与修行，再仓储/香火，最后奇观 */
 export const PRIORITY = [

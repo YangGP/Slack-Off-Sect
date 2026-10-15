@@ -4,7 +4,7 @@
  *
  * 支持「假设性改动」：只在本次运行里改数据对象，跑完还原，不落盘。
  */
-import { createInitialState } from '../src/game/state.js'
+import { createAuditContext } from './lib/audit-context.mjs'
 import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { RESOURCES, RESOURCE_MAP } from '../src/data/resources.js'
@@ -116,7 +116,8 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
   const TOTAL = Math.round(hours * 3600)
   const DECISION_EVERY = 5
 
-  const state = createInitialState()
+  const clock = createAuditContext()
+  const { state } = clock
   const derived = E.createDerived()
   if (forceAutoCraft) state.upgrades.intuition = true // 只为验证自动制作的效果
   E.recompute(state, derived)
@@ -131,7 +132,7 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
   let income = 0
 
   for (let t = 1; t <= TOTAL; t++) {
-    E.tick(state, derived, 1, { events: false })
+    E.tick(state, derived, 1, { events: false, startAt: clock.advance(1) })
     income += Math.max(0, derived.rates[resId] || 0)
     if (t % DECISION_EVERY === 0) bot.act()
     if (t % 300 === 0) E.recompute(state, derived)

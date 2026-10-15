@@ -21,18 +21,20 @@ import { BUILDINGS } from '../src/data/buildings.js'
 import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
 import { RESOURCES } from '../src/data/resources.js'
 
-const RES_ID = process.argv[2] || 'stone'
-const HOURS = Number(process.argv[3] || 8)
 const args = process.argv.slice(2)
+const positional = args.filter(arg => !arg.startsWith('--'))
+if (positional.length > 2) throw new Error('Usage: audit -- [resource] [hours] [--patch=value ...]')
+const RES_ID = positional[0] || 'stone'
+const HOURS = Number(positional[1] || 8)
 
 const patches = {}
 const patchNotes = []
 for (const a of args) {
   if (a.startsWith('--craft=')) {
-    patches.craftQi = Number(a.split('=')[1])
+    patches.craftQi = Number(a.slice(a.indexOf('=') + 1))
     patchNotes.push(`点石成灵的灵气成本 → ${patches.craftQi}`)
   } else if (a.startsWith('--cap=')) {
-    patches.baseMax = Number(a.split('=')[1])
+    patches.baseMax = Number(a.slice(a.indexOf('=') + 1))
     patchNotes.push(`基础上限 → ${patches.baseMax}`)
   } else if (a.startsWith('--prod=')) {
     const parts = a.slice('--prod='.length).split(':')
@@ -43,13 +45,13 @@ for (const a of args) {
     const b = BUILDINGS.find((x) => x.id === id)
     patchNotes.push(`${b?.name || id} 产出 ${RESOURCES.find((r) => r.id === res)?.name || res} +${val}/秒`)
   } else if (a.startsWith('--realm=')) {
-    patches.realmFactor = Number(a.split('=')[1])
+    patches.realmFactor = Number(a.slice(a.indexOf('=') + 1))
     patchNotes.push(`破境花费 ×${patches.realmFactor}`)
   } else if (a.startsWith('--upcost=')) {
-    patches.upgradeFactor = Number(a.split('=')[1])
+    patches.upgradeFactor = Number(a.slice(a.indexOf('=') + 1))
     patchNotes.push(`参悟（修真/技艺/法宝）花费 ×${patches.upgradeFactor}`)
   } else if (a.startsWith('--job=')) {
-    patches.jobFactor = Number(a.split('=')[1])
+    patches.jobFactor = Number(a.slice(a.indexOf('=') + 1))
     patchNotes.push(`相关职位基础产出 ×${patches.jobFactor}`)
   } else if (a === '--autocraft') {
     patches.autoCraft = true

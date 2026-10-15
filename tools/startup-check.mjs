@@ -1,3 +1,4 @@
+import { installBrowserGlobals } from './lib/browser-env.mjs'
 import assert from 'node:assert/strict'
 import { build } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -20,9 +21,7 @@ await build({
 
 const dom = new JSDOM('<div id="app"></div>', { url: 'http://localhost:5273/', pretendToBeVisual: true })
 const browser = dom.window
-for (const name of ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'Node', 'localStorage', 'MutationObserver']) {
-  Object.defineProperty(globalThis, name, { value: name === 'window' ? browser : browser[name], configurable: true })
-}
+const restoreGlobals = installBrowserGlobals(browser, ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'Node', 'localStorage', 'MutationObserver'])
 const originalNow = Date.now
 const originalSetInterval = globalThis.setInterval
 const originalClearInterval = globalThis.clearInterval
@@ -95,10 +94,13 @@ try {
     assert.equal(reloaded.state.stats.playTime, beforeCatchup, '加载提示显示时收益尚未写回')
     await Promise.resolve()
     assert.ok(browser.document.querySelector('.offline-loading'), '补算之前先渲染加载符号')
+    assert.equal(browser.document.querySelector('progress[aria-label="离线结算进度"]')?.getAttribute('max'), '100', '补算展示有明确上限的进度条')
     assert.equal(browser.document.querySelector('.wrap').getAttribute('aria-busy'), 'true', '加载期间页面标记为忙碌')
     await completion
   }
   assert.equal(reloaded.ui.offlineLoading, false, '补算结束收起加载提示')
+  assert.equal(reloaded.ui.offlineProgress.percent, 100, '补算完成后进度达到100%')
+  assert.equal(browser.document.querySelector('.offline-progress'), null, '补算完成后移除进度条')
   assert.equal(reloaded.state.stats.playTime, beforeCatchup + 600, '恢复页面只补算尚未推进的十分钟')
   assert.ok(reloaded.state.log.some(entry => entry.text.includes('挂机 600 秒')), '真实启动入口补算后生成挂机报告')
   for (const step of intervals.values()) await step()
@@ -118,6 +120,7 @@ try {
   assert.equal(awayReload.saveNow(), false, '加载期间不覆盖待补算存档')
   await awayReload.initializeGame()
   assert.equal(awayReload.ui.offlineLoading, false)
+  assert.equal(awayReload.ui.offlineProgress.percent, 100, '读档离线异步结算完成后进度达到100%')
   assert.equal(awayReload.state.stats.playTime, savedPlayTime + 600, '读档离线只补算一次')
   assert.equal(intervals.size, 1, '初始离线结束后才启动在线循环')
   awayReload.stopLoop()
@@ -131,4 +134,5 @@ try {
   else delete globalThis.requestAnimationFrame
   delete globalThis.__gameHot
   dom.window.close()
+  restoreGlobals()
 }

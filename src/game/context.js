@@ -11,6 +11,11 @@ export function gameRandom(state) {
   return (contexts.get(state)?.random ?? Math.random)()
 }
 
+/** 离线中间步骤只计算经济数值，界面来源与解锁明细在结算结束时统一补齐。 */
+export function economyDetailsEnabled(state) {
+  return contexts.get(state)?.economyDetails !== false
+}
+
 export function setGameContext(state, context) {
   contexts.set(state, context)
 }

@@ -325,33 +325,37 @@ const condenseStatus = computed(() => {
           </div>
 
           <div class="tip-section">自动制作</div>
-          <div v-if="compact" class="tip-row">
-            <span class="k">状态</span>
-            <span class="v" :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">
-              <template v-if="row.autoStatus.on">{{ row.autoStatus.ready ? '自动中 · 下一份 ' + row.autoStatus.wait.toFixed(1) + '秒' : row.autoStatus.reason }}</template>
-              <template v-else-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked">{{ condenseStatus }}</template>
-              <template v-else>{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</template>
-              <template v-if="row.autoStatus.orderRemaining"> · 订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</template>
-            </span>
-          </div>
-          <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="tip-row">
-            <span class="k">凝灵诀</span>
-            <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓，最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</span>
-          </div>
-          <div v-if="derived.craftTargetsUnlocked" class="tip-row">
-            <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}；达到后暂停，用掉后补回。0不限，手动制作不受限制，一份制作的加成可能超过目标。</span>
-          </div>
-          <div class="tip-row">
-            <span class="k">节奏</span>
-            <span class="v">每 {{ fmt(row.autoStatus.step) }} 秒 1 份</span>
-          </div>
-          <div class="tip-row">
-            <span class="k">还能做</span>
-            <span class="v">{{ row.autoStatus.canMake }} 份（受材料与仓储限制）</span>
-          </div>
-          <div v-if="row.autoStatus.on" class="tip-row">
-            <span class="k">本轮已做</span>
-            <span class="v good">{{ row.autoStatus.made }} 份</span>
+          <div class="craft-auto-tip">
+            <div v-if="compact" class="tip-row">
+              <span class="k">状态</span>
+              <span class="v" :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">
+                <template v-if="row.autoStatus.on">{{ row.autoStatus.ready ? '自动中 · 下一份 ' + row.autoStatus.wait.toFixed(1) + '秒' : row.autoStatus.reason }}</template>
+                <template v-else-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked">{{ condenseStatus }}</template>
+                <template v-else>{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</template>
+                <template v-if="row.autoStatus.orderRemaining"> · 订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</template>
+              </span>
+            </div>
+            <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="tip-row">
+              <span class="k">凝灵诀</span>
+              <span class="v">每 {{ CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS }} 秒检查满仓</span>
+            </div>
+            <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="craft-auto-note">最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</div>
+            <div v-if="derived.craftTargetsUnlocked" class="tip-row">
+              <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}</span>
+            </div>
+            <div v-if="derived.craftTargetsUnlocked" class="craft-auto-note">达到目标后暂停，用掉后补回；0 表示不限。手动制作不受限制，一份制作的加成可能超过目标。</div>
+            <div class="tip-row">
+              <span class="k">节奏</span>
+              <span class="v">每 {{ fmt(row.autoStatus.step) }} 秒 1 份</span>
+            </div>
+            <div class="tip-row">
+              <span class="k">还能做</span>
+              <span class="v">{{ row.autoStatus.canMake }} 份（受材料与仓储限制）</span>
+            </div>
+            <div v-if="row.autoStatus.on" class="tip-row">
+              <span class="k">本轮已做</span>
+              <span class="v good">{{ row.autoStatus.made }} 份</span>
+            </div>
           </div>
           <div class="tip-flavor">
             {{
@@ -377,3 +381,30 @@ const condenseStatus = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.craft-auto-tip {
+  display: grid;
+  gap: 4px;
+}
+.craft-auto-tip .tip-row {
+  display: grid;
+  grid-template-columns: 5em minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+.craft-auto-tip .k {
+  white-space: nowrap;
+}
+.craft-auto-tip .v {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.craft-auto-note {
+  margin-bottom: 4px;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+}
+</style>

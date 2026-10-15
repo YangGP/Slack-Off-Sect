@@ -15,12 +15,12 @@
  */
 import { createInitialState } from '../src/game/state.js'
 import * as E from './engine-fixture.mjs'
-import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../src/data/upgrades.js'
-import { TECHNIQUES } from '../src/data/techniques.js'
+import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
+
 import { CRAFTS } from '../src/data/crafts.js'
 import { BUILDINGS } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
-import { REALMS, ASCEND_REALM_INDEX } from '../src/data/realms.js'
+import { ASCEND_REALM_INDEX } from '../src/data/realms.js'
 import { RESOURCE_MAP } from '../src/data/resources.js'
 import { HUNT, HUNT_FIELDS } from '../src/modules/hunting/data.js'
 

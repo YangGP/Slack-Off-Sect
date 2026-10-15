@@ -8,7 +8,7 @@ import { REALMS } from '../src/data/realms.js'
 // 用于事件回归比较，不代表真人玩法或最优选择。
 const hours = Number(process.argv[2] || 16)
 const karma = Number(process.argv[3] || 0)
-if (!Number.isFinite(hours) || hours <= 0) throw new Error('小时数必须为正数')
+if (!Number.isFinite(hours) || hours <= 0 || hours > 168) throw new Error('小时数必须为正数')
 if (!Number.isFinite(karma) || karma < 0) throw new Error('仙缘必须为非负数')
 for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [83, 'active'], [83, 'default']]) {
   let rng = seed || 1

@@ -1,11 +1,11 @@
 import { RESOURCES } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
-import { ALL_UPGRADES } from '@/data/upgrades'
+import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { treasureMult, habitabilityEffects, jobOutputs, softCap, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { JOBS } from '@/data/jobs'
-import { gameNow } from '../context'
+import { gameNow, economyDetailsEnabled } from '../context'
 import { REALMS } from '@/data/realms'
 import { floorNumber } from '../numbers'
 import { PROCESSING_STATIONS } from '@/data/industry'
@@ -20,6 +20,15 @@ import { isEntryEnabled } from '@/data/modules'
  * 它们互为燃料与产物，属能源产业闭环；排除后粒子链保持一对一配比，也不会出现燃料自增。
  */
 export const REACTOR_EXCLUDED = new Set(['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy'])
+
+// 非持续产出的物料（如兽皮）耗尽后，只会由制作或模块结算补回。
+// 这些动作仍检查库存并重算，因此单独缺此类物料的停机设施可以保留零供给。
+const CONTINUOUS_OUTPUTS = new Set([
+  ...BUILDINGS.flatMap(meta => Object.keys(meta.effects?.prod || {})),
+  ...ALL_UPGRADES.flatMap(meta => Object.keys(meta.effects?.prod || {})),
+  ...JOBS.flatMap(job => [job.resource, job.secondary?.resource,
+    ...(job.additionalOutputs || []).map(output => output.resource)]),
+].filter(Boolean))
 
 export function applyEffects(ef, mult, targets, src) {
   if (!ef) return
@@ -86,8 +95,6 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.breakthroughDiscount) acc.breakthroughDiscount += ef.breakthroughDiscount * mult
   // 渡劫身死减免（香火线《愿力护道》等）：累加为百分点，progression 结算身死概率时扣减。
   if (ef.tribulationSafety) acc.tribulationSafety += ef.tribulationSafety * mult
-  // 建筑造价折扣（《营造技艺》）：只作用于建筑建造价，见 core.js 的 buildingPriceAt。
-  if (ef.buildingCostDiscount) acc.buildingCostDiscount += ef.buildingCostDiscount * mult
   if (ef.offlineHours) acc.offlineHours += ef.offlineHours * mult
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
   if (ef.autoCraft) acc.autoCraftUnlocked = true
@@ -158,6 +165,7 @@ function buildingPowerDraw(state, meta) {
  * 任何会改变数值的操作之后都应该调用一次。
  */
 export function recomputeRaw(state, derived, supply, seconds = 1) {
+  const details = economyDetailsEnabled(state)
   const max = {}
   for (const r of RESOURCES) max[r.id] = r.baseMax
   const prod = {}
@@ -165,11 +173,12 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const jobRatio = {}
   // 进项来源明细：res -> [{ kind, id, label, count, raw }]
   const sources = {}
+  const polarizeRaw = {}
   // 维护费：res -> 每秒总消耗；expenseRaw 是逐条明细（弟子口粮稍后并进来）
   const maint = {}
   const expenseRaw = {}
   const addSource = (res, entry) => {
-    if (!entry.raw) return
+    if (!details || !entry.raw) return
     if (!sources[res]) sources[res] = []
     sources[res].push(entry)
   }
@@ -187,7 +196,6 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     arrivalBonus: 0,
     breakthroughDiscount: 0,
     tribulationSafety: 0,
-    buildingCostDiscount: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     karmaRatio: 0,
     autoCraftUnlocked: false,
@@ -242,12 +250,13 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       delete activeOnly.disasterGuard
       delete activeOnly.ascendBonus
     }
-    applyEffects(activeOnly, on * powMult, targets, { kind: 'building', id: meta.id, label: meta.name, count: on })
+    applyEffects(activeOnly, on * powMult, targets, details ? { kind: 'building', id: meta.id, label: meta.name, count: on } : null)
     if (ef.prod) {
       for (const k in ef.prod) {
         // 炉内自用能（变更 4）：从毛输出扣减，得出净供能；不参与供能门禁，故零库存也能首启。
         const gross = ef.prod[k] * on * powMult
         const net = Math.max(0, gross - (meta.selfUse?.[k] || 0) * on)
+        if (meta.id === 'polarizeArray') polarizeRaw[k] = net
         addSource(k, { kind: 'building', id: meta.id, label: meta.name, count: on, raw: net })
       }
     }
@@ -285,7 +294,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     if (!state.upgrades[up.id]) continue
     const enabled = !up.upkeep || state.upgradeEnabled?.[up.id] !== false
     const mult = treasureMult(state, up) * (supply[up.id] ?? 1) * Number(enabled)
-    applyEffects(up.effects, mult, targets, { kind: 'upgrade', id: up.id, label: up.name, count: 1 })
+    applyEffects(up.effects, mult, targets, details ? { kind: 'upgrade', id: up.id, label: up.name, count: 1 } : null)
     if (up.effects?.prod) {
       for (const k in up.effects.prod) {
         addSource(k, {
@@ -518,6 +527,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     globalMult,
   }
   derived.sources = sourceList
+  // 供给求解只依赖偏极阵实际流量，不依赖为 tooltip 构造的来源列表。
+  derived.polarizeOutput = Object.fromEntries(Object.entries(polarizeRaw)
+    .map(([res, raw]) => [res, raw * ((prod[res] || 0) > 0 ? (rates[res] || 0) / prod[res] : 0)]))
   derived.sourceFactor = sourceFactor
   derived.expenseSources = expenseList
   derived.expense = expense
@@ -570,9 +582,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.consumeReduction = acc.consumeReduction
   derived.arrivalBonus = acc.arrivalBonus
   derived.breakthroughDiscount = acc.breakthroughDiscount
-  // 暴露给 progression：渡劫身死减免与建筑造价折扣（预览 / 结算同源）。
+  // 暴露给 progression：渡劫身死减免（预览 / 结算同源）。
   derived.tribulationSafety = acc.tribulationSafety
-  derived.buildingCostDiscount = acc.buildingCostDiscount
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = (state.dao || 0) >= 1
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
@@ -608,6 +619,50 @@ export function finishDerived(state, derived) {
   return derived
 }
 
+/**
+ * 离线逐秒推进期间，只有供给仍充足（或无来源物料持续断供）、传功状态不变时才复用经济数据。
+ * 人口、岗位、历法、增益与模块结算仍由 simulation 在各自边界重算；这里检查库存变化。
+ * 只供同一次离线推演的相邻步骤使用，不能用来跳过玩家操作后的重算。
+ */
+export function canReuseEconomy(state, derived, seconds) {
+  if (state.buffs.some(buff => (buff.until || 0) <= gameNow(state))) return false
+  const missingMaterial = meta => Object.keys(meta?.upkeep || {}).some(res =>
+    !CONTINUOUS_OUTPUTS.has(res) && !(state.resources[res] > 0))
+  for (const [id, value] of Object.entries(derived.buildingSupply)) {
+    if (value !== 1 && !(value === 0 && missingMaterial(BUILDING_MAP[id]))) return false
+  }
+  for (const [id, value] of Object.entries(derived.upgradeSupply)) {
+    if (state.upgradeEnabled?.[id] !== false && value !== 1 &&
+      !(value === 0 && missingMaterial(UPGRADE_MAP[id]))) return false
+  }
+  const dt = Math.max(0.001, seconds)
+  for (const [res, demand] of Object.entries(derived.maintenance)) {
+    const available = Math.max(0, (state.resources[res] || 0) / dt + (derived.rates[res] || 0)
+      - (res === 'qi' ? derived.upkeep : 0))
+    if (demand > available) return false
+  }
+  // 偏极阵任一侧接近满仓时须重新求负荷，不能沿用满供产出而浪费上游物料。
+  if (derived.buildingSupply.polarizeArray > 0) {
+    for (const res of ['yangParticle', 'yinParticle']) {
+      const output = derived.polarizeOutput[res] || 0
+      const room = Math.max(0, (derived.max[res] || 0) - (state.resources[res] || 0)) / dt
+      const sink = Math.max(0, -(derived.expense[res] || 0))
+      const other = Math.max(0, (derived.rates[res] || 0) - output)
+      if (output > room + sink - other) return false
+    }
+  }
+  if (derived.discipleTrainingUnlocked) {
+    let training = 0
+    for (const member of state.disciples.members) training += discipleTrainingCost(member, state.realm)
+    // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功。
+    const available = Math.max(0, (state.resources.qi || 0) / dt + (derived.rates.qi || 0)
+      + (derived.expense.qi || 0) + derived.trainingCost)
+    const cost = training > 0 && available + 1e-10 >= training ? training : 0
+    if (cost !== derived.trainingCost) return false
+  }
+  return true
+}
+
 /** Supply is shared proportionally; disciple food is reserved before building upkeep.
  * Start at full capacity and only reduce it, so a missing input cannot fund its own output.
  * Storage and housing remain available even when production is starved.
@@ -636,7 +691,7 @@ export function recompute(state, derived, seconds = 1) {
     if (supply.polarizeArray > 0) {
       let factor = 1
       for (const res of ['yangParticle', 'yinParticle']) {
-        const output = (derived.sources[res] || []).filter(s => s.id === 'polarizeArray').reduce((sum, s) => sum + s.value, 0)
+        const output = derived.polarizeOutput[res] || 0
         if (output <= 0) continue
         const room = Math.max(0, (derived.max[res] || 0) - (state.resources[res] || 0)) / dt
         const sink = Math.max(0, -(derived.expense[res] || 0))
@@ -673,7 +728,7 @@ export function recompute(state, derived, seconds = 1) {
   derived.buildingSupply = Object.fromEntries(buildingConsumers.map(b => [b.id, supply[b.id]]))
   derived.upgradeSupply = Object.fromEntries(ALL_UPGRADES.filter(u => u.upkeep && state.upgrades[u.id])
     .map(u => [u.id, state.upgradeEnabled?.[u.id] === false ? 0 : supply[u.id]]))
-  finishDerived(state, derived)
+  if (economyDetailsEnabled(state)) finishDerived(state, derived)
   Object.assign(output, derived)
   return output
 }

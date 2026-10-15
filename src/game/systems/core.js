@@ -99,8 +99,6 @@ export function createDerived() {
     breakthroughDiscount: 0,
     /** 渡劫身死概率减免（百分点），由香火线《愿力护道》等累加 */
     tribulationSafety: 0,
-    /** 建筑造价折扣（小数），只作用于建筑建造价 */
-    buildingCostDiscount: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     autoCraftUnlocked: false,
     autoCondenseLiquidUnlocked: false,
@@ -253,6 +251,8 @@ export function isProgressionVisible(state, needs) {
 export function isCraftUnlocked(state, craft) {
   if (!isEntryEnabled(state, craft)) return false
   if (craft.unlocked) return true
+  // 丹道改版前已开放九转炼丹的旧档，本世继续使用；仍需保有原法宝。
+  if (craft.id === 'refineNineTurnPill' && state.legacyNineTurnPill === true && state.upgrades.alchemyCauldron) return true
   return checkNeeds(state, craft.needs)
 }
 
@@ -312,40 +312,39 @@ export function scaleCost(cost, factor) {
   return roundCost(out)
 }
 
-/** 购买第 n 座（从 0 开始计数）建筑的价格。discount 为建筑造价折扣（《营造技艺》等，只作用于建造价）。 */
-export function buildingPriceAt(meta, index, starterHut = false, discount = 0) {
-  const discountFactor = 1 - Math.min(0.9, Math.max(0, discount || 0))
-  const factor = Math.pow(meta.priceRatio || 1.15, index) * discountFactor
+/** 购买第 n 座（从 0 开始计数）建筑的价格。 */
+export function buildingPriceAt(meta, index, starterHut = false) {
+  const factor = Math.pow(meta.priceRatio || 1.15, index)
   const cost = scaleCost(meta.cost, factor)
   if (meta.id === 'hut' && index === 0 && starterHut) delete cost.wood
   return cost
 }
 
 /** 购买 count 座建筑从 from 开始的总价 */
-export function buildingCostFrom(meta, from, count, starterHut = false, discount = 0) {
+export function buildingCostFrom(meta, from, count, starterHut = false) {
   const total = {}
   for (let i = 0; i < count; i++) {
-    const price = buildingPriceAt(meta, from + i, starterHut, discount)
+    const price = buildingPriceAt(meta, from + i, starterHut)
     for (const k in price) total[k] = (total[k] || 0) + price[k]
   }
   return total
 }
 
-export function buildingCost(state, id, count = 1, discount = 0) {
+export function buildingCost(state, id, count = 1) {
   const meta = BUILDING_MAP[id]
   if (!meta) return {}
-  return buildingCostFrom(meta, countOf(state, id), count, !state.starterHutBuilt, discount)
+  return buildingCostFrom(meta, countOf(state, id), count, !state.starterHutBuilt)
 }
 
 /** 在现有资源下最多能买几座（上限 cap 防止死循环） */
-export function maxAffordable(state, id, cap = 500, discount = 0) {
+export function maxAffordable(state, id, cap = 500) {
   const meta = BUILDING_MAP[id]
   if (!meta) return 0
   const from = countOf(state, id)
   const running = {}
   let n = 0
   for (; n < cap; n++) {
-    const price = buildingPriceAt(meta, from + n, !state.starterHutBuilt, discount)
+    const price = buildingPriceAt(meta, from + n, !state.starterHutBuilt)
     let ok = true
     for (const k in price) {
       const have = state.resources[k] || 0

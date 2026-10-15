@@ -257,7 +257,7 @@
 
 #### 2.5.1 解锁与模式切换
 
-- 新增研究《招贤纳士》（glyph「贤」），前置《广开山门》（`recruitDrive`，招募间隔）与《知人善任》（`talentAssignment`，辨才）；`effects.recruitMode: true`，派生 `derived.recruitModeUnlocked`。
+- 新增研究《招贤纳士》（glyph「贤」），金丹起开放（`realm: 4`），前置《香火愿》（`incenseVow`）、《知人善任》（`talentAssignment`）及一座山门；费用为灵机1000、香火150、灵石400。不依赖《广开山门》及其阵基、讲经、香火志研究链；`effects.recruitMode: true`，派生 `derived.recruitModeUnlocked`。
 - `settings.recruitMode`：`'auto'`（默认，即现状）或 `'manual'`；随存档保留，旧档默认 `'auto'`。未解锁时不可切换、界面入口隐藏。
 - 切到 `'manual'` 后停止自动前来：`recruitArrivals` 不再计时并清零 `arrivalTimer`，免费来人暂停；切回 `'auto'` 恢复，并从零重新计时。
 

@@ -24,6 +24,7 @@ let restored = null
 let initialized = false
 let initializing = null
 let loopRequested = false
+let offlineController = null
 export const state = reactive(createInitialState())
 export const derived = reactive(E.createDerived())
 
@@ -35,6 +36,7 @@ export const ui = reactive({
   debugPage: false,
   offlineReport: null,
   offlineLoading: false,
+  offlineProgress: { completedSeconds: 0, totalSeconds: 0, percent: 0 },
   toast: null,
   message: null,
   lastSavedAt: 0,
@@ -108,8 +110,8 @@ function applyOfflineProgress() {
   if (elapsed < 30) return
   const capSeconds = Math.floor((derived.offlineHours || CONFIG.OFFLINE_CAP_HOURS) * 3600)
   const seconds = Math.min(elapsed, capSeconds)
-  return withOfflineLoading(() => {
-    const result = game.simulateOffline(seconds, { startAt: restored.lastSaveAt })
+  return withOfflineLoading(async options => {
+    const result = await game.simulateOfflineAsync(seconds, { ...options, startAt: restored.lastSaveAt })
     const gains = Object.entries(result.gains)
       .map(([id, amount]) => ({
         id,
@@ -140,10 +142,13 @@ function applyOfflineProgress() {
 }
 
 async function withOfflineLoading(run) {
+  const controller = new AbortController()
+  offlineController = controller
   ui.offlineLoading = true
+  ui.offlineProgress = { completedSeconds: 0, totalSeconds: 0, percent: 0 }
   try {
     await nextTick()
-    // 先让加载提示绘制出来，再开始同步补算；隐藏页面无需等动画帧。
+    // 先绘制进度条；随后引擎按时间预算分批结算，每批之间让出主线程。
     await new Promise(resolve => {
       if (typeof requestAnimationFrame === 'function' && document.visibilityState !== 'hidden') {
         const fallback = setTimeout(resolve, 100)
@@ -153,10 +158,22 @@ async function withOfflineLoading(run) {
         }))
       } else setTimeout(resolve, 0)
     })
-    return run()
+    return await run({ signal: controller.signal,
+      onProgress: progress => { if (offlineController === controller) ui.offlineProgress = progress } })
+  } catch (error) {
+    if (error.name !== 'AbortError') throw error
   } finally {
-    ui.offlineLoading = false
+    if (offlineController === controller) {
+      offlineController = null
+      ui.offlineLoading = false
+    }
   }
+}
+
+function cancelOfflineProgress() {
+  offlineController?.abort()
+  offlineController = null
+  ui.offlineLoading = false
 }
 
 
@@ -207,6 +224,7 @@ export function startLoop() {
 
 export function stopLoop() {
   loopRequested = false
+  cancelOfflineProgress()
   runtime.stop()
   if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide)
   if (typeof window !== 'undefined') window.removeEventListener('beforeunload', onBeforeUnload)
@@ -273,7 +291,7 @@ export const actions = {
     return false
   },
   buyMax(id) {
-    const n = E.maxAffordable(state, id, 500, derived.buildingCostDiscount)
+    const n = E.maxAffordable(state, id, 500)
     if (n <= 0) {
       toast('资源不足', 'bad')
       return 0
@@ -507,6 +525,7 @@ export const actions = {
   },
   importText(text) {
     const next = parseImport(text)
+    cancelOfflineProgress()
     ui.saveRecoveryNotice = next.__recoveryNotice || ''
     game.replaceState(next)
     runtime.resetClock()
@@ -522,6 +541,7 @@ export const actions = {
   },
   resetGame() {
     if (!repository.clear()) return false
+    cancelOfflineProgress()
     const recovering = !!ui.saveLoadError
     ui.saveLoadError = ''
     game.reset()
