@@ -110,6 +110,7 @@ export function validateState(state, fresh) {
     result.settings[key] = typeof result.settings[key] === 'boolean' ? result.settings[key] : fresh.settings[key]
   }
   result.settings = Object.fromEntries(Object.keys(fresh.settings).map(key => [key, result.settings[key] ?? fresh.settings[key]]))
+  result.settings.recruitMode = result.settings.recruitMode === 'manual' ? 'manual' : 'auto'
   result.settings.modules = moduleFlags
   result.settings.craftReservePercent = safeNumber(result.settings.craftReservePercent, 20, 100)
   result.settings.autoCraftPriority = Object.hasOwn(CRAFT_MAP, result.settings.autoCraftPriority) ? result.settings.autoCraftPriority : fresh.settings.autoCraftPriority

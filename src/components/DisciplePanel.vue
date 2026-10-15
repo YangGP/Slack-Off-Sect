@@ -2,9 +2,9 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { JOBS } from '@/data/jobs'
-import { idleDisciples, nextArrivalIn, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, discipleAidPreview, canAfford } from '@/game/engine'
+import { idleDisciples, nextArrivalIn, isManualRecruit, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, discipleAidPreview, recruitPreview, canAfford } from '@/game/engine'
 import { REALMS } from '@/data/realms'
-import { cultivationRequired, cultivationRate, discipleFactor, discipleAnnualBaseUpkeep, discipleDismissalCost, discipleResidenceYears, discipleTrainingCost, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples } from '@/data/disciples'
+import { cultivationRequired, cultivationRate, discipleFactor, discipleAnnualBaseUpkeep, discipleDismissalCost, discipleResidenceYears, discipleTrainingCost, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples, RECRUIT_TIERS } from '@/data/disciples'
 import { TALENT_MAP, TALENT_TIERS, TALENT_TIER_MAP, talentBonus, talentMatches, talentDescription } from '@/data/talents'
 import { costLabel } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -16,6 +16,11 @@ import StableSelect from './StableSelect.vue'
 
 const idle = computed(() => idleDisciples(state))
 const waitNext = computed(() => nextArrivalIn(state, derived))
+// 主动招募（《招贤纳士》解锁）：与自动前来互斥，见 docs/DISCIPLE-PROGRESSION.md §2.5。
+const recruitManual = computed(() => isManualRecruit(state, derived))
+const recruitCards = computed(() => derived.recruitModeUnlocked
+  ? RECRUIT_TIERS.map(tier => recruitPreview(state, derived, tier.id))
+  : [])
 const jobDrafts = reactive({})
 const managementOpen = ref(false)
 const managementToggle = ref(null)
@@ -138,7 +143,7 @@ function commitJob(jobId, event) {
     <div class="box-head disciple-head">
       <HoverTip v-if="!managementOpen" label="职位分配"><template #tip><p>人数来自门中弟子，闲散弟子不产出；分配岗位不影响自动修炼。</p></template></HoverTip>
       <HoverTip v-else label="弟子管理"><template #tip>
-          <p>工作时也自动修炼，灵根影响修炼速度，修满后等待突破；目标境界不能超过宗门。</p>
+          <p>工作时也自动修炼，灵根影响修炼速度与突破成功率，修满后等待突破；目标境界不能超过宗门。</p>
           <p>天赋类型固定，修炼、岗位专长和突破效果只作用于本人。宗门每高于突破目标一境，成功率增加10个百分点，最高99%。</p>
           <p>掌握《传功授业》后可对弟子传功：持续耗灵气加速本人修炼、不停岗；也可预付个人护道材料，加成其下一次突破。</p>
           <p>突破失败消耗材料，损失20%本境修为并调息60秒。批量突破逐人扣料，材料不足即停止。</p>
@@ -233,9 +238,31 @@ function commitJob(jobId, event) {
       </div>
       <div v-if="derived.leaveChance > 0" class="small bad">当前每次检查离开概率 {{ fmt(derived.leaveChance * 100) }}%。</div>
       <div class="small dim">
-        <template v-if="derived.leaveChance > 0">宜居度不足，改善居住环境后恢复弟子前来。</template>
+        <template v-if="recruitManual">主动招募模式：停用自动前来，可用下方礼聘招募弟子。</template>
+        <template v-else-if="derived.leaveChance > 0">宜居度不足，改善居住环境后恢复弟子前来。</template>
         <template v-else-if="waitNext === null">居所已满，扩建居所才会再有人来。</template>
         <template v-else>下一位弟子约 {{ fmtTime(waitNext) }}后到。</template>
+      </div>
+
+      <div v-if="derived.recruitModeUnlocked" class="recruit-block">
+        <div class="btn-row">
+          <span class="small dim">招募方式</span>
+          <button class="btn" :aria-pressed="!recruitManual" @click="actions.setRecruitMode('auto')">自动前来</button>
+          <button class="btn" :aria-pressed="recruitManual" @click="actions.setRecruitMode('manual')">主动招募</button>
+        </div>
+        <div v-if="recruitManual" class="btn-row recruit-tiers">
+          <HoverTip v-for="card in recruitCards" :key="card.tierId" :title="`礼聘·${card.tier.name}`" :description="card.tier.desc">
+            <button class="btn" :disabled="!card.ready || !card.affordable" @click="actions.recruitDisciple(card.tierId)">
+              {{ card.tier.name }} · {{ costText(card.cost) }}
+            </button>
+            <template #tip>
+              <div class="tip-row"><span class="k">起点境界</span><span class="v">{{ card.realmRangeText }}</span></div>
+              <div class="tip-row"><span class="k">花费</span><span class="v" :class="card.affordable ? '' : 'bad'">{{ costText(card.cost) }}</span></div>
+              <div class="tip-desc" :class="card.ready ? '' : 'bad'">{{ card.status }}</div>
+              <div class="tip-flavor">档位越高，天赋品级越高、越易招到高境界起点；起点按宗门境界浮动，入宗即具境界，口粮与逐出费用随境界计。</div>
+            </template>
+          </HoverTip>
+        </div>
       </div>
 
       </div>
@@ -305,7 +332,7 @@ function commitJob(jobId, event) {
                     <div class="tip-row"><span class="k">每年基础口粮</span><span class="v">灵气 {{ fmt(member.annualBaseUpkeep) }}</span></div>
                     <div class="tip-row"><span class="k">逐出费用</span><span class="v">灵气 {{ fmtCost(member.dismissalCost) }}</span></div>
                     <div class="tip-section">修炼</div>
-                    <div class="tip-row"><span class="k">灵根 / 速度</span><span class="v">{{ member.root?.name || '三灵根' }} · {{ fmt(member.rate) }}修为/秒</span></div>
+                    <div class="tip-row"><span class="k">灵根 / 速度</span><span class="v">{{ member.root?.name || '三灵根' }} · {{ fmt(member.rate) }}修为/秒<template v-if="member.root?.breakthrough"> · 突破 {{ member.root.breakthrough > 0 ? '+' : '' }}{{ member.root.breakthrough }}pt</template></span></div>
                     <div v-if="cultivationRequired(member.realm)" class="tip-row"><span class="k">本境修为</span><span class="v">{{ fmt(member.cultivation) }} / {{ fmt(cultivationRequired(member.realm)) }}</span></div>
                     <div class="tip-row"><span class="k">状态</span><span class="v">{{ member.preview.status }}<template v-if="member.cooldown > 0"> · 剩余{{ fmtTime(member.cooldown) }}</template><template v-else-if="member.preview.status === '修炼中'"> · 约{{ fmtTime((member.preview.required - member.cultivation) / member.rate) }}修满</template></span></div>
                     <div class="tip-section">岗位</div>
@@ -375,6 +402,12 @@ function commitJob(jobId, event) {
 <style scoped>
 .auto-talent-jobs {
   margin-bottom: 8px;
+}
+.recruit-block {
+  margin-top: 8px;
+}
+.recruit-tiers {
+  margin-top: 6px;
 }
 .disciple-head {
   display: flex;

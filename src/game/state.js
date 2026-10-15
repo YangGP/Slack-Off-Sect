@@ -34,7 +34,7 @@ export function createInitialState(now = Date.now()) {
     peak: {},
 
     disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: now >>> 0,
-      talentSeed: (now ^ 0x6d2b79f5) >>> 0, talentVersion: 2 },
+      talentSeed: (now ^ 0x6d2b79f5) >>> 0, recruitSeed: (now ^ 0x1b873593) >>> 0, talentVersion: 2 },
     // 弟子自动前来的计时（秒）
     arrivalTimer: 0,
     // 历法：已经过去的天数（小数，1 天 = CALENDAR.DAY_SECONDS 秒）
@@ -112,6 +112,8 @@ export function createInitialState(now = Date.now()) {
       autosave: true,
       autoCraftOn: true,
       autoTalentJobs: true,
+      // 招募模式：'auto' 弟子自动前来（默认）／'manual' 主动招募（需《招贤纳士》解锁）
+      recruitMode: 'auto',
       autoCraftSpeeds: {},
       craftWeights: {},
       processingModes: {},

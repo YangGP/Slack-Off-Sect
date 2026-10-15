@@ -92,6 +92,9 @@ const effects = (e) => {
   if (e.autoCraft) out.push('自动制作')
   if (e.autoCraftSpeedControl) out.push('自动速限1/2/5/10倍（受工位约束）')
   if (e.autoCondenseLiquid) out.push('节气满仓自动凝液（需凝气化液）')
+  if (e.discipleTraining) out.push('解锁弟子传功与个人护道')
+  if (e.autoTalentJobs) out.push('按岗位专长自动分工（弟子页可暂停）')
+  if (e.recruitMode) out.push('解锁主动招募（礼聘档位越高天赋越好、起点境界越高）')
   if (e.unlockBuildings?.length) out.push('解锁 ' + e.unlockBuildings.map(bname).join('/'))
   return out.join('；')
 }

@@ -1,6 +1,6 @@
 import { JOBS } from '@/data/jobs'
-import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval } from './core'
-import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, DISCIPLE_AIDS, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
+import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval, isManualRecruit } from './core'
+import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, DISCIPLE_AIDS, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP, RECRUIT_TIER_MAP, recruitCost, recruitRealmRange, rollRecruitRealm, rootBreakthroughBonus } from '@/data/disciples'
 import { talentBonus, gainBreakthroughTalent, upgradeTalent, TALENT_MAP } from '@/data/talents'
 import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
@@ -94,7 +94,8 @@ export function discipleBreakthroughPreview(state, member) {
   const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
     [id, Math.max(1, Math.ceil(amount * DISCIPLE_GROWTH.costFactor))]))
   const chance = Math.min(BREAKTHROUGH.chanceCap, realmBaseChance(target) * DISCIPLE_GROWTH.successFactor +
-    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough') + (member.aidBonus || 0))
+    Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough') +
+    rootBreakthroughBonus(member) / 100 + (member.aidBonus || 0))
   const status = target >= REALMS.length ? '已至最高境界' : member.cooldown > 0 ? '突破调息中' :
     member.cultivation < required ? '修炼中' : target > state.realm ? '受宗门境界限制' : '待突破'
   return { target, required, cost, chance, status, ready: status === '待突破', affordable: canAfford(state, cost) }
@@ -141,6 +142,11 @@ export function breakthroughDisciples(state, derived, ids, random = () => gameRa
  */
 export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   if (dt <= 0) return 0
+  // 主动招募模式：停止免费来人，切回自动后重新计时（见 docs/DISCIPLE-PROGRESSION.md §2.5）。
+  if (isManualRecruit(state, derived)) {
+    state.arrivalTimer = 0
+    return 0
+  }
   if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) {
     state.arrivalTimer = 0
     return 0
@@ -173,6 +179,42 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   // 住满了就把计时清零：扩建之后重新开始算，不会立刻蹦出一个人
   if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) state.arrivalTimer = 0
   return arrived
+}
+
+/** 主动招募预览：礼聘档位的花费、起点境界区间与可招募状态（见 docs/DISCIPLE-PROGRESSION.md §2.5）。 */
+export function recruitPreview(state, derived, tierId) {
+  const tier = RECRUIT_TIER_MAP[tierId]
+  if (!tier) return null
+  const cost = recruitCost(tier, state.realm)
+  const range = recruitRealmRange(tier, state.realm)
+  const risk = derived.leaveChance > 0
+  const full = !risk && state.disciples.total >= derived.maxDisciples
+  const blockReason = risk ? 'risk' : full ? 'full' : null
+  return { tierId, tier, cost, realmMin: range.min, realmMax: range.max,
+    realmRangeText: range.min === range.max ? REALMS[range.min]?.name || '凡体'
+      : `${REALMS[range.min]?.name || '凡体'}～${REALMS[range.max]?.name || '凡体'}`,
+    ready: !blockReason, blockReason,
+    status: risk ? '宜居度不足，暂缓招募' : full ? '居所已满' : '可招募',
+    affordable: canAfford(state, cost) }
+}
+
+/** 主动招募一名弟子：满员／离开风险／未解锁或付不起则不执行、不扣料。 */
+export function recruitDisciple(state, derived, tierId) {
+  if (!isManualRecruit(state, derived)) return { recruited: 0, reason: 'locked' }
+  const preview = recruitPreview(state, derived, tierId)
+  if (!preview) return { recruited: 0, reason: 'unknown' }
+  if (preview.blockReason) return { recruited: 0, reason: preview.blockReason }
+  if (!preview.affordable) return { recruited: 0, reason: 'insufficient' }
+  payCost(state, preview.cost)
+  const realm = rollRecruitRealm(state.disciples, preview.tier, state.realm)
+  const member = newDisciple(state.disciples, null, { realm, quality: preview.tier })
+  state.disciples.members.push(member)
+  autoAssignTalentJobs(state)
+  recountDisciples(state.disciples)
+  state.stats.recruits += 1
+  pushLog(state, `礼聘${preview.tier.name}：${member.name}入我山门（${REALMS[member.realm].name}·${SPIRITUAL_ROOT_MAP[member.spiritualRoot].name}）`, 'good')
+  recompute(state, derived)
+  return { recruited: 1, member, cost: preview.cost }
 }
 
 export function clearJobs(state, derived) {

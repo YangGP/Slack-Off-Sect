@@ -87,23 +87,31 @@ export function talentBonus(member, category, jobId = member.roleId) {
   return Math.min(TALENT_RULES.caps[category] || 0, bonus)
 }
 
-export function rollTalent(talents, random) {
+export function rollTalent(talents, random, tierWeights = null) {
   if (talents.length >= TALENT_RULES.maxCount) return null
   const owned = new Set(talents.map(entry => TALENT_MAP[entry.id]?.category))
   const candidates = TALENTS.filter(meta => !owned.has(meta.category))
+  if (!candidates.length) return null
+  // 招募礼聘等场景可传入替代品级权重，使高品级更容易出现；未传时沿用基础权重。
   const tiers = TALENT_TIERS.filter(tier => candidates.some(meta => meta.tier === tier.id))
-  if (!tiers.length) return null
-  const tier = weighted(tiers, random)
+    .map(tier => ({ ...tier, weight: tierWeights?.[tier.id] ?? tier.weight }))
+  const total = tiers.reduce((sum, tier) => sum + tier.weight, 0)
+  const tier = total > 0 ? weighted(tiers, random) : weighted(
+    TALENT_TIERS.filter(item => candidates.some(meta => meta.tier === item.id)), random)
   const pool = candidates.filter(meta => meta.tier === tier.id)
   const meta = pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))]
   return { id: meta.id, level: 1 }
 }
 
-export function birthTalents(random) {
-  const count = weighted(TALENT_RULES.birthCounts, random).count
+/** 入宗天赋；quality 可传 { tierWeights, countWeights } 调整品级与条数分布（主动招募）。 */
+export function birthTalents(random, quality = null) {
+  const counts = quality?.countWeights
+    ? TALENT_RULES.birthCounts.map((entry, index) => ({ ...entry, weight: quality.countWeights[index] ?? 0 }))
+    : TALENT_RULES.birthCounts
+  const count = weighted(counts, random).count
   const talents = []
   for (let index = 0; index < count; index++) {
-    const talent = rollTalent(talents, random)
+    const talent = rollTalent(talents, random, quality?.tierWeights || null)
     if (talent) talents.push(talent)
   }
   return talents

@@ -337,6 +337,30 @@ export const actions = {
     else toast(result.insufficient ? '护道材料不足' : '所选弟子已护道或已至圆满', 'bad')
     return result
   },
+  /** 切换招募模式（需《招贤纳士》）：'auto' 自动前来／'manual' 主动招募，二者互斥。 */
+  setRecruitMode(mode) {
+    if (!derived.recruitModeUnlocked || (mode !== 'auto' && mode !== 'manual')) return false
+    if (state.settings.recruitMode === mode) return true
+    state.settings.recruitMode = mode
+    if (mode === 'manual') state.arrivalTimer = 0
+    E.recompute(state, derived)
+    saveNow()
+    afterAction(mode === 'manual' ? '已改为主动招募，自动前来暂停' : '已改为自动前来', 'info')
+    return true
+  },
+  /** 主动招募一名弟子：按礼聘档位扣料并立即入宗。 */
+  recruitDisciple(tierId) {
+    const result = E.recruitDisciple(state, derived, tierId)
+    if (result.recruited) {
+      afterAction(`礼聘招得 ${result.member.name}`, 'good')
+      saveNow()
+    } else {
+      toast(result.reason === 'full' ? '居所已满，无法招募'
+        : result.reason === 'risk' ? '宜居度不足，暂缓招募'
+          : result.reason === 'insufficient' ? '资源不足' : '尚未解锁主动招募', 'bad')
+    }
+    return result
+  },
   dismissDisciples(ids) {
     const preview = E.discipleDismissalPreview(state, ids)
     if (!preview.count) return { dismissed: 0 }
