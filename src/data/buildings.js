@@ -334,7 +334,7 @@ const CORE_BUILDINGS = [
     cost: { ironMortar: 40, arcaneGold: 10, stone: 12000, insight: 10000, artifact: 30 },
     priceRatio: 1.35,
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
-    effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000 }, habitability: 5 },
+    effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000, immortalForce: 20000 }, habitability: 5 },
     upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
     needs: { upgrades: ['grottoArt'] },
   },
@@ -551,7 +551,7 @@ const CORE_BUILDINGS = [
     cost: { ironMortar: 100, arcaneGold: 20, crystalSilver: 10, stone: 60000, artifact: 100, insight: 60000, spiritTalisman: 100 },
     priceRatio: 1.6,
     desc: '塔尖直插云海，聚气存念并镇住灵气分子与正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
-    effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000 } },
+    effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000, immortalForce: 40000 } },
     upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
     upkeepQi: 2, upkeepEnergy: 0.02, powerMult: 1.6, // 木材 / 玄铁修缮另计，仓储保留
 
@@ -595,14 +595,47 @@ const CORE_BUILDINGS = [
     name: '湮灭炉',
     glyph: '湮',
     group: 'wonder',
-    cost: { arcaneGold: 12, mithril: 12, stone: 30000, artifact: 40, spiritArtifact: 6 },
+    // 化神可达：造价用灵器／灵符／灵晶／玄钢等化神前已有来源的材料，不依赖炼虚的秘银与合体的玄金。
+    cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, stone: 30000, artifact: 40 },
     priceRatio: 1.6,
-    desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。',
-    effects: { prod: { qiEnergy: 0.06 } },
+    desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座运行的湮灭炉还会为宗门添一层全局增产。',
+    // 化神入门：既产灵能，又是那层全局增产（参考猫国核反应堆）。毛输出 0.06，炉内自用 0.015，净 0.045。
+    // ratioReactor：每座给一层全局产出倍率，多座相加；维护费每座固定，不随该层缩放。
+    effects: { prod: { qiEnergy: 0.06 }, ratioReactor: 0.05 },
     // 正负灵子是燃料；炉内自用能从毛输出扣减（净 = 0.06 − 0.015）。自用能即其稳定后的控制用能，故不再重复收灵气费；不依赖已有灵能库存。
     upkeep: { yangParticle: 0.02, yinParticle: 0.02 },
     selfUse: { qiEnergy: 0.015 },
-    needs: { upgrades: ['annihilationArt'], realm: 8 },
+    needs: { upgrades: ['annihilationArt'], realm: 6 },
+  },
+  {
+    // 炼虚发现仙灵力的初期途径：以灵气托起相激之场，采聚天地间自然聚合的微量仙灵力。
+    // 只是「采聚」，产速极低，仅供发现与首批用途；真正的聚合固结由合体的聚仙阵承担。
+    id: 'harvestPlatform',
+    name: '采仙台',
+    glyph: '仙',
+    group: 'wonder',
+    cost: { mithril: 8, crystal: 40, arrayBase: 12, artifact: 30, stone: 20000, insight: 30000, spiritArtifact: 4 },
+    priceRatio: 1.5,
+    desc: '高台上的相激之场缓缓运转，把天地间自然聚成的仙灵力一丝丝拢住。取之极慢，却已足够看清这一味材料。',
+    effects: { prod: { immortalForce: 0.002 } },
+    // 采聚不是固结产线，可用灵气驱动基础运行；产速极低，不构成量产。
+    upkeep: { qiParticle: 0.02 }, upkeepQi: 3,
+    needs: { upgrades: ['immortalDiscovery'], realm: 7 },
+  },
+  {
+    // 合体量产：以分子为料、灵能为力，连续聚合固结。
+    // 只设 upkeepEnergy、不设 upkeepQi —— 引擎据此恒走灵能档，不能用灵气档绕过固结所需能量。
+    id: 'immortalArray',
+    throughput: true,
+    name: '聚仙阵',
+    glyph: '聚',
+    group: 'wonder',
+    cost: { arcaneGold: 16, mithril: 12, stone: 40000, insight: 60000, artifact: 40, spiritArtifact: 8, spiritTalisman: 20 },
+    priceRatio: 1.6,
+    desc: '分子为料、灵能为力，阵中分子层层吸能聚合，固结成稳定的仙灵力。料与力缺一不可。',
+    effects: { prod: { immortalForce: 0.01 } },
+    upkeep: { qiParticle: 0.06 }, upkeepEnergy: 0.02,
+    needs: { upgrades: ['immortalIndustry'], realm: 8 },
   },
   {
     id: 'karmaPool',
@@ -693,7 +726,7 @@ const CORE_BUILDING_DISPLAY_ORDER = [
   // 香火后接猎杀模块，再进入阵道和奇观。
   'gate', 'incenseCauldron', 'ancestorHall',
   'mountainArray', 'spiritLockArray',
-  'splitArray', 'polarizeArray', 'annihilationFurnace', 'heavenTower', 'karmaPool',
+  'splitArray', 'polarizeArray', 'annihilationFurnace', 'harvestPlatform', 'immortalArray', 'heavenTower', 'karmaPool',
 ]
 
 /** 猎杀设施保持相邻，插在香火设施之后，与用途筛选顺序一致。 */

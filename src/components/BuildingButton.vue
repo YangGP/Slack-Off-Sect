@@ -24,6 +24,8 @@ const enabled = computed(() => (entry.value.on === false ? 0 : count.value))
 const supply = computed(() => derived.buildingSupply?.[props.meta.id] ?? 1)
 const active = computed(() => enabled.value * supply.value)
 const hasPower = computed(() => props.meta.upkeepQi != null || props.meta.upkeepEnergy != null)
+// 只有「灵气基础 / 灵能高阶」两档都有的建筑才显示档位切换；只吃灵能（如聚仙阵）或只吃灵气的没有可切档。
+const hasPowerToggle = computed(() => props.meta.upkeepQi != null && props.meta.upkeepEnergy != null)
 const energyReady = computed(() => !!state.upgrades.energyApplication)
 const powerMode = computed(() => (
   props.meta.upkeepEnergy != null && entry.value.power === 'energy' && energyReady.value
@@ -188,7 +190,7 @@ onBeforeUnmount(clearHighlight)
     </HoverTip>
 
     <!-- 灵能高阶：接入后以灵能驱动、效果 ×倍率；需先参悟《灵能输配》 -->
-    <HoverTip v-if="count > 0 && hasPower && (powerMode === 'energy' || energyReady)" class="side-tip"
+    <HoverTip v-if="count > 0 && hasPowerToggle && (powerMode === 'energy' || energyReady)" class="side-tip"
       :title="powerMode === 'energy' ? '改用灵气基础' : '接入灵能高阶'"
       :description="powerMode === 'energy' ? '回到灵气运行，效果份额降低。' : '以灵能驱动，效果提升；需持续供灵能，断供即降载。'">
       <button

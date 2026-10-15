@@ -2,7 +2,7 @@
 export { craftYield, maxCraftable, isAutoCrafting, processingPlan, autoCraftStatus, canAutoCraft, craftTarget, resourceFlow, processingBottleneck, clickGain } from './systems/craftingRules'
 export { clamp, habitabilityEffects, softCap, createDerived, entryOf, countOf, activeOf, jobOutputs, idleDisciples, checkNeeds, isBuildingUnlocked, trackPeak, isJobUnlocked, isUpgradeUnlocked, isProgressionVisible, isCraftUnlocked, canAfford, payCost, addResource, roundCost, scaleCost, buildingPriceAt, buildingCostFrom, buildingCost, maxAffordable, calendarAt, arrivalInterval, nextArrivalIn, realmCost, pushLog, treasureLevel, treasureMult, refineCost, isTreasureForged } from './systems/core'
 export { timeToAfford } from './systems/queries'
-export { recompute } from './systems/economy'
+export { recompute, REACTOR_EXCLUDED } from './systems/economy'
 export { buyBuilding, sellBuilding, toggleBuilding, setBuildingPower } from './systems/buildings'
 export { setJob, shiftJob, fillJob, assignDisciples, autoAssignTalentJobs, discipleDismissalPreview, dismissDisciples, discipleBreakthroughPreview, breakthroughDisciples, discipleAidPreview, applyDiscipleAid, setMentored, recruitArrivals, clearJobs } from './systems/disciples'
 export { toggleUpkeepUpgrade, research, refineTreasure, breakthroughPreview, breakthrough, lifeInsightOf, canAscend, reincarnationsDone, canReincarnate, ascensionGain, reincarnationGain } from './systems/progression'

@@ -2,7 +2,7 @@ import { auditReachability } from './progression-reachability.mjs'
 import { powerFixture, measurePower } from './power-scenarios.mjs'
 
 export function runPowerChecks(E, ok, close) {
-  for (const [realm, expected] of [[4, [false, false, false]], [5, [true, false, false]], [6, [true, true, false]], [7, [true, true, false]], [8, [true, true, true]]]) {
+  for (const [realm, expected] of [[4, [false, false, false]], [5, [true, false, false]], [6, [true, true, true]], [7, [true, true, true]], [8, [true, true, true]]]) {
     const r = auditReachability(realm)
     ok(`粒子设施可在境界 ${realm} 的来源和仓容内自举`, r.settled && r.state.realm === realm &&
       ['splitArray', 'polarizeArray', 'annihilationFurnace'].every((id, i) => !!r.state.buildings[id]?.count === expected[i]))

@@ -377,6 +377,7 @@ const CORE_TECHNIQUES = [
       storageRatio: {
         qi: 0.6, wood: 0.6, rock: 0.6, stone: 0.6, ore: 0.6, herb: 0.6,
         steel: 1, plank: 1, crystal: 1, spiritLiquid: 1, arrayBase: 1, talisman: 1, artifact: 1, pill: 1,
+        immortalForce: 1,
       },
     },
     needs: { realm: 7, upgrades: ['storeStoneArt', 'capacityRune'] },
@@ -688,6 +689,17 @@ const CORE_TECHNIQUES = [
     effects: { ratio: { qi: 0.5, insight: 0.25 }, processingPowerCapacity: 4 },
     upkeep: { qiEnergy: 0.1 },
     needs: { upgrades: ['energyApplication'] },
+  },
+  {
+    id: 'immortalJade',
+    name: '仙灵玉',
+    glyph: '玉',
+    kind: 'treasure',
+    cost: { insight: 3200, crystal: 40, immortalForce: 2, spiritArtifact: 4 },
+    refine: { insight: 9600, materials: { immortalForce: 2 }, materialFromLevel: 1 }, // 祭炼继续吃仙灵力，正合其题
+    desc: '仙灵力凝成的玉髓，稳住聚合之势、减少逸散。仙灵力产出 +25%。',
+    effects: { ratio: { immortalForce: 0.25 } },
+    needs: { upgrades: ['immortalDiscovery'] },
   },
   {
     // 玄铁工具一套三件：斧（伐木）、镐（采矿）、百炼（合璧）。
