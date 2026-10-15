@@ -273,7 +273,7 @@ export const actions = {
     return false
   },
   buyMax(id) {
-    const n = E.maxAffordable(state, id)
+    const n = E.maxAffordable(state, id, 500, derived.buildingCostDiscount)
     if (n <= 0) {
       toast('资源不足', 'bad')
       return 0

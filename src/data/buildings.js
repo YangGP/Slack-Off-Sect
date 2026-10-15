@@ -185,7 +185,8 @@ const CORE_BUILDINGS = [
     desc: '玄铁混灵土固壁、玄金储灵，凿山为府，聚灵成池。二十四名弟子分室静修，吐纳有得。',
     effects: { maxDisciples: 24, storage: { qi: 3000, wood: 1200 }, habitability: 6 },
     upkeepQi: 0.6, upkeepEnergy: 0.006, powerMult: 1.6,
-    needs: { upgrades: ['grottoArt'] },
+    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档，避免过早依赖玄金（见 docs/MATERIAL-RESEARCH.md §3.3）。
+    needs: { realm: 8, upgrades: ['grottoArt'] },
   },
 
   // ============ 宜居 ============
@@ -309,8 +310,8 @@ const CORE_BUILDINGS = [
     group: 'store',
     cost: { spiritMortar: 8, plank: 6, arrayBase: 2, herb: 500 },
     priceRatio: 1.22,
-    desc: '药架通风、玉匣封灵，灵草与丹药分格收存。普通药材多存，仙草与九转丹少量精藏。',
-    effects: { storage: { herb: 2000, immortalHerb: 80, pill: 1000, nineTurnPill: 100 } },
+    desc: '药架通风、玉匣封灵，灵草与丹药分格收存。普通药材多存，仙草、凝元丹与九转丹少量精藏。',
+    effects: { storage: { herb: 2000, immortalHerb: 80, pill: 1000, condensePill: 300, nineTurnPill: 100 } },
     // 金丹重排：仙草随凝链后移到元婴，药藏同档开放（金丹档的仓储由材料库前移承接）
     needs: { realm: 5, upgrades: ['alchemyArt', 'woodworking'] },
   },
@@ -336,7 +337,21 @@ const CORE_BUILDINGS = [
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
     effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000, immortalForce: 20000 }, habitability: 5 },
     upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
-    needs: { upgrades: ['grottoArt'] },
+    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档；中后期扩仓由《广储库》承接（见 docs/MATERIAL-RESEARCH.md §3.3）。
+    needs: { realm: 8, upgrades: ['grottoArt'] },
+  },
+  {
+    // 中后期仓储：填「玄库（炼虚）↔ 洞天（合体）」之间的扩仓空档（见 docs/MATERIAL-RESEARCH.md §3.3）。
+    // 造价只用炼虚可得建材（玄铁混灵土/秘银等），不含炼虚还炼不出的玄金。
+    id: 'grandStore',
+    name: '广储库',
+    glyph: '广',
+    group: 'store',
+    cost: { ironMortar: 30, mithril: 20, plank: 20, stone: 8000 }, // 待校准
+    priceRatio: 1.32,
+    desc: '广厦分格、铁架承重，大宗营造原料与粒子、仙灵力各有定额 —— 洞天之前的主力仓。',
+    effects: { storageAll: 4000, storage: { insight: 12000, qi: 50000, wood: 50000, stone: 50000, rock: 50000, ore: 50000, faith: 50000, qiParticle: 50000, yangParticle: 50000, yinParticle: 50000, qiEnergy: 15000, immortalForce: 12000 } },
+    needs: { realm: 7, upgrades: ['earthEssence'] }, // 待校准
   },
 
   // ============ 修行 ============
@@ -435,6 +450,19 @@ const CORE_BUILDINGS = [
     effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 }, ratio: { herb: 0.1 }, storage: { pill: 80 } },
     upkeep: { wood: 0.25 }, // 丹炉要一直添柴
     needs: { upgrades: ['alchemyArt'] },
+  },
+  {
+    // 丹道高阶设施：承接二级/三级丹的产能与仓容，使高阶丹不再只依赖一件法宝（见 docs/MATERIAL-RESEARCH.md §1.5）。
+    id: 'pillFurnace',
+    name: '丹鼎',
+    glyph: '鼎',
+    group: 'craft',
+    cost: { ironMortar: 6, plank: 12, ore: 500, insight: 2000 },
+    priceRatio: 1.28,
+    desc: '玄铁混灵土铸鼎、三才定位，凝元丹与九转丹皆由此出。高阶丹不再只靠一件法宝。',
+    effects: { craftBonusByResource: { condensePill: 0.12, nineTurnPill: 0.12 }, storage: { condensePill: 80, nineTurnPill: 20 } },
+    upkeep: { wood: 0.5 }, // 丹鼎火候更盛，耗柴更多
+    needs: { upgrades: ['alchemyEssence'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
     id: 'forge',
@@ -718,11 +746,11 @@ const CORE_BUILDING_DISPLAY_ORDER = [
   'hut', 'logHouse', 'mansion', 'caveDwelling',
   'livingCourt', 'communalHall', 'cleansingBath', 'quietGarden',
   // 仓储：基础原料、建材、专藏、洞天。
-  'granary', 'materialYard', 'warehouse', 'depot', 'mysticVault', 'medicineVault', 'arcaneVault', 'grotto',
+  'granary', 'materialYard', 'warehouse', 'depot', 'mysticVault', 'medicineVault', 'arcaneVault', 'grandStore', 'grotto',
   // 修行：研读、典籍收存、讲经观星、静修历练。
   'library', 'scriptureArchive', 'academy', 'observatory', 'meditationPool', 'trialTower',
   // 炼造：基础工坊与专业加工。
-  'workshop', 'alchemyRoom', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'crystalBench', 'temperFurnace',
+  'workshop', 'alchemyRoom', 'pillFurnace', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'crystalBench', 'temperFurnace',
   // 香火后接猎杀模块，再进入阵道和奇观。
   'gate', 'incenseCauldron', 'ancestorHall',
   'mountainArray', 'spiritLockArray',

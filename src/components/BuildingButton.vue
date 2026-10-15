@@ -36,7 +36,7 @@ const powerMult = computed(() => hasPower.value && powerMode.value === 'energy' 
 const runningCost = computed(() => !!props.meta.upkeep || hasPower.value)
 const throughputMult = computed(() => props.meta.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
-const price = computed(() => buildingCost(state, props.meta.id, 1))
+const price = computed(() => buildingCost(state, props.meta.id, 1, derived.buildingCostDiscount))
 const affordable = computed(() => canAfford(state, price.value))
 
 /**

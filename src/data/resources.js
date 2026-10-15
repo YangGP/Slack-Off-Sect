@@ -177,6 +177,18 @@ const CORE_RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    // 二级丹：补 pill 与 nineTurnPill 之间的断层（见 docs/MATERIAL-RESEARCH.md §1.2）。
+    // 承接元婴～化神的中阶研究费用与护道，使高阶丹不再只依赖一件法宝。
+    id: 'condensePill',
+    name: '凝元丹',
+    glyph: '丹',
+    color: '#ffca80',
+    baseMax: 30,
+    storageWeight: 0.03,
+    desc: '以元气凝形、君臣相济的二品灵丹，药力较丹药更纯，是元婴后常服的进境之物。',
+    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
     id: 'nineTurnPill',
     name: '九转丹',
     glyph: '丹',
@@ -349,7 +361,7 @@ export const RESOURCE_GROUPS = [
   { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'faith'] },
   { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
   { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
-  { id: 'crafted', name: '丹符器物', resources: ['pill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
+  { id: 'crafted', name: '丹符器物', resources: ['pill', 'condensePill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
   { id: 'hunting', name: '猎杀物资', resources: ['huntPreparation', 'beastHide', 'beastBone'] },
   { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'immortalForce', 'ascensionSeal'] },
 ]

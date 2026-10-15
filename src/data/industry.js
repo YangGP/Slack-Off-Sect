@@ -18,7 +18,7 @@ export const RECIPE_STATIONS = {
   forgeSpiritTreasure: 'forge', refineMithril: 'forge', smeltArcaneGold: 'forge',
   fuseCrystalSilver: 'forge',
   drawTalisman: 'inscription', assembleArrayBase: 'inscription', drawSpiritTalisman: 'inscription',
-  refinePill: 'alchemy', refineNineTurnPill: 'alchemy',
+  refinePill: 'alchemy', condensePill: 'alchemy', refineNineTurnPill: 'alchemy',
   condenseLiquid: 'condensation', condenseCrystal: 'condensation',
   growImmortalHerb: 'nursery',
 }

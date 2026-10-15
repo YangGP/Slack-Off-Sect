@@ -1695,7 +1695,7 @@ ok('境界面板渲染', html().includes('飞升'))
     state.realm = 5
     engine.recompute(state, derived)
     await new Promise(r => setTimeout(r, 50))
-    ok('换境后更新护道材料、供奉量并清空选择', text().includes('九转养神') && text().includes('晶符凝神') && text().includes('香火 600') && text().includes('渡劫成功率 55%') && !doc.querySelector('.main input[type="checkbox"]:checked'))
+    ok('换境后更新护道材料、供奉量并清空选择', text().includes('凝元养神') && text().includes('晶符凝神') && text().includes('香火 600') && text().includes('渡劫成功率 55%') && !doc.querySelector('.main input[type="checkbox"]:checked'))
   }
   state.realm = 4
   engine.recompute(state, derived)

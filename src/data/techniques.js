@@ -79,9 +79,10 @@ const CORE_TECHNIQUES = [
     name: '丹火纯青',
     glyph: '火',
     cost: { insight: 270, herb: 900, pill: 6 },
-    desc: '火候拿捏到分毫不差，出炉的成色都不一样。丹药与九转丹制作产出 +5%。',
-    effects: { craftBonusByResource: { pill: 0.05, nineTurnPill: 0.05 } },
-    needs: { upgrades: ['alchemyArt', 'forgeArt'], building: { id: 'alchemyRoom', count: 1 } },
+    desc: '火候拿捏到分毫不差，出炉的成色都不一样。丹药、凝元丹与九转丹制作产出 +5%。',
+    effects: { craftBonusByResource: { pill: 0.05, condensePill: 0.05, nineTurnPill: 0.05 } },
+    // 解耦炼器术：丹道工艺可独立推进（见 docs/MATERIAL-RESEARCH.md §1.5/§1.6）。
+    needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
     id: 'flowField',
@@ -354,7 +355,8 @@ const CORE_TECHNIQUES = [
     cost: { insight: 260, wood: 400, rock: 300 },
     desc: '横梁加铁箍、立柱下石础，同样一间仓房能多堆两成。灵气与基础物资上限 +20%。',
     effects: { storageRatio: { qi: 0.2, wood: 0.2, rock: 0.2, stone: 0.2, ore: 0.2, herb: 0.2 } },
-    needs: { realm: 3 },
+    // 起点补「库房 ≥ 1」：与《叠匣术》同口径，仓储技艺一律先有仓库再谈加固（见 docs/MATERIAL-RESEARCH.md §3.4）。
+    needs: { realm: 3, building: { id: 'warehouse', count: 1 } },
   },
   {
     id: 'storeStoneArt',
@@ -410,6 +412,17 @@ const CORE_TECHNIQUES = [
     desc: '山门迎香有一套礼数，香客走得顺，香使收得也稳。香使产出 +35%。',
     effects: { jobRatio: { incenseKeeper: 0.35 } },
     needs: { upgrades: ['incensePower'], building: { id: 'gate', count: 3 } },
+  },
+  {
+    // 香火线后期技艺：承接《愿力》研究，提供作用于渡劫的被动减死（见 docs/MATERIAL-RESEARCH.md §2.3）。
+    id: 'vowGuard',
+    name: '愿力护道',
+    glyph: '愿',
+    cost: { insight: 12000, faith: 6000 }, // 待校准
+    desc: '以愿力护持道体、消解天威。渡劫身死概率 −5 个百分点。',
+    effectDesc: '因此渡劫多一分护身之力：身死概率降低 5 个百分点。',
+    effects: { tribulationSafety: 0.05 }, // 待校准
+    needs: { upgrades: ['vowPower'] },
   },
 
   // ---------- 宜居度 ----------

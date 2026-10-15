@@ -63,7 +63,11 @@ export function breakthroughPreview(state, derived, options = {}) {
     for (const [res, amount] of Object.entries(aid.cost)) cost[res] = (cost[res] || 0) + amount
   }
   const chance = Math.min(rules.chanceCap, baseChance + aids.reduce((sum, aid) => sum + aid.bonus, 0))
-  const deathOnFailure = state.realm >= rules.deathRealm ? (rules.deathChances[state.realm] || 0) : 0
+  // 身死减免：本次选中的护道 deathReduce 之和 + 已学技艺的 tribulationSafety（被动）。
+  // 被动减免（《愿力护道》）作用于所有身死道消境界（金丹起）；预览与实际结算共用这处计算，保证同源。
+  const baseDeath = state.realm >= rules.deathRealm ? (rules.deathChances[state.realm] || 0) : 0
+  const deathReduce = aids.reduce((sum, aid) => sum + (aid.deathReduce || 0), 0) + Math.max(0, derived?.tribulationSafety || 0)
+  const deathOnFailure = Math.max(0, baseDeath - deathReduce)
   const regressionOnFailure = state.realm >= rules.regressionRealm ? 1 - deathOnFailure : 0
   const maxChance = Math.min(rules.chanceCap, baseChance + availableAids.reduce((sum, aid) => sum + aid.bonus, 0))
   return { baseChance, chance, maxChance, availableAids, cost, tribulation, deathOnFailure, regressionOnFailure,

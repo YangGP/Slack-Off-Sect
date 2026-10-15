@@ -5,6 +5,7 @@ import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/real
 import { breakthroughPreview, canAfford } from '@/game/engine'
 import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
 import { enough as enoughOf } from '@/game/pricing'
+import { aidExtraText } from '@/game/effectsText'
 import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
@@ -171,7 +172,7 @@ function reincarnate() {
         <div class="small" style="display: flex; gap: 16px; flex-wrap: wrap; padding-bottom: 6px">
           <label v-for="aid in preview.availableAids" :key="aid.id">
             <input v-model="aids[aid.id]" type="checkbox">
-            {{ aid.name }} +{{ fmtPercent(aid.bonus) }}：
+            {{ aid.name }} +{{ fmtPercent(aid.bonus) }}{{ aidExtraText(aid) }}：
             <span v-for="(amount, res) in aid.cost" :key="res" :class="{ lack: !enoughOf(state, res, amount) }" style="margin-right: 6px">{{ resourceName(res) }} {{ fmtCost(amount) }}</span>
           </label>
         </div>

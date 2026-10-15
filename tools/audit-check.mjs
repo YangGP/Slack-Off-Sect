@@ -15,21 +15,22 @@ for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
   for (const resource of Object.keys(floors)) assert.ok(CRAFT_MAP[id].cost[resource] > 0, `${id} 的模拟保留料 ${resource} 已不在实际配方中`)
 }
 
-// 复现合体材料容量不足：必须追踪尚未解锁的洞天扩仓链。
+// 复现合体材料容量不足：必须追踪尚未解锁的扩仓链。
+// v0.38 起中后期主扩仓由《广储库》(grandStore, realm 7) 承接，洞天退配合体档，故这里追踪广储库链。
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
 blockedState.realm = 8
 blockedState.buildings.depot = { count: 2, on: true }
-// 此夹具隔离灵气分子仓容；灵机必须足以覆盖洞天造价，由典籍库提供。
+// 此夹具隔离灵气分子仓容；灵机必须足以覆盖扩仓造价，由典籍库提供。
 blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MAP.scriptureArchive.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
 blockedState.resources.qiParticle = 100
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
 assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need === 120)
-assert.ok(blocked.expansions.some(b => b.id === 'grotto' && !b.unlocked))
+assert.ok(blocked.expansions.some(b => b.id === 'grandStore' && !b.unlocked))
 assert.equal(blocked.producer.id, 'splitArray')
 const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
-assert.ok(prerequisites.upgrades.has('grottoArt'))
-assert.ok(prerequisites.buildings.has('grotto'))
+assert.ok(prerequisites.upgrades.has('earthEssence'))
+assert.ok(prerequisites.buildings.has('grandStore'))
 
 // 满员、等待昂贵新住房时，凝晶研究的符箓和上游木料不能被常规建设抢走。
 const studying = createInitialState(), studyDerived = E.createDerived()

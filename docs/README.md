@@ -22,6 +22,7 @@
 | 文档 | 维护范围与状态 |
 | --- | --- |
 | [ROADMAP](ROADMAP.md) | 后续工作入口；具体方案与参数引用专题，避免重复维护 |
+| [MATERIAL-RESEARCH](MATERIAL-RESEARCH.md) | 丹道／香火／土木三条材料研究线的缺口与策划方向（未排期工作草案） |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 灵子、灵能与香火因果的世界观；仙灵力与粒子供能已实施 |
 | [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓猎杀已实现；深山、禁地与来袭关联等仍待扩展 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现；散修、邻宗与长期准备能力仍为草案 |

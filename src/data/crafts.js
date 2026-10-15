@@ -66,6 +66,19 @@ const CORE_CRAFTS = [
     needs: { building: { id: 'alchemyRoom', count: 1 } },
   },
   {
+    // 二级丹：补一/三品之间的断层（见 docs/MATERIAL-RESEARCH.md §1.2/§1.4）。
+    id: 'condensePill',
+    name: '凝元炼丹',
+    out: 'condensePill',
+    amount: 1,
+    tier: 2,
+    primary: ['pill'],
+    cost: { pill: 20, immortalHerb: 2, qi: 300 },
+    time: 4,
+    desc: '以丹药为基、仙草引元，文武再炼三遍，凝成二品凝元丹。',
+    needs: { realm: 5, upgrades: ['alchemyEssence'], building: { id: 'alchemyRoom', count: 1 } },
+  },
+  {
     id: 'sawPlank',
     name: '刨木成板',
     out: 'plank',
@@ -158,10 +171,13 @@ const CORE_CRAFTS = [
     amount: 1,
     tier: 2,
     primary: ['pill'],
-    cost: { pill: 100, immortalHerb: 5, qi: 500 },
+    cost: { condensePill: 20, immortalHerb: 5, qi: 500 },
     time: 6,
-    desc: '九转丹炉里火候九变，一炉只出数枚。',
-    needs: { upgrade: 'alchemyCauldron' },
+    desc: '丹鼎里火候九变，一炉只出数枚。',
+    // 解锁由法宝改为「研究 + 建筑」：去掉 upgrade: alchemyCauldron（见 docs/MATERIAL-RESEARCH.md §1.4）。
+    // 境界门槛取化神（realm 6，待校准）：使目标炼虚(7) 的护道可在化神备齐三品丹，
+    // 与「三品丹用于炼虚～渡劫护道」的定位一致（原稿建议 7 会和护道用法冲突）。
+    needs: { realm: 6, upgrades: ['alchemyEssence'], building: { id: 'pillFurnace', count: 1 } },
   },
   {
     id: 'drawSpiritTalisman',
@@ -277,7 +293,7 @@ export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
+export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]
