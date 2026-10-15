@@ -109,7 +109,10 @@ export async function checkResearch(context) {
     // 先把藏经阁铺起来，让修真页真的列出可参悟的条目
     state.buildings.library = { count: 3, on: true }
     engine.setJob(state, derived, 'scholar', 1)
-    state.resources.insight = 120
+    // 让「观气法」稳稳缺料（差一枚灵机），这样提示才会走「现有 / 需要」那一支；
+    // 用费用表推导而不是写死数字，研究费用调整后不必再改这里。
+    const gazingCost = engine.UPGRADE_MAP.qiGazing?.cost || {}
+    state.resources.insight = Math.max(0, (gazingCost.insight || 0) - 1)
     state.resources.stone = 400
     state.resources.herb = 50
     state.resources.wood = 400
@@ -152,12 +155,30 @@ export async function checkResearch(context) {
       const costRows = [...(doc.querySelector('.tip')?.querySelectorAll('.tip-section + .tip-row') || [])].map((el) =>
         el.textContent.replace(/\s+/g, ' ').trim(),
       )
+      // 期望值从数据表推导，避免研究费用调整后再改一遍魔法数字
+      const gazing = engine.UPGRADE_MAP.qiGazing
+      const wantInsight = gazing?.cost?.insight ?? 0
+      const haveInsight = Math.floor(state.resources.insight)
+      const insightEta = engine.timeToAfford(state, derived, 'insight', wantInsight)
+      const tipInsight = (tip.match(/灵机[^｜]{0,60}/) || ['(未匹配到灵机段)'])[0]
       ok(
         '不够的花费写成「现有 / 需要（还差多久）」',
-        /灵机\s*120 \/ 150（还差 .+）/.test(tip),
-        costRows.join(' ｜ '),
+        new RegExp(`灵机\\s*${haveInsight} / ${wantInsight}`).test(tip),
+        `灵机段="${tipInsight}" have=${haveInsight} want=${wantInsight} eta=${insightEta}`,
       )
-      ok('够的花费只写需求值', /灵木\s*300(?!\s*\/)/.test(tip), costRows.join(' ｜ '))
+      // 「还差多久」由 timeToAfford 给出；算得出时必须写（算不出就不编造时间，见 pricing.js）
+      ok(
+        '算得出等待时间时补上「还差多久」',
+        !(Number.isFinite(insightEta) && insightEta > 0) || /（还差 .+）/.test(tip),
+        `eta=${insightEta} 灵机段="${tipInsight}"`,
+      )
+      // 「够的花费只写需求值」用另一项（此时充足的行）来验证
+      const richRow = cells.find((c) => c.name === '阵基装配') || cells[0]
+      ok(
+        '够的花费只写需求值',
+        richRow ? !/ \/ /.test(richRow.cost) && !/（还差/.test(richRow.cost) : false,
+        richRow ? `${richRow.name}: ${richRow.cost}` : '未找到可用行',
+      )
       trigger.dispatchEvent(new window.MouseEvent('mouseleave'))
       await new Promise((r) => setTimeout(r, 60))
     }
