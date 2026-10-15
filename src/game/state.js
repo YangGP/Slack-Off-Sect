@@ -53,6 +53,8 @@ export function createInitialState(now = Date.now()) {
     craftOrders: {},
     industryVersion: 1,
     qiLiquidVersion: 2,
+    alchemyProgressionVersion: 1,
+    legacyNineTurnPill: false,
     scriptureArchiveVersion: 1,
     beastRetirementVersion: 1,
 
@@ -191,6 +193,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.craftTimers = {}
   state.craftOrders = {}
   state.industryVersion = 1
+  state.alchemyProgressionVersion = 1
+  state.legacyNineTurnPill = false
   state.scriptureArchiveVersion = 1
   state.autoCraft = {}
   state.craftTargets = {}

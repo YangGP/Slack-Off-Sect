@@ -43,8 +43,7 @@
 可只读重算任意导出存档：
 
 ```powershell
-npx vite build --ssr tools/storage-pacing-audit.mjs --outDir .smoke-storage-pacing
-node .smoke-storage-pacing/storage-pacing-audit.js '存档路径.txt'
+npm run audit:save -- '存档路径.txt'
 ```
 
 脚本列出仓容、自然净产出、填仓时间、超限库存、下一座库房造价、制作收益及下一境基础费用是否可容纳。

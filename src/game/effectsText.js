@@ -143,8 +143,6 @@ export function describeEffects(ef) {
   if (ef.breakthroughDiscount) push('破境花费', `-${fmtPercent(ef.breakthroughDiscount)}`, 'good')
   // 身死减免（香火线《愿力护道》等）：作用于所有身死道消境界，与 progression 的 deathReduce 同源。
   if (ef.tribulationSafety) push('身死概率', `-${fmtPercent(ef.tribulationSafety)}`, 'good')
-  // 建筑造价折扣（《营造技艺》）：只作用于建筑建造价。
-  if (ef.buildingCostDiscount) push('建筑造价', `-${fmtPercent(ef.buildingCostDiscount)}`, 'good')
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')

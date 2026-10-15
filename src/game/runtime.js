@@ -3,6 +3,7 @@ import { createInitialState } from './state'
 import { setGameContext, resetRuntimeCounters, runtimeCounters } from './context'
 import { createSaveRepository, restoreSave } from './save'
 import { CONFIG } from '@/data/config'
+import { throwIfSimulationCancelled } from './systems/simulation'
 
 /**
  * 创建无 Vue/DOM 依赖的游戏实例。
@@ -11,10 +12,12 @@ import { CONFIG } from '@/data/config'
 export function createGame({ state, derived = engine.createDerived(), snapshotState = null,
   now = () => Date.now(), random = () => Math.random() } = {}) {
   state ||= createInitialState(now())
+  let stateRevision = 0
   setGameContext(state, { now, random })
   engine.recompute(state, derived)
 
   function replaceState(next) {
+    stateRevision++
     for (const key of Object.keys(state)) if (!(key in next)) delete state[key]
     Object.assign(state, next)
     resetRuntimeCounters(state)
@@ -40,6 +43,24 @@ export function createGame({ state, derived = engine.createDerived(), snapshotSt
     return result
   }
 
+  async function simulateOfflineAsync(seconds, options = {}) {
+    const revision = stateRevision
+    const opts = { startAt: state.lastTickAt, ...options,
+      isCancelled: () => revision !== stateRevision || options.isCancelled?.() }
+    throwIfSimulationCancelled(opts)
+    const working = snapshotState ? snapshotState(state) : structuredClone(state)
+    const workingDerived = engine.createDerived()
+    setGameContext(working, { now, random })
+    Object.assign(runtimeCounters(working), runtimeCounters(state))
+    const result = await engine.simulateOfflineAsync(working, workingDerived, seconds, opts)
+    // 读档、重开或停止循环后，旧副本不能覆盖新状态。
+    throwIfSimulationCancelled(opts)
+    Object.assign(state, working)
+    Object.assign(runtimeCounters(state), runtimeCounters(working))
+    engine.recompute(state, derived)
+    return result
+  }
+
   return {
     state, derived, now,
     recompute: () => engine.recompute(state, derived),
@@ -48,6 +69,17 @@ export function createGame({ state, derived = engine.createDerived(), snapshotSt
     reset: () => replaceState(createInitialState(now())),
     tick: (seconds, options = {}) => engine.tick(state, derived, seconds, { startAt: state.lastTickAt, ...options }),
     simulateOffline,
+    simulateOfflineAsync,
+    async advanceAsync(seconds, options = {}) {
+      if (!Number.isFinite(seconds) || seconds <= 0) return null
+      const startAt = options.startAt ?? now() - seconds * 1000
+      const cap = (derived.offlineHours || CONFIG.OFFLINE_CAP_HOURS) * 3600
+      const result = await simulateOfflineAsync(Math.min(seconds, cap), { ...options, startAt })
+      state.buffs = state.buffs.filter(buff => buff.until > now())
+      engine.settleExpiredThreat(state, derived)
+      engine.recompute(state, derived)
+      return result
+    },
     advance(seconds, { startAt = now() - seconds * 1000 } = {}) {
       if (!Number.isFinite(seconds) || seconds <= 0) return null
       if (seconds <= 3) {
@@ -98,15 +130,22 @@ export function createRuntime({ game = createGame(), repository = createSaveRepo
     last = now
     if (seconds <= 0.001 || repository.loadError) return
     const current = revision
-    const run = () => {
+    const finish = report => {
       if (current !== revision) return
-      const report = game.advance(seconds, { startAt })
       onAdvance(seconds, report)
       autosaveSeconds += seconds
       if (game.state.settings.autosave && autosaveSeconds >= CONFIG.AUTOSAVE_MS / 1000) {
         autosaveSeconds = 0
         save()
       }
+    }
+    const run = (options = {}) => {
+      if (current !== revision) return
+      if (deferAdvance && seconds > 3) {
+        return game.advanceAsync(seconds, { ...options, startAt,
+          isCancelled: () => current !== revision || options.isCancelled?.() }).then(finish)
+      }
+      return finish(game.advance(seconds, { startAt }))
     }
     if (deferAdvance && seconds > 3) {
       advancing = true

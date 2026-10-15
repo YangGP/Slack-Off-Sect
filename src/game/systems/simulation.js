@@ -1,6 +1,6 @@
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
-import { recompute } from './economy'
+import { recompute, canReuseEconomy } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
 import { runModuleTicks, nextModuleDeadline } from '@/game/moduleRegistry'
@@ -48,7 +48,13 @@ export function tick(state, derived, dt, opts = {}) {
 
 /** 同一时间轴处理所有期限；到期点切步，避免整步套用已过期加成。 */
 export function advanceTicks(state, derived, seconds, opts) {
+  createTickRunner(state, derived, seconds, opts).runBatch()
+}
+
+/** 同步与异步共用同一条时间轴；批次只暂停执行，不额外切分游戏步长。 */
+function createTickRunner(state, derived, seconds, opts) {
   let now = opts.startAt ?? gameNow(state)
+  const start = now
   const end = now + seconds * 1000
   // 大步长只用于没有人口、维护、加工与灵能逸散的稳定生产。
   // 其余场景逐秒结算，避免步内供给、修炼和加工状态变化被提前或延后。
@@ -62,38 +68,51 @@ export function advanceTicks(state, derived, seconds, opts) {
   const maxSliceMs = seconds > CONFIG.OFFLINE_COARSE_AFTER_SECONDS
     && stableProduction ? CONFIG.MAX_SLICE_SECONDS * 1000
     : CONFIG.TICK_SLICE_MS
-  return withGameContext(state, { now: () => now }, () => {
-    while (end - now > 1e-6) {
-      let next = Math.min(end, now + maxSliceMs)
-      // 与逐秒参考结算相同：下一次逐秒采样进入新节气时切步。
-      const termSeconds = CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS
-      const calendarSeconds = state.totalDays * CALENDAR.DAY_SECONDS
-      const untilTerm = termSeconds - (calendarSeconds % termSeconds)
-      const termSteps = Math.max(1, Math.ceil(untilTerm / (CONFIG.TICK_SLICE_MS / 1000) - 1e-9))
-      next = Math.min(next, now + termSteps * CONFIG.TICK_SLICE_MS)
-      for (const buff of state.buffs) {
-        if (buff.until > now && buff.until < next) next = buff.until
-      }
-      const deadline = state.pendingChoice?.deadline
-      if (deadline > now && deadline < next) next = deadline
-      // 可选模块的期限（如猎杀任务归队）在到期处切步：在线与离线都在同一边界结算
-      const moduleDeadline = nextModuleDeadline(state, now)
-      if (moduleDeadline < next) next = moduleDeadline
-      tickStep(state, derived, (next - now) / 1000, opts)
-      now = next
+  let reuseEconomy = false
+  let finished = false
+  return {
+    get done() { return end - now <= 1e-6 },
+    get completedSeconds() { return end - now <= 1e-6 ? seconds : Math.min(seconds, (now - start) / 1000) },
+    runBatch(shouldYield = () => false) {
+      return withGameContext(state, { now: () => now, economyDetails: !opts.offline || opts.economyDetails === true }, () => {
+        while (end - now > 1e-6) {
+          let next = Math.min(end, now + maxSliceMs)
+          // 与逐秒参考结算相同：下一次逐秒采样进入新节气时切步。
+          const termSeconds = CALENDAR.DAYS_PER_TERM * CALENDAR.DAY_SECONDS
+          const calendarSeconds = state.totalDays * CALENDAR.DAY_SECONDS
+          const untilTerm = termSeconds - (calendarSeconds % termSeconds)
+          const termSteps = Math.max(1, Math.ceil(untilTerm / (CONFIG.TICK_SLICE_MS / 1000) - 1e-9))
+          next = Math.min(next, now + termSteps * CONFIG.TICK_SLICE_MS)
+          for (const buff of state.buffs) {
+            if (buff.until > now && buff.until < next) next = buff.until
+          }
+          const deadline = state.pendingChoice?.deadline
+          if (deadline > now && deadline < next) next = deadline
+          // 可选模块的期限（如猎杀任务归队）在到期处切步：在线与离线都在同一边界结算
+          const moduleDeadline = nextModuleDeadline(state, now)
+          if (moduleDeadline < next) next = moduleDeadline
+          tickStep(state, derived, (next - now) / 1000, opts, reuseEconomy)
+          reuseEconomy = opts.offline === true && opts.cacheEconomy !== false
+          now = next
+          if (shouldYield()) break
+        }
+        if (end - now <= 1e-6 && !finished) {
+          state.buffs = state.buffs.filter(buff => buff.until > now)
+          settleExpiredThreat(state, derived)
+          state.lastTickAt = now
+          withGameContext(state, { economyDetails: true }, () => recompute(state, derived))
+          finished = true
+        }
+      })
     }
-    state.buffs = state.buffs.filter(buff => buff.until > now)
-    settleExpiredThreat(state, derived)
-    state.lastTickAt = now
-    recompute(state, derived)
-  })
+  }
 }
 
-export function tickStep(state, derived, dt, opts) {
+export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   const { offline = false, events = true } = opts
   const cap = dt > CONFIG.MAX_STEP_SECONDS ? CONFIG.MAX_STEP_SECONDS : dt
-  autoAssignTalentJobs(state)
-  recompute(state, derived, cap)
+  const assignmentsChanged = autoAssignTalentJobs(state)
+  if (!reuseEconomy || assignmentsChanged || !canReuseEconomy(state, derived, cap)) recompute(state, derived, cap)
   for (const member of state.disciples.members) cultivateDisciple(member, cap, derived.trainingActive)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
 
@@ -195,7 +214,9 @@ export function tickStep(state, derived, dt, opts) {
 
   // 5) 自动制作：勾了「自动」的配方每 time 秒一份，离线也照做（挂着就一直做）
   //    材料消耗可能使维护设施断供，收徒和事件结算前必须刷新宜居度与灾害防护。
-  if (runAutoCraft(state, derived, cap)) recompute(state, derived, cap)
+  if (runAutoCraft(state, derived, cap) && (!reuseEconomy || !canReuseEconomy(state, derived, cap))) {
+    recompute(state, derived, cap)
+  }
 
   // 6) 历法推进：天数累加
   //    一天 3 秒（见 CALENDAR.DAY_SECONDS），所以 1 节气只有 45 秒 —— 节气变化**不写纪事**
@@ -253,10 +274,50 @@ export function simulateOffline(state, derived, seconds, opts = {}) {
   const before = { ...state.resources }
   const disciplesBefore = state.disciples.total
   advanceTicks(state, derived, cap, { ...opts, offline: true, events: false })
+  return offlineSummary(state, before, disciplesBefore, cap)
+}
+
+function offlineSummary(state, before, disciplesBefore, cap) {
   const gains = {}
   for (const r of RESOURCES) {
     const diff = (state.resources[r.id] || 0) - (before[r.id] || 0)
     if (diff > 0.01) gains[r.id] = diff
   }
   return { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
+}
+
+export function throwIfSimulationCancelled(opts) {
+  if (opts.signal?.aborted || opts.isCancelled?.()) {
+    const error = new Error('离线结算已取消')
+    error.name = 'AbortError'
+    throw error
+  }
+}
+
+/** 每批最多计算约8ms，随后让出主线程；仍逐秒处理所有游戏结算边界。 */
+export async function simulateOfflineAsync(state, derived, seconds, opts = {}) {
+  throwIfSimulationCancelled(opts)
+  const cap = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
+  if (cap <= 0) return { seconds: 0, gains: {}, disciples: 0 }
+  const before = { ...state.resources }
+  const disciplesBefore = state.disciples.total
+  const yieldControl = opts.yieldControl || (() => new Promise(resolve => setTimeout(resolve, 0)))
+  const budget = Number.isFinite(opts.budgetMs) ? Math.max(1, opts.budgetMs) : 8
+  const maxBatchSteps = Number.isInteger(opts.maxBatchSteps) ? Math.max(1, opts.maxBatchSteps) : 256
+  const progress = completedSeconds => opts.onProgress?.({ completedSeconds, totalSeconds: cap,
+    percent: Math.min(100, completedSeconds / cap * 100) })
+  progress(0)
+  await yieldControl()
+  throwIfSimulationCancelled(opts)
+  const runner = createTickRunner(state, derived, cap, { ...opts, offline: true, events: false })
+  while (!runner.done) {
+    const batchStart = performance.now()
+    let steps = 0
+    runner.runBatch(() => ++steps >= maxBatchSteps || performance.now() - batchStart >= budget)
+    throwIfSimulationCancelled(opts)
+    progress(runner.completedSeconds)
+    if (!runner.done) await yieldControl()
+    throwIfSimulationCancelled(opts)
+  }
+  return offlineSummary(state, before, disciplesBefore, cap)
 }

@@ -24,7 +24,7 @@ const seed = Number(process.argv[3] || 1)
 const hours = Number(process.argv[4] || 72)
 const selection = process.argv[5] || 'full'
 const outcome = process.argv[6] || 'success'
-if (!['baseline', 'naked', 'aided', 'focus', 'power', 'rush', 'rush-naked', 'rush-aided'].includes(mode) || !Number.isInteger(seed) || seed < 1 || !Number.isFinite(hours) || hours <= 0 || hours > 168
+if (!['baseline', 'naked', 'aided', 'focus', 'power', 'rush', 'rush-naked', 'rush-aided'].includes(mode) || !Number.isInteger(seed) || seed < 1 || seed > 0xffffffff || !Number.isFinite(hours) || hours <= 0 || hours > 168
   || !['full', 'none', 'pill', 'equipment', 'faith'].includes(selection) || !['success', 'regression', 'death'].includes(outcome)) throw Error('Invalid arguments')
 let now = 1791676800000, rngState = seed >>> 0
 const random = () => {

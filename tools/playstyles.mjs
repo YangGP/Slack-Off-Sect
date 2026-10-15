@@ -3,7 +3,7 @@
  * Away time only runs production, arrivals and enabled crafting, with the real offline cap.
  * Random events are disabled for reproducible comparisons.
  */
-import { createInitialState } from '../src/game/state.js'
+import { createAuditContext } from './lib/audit-context.mjs'
 import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 import { REALMS } from '../src/data/realms.js'
@@ -20,7 +20,8 @@ const profiles = [
 console.log(`比较 ${hours} 小时：共同开局15分钟，每次上线2分钟、每5秒决策；离线不购买/研究/破境，无随机事件。`)
 console.log('模式       境界     弟子  建筑  参悟  操作分钟  离线截断小时')
 for (const profile of profiles) {
-  const state = createInitialState()
+  const clock = createAuditContext()
+  const { state } = clock
   const derived = E.createDerived()
   E.recompute(state, derived)
   const bot = createBot(state, derived)
@@ -30,7 +31,7 @@ for (const profile of profiles) {
   const visit = (seconds) => {
     bot.act()
     for (let t = 1; t <= seconds; t++) {
-      E.tick(state, derived, 1, { events: false })
+      E.tick(state, derived, 1, { events: false, startAt: clock.advance(1) })
       if (t % 5 === 0) bot.act()
     }
     elapsed += seconds
@@ -40,7 +41,8 @@ for (const profile of profiles) {
   while (elapsed < total) {
     const away = Math.min(profile.interval - 120, total - elapsed)
     const simulated = Math.min(away, derived.offlineHours * 3600)
-    E.simulateOffline(state, derived, simulated)
+    const startAt = clock.advance(away) + (away - simulated) * 1000
+    E.simulateOffline(state, derived, simulated, { startAt })
     lost += away - simulated
     elapsed += away
     if (elapsed < total) visit(Math.min(120, total - elapsed))

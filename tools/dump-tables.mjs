@@ -84,9 +84,8 @@ const effects = (e) => {
   if (e.ascendBonus) out.push(`仙缘 +${pct(e.ascendBonus)}`)
   if (e.arrivalBonus) out.push(`弟子前来间隔 −${pct(e.arrivalBonus)}`)
   if (e.breakthroughDiscount) out.push(`破境 −${pct(e.breakthroughDiscount)}`)
-  // 渡劫身死减免（香火线《愿力护道》）与建筑造价折扣（《营造技艺》）：与 effectsText.js 同步。
+  // 渡劫身死减免（香火线《愿力护道》）：与 effectsText.js 同步。
   if (e.tribulationSafety) out.push(`身死概率 −${pct(e.tribulationSafety)}`)
-  if (e.buildingCostDiscount) out.push(`建筑造价 −${pct(e.buildingCostDiscount)}`)
   if (e.offlineHours) out.push(`离线 +${e.offlineHours}h`)
   if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')

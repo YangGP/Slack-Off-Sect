@@ -1,8 +1,6 @@
 import { createInitialState, normalizeState } from '../src/game/state.js'
 import { newDisciple, cultivationRate, cultivationRequired, cultivateDisciple } from '../src/data/disciples.js'
-import { TALENTS, TALENT_MAP, TALENT_TIERS, TALENT_RULES, birthTalents, rollTalent,
-  normalizeTalents, talentBonus, talentMatches, gainBreakthroughTalent, upgradeTalent, talentValue,
-  talentDescription } from '../src/data/talents.js'
+import { TALENTS, TALENT_MAP, TALENT_TIERS, birthTalents, rollTalent, normalizeTalents, talentBonus, talentMatches, gainBreakthroughTalent, upgradeTalent, talentValue, talentDescription } from '../src/data/talents.js'
 import { exportJson, parseImport } from '../src/game/save.js'
 
 export function runTalentChecks(E, ok, close) {

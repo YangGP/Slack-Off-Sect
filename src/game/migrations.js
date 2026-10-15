@@ -78,9 +78,12 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   merged.qiLiquidVersion = 2
   // v0.38：九转炼丹的前置由法宝 alchemyCauldron 改为研究 alchemyEssence + 丹鼎。
   // 为避免已炼成九转丹炉的旧档回锁，补发 alchemyEssence（不重复收费）；无该法宝则不动。
-  if (merged.upgrades.alchemyCauldron && !merged.upgrades.alchemyEssence) {
+  if (state.alchemyProgressionVersion !== 1 && merged.upgrades.alchemyCauldron) {
     merged.upgrades.alchemyEssence = true
+    // 原配方仅需九转丹炉。保留本世解锁资格，不赠送有仓储和增产效果的丹鼎。
+    merged.legacyNineTurnPill = true
   }
+  merged.alchemyProgressionVersion = 1
   merged.achievements = state.achievements || {}
   merged.craftProgress = state.craftProgress || {}
   merged.autoCraft = state.autoCraft || {}

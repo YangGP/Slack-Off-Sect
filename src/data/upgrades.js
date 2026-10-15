@@ -587,16 +587,15 @@ const CORE_CULTIVATION = [
     // 造价含玄钢，而玄钢要「炼器术 → 淬玄工艺」才产得出：列进前置，避免先露面却找不到来源。
     needs: { upgrades: ['earthEssence', 'steelWorking'] },
   },
-  // 土木族自有工艺节点：承接「降低建筑造价」这一新机制（见 docs/MATERIAL-RESEARCH.md §3.1），故进修真族。
+  // 土木族工艺节点；暂时只保留混灵土与玄铁混灵土的制作增益。
   {
     id: 'masonryArt',
     name: '营造技艺',
     glyph: '艺',
     cost: { insight: 1500, plank: 20, ore: 400 }, // 待校准
-    desc: '料有定尺、工有定法，营造技艺既精，殿宇物料便省下一成。「降低建筑造价」为新机制（待校准）。',
-    effectDesc: '因此建造成本降低，混灵土与玄铁混灵土也浇筑得更省。',
-    // buildingCostDiscount 为建筑造价折扣新字段（0.05 = 5%），只作用于建筑建造价（见 core.js 的 buildingPriceAt）。
-    effects: { buildingCostDiscount: 0.05, craftBonusByResource: { spiritMortar: 0.1, ironMortar: 0.1 } },
+    desc: '料有定尺、工有定法，调配与浇筑愈发熟练，同样的原料可制成更多建材。',
+    effectDesc: '混灵土与玄铁混灵土制作产出提高。',
+    effects: { craftBonusByResource: { spiritMortar: 0.1, ironMortar: 0.1 } },
     needs: { upgrades: ['earthArt', 'woodworking'], building: { id: 'warehouse', count: 1 } },
   },
 
@@ -649,11 +648,12 @@ const CORE_CULTIVATION = [
     id: 'seekTalents',
     name: '招贤纳士',
     glyph: '贤',
-    cost: { insight: 4000, faith: 800, stone: 1200 }, // 待校准
+    cost: { insight: 1000, faith: 150, stone: 400 },
     desc: '贴榜悬赏、以礼相聘，贤才自会下山。可在弟子页切换「主动招募」，按礼聘档位花费资源招人。',
     effectDesc: '档位越高，花费越多、越容易招到高品级天赋的弟子，入宗起点境界也越接近宗门。',
     effects: { recruitMode: true },
-    needs: { upgrades: ['recruitDrive', 'talentAssignment'] },
+    // 金丹即可礼聘人才，不经过阵基装配、讲经法、香火志和广开山门。
+    needs: { realm: 4, upgrades: ['incenseVow', 'talentAssignment'], building: { id: 'gate', count: 1 } },
   },
   {
     id: 'mentorship',

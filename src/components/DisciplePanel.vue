@@ -245,15 +245,26 @@ function commitJob(jobId, event) {
       </div>
 
       <div v-if="derived.recruitModeUnlocked" class="recruit-block">
-        <div class="btn-row">
-          <span class="small dim">招募方式</span>
-          <button class="btn" :aria-pressed="!recruitManual" @click="actions.setRecruitMode('auto')">自动前来</button>
-          <button class="btn" :aria-pressed="recruitManual" @click="actions.setRecruitMode('manual')">主动招募</button>
+        <div class="recruit-header">
+          <span class="recruit-heading">招募方式</span>
+          <div class="recruit-mode">
+            <span :class="{ selected: !recruitManual }">自动前来</span>
+            <button
+              class="recruit-switch"
+              type="button"
+              role="switch"
+              aria-label="主动招募"
+              :aria-checked="recruitManual"
+              @click="actions.setRecruitMode(recruitManual ? 'auto' : 'manual')"
+            ><span class="recruit-switch-thumb" aria-hidden="true"></span></button>
+            <span :class="{ selected: recruitManual }">主动招募</span>
+          </div>
         </div>
-        <div v-if="recruitManual" class="btn-row recruit-tiers">
+        <div v-if="recruitManual" class="recruit-tiers">
           <HoverTip v-for="card in recruitCards" :key="card.tierId" :title="`礼聘·${card.tier.name}`" :description="card.tier.desc">
-            <button class="btn" :disabled="!card.ready || !card.affordable" @click="actions.recruitDisciple(card.tierId)">
-              {{ card.tier.name }} · {{ costText(card.cost) }}
+            <button class="btn recruit-tier" :disabled="!card.ready || !card.affordable" @click="actions.recruitDisciple(card.tierId)">
+              <span class="recruit-tier-title"><span class="recruit-glyph" aria-hidden="true">{{ card.tier.glyph }}</span>{{ card.tier.name }}</span>
+              <span class="recruit-tier-cost">{{ costText(card.cost) }}</span>
             </button>
             <template #tip>
               <div class="tip-row"><span class="k">起点境界</span><span class="v">{{ card.realmRangeText }}</span></div>
@@ -404,10 +415,121 @@ function commitJob(jobId, event) {
   margin-bottom: 8px;
 }
 .recruit-block {
-  margin-top: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  background: #fcfbf8;
+}
+.recruit-header,
+.recruit-mode,
+.recruit-tier-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.recruit-header {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.recruit-heading {
+  font-size: 13px;
+  font-weight: 600;
+}
+.recruit-mode {
+  font-size: 13px;
+  color: var(--dim);
+}
+.recruit-mode .selected {
+  color: var(--text);
+  font-weight: 600;
+}
+.recruit-switch {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 26px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 20px;
+  background: #e5e5e5;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.recruit-switch[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.recruit-switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  transition: transform 160ms ease;
+}
+.recruit-switch[aria-checked='true'] .recruit-switch-thumb {
+  transform: translateX(18px);
+}
+.recruit-switch:hover {
+  border-color: var(--text);
+}
+.recruit-switch:focus-visible,
+.recruit-tier:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .recruit-tiers {
-  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.recruit-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  text-align: left;
+  border-color: var(--line);
+}
+.recruit-tier:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: #fff9f0;
+}
+.recruit-tier-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.recruit-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid currentColor;
+  color: var(--accent);
+  font-size: 12px;
+}
+.recruit-tier-cost {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+.recruit-tier:disabled .recruit-glyph,
+.recruit-tier:disabled .recruit-tier-cost {
+  color: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .recruit-switch,
+  .recruit-switch-thumb {
+    transition: none;
+  }
 }
 .disciple-head {
   display: flex;

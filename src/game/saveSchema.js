@@ -13,8 +13,8 @@ export const SAVE_VERSION = 2
 const CORE_SAVE_FIELDS = [
   'version', 'createdAt', 'lastTickAt', 'lastSaveAt', 'resources', 'seen', 'peak',
   'disciples', 'arrivalTimer', 'totalDays', 'treasureLevels', 'craftTimers', 'craftOrders',
-  'industryVersion', 'qiLiquidVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
-  'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm',
+  'industryVersion', 'qiLiquidVersion', 'alchemyProgressionVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
+  'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',
 ]
@@ -58,6 +58,7 @@ const sanitizeModuleFlags = (raw) => Object.fromEntries(
 export function validateState(state, fresh) {
   const result = Object.fromEntries(SAVE_FIELDS.map(key => [key, state[key] ?? fresh[key]]))
   result.version = SAVE_VERSION
+  result.legacyNineTurnPill = result.legacyNineTurnPill === true
   // 先定下模块开关：模块切片归一化要据此判断「关闭时丢弃活动状态」
   const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {

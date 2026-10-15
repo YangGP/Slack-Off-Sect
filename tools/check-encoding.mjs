@@ -7,7 +7,7 @@
  *
  * 用法：npm run check:encoding   （已挂进 npm run check）
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, lstatSync } from 'node:fs'
 import { join } from 'node:path'
 
 const SKIP_DIRS = new Set([
@@ -17,6 +17,7 @@ const SKIP_DIRS = new Set([
   'dist-ssr',
   '.vite',
   '.bundle-review',
+  'cat-zh-master',
 ])
 const TEXT = /\.(js|mjs|cjs|vue|css|html|json|md|txt|yml|yaml)$/i
 const ROOT_DOTFILES = new Set(['.gitignore', '.gitattributes', '.editorconfig'])
@@ -28,7 +29,9 @@ function walk(dir) {
   for (const name of readdirSync(dir)) {
     if (SKIP_DIRS.has(name) || name.startsWith('.smoke')) continue
     const p = join(dir, name)
-    if (statSync(p).isDirectory()) {
+    const stat = lstatSync(p)
+    if (stat.isSymbolicLink()) continue
+    if (stat.isDirectory()) {
       walk(p)
       continue
     }

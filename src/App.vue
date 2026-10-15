@@ -57,8 +57,18 @@ const status = computed(() => ui.toast?.text || '')
 
 <template>
   <div v-if="ui.offlineLoading" class="offline-loading" role="status" aria-live="polite">
-    <span class="loading-spinner" aria-hidden="true"></span>
-    <span>正在结算挂机收益…</span>
+    <div class="offline-loading-content">
+      <div class="offline-loading-head">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span>正在结算挂机收益…</span>
+        <span class="offline-loading-percent">{{ Math.floor(ui.offlineProgress.percent) }}%</span>
+      </div>
+      <progress class="offline-progress" aria-label="离线结算进度" :value="ui.offlineProgress.percent" max="100">{{ Math.floor(ui.offlineProgress.percent) }}%</progress>
+      <div class="offline-loading-detail">
+        <template v-if="ui.offlineProgress.totalSeconds">已结算 {{ fmtTime(ui.offlineProgress.completedSeconds) }} / {{ fmtTime(ui.offlineProgress.totalSeconds) }}</template>
+        <template v-else>正在准备结算…</template>
+      </div>
+    </div>
   </div>
   <div class="wrap" :inert="ui.offlineLoading" :aria-busy="ui.offlineLoading">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">

@@ -8,6 +8,11 @@ import { progressionDiagnostics } from './progression-diagnostics.mjs'
 import { createBot, ADVANCED_CRAFTS } from './player-bot.mjs'
 import { createInitialState } from '../src/game/state.js'
 import * as E from './engine-fixture.mjs'
+import { createAuditContext } from './lib/audit-context.mjs'
+import { inspectSave } from './lib/save-report.mjs'
+import { modelBreakthroughRisk } from './lib/breakthrough-risk.mjs'
+import { BREAKTHROUGH_AIDS } from '../src/data/realms.js'
+import { gameRandom } from '../src/game/context.js'
 
 // 配方改料后不得继续按已经移除的原料暂停模拟加工。
 for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
@@ -112,3 +117,44 @@ auditResource({ ...brief, resId: 'stone', patches: { jobFactor: 0.5 } })
 assert.equal(miner.secondary.base, originalStone)
 assert.equal(miner.base, originalRock)
 console.log('审计工具检查通过：参数、临时修改、异常还原与矿工附产')
+
+// 相同输入不能随现实时间或其他审计的随机消耗而变化。
+const firstRun = auditResource({ hours: 0.25 })
+auditResource({ hours: 0.1, patches: { baseMax: 250 } })
+assert.deepEqual(auditResource({ hours: 0.25 }).state, firstRun.state)
+const firstClock = createAuditContext(17), secondClock = createAuditContext(17)
+assert.equal(firstClock.advance(2), firstClock.state.createdAt)
+assert.equal(firstClock.advance(1), firstClock.state.createdAt + 2000)
+assert.deepEqual(Array.from({ length: 8 }, () => gameRandom(firstClock.state)), Array.from({ length: 8 }, () => gameRandom(secondClock.state)))
+assert.deepEqual(firstClock.state.disciples, secondClock.state.disciples)
+assert.throws(() => createAuditContext(0x100000000), /uint32/)
+
+// 已学营造技艺的存档也按原价报价，与实际扣费一致。
+const priced = createInitialState(1800000000000), pricedDerived = E.createDerived()
+priced.upgrades.masonryArt = true
+priced.buildings.warehouse = { count: 3, on: true }
+E.recompute(priced, pricedDerived)
+const text = JSON.stringify(priced)
+const report = inspectSave(text)
+assert.deepEqual(report.warehouse.nextCost, E.buildingCost(priced, 'warehouse', 1))
+delete priced.upgrades.masonryArt
+assert.deepEqual(report.warehouse.nextCost, inspectSave(JSON.stringify(priced)).warehouse.nextCost)
+priced.upgrades.masonryArt = true
+assert.equal(JSON.stringify(priced), text)
+assert.throws(() => inspectSave('{invalid'))
+assert.throws(() => inspectSave(JSON.stringify({ ...priced, version: 999 })), /无法完整兼容/)
+
+// 对照去掉护道减死亡率的情况，防止报告只算成功率而漏算保命材料。
+const aided = modelBreakthroughRisk('aided')
+const reductions = Object.values(BREAKTHROUGH_AIDS).flat().filter(aid => aid.deathReduce)
+const originalReductions = reductions.map(aid => aid.deathReduce)
+try {
+  for (const aid of reductions) aid.deathReduce = 0
+  const withoutProtection = modelBreakthroughRisk('aided')
+  assert.ok(aided.expectedDeaths < withoutProtection.expectedDeaths)
+  assert.ok(aided.firstLifeSuccess > withoutProtection.firstLifeSuccess)
+} finally {
+  reductions.forEach((aid, i) => { aid.deathReduce = originalReductions[i] })
+}
+assert.ok(aided.expectedTotalAttempts < modelBreakthroughRisk('naked').expectedTotalAttempts)
+console.log('审计回归检查通过：重复运行、模拟时钟、存档报价与护道死亡风险')

@@ -1,0 +1,369 @@
+import { createInitialState, normalizeState, resetForAscension, resetForReincarnation } from '../../src/game/state.js'
+import * as E from '../engine-fixture.mjs'
+import { RESOURCES } from '../../src/data/resources.js'
+import { UPGRADE_MAP } from '../../src/data/upgrades.js'
+import { CRAFTS } from '../../src/data/crafts.js'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../../src/data/realms.js'
+import { CONFIG } from '../../src/data/config.js'
+import { exportSave, parseImport } from '../../src/game/save.js'
+import { newGame, successfulBreakthrough } from './fixtures.mjs'
+
+export function treasureRefinement({ ok, close, section }) {
+  section('法宝祭炼（可重复升级）')
+  {
+    const { state, derived } = newGame()
+    const pearl = E.UPGRADE_MAP.spiritBanner
+
+    // 没炼成之前不能祭炼
+    ok('未炼成时祭炼无效', E.refineTreasure(state, derived, 'spiritBanner') === 0)
+    ok('未炼成时没有祭炼花费', E.refineCost(state, 'spiritBanner') && !E.isTreasureForged(state, 'spiritBanner'))
+
+    state.upgrades.spiritBanner = true
+    state.resources.insight = 1e7
+    state.resources.stone = 1e7
+    state.buildings.spiritField = { count: 1, on: true } // 有个产出源才看得出效果变化
+    E.recompute(state, derived)
+    ok('炼成后倍数从 1 起算', close(E.treasureMult(state, pearl), 1, 1e-9))
+
+    const cost1 = E.refineCost(state, 'spiritBanner')
+    ok(
+      '首次祭炼花费 = 法宝基础材料 + 灵机基数',
+      close(cost1.insight, pearl.refine.insight, 1e-9) &&
+        close(cost1.stone, pearl.cost.stone, 1e-9) &&
+        close(cost1.wood, pearl.cost.wood, 1e-9),
+      JSON.stringify(cost1),
+    )
+
+    // 祭炼要「材料 + 灵机」，所以按当前花费把两种都给足（花费形状以后变了也不会假失败）
+    const topUp = () => {
+      const c = E.refineCost(state, 'spiritBanner')
+      for (const res in c) state.resources[res] = Math.max(state.resources[res] || 0, c[res] * 100)
+      E.recompute(state, derived)
+    }
+    topUp()
+
+    const rateBefore = derived.rates.qi
+    ok('祭炼一次成功', E.refineTreasure(state, derived, 'spiritBanner') === 1)
+    ok('等级记在 state 里', E.treasureLevel(state, 'spiritBanner') === 1)
+    ok('效果按 +30% 放大', close(E.treasureMult(state, pearl), 1.3, 1e-9))
+    ok('产出真的跟着涨了', derived.rates.qi > rateBefore, `${rateBefore.toFixed(3)} → ${derived.rates.qi.toFixed(3)}`)
+    ok('单件法宝 +15% → 祭炼一级后 +19.5%', close(derived.ratio.qi - 0, 0.15 * 1.3 + (derived.ratio.qi - derived.ratio.qi), 1e9))
+
+    const cost2 = E.refineCost(state, 'spiritBanner')
+    ok(
+      '第二次祭炼花费 ×1.7（材料与灵机同乘）',
+      close(cost2.insight, pearl.refine.insight * 1.7, 1e-6) && close(cost2.stone, pearl.cost.stone * 1.7, 1e-6),
+      `灵机 ${cost1.insight} → ${cost2.insight}`,
+    )
+
+    for (let i = 0; i < 4; i++) {
+      topUp()
+      E.refineTreasure(state, derived, 'spiritBanner')
+    }
+    ok('可以继续往上祭炼（无等级上限）', E.treasureLevel(state, 'spiritBanner') === 5)
+    ok('Lv.5 时效果 ×2.5', close(E.treasureMult(state, pearl), 2.5, 1e-9))
+    ok(
+      '花费指数增长',
+      E.refineCost(state, 'spiritBanner').insight > pearl.refine.insight * 7,
+      `${Math.round(E.refineCost(state, 'spiritBanner').insight)} vs 基础 ${pearl.refine.insight}`,
+    )
+
+    // 修真与技艺不参与祭炼
+    ok('修真与技艺没有祭炼花费', E.refineCost(state, 'qiOrigin') === null && E.refineCost(state, 'qiArt') === null)
+    ok('修真与技艺的倍率恒为 1', E.treasureMult(state, E.UPGRADE_MAP.qiOrigin) === 1)
+
+    // 存档往返
+    const round = normalizeState(JSON.parse(JSON.stringify(state)))
+    ok('祭炼等级进存档', round.treasureLevels.spiritBanner === 5)
+  }
+}
+
+export function researchAndAscension({ ok, close, section }) {
+  section('修真·技艺 / 境界 / 飞升')
+  {
+    const { state, derived } = newGame()
+    ok('初始没有能支付的修真或技艺', derived.availableUpgrades.every(id => !E.canAfford(state, UPGRADE_MAP[id].cost)))
+
+    state.resources.qi = 5000
+    state.resources.wood = 5000
+    state.resources.stone = 500
+    state.resources.herb = 500
+    state.buildings.spiritField = { count: 3, on: true } // 藏经阁现在要三座聚灵阵，且不要灵草
+    E.buyBuilding(state, derived, 'hut', 1)
+    E.buyBuilding(state, derived, 'library', 1)
+    ok('建成藏经阁仍需研究灵源考才出现引气诀', !derived.availableUpgrades.includes('qiArt'))
+    state.upgrades.qiOrigin = true
+    E.recompute(state, derived)
+    ok('研究灵源考后出现引气诀', derived.availableUpgrades.includes('qiArt'))
+
+    state.resources.insight = 100
+    const okResearch = E.research(state, derived, 'qiArt')
+    ok('参悟成功', okResearch === true && state.upgrades.qiArt === true)
+    // 引气诀 +10% 要作用在产出源上才看得出来：先补一座聚灵阵
+    state.resources.qi = 100
+    E.buyBuilding(state, derived, 'spiritField', 1)
+    const fields = E.countOf(state, 'spiritField')
+    ok(
+      `灵气产出加成生效（聚灵阵 ${fields} × 0.3 × 引气诀 1.1 × 春季 1.2）`,
+      close(derived.rates.qi, fields * 0.3 * 1.1 * 1.2, 1e-6),
+      `实际 ${derived.rates.qi}`,
+    )
+
+    const { state: s2, derived: d2 } = newGame()
+    // 破境材料横跨基础资源与进阶成品，逐项列举容易漏（每加一种料就断）—— 统一补满。
+    for (const r of RESOURCES) s2.resources[r.id] = 1e7
+    const okBreak = successfulBreakthrough(s2, d2)
+    ok('破境成功', okBreak === true && s2.realm === 1)
+    ok('境界倍率提升', d2.realmMult > 1)
+
+    // 一路推到渡劫期
+    let guard = 0
+    while (successfulBreakthrough(s2, d2) && guard++ < 50) {
+      // 补满**所有**资源：早先这里逐个列了 7 种，加了进阶品之后
+      // 一路只推到第 8 境就断了（夹具的错，不是玩法的错）—— 改成通用写法，以后新增资源不会再犯。
+      for (const r of RESOURCES) s2.resources[r.id] = 1e7
+    }
+    ok('可修到渡劫期', s2.realm === ASCEND_REALM_INDEX, `实际 ${s2.realm}`)
+    ok('渡劫期即可飞升（不要求转世次数）', E.canAscend(s2) === true)
+    s2.stats.reincarnations = 0
+    ok('一次都没转世也能飞升（转世只是常见路线）', E.canAscend(s2) === true)
+    s2.realm = ASCEND_REALM_INDEX - 1
+    ok('境界不到渡劫期则不能飞升', E.canAscend(s2) === false)
+    s2.realm = ASCEND_REALM_INDEX
+
+    s2.stats.lifeInsight = 2e6
+    const gain = E.ascensionGain(s2, d2)
+    ok('飞升可获得仙缘', gain > 0, `实际 ${gain}`)
+
+    resetForAscension(s2, gain)
+    E.recompute(s2, d2)
+    ok('飞升后境界归零', s2.realm === 0)
+    ok('飞升后建筑清空', Object.keys(s2.buildings).length === 0)
+    ok('飞升后保留仙缘', s2.karma === gain)
+    ok('飞升后保留成就', true)
+    ok('仙缘提供全局加成', d2.karmaMult > 1)
+    ok('飞升次数 +1', s2.stats.ascensions === 1)
+
+    // 回归：飞升后的第二世必须跟第一次开山一样从零起步（曾经漏改，一飞升就白送 2 人 1 阵徒）
+    ok('飞升后弟子归零', s2.disciples.total === 0, `实际 ${s2.disciples.total}`)
+    ok('飞升后职位清空', Object.values(s2.disciples.jobs).every((n) => n === 0))
+    ok('飞升后弟子上限为 0（没有居所）', d2.maxDisciples === 0, `实际 ${d2.maxDisciples}`)
+    ok('飞升后资源清空', Object.values(s2.resources).every((v) => v === 0))
+    ok('飞升后修真与技艺清空', Object.keys(s2.upgrades).length === 0)
+    ok('飞升后法宝祭炼等级清空', Object.keys(s2.treasureLevels).length === 0)
+    ok('飞升后左栏回到只有灵气', Object.keys(s2.seen).join() === 'qi')
+    ok('飞升后建筑列表回到开局（渐进露出重置）', !E.isBuildingUnlocked(s2, 'lumberYard'))
+    ok('飞升后仍然没有任何建筑可造（连聚灵阵都还没露面）', !E.isBuildingUnlocked(s2, 'spiritField'))
+    ok('飞升后制作进度与自动开关清空', Object.keys(s2.craftProgress).length === 0 && Object.keys(s2.autoCraft).length === 0)
+  }
+}
+
+export function reincarnation({ ok, close, section }) {
+  section('转世（化神期起，清空范围与飞升相同）')
+  {
+    const { state, derived } = newGame()
+    state.realm = REINCARNATE_REALM_INDEX - 1
+    E.recompute(state, derived)
+    ok('元婴期还不能转世', !E.canReincarnate(state), REALMS[state.realm].name)
+
+    state.realm = REINCARNATE_REALM_INDEX
+    E.recompute(state, derived)
+    ok(
+      '化神期即可转世（且此时还不能飞升）',
+      E.canReincarnate(state) && !E.canAscend(state),
+      REALMS[state.realm].name + ' / 飞升需 ' + REALMS[ASCEND_REALM_INDEX].name,
+    )
+
+    // 同一条公式：越晚结算越值钱
+    state.stats.lifeInsight = 40000
+    E.recompute(state, derived)
+    const atShen = E.reincarnationGain(state, derived)
+    state.realm = ASCEND_REALM_INDEX
+    E.recompute(state, derived)
+    const atDujie = E.ascensionGain(state, derived)
+    ok('化神期转世能结算仙缘', atShen > 0, String(atShen))
+    ok('渡劫期飞升拿得更多（同一公式，门槛更高）', atDujie > atShen, atShen + ' → ' + atDujie)
+    ok('两者用同一条公式（境界因子 1+境界×0.3）', close(atDujie / atShen, (1 + ASCEND_REALM_INDEX * 0.3) / (1 + REINCARNATE_REALM_INDEX * 0.3), 0.02), (atDujie / atShen).toFixed(3))
+
+    // 清空范围：与飞升完全一样（连修真 / 技艺·法宝 都不保留）
+    const st = createInitialState()
+    const dv = E.createDerived()
+    E.recompute(st, dv)
+    st.buildings.hut = { count: 3, on: true }
+    st.upgrades.qiOrigin = true
+    st.upgrades.qiArt = true
+    st.treasureLevels.spiritBanner = 3
+    st.resources.qi = 1234
+    st.disciples.total = 5
+    st.realm = REINCARNATE_REALM_INDEX
+    st.karma = 10
+    st.achievements.firstHut = true
+    const gain = 22
+    resetForReincarnation(st, gain)
+    E.recompute(st, dv)
+    ok('转世后境界回凡体', st.realm === 0, String(st.realm))
+    ok('转世后修真 / 技艺·法宝清空（与飞升一致）', Object.keys(st.upgrades).length === 0, Object.keys(st.upgrades).join(','))
+    ok('转世后法宝等级清空', Object.keys(st.treasureLevels).length === 0)
+    ok('转世后建筑 / 弟子 / 资源清空', Object.keys(st.buildings).length === 0 && st.disciples.total === 0 && (st.resources.qi || 0) === 0)
+    ok('转世结算仙缘', st.karma === 10 + gain, String(st.karma))
+    ok('转世计数与飞升计数分开', st.stats.reincarnations === 1 && (st.stats.ascensions || 0) === 0, '转世 ' + st.stats.reincarnations + ' / 飞升 ' + (st.stats.ascensions || 0))
+    ok('成就与统计保留', st.achievements.firstHut === true)
+  }
+}
+
+export function karmaSoftCap({ ok, close, section }) {
+  section('道果与仙缘软上限（第 3 步）')
+  {
+    const { state, derived } = newGame()
+    state.realm = ASCEND_REALM_INDEX
+    state.stats.reincarnations = 0 // 转世不是门槛：一次都没转世也能飞升
+    state.stats.lifeInsight = 2e6
+    E.recompute(state, derived)
+    const before = { dao: state.dao || 0, mult: derived.daoMult, gain: E.ascensionGain(state, derived) }
+    ok('飞升前没有道果', before.dao === 0, String(before.dao))
+
+    // 模拟一次飞升的结算（只跑重置函数，不动其它）
+    resetForAscension(state, 0)
+    E.recompute(state, derived)
+    ok('飞升结一颗道果', (state.dao || 0) === 1, String(state.dao))
+    ok('道果提升全局产出（+5%/颗）', close(derived.daoMult, 1.05, 1e-9), '×' + derived.daoMult.toFixed(3))
+
+    // 道果反哺下层：同一份「本世灵机」，有 1 颗道果时仙缘多 10%
+    const probe = (dao) => {
+      const s3 = createInitialState()
+      const d3 = E.createDerived()
+      s3.realm = REINCARNATE_REALM_INDEX
+      s3.stats.lifeInsight = 40000
+      s3.dao = dao
+      E.recompute(s3, d3)
+      return E.reincarnationGain(s3, d3)
+    }
+    const g0 = probe(0)
+    const g1 = probe(1)
+    ok('道果让转世拿到的仙缘更多（+10%/颗）', g1 > g0, g0 + ' → ' + g1)
+
+    // 仙缘软上限：前 75% 不打折，之后渐近到 +200%
+    ok('软上限：小数值不打折', close(E.softCap(1, 2), 1, 1e-9), String(E.softCap(1, 2)))
+    ok('软上限：超过 75% 后打折但仍在涨', E.softCap(1.8, 2) > 1.5 && E.softCap(1.8, 2) < 2, E.softCap(1.8, 2).toFixed(3))
+    ok('软上限：永远到不了上限', E.softCap(1000, 2) < 2 && E.softCap(1000, 2) > 1.99, E.softCap(1000, 2).toFixed(4))
+
+    const s4 = createInitialState()
+    const d4 = E.createDerived()
+    s4.karma = 50
+    E.recompute(s4, d4)
+    const low = d4.karmaMult
+    s4.karma = 500
+    E.recompute(s4, d4)
+    const high = d4.karmaMult
+    ok('仙缘加成随点数上涨但被压住（500 点 < 线性外推）', high < 1 + 500 * CONFIG.KARMA_BONUS_PER_POINT && high > low, low.toFixed(2) + ' → ' + high.toFixed(2))
+  }
+}
+
+export function breakthroughRisk({ ok, close, section }) {
+  section('破境概率与失败结算')
+  {
+    const setup = (realm) => {
+      const s = createInitialState(), d = E.createDerived()
+      s.realm = realm
+      s.stats.lifeInsight = 200000
+      s.karma = 50
+      s.dao = 2
+      E.recompute(s, d)
+      for (const id of Object.keys(s.resources)) s.resources[id] = 100000
+      return [s, d]
+    }
+    for (let realm = 0; realm < 10; realm++) {
+      const [s, d] = setup(realm)
+      const p = E.breakthroughPreview(s, d)
+      ok(`境界${realm}基础概率遵守阶段`, close(p.baseChance, realm < 3 ? 0.95 : realm === 3 ? 0.70 : realm >= 7 ? 0.20 - (realm - 7) * 0.05 : 0.6 - (realm - 4) * 0.05))
+      ok(`境界${realm}身死风险遵守金丹分界`, realm < 4 ? p.deathRisk === 0 : p.deathRisk > 0)
+      ok(`境界${realm}退境风险遵守炼虚分界`, realm < 7 ? p.regressionRisk === 0 : close(p.regressionOnFailure + p.deathOnFailure, 1))
+      const options = Object.fromEntries(p.availableAids.map(aid => [aid.id, true]))
+      const aided = E.breakthroughPreview(s, d, options)
+      ok(`目标境界${realm + 1}独立配置两组护道与香火`, p.availableAids.length === 3 && p.availableAids[2].cost.faith > 0)
+      ok(`目标境界${realm + 1}满配概率符合设计`, close(aided.chance, realm < 3 ? 0.99 : realm === 3 ? 0.90 : 0.85 - (realm - 4) * 0.05) && close(p.maxChance, aided.chance))
+      const expected = { ...E.realmCost(s, d, realm + 1) }
+      for (const aid of p.availableAids) {
+        for (const [res, amount] of Object.entries(aid.cost)) expected[res] = (expected[res] || 0) + amount
+      }
+      ok(`目标境界${realm + 1}基础和辅助费用相加`, Object.entries(expected).every(([res, amount]) => close(aided.cost[res], amount)))
+      for (const aid of p.availableAids) {
+        for (const [res, amount] of Object.entries(aid.cost)) {
+          const [poor, pd] = setup(realm)
+          poor.resources[res] = (E.realmCost(poor, pd, realm + 1)[res] || 0) + amount - 1
+          const before = { ...poor.resources }
+          ok(`目标境界${realm + 1}方案${aid.name}缺${res}不可支付`, !E.breakthrough(poor, pd, { [aid.id]: true }, () => { throw Error('不应掷骰') }) && Object.entries(before).every(([id, have]) => poor.resources[id] === have))
+        }
+      }
+      const obsolete = Object.fromEntries((BREAKTHROUGH_AIDS[realm === 0 ? 10 : realm] || []).map(aid => [aid.id, true]))
+      ok(`目标境界${realm + 1}不沿用其他境界方案`, close(E.breakthroughPreview(s, d, obsolete).chance, p.baseChance))
+      // 所有护道加工品在冲关前即可解锁生产，不要求下一境的配方。
+      for (const aid of p.availableAids) {
+        for (const res of Object.keys(aid.cost)) {
+          const recipe = CRAFTS.find(c => c.out === res)
+          if (recipe) ok(`目标境界${realm + 1}的${res}可提前生产`, (recipe.needs?.realm || 0) <= realm)
+        }
+      }
+    }
+    const [early, ed] = setup(3)
+    const ec = E.realmCost(early, ed, 4)
+    ok('金丹70%边界失败不倒退、只扣突破材料', !E.breakthrough(early, ed, {}, () => 0.70) && early.realm === 3 && early.resources.pill === 100000 - ec.pill && early.buffs.length === 0)
+    const [golden, gd] = setup(3)
+    ok('金丹低于70%边界时突破成功', E.breakthrough(golden, gd, {}, () => 0.699) && golden.realm === 4)
+    const [s, d] = setup(4)
+    const all = Object.fromEntries(BREAKTHROUGH_AIDS[5].map(aid => [aid.id, true]))
+    const p = E.breakthroughPreview(s, d, all)
+    ok('元婴护道叠加25个百分点且计入报价', close(p.chance, 0.85) && p.cost.faith === 250 && p.cost.immortalHerb === 8 && p.cost.arrayBase === 4 && p.cost.talisman === REALMS[5].cost.talisman + 20)
+    const [capped, cd] = setup(0)
+    const earlyOptions = Object.fromEntries(BREAKTHROUGH_AIDS[1].map(aid => [aid.id, true]))
+    ok('成功率最高99%', E.breakthroughPreview(capped, cd, earlyOptions).chance === 0.99)
+    const [poor, pd] = setup(4)
+    poor.resources.faith = 249
+    ok('辅助材料不足不支付、不掷骰', !E.breakthrough(poor, pd, all, () => { throw Error('不应掷骰') }) && poor.resources.qi === 100000)
+    ok('渡劫失败境界不变', !E.breakthrough(s, d, all, () => 0.99) && s.realm === 4)
+    ok('失败扣基础与辅助材料及2%相关库存', s.resources.pill === 100000 - p.cost.pill - Math.floor((100000 - p.cost.pill) * 0.02) && s.resources.faith === 99750 && s.resources.immortalHerb === 99992 && s.resources.arrayBase === 99996 && s.resources.talisman === 100000 - p.cost.talisman - Math.floor((100000 - p.cost.talisman) * 0.02))
+    ok('失败减产5%且有恢复期限', s.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05 && b.until > Date.now()))
+    E.breakthrough(s, d, {}, () => 0.99)
+    ok('连续失败减产不叠加', s.buffs.filter(b => b.id === 'breakthroughInjury').length === 1)
+    for (let realm = 4; realm <= 9; realm++) {
+      const fatal = { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }[realm]
+      // 护道可带 deathReduce（渡劫「立愿应劫」），满配身死概率相应下调（见 MATERIAL-RESEARCH.md §2.3）。
+      const deathReduce = BREAKTHROUGH_AIDS[realm + 1].reduce((sum, aid) => sum + (aid.deathReduce || 0), 0)
+      const expectedDeath = Math.max(0, fatal - deathReduce)
+      const [below, bd] = setup(realm)
+      const full = Object.fromEntries(BREAKTHROUGH_AIDS[realm + 1].map(aid => [aid.id, true]))
+      const preview = E.breakthroughPreview(below, bd, full)
+      ok(`境界${realm}满配身死风险符合调参`, close(preview.deathOnFailure, expectedDeath) && close(preview.deathRisk, (1 - preview.chance) * expectedDeath))
+      let deathRoll = 0
+      ok(`境界${realm}低于身死边界时强制重开`, !E.breakthrough(below, bd, full, () => deathRoll++ === 0 ? 0.99 : expectedDeath - 0.001) && below.realm === 0 && below.stats.breakthroughDeaths === 1)
+      const [edge, edgeDerived] = setup(realm)
+      let edgeRoll = 0
+      ok(`境界${realm}身死边界及以上存活且遵守退境分界`, !E.breakthrough(edge, edgeDerived, full, () => edgeRoll++ === 0 ? 0.99 : fatal) && edge.realm === (realm < 7 ? realm : realm - 1) && edge.stats.breakthroughDeaths === 0)
+      if (realm < 7) {
+        ok(`境界${realm}身死同样减半仙缘且保留永久进度`, below.karma === 50 + preview.deathKarma && below.dao === 2 && below.stats.reincarnations === 0 && below.stats.ascensions === 0 && below.resources.qi === 0)
+        ok(`境界${realm}存活失败只减产扣料不退境`, edge.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && edge.stats.lifeInsight === 200000)
+        continue
+      }
+      const [alive, ad] = setup(realm)
+      alive.stats.bestRealm = realm
+      const cost = E.realmCost(alive, ad, realm + 1)
+      const material = Object.keys(cost).find(id => id !== 'qi' && id !== 'insight')
+      const remaining = alive.resources[material] - cost[material]
+      ok(`境界${realm}失败存活必退一境`, !E.breakthrough(alive, ad, {}, () => 0.99) && alive.realm === realm - 1)
+      ok(`境界${realm}退境仍减产扣料并保留本世`, alive.resources[material] === remaining - Math.floor(remaining * 0.02) && alive.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && alive.stats.bestRealm === realm && alive.stats.lifeInsight === 200000 && alive.karma === 50 && alive.dao === 2)
+      ok(`境界${realm}退境后产出倍率立即更新`, ad.realmMult === REALMS[realm - 1].mult)
+    }
+    const [dead, dd] = setup(7)
+    dead.achievements.firstQi = true
+    dead.stats.bestRealm = 7
+    const gain = Math.floor(E.reincarnationGain(dead, dd) / 2)
+    let roll = 0
+    ok('炼虚失败可身死重开', !E.breakthrough(dead, dd, {}, () => roll++ === 0 ? 0.99 : 0) && dead.realm === 0)
+    ok('只减半本次仙缘且不误计转世飞升', dead.karma === 50 + gain && dead.dao === 2 && dead.stats.breakthroughDeaths === 1 && dead.stats.reincarnations === 0 && dead.stats.ascensions === 0)
+    ok('身死保留历史、清空本世', dead.achievements.firstQi && dead.stats.bestRealm === 7 && dead.stats.lifeInsight === 0 && dead.resources.pill === 0 && dead.buffs.length === 0)
+    const restored = parseImport(exportSave(dead))
+    ok('身死记录可保存恢复', restored.stats.breakthroughDeaths === 1 && restored.karma === dead.karma && restored.dao === 2)
+    const [win, wd] = setup(4)
+    ok('低于成功率时正常破境', E.breakthrough(win, wd, {}, () => 0.599) && win.realm === 5 && win.stats.bestRealm === 5)
+  }
+}

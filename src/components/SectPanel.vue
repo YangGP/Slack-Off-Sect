@@ -61,7 +61,7 @@ const list = computed(() => {
   const f = filter.value
   let items = unlocked.value
   if (f === 'affordable') {
-    items = items.filter((b) => canAfford(state, buildingCost(state, b.id, 1, derived.buildingCostDiscount)))
+    items = items.filter((b) => canAfford(state, buildingCost(state, b.id, 1)))
   } else if (f === 'owned' || f === 'toggle') {
     items = items.filter((b) => countOf(state, b.id) > 0)
   } else if (f !== 'all') {

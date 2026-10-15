@@ -18,3 +18,5 @@ docs/DISCIPLE-GROWTH-DATA.json
 tools/.*
 .early
 cat-zh-master/
+# 导出的本地存档：按需保留，不入库
+摸鱼宗门存档-*.txt
