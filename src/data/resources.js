@@ -16,6 +16,17 @@ const CORE_RESOURCES = [
     desc: '宗门根基。弟子靠它吐纳修炼，一切营造皆由此起。',
   },
   {
+    id: 'warrant',
+    name: '信符',
+    glyph: '符',
+    color: '#d8b98a',
+    baseMax: 100,
+    // 仓容完全独立：不套通用扩仓（比例为 0），也不乘仙缘仓储倍率（isolatedStorage）。
+    storageWeight: 0,
+    isolatedStorage: true,
+    desc: '宗门开具的差遣凭信：入山猎妖每趟百枚，拜访邻宗互市每回五十枚。基础备百枚之量，猎杀营地每座再供 300。',
+  },
+  {
     id: 'wood',
     name: '灵木',
     glyph: '木',
@@ -358,10 +369,10 @@ export const VISIBLE_RESOURCES = RESOURCES.filter((r) => !r.hidden).map((r) => r
 
 /** 左栏按用途分组；混合来源的灵石、玄铁仍属于基础原料。 */
 export const RESOURCE_GROUPS = [
-  { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'faith'] },
+  { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'faith', 'warrant'] },
   { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
   { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
   { id: 'crafted', name: '丹符器物', resources: ['pill', 'condensePill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
-  { id: 'hunting', name: '猎杀物资', resources: ['huntPreparation', 'beastHide', 'beastBone'] },
+  { id: 'hunting', name: '猎杀物资', resources: ['beastHide', 'beastBone'] },
   { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'immortalForce', 'ascensionSeal'] },
 ]

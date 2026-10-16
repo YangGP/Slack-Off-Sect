@@ -148,6 +148,7 @@ export function describeEffects(ef) {
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
   if (ef.autoTalentJobs) push('自动按岗位专长分工', '弟子页可暂停', 'good')
   if (ef.recruitMode) push('解锁主动招募', '弟子页可切换礼聘招募，档位越高天赋越好', 'unlock')
+  if (ef.openTrade) push('解锁宗门外交', '外交页与各宗互市，以富余资源换取紧缺物资', 'unlock')
   if (ef.autoCraftSpeedControl) push('各配方自动速限', '1× / 2× / 5× / 10×（金丹起受工位容量约束）', 'unlock')
   if (ef.autoCondenseLiquid) push('节气满仓自凝灵液', '需掌握《凝气化液》', 'good')
   if (ef.energyCraft) push('灵能输配', '解锁工位灵能驱动，按额外负荷耗能', 'unlock')

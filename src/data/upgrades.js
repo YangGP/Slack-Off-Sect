@@ -894,6 +894,21 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['forgeArt', 'steelWorking'] },
   },
 
+  // ============ 宗门外交（可选模块贡献，见 modules/diplomacy） ============
+  // 与《主动招募》同型：规则型开关节点（effects.openTrade），不开建筑、不占仓容。
+  {
+    id: 'neighborContacts',
+    name: '邻宗往来',
+    glyph: '邻',
+    cost: { insight: 2000, stone: 300, herb: 200 },
+    desc: '修书遣使，与山外的药泉谷、黑铁山、须弥寺互通声气。富余的换紧缺的，宗门才活得久。',
+    effectDesc: '因此开立宗门外交：与各宗互市，以富余资源换取紧缺物资。',
+    effects: { openTrade: true },
+    note: '解锁宗门外交页',
+    needs: { upgrades: ['gateRecord'] },
+    module: 'diplomacy',
+  },
+
 
 ]
 
@@ -1018,6 +1033,7 @@ export const CULTIVATION_STAGES = [
       'breathArt',
       'trialArt',
       'gateRecord',
+      'neighborContacts',
     ],
   },
 ]

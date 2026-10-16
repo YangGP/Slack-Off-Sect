@@ -8,7 +8,7 @@
 - `checks.mjs`：显式登记执行顺序，保留拆分前的顺序。
 - `../lib/checks.mjs`：每次运行独立的 `ok`、`close`、`section` 和统计汇总。
 - `fixtures.mjs`：新档、已开山存档和强制成功突破的公共夹具。
-- 其余文件：按功能保存用例。数值和格式在 `numbers`；建筑及开局在 `buildings`、`startup`；经济和仓储在 `economy`、`storage`；研究与破境在 `research`、`progression`；炼制在 `crafting`、`automation`、`materials`、`power`；事件、猎杀、弟子和存档分别放在同名文件。
+- 其余文件：按功能只保留关键节点用例（能一次性验证「某系统整体是否还能用」的闭环）。开局在 `startup`，数据契约在 `catalog`；建筑、经济、弟子、仓储、自动化、制作、研究、进程、事件、存档、猎杀、外交、灵能、材料各保留 1~2 个系统闭环用例；旧的数值格式、单点边界与迁移类用例已删除。
 - `extensions.mjs`：连接已有的工业、弟子和离线专项检查，不复制其实现。
 
 ## 新增用例

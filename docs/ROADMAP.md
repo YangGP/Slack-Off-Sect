@@ -2,6 +2,8 @@
 
 更新：2026-10-14。本文只记录尚待决定或完成的工作。当前实现见 [DESIGN.md](DESIGN.md)。
 
+猫国对照得出的平衡与内容缺口按序处理清单见 [BALANCE-PRIORITY.md](BALANCE-PRIORITY.md)（D2~D9，2026-10-16）。
+
 ## 1. 研究与后期供能
 
 当前研究分组与依赖见 [RESEARCH.md](RESEARCH.md)。修真应用与粒子产线前移已实施，后续只列未完成设计与待测事项。

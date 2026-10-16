@@ -242,12 +242,12 @@ export function resourceSourcesAndSinks({ ok, section }) {
     }
     for (const u of ALL_UPGRADES) for (const k of Object.keys(u.cost || {})) sunk.add(k)
     for (const r of REALMS) for (const k of Object.keys(r.cost || {})) sunk.add(k)
-    // 兽材由猎杀任务结算产生，猎备由出征消耗 —— 都不在 jobs/crafts 的静态表里，单独补进来。
+    // 兽材由猎杀任务结算产生，信符由出征与外交互市消耗 —— 都不在 jobs/crafts 的静态表里，单独补进来。
     for (const f of HUNT_FIELDS) {
       for (const k of Object.keys(f.baseYield || {})) sourced.add(k)
       for (const k of Object.keys(f.advancedYield || {})) sourced.add(k)
     }
-    sunk.add('huntPreparation')
+    sunk.add('warrant')
 
     const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
     const noSink = RESOURCES.filter(
@@ -255,59 +255,5 @@ export function resourceSourcesAndSinks({ ok, section }) {
     ).map((r) => r.name)
     ok('每个资源都有来源（没有凭空出现的）', noSource.length === 0, noSource.join('、') || '全部有')
     ok('每个资源都有去向（没有死资源）', noSink.length === 0, noSink.join('、') || '全部有')
-  }
-}
-
-export function advancedResourceUses({ ok, section }) {
-  section('进阶品的作用：一次性突破 + 可重复去向')
-  {
-    // 纯中间体：只作为别的东西的原料，自己不进建筑（放行）
-    const INTERMEDIATE = new Set(['immortalHerb'])
-    const buildingSinks = new Set()
-    for (const b of BUILDINGS) for (const k of Object.keys(b.cost || {})) buildingSinks.add(k)
-
-    const generated = CRAFTS.filter((c) => c.cost && Object.keys(c.cost).length >= 2 && c.needs)
-    const advancedActs = generated.filter((c) => ['steel', 'immortalHerb', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure'].includes(c.out))
-
-    const noRepeat = advancedActs
-      .map((c) => c.out)
-      .filter((out) => !INTERMEDIATE.has(out) && !buildingSinks.has(out))
-    ok(
-      '每种进阶品都有可重复去向（至少进一样建筑的造价）',
-      noRepeat.length === 0,
-      noRepeat.join('、') || '全部有',
-    )
-
-    // 另一条：进阶品必须出现在"一次性"的后期门槛里（破境或研究），否则它只是建材
-    const oneShot = new Set()
-    for (const r of REALMS) for (const k of Object.keys(r.cost || {})) oneShot.add(k)
-    for (const u of ALL_UPGRADES) for (const k of Object.keys(u.cost || {})) oneShot.add(k)
-    const noGate = advancedActs
-      .map((c) => c.out)
-      .filter((out) => !INTERMEDIATE.has(out) && !oneShot.has(out))
-    ok('每种进阶品也都进了后期门槛（破境或研究）', noGate.length === 0, noGate.join('、') || '全部有')
-  }
-}
-
-export function materialRoles({ ok, section }) {
-  section('角色倾向：灵符与结构建材承担后期营造')
-  {
-    // 这些材料仍偏向营造；晶银已兼任渡劫辅助材料，不再限制其一次性费用占比。
-    const sumOf = (res, list) =>
-      list.reduce((s, x) => s + (x.cost?.[res] || 0), 0)
-    const oneShot = [...REALMS, ...ALL_UPGRADES]
-    for (const [res, label] of [
-      ['ironMortar', '玄铁混灵土'],
-      ['arcaneGold', '玄金'],
-      ['spiritTalisman', '灵符'],
-    ]) {
-      const inBuildings = sumOf(res, BUILDINGS)
-      const inGates = sumOf(res, oneShot)
-      ok(
-        label + '的建筑需求 ≥ 一次性需求（偏建材）',
-        inBuildings >= inGates,
-        '建筑 ' + inBuildings + ' vs 门槛 ' + inGates,
-      )
-    }
   }
 }

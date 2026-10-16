@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url'
 export async function checkSaves(context) {
   let { ok, bundlePath, window, state, ui, actions, startLoop, stopLoop, saveNow, text, doc } = context
   console.log('\n== 存档 ==')
+  saveNow()
   {
     const previousRaw = window.localStorage.getItem('slack-off-sect.save.v1')
     const debugDescriptor = Object.getOwnPropertyDescriptor(window, 'DEBUG')
@@ -47,6 +48,8 @@ export async function checkSaves(context) {
   ok('存档结构完整', !!(raw.resources && raw.disciples && raw.stats && raw.buildings))
   ok('调试开关不写入存档', !('debug' in raw) && !('debug' in raw.ui))
   {
+    actions.setTab('settings')
+    await new Promise(r => setTimeout(r, 60))
     const settingsButton = name => [...doc.querySelectorAll('.main button')].find(b => b.textContent.trim() === name)
     ok('存档使用文件入口并移除文本框和复制按钮', !!doc.querySelector('.main input[type="file"]') && !doc.querySelector('.main textarea') && !settingsButton('复制到剪贴板'))
     const originalCreate = URL.createObjectURL

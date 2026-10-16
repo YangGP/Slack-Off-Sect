@@ -368,7 +368,8 @@ export async function checkLayout(context) {
     await new Promise((r) => setTimeout(r, 50))
     ok('移开后 tooltip 消失', !doc.querySelector('.tip'))
   }
-  ok('标签页包含独立炼制页且保持纯文字形式', doc.querySelectorAll('.tabs .tab').length === 9 && [...doc.querySelectorAll('.tabs .tab')].some(el => el.textContent.trim() === '炼制'))
+  ok('标签页包含独立炼制页且保持纯文字形式', doc.querySelectorAll('.tabs .tab').length === 10 && [...doc.querySelectorAll('.tabs .tab')].some(el => el.textContent.trim() === '炼制'))
+  ok('外交模块贡献独立标签', [...doc.querySelectorAll('.tabs .tab')].some(el => el.textContent.trim() === '外交'))
   ok(
     '没有旧的卡片 / 斑马纹 / 进度条 / 气泡元素',
     doc.querySelectorAll('.card, .bcard, .progress, .toast, .box-head .hint.badge').length === 0,

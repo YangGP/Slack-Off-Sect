@@ -9,7 +9,7 @@ import { gameNow, withGameContext } from '@/game/context'
 /**
  * 妖兽猎杀系统（首轮：山麓）。
  *
- * 一次出征 = 消耗猎备 → 派 1~5 名弟子 → 按实际时间推进 → 归队一次性结算兽材。
+ * 一次出征 = 消耗信符 → 派 1~5 名弟子 → 按实际时间推进 → 归队一次性结算兽材。
  * 成员属于「占用状态」：出征期间停止原岗位工作，但仍修炼、累计停留与普通口粮，
  * 也不能被转岗、逐出或再次派往其他任务。规则见 docs/BEAST-SYSTEM.md。
  *
@@ -117,7 +117,7 @@ function sanitizeMissions(value) {
       formulaVersion: HUNT_SCHEMA_VERSION, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
       support: mission.support, successBonus: Number.isFinite(mission.successBonus) ? Math.max(0, mission.successBonus) : 0,
       yieldBonus: mission.yieldBonus, baseYield: { ...field.baseYield }, advancedYield: field.advancedYield ? { ...field.advancedYield } : null,
-      preparationPaid: HUNT.PREPARATION_COST,
+      preparationPaid: HUNT.WARRANT_COST,
       snapshots: mission.snapshots.map(snap => ({ id: snap.id, name: typeof snap.name === 'string' ? snap.name.slice(0, 40) : `弟子${snap.id}`,
         realm: snap.realm, e: snap.e, A: snap.A, p: snap.p, roleId: JOBS.some(j => j.id === snap.roleId) ? snap.roleId : null })),
     }
@@ -200,8 +200,8 @@ export function isHuntUnlocked(state, fieldId) {
   return state.realm >= field.entryRealm
 }
 
-export function huntPreparation(state) {
-  return state.resources.huntPreparation || 0
+export function warrantBalance(state) {
+  return state.resources.warrant || 0
 }
 
 export function huntTeamMax(state) {
@@ -253,7 +253,7 @@ export function huntPreview(state, derived, fieldId, teamIds) {
   for (const [res, base] of Object.entries(field.baseYield || {})) {
     expectedGains[res] = base * field.baseDuration * support * expectedZ * gain
   }
-  return { field, rows, duration, expectedSuccess, expectedGains, prepEnough: huntPreparation(state) >= HUNT.PREPARATION_COST }
+  return { field, rows, duration, expectedSuccess, expectedGains, prepEnough: warrantBalance(state) >= HUNT.WARRANT_COST }
 }
 
 export function huntDuration(field, durationReduction = 0) {
@@ -261,7 +261,7 @@ export function huntDuration(field, durationReduction = 0) {
   return Math.max(1, Math.ceil(field.baseDuration * (1 - reduction)))
 }
 
-/** 出征前校验：猎场/设施/境界/成员/猎备都满足才允许出发。 */
+/** 出征前校验：猎场/设施/境界/成员/信符都满足才允许出发。 */
 export function canDepart(state, derived, fieldId, teamIds) {
   if (!isModuleEnabled(state, 'hunting')) return { ok: false, reason: '猎杀模块已关闭' }
   const field = HUNT_FIELD_MAP[fieldId]
@@ -273,12 +273,12 @@ export function canDepart(state, derived, fieldId, teamIds) {
   const rows = evaluateTeam(state, derived, fieldId, teamIds)
   if (rows.length < HUNT.TEAM_MIN) return { ok: false, reason: '请选择至少 1 名弟子' }
   if (rows.length > HUNT.TEAM_MAX) return { ok: false, reason: `每队最多 ${HUNT.TEAM_MAX} 人` }
-  if (huntPreparation(state) < HUNT.PREPARATION_COST) return { ok: false, reason: `猎备不足 ${HUNT.PREPARATION_COST}` }
+  if (warrantBalance(state) < HUNT.WARRANT_COST) return { ok: false, reason: `信符不足 ${HUNT.WARRANT_COST}` }
   return { ok: true }
 }
 
 /**
- * 出发：原子扣猎备、占用成员、保存快照。
+ * 出发：原子扣信符、占用成员、保存快照。
  * 连续点击不会重复支付或派出（同一成员已带 onMission 会被 evaluateTeam 过滤）。
  */
 export function departHunt(state, derived, { fieldId, teamIds } = {}) {
@@ -319,10 +319,10 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
     baseYield: { ...field.baseYield },
     advancedYield: field.advancedYield ? { ...field.advancedYield } : null,
     snapshots,
-    preparationPaid: HUNT.PREPARATION_COST,
+    preparationPaid: HUNT.WARRANT_COST,
   }
 
-  state.resources.huntPreparation = Math.max(0, (state.resources.huntPreparation || 0) - HUNT.PREPARATION_COST)
+  state.resources.warrant = Math.max(0, (state.resources.warrant || 0) - HUNT.WARRANT_COST)
   for (const snap of snapshots) {
     const member = byId.get(snap.id)
     if (!member) continue
@@ -334,11 +334,11 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
   hunting.statistics.departures += 1
   hunting.settings.selectedFieldId = fid
   hunting.settings.teamIds = snapshots.map(s => s.id)
-  pushLog(state, `出征山麓：${snapshots.length} 名弟子带 ${HUNT.PREPARATION_COST} 猎备入山`, 'event')
+  pushLog(state, `出征山麓：${snapshots.length} 名弟子持 ${HUNT.WARRANT_COST} 枚信符入山`, 'event')
   return { ok: true, mission }
 }
 
-/** 取消：立即归队，不发半程兽材、不退猎备、不回滚已发生的猎场活动。 */
+/** 取消：立即归队，不发半程兽材、不退信符、不回滚已发生的猎场活动。 */
 export function cancelHunt(state, derived, missionId = null) {
   const mission = missionId ? state.hunting.missions[missionId] : activeMission(state)
   if (!mission || mission.status !== 'active') return { ok: false }
@@ -347,7 +347,7 @@ export function cancelHunt(state, derived, missionId = null) {
   state.hunting.statistics.cancelledMissions += 1
   state.hunting.lastOutcome = { fieldId: mission.fieldId, at: gameNow(state), cancelled: true, gains: {} }
   recount(state)
-  pushLog(state, `猎杀任务取消，弟子归队（不退猎备）`, 'bad')
+  pushLog(state, `猎杀任务取消，弟子归队（不退信符）`, 'bad')
   return { ok: true }
 }
 
@@ -503,7 +503,8 @@ export function deactivateHunting(state) {
   hunting.missions = {}
   for (const member of state.disciples?.members || []) {
     member.onMission = false
-    if (member.roleId === 'huntPlanner') member.roleId = null
+    // 执符使为猎杀与外交共用：外交仍启用时保留岗位，避免读档清空共享供给。
+    if (member.roleId === 'huntPlanner' && !isModuleEnabled(state, 'diplomacy')) member.roleId = null
   }
   recount(state)
 }

@@ -326,4 +326,4 @@
 - 个人效果只作用于明确的人选、岗位或产线，避免重复计算宗门倍率。
 - 大量弟子、批量操作和长时间离线正常结算，列表与加载提示保持可用。
 
-现有回归入口见 `tools/disciple-check.mjs`、`tools/architecture-check.mjs` 与 `tools/dom-check.mjs`；验证命令统一见 [ENGINEERING.md](ENGINEERING.md)。
+现有回归入口见 `tools/disciple-check.mjs` 与 `tools/architecture-check.mjs`；验证命令统一见 [ENGINEERING.md](ENGINEERING.md)。

@@ -82,8 +82,8 @@ for (let round = 1; round <= MAX_ROUND; round++) {
     }
   }
   // 3) 配方（快照判定供料）
-  // 猎杀是任务来源，不在 jobs/crafts 中；需要实际可达的营地、弟子容量与猎备。
-  if (derived.maxDisciples > 0 && snap.has('huntPreparation') && derived.max.huntPreparation >= HUNT.PREPARATION_COST) {
+  // 猎杀是任务来源，不在 jobs/crafts 中；需要实际可达的营地、弟子容量与信符。
+  if (derived.maxDisciples > 0 && snap.has('warrant') && derived.max.warrant >= HUNT.WARRANT_COST) {
     for (const field of HUNT_FIELDS) {
       if (!E.isHuntUnlocked(state, field.id)) continue
       for (const res of Object.keys(field.baseYield)) {

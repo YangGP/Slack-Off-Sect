@@ -1,14 +1,14 @@
 # 工程约定与工具
 
-可选模块由 `data/modules.js` 定义开关，`game/moduleRegistry.js` 接入初始化、存档、时间推进与停用清理，`modules/uiRegistry.js` 单独接入界面。猎杀数据与系统集中在 `modules/hunting/`，引擎不依赖 Vue 界面。停用模块读档时先验证并保留切片，再召回活动任务，保留历史和偏好；转世/飞升才重置本世切片。任务存档过滤异常结构与数值并重挂合法成员占用。
+可选模块由 `data/modules.js` 定义开关，`game/moduleRegistry.js` 接入初始化、存档、时间推进与停用清理，`modules/uiRegistry.js` 单独接入界面。目录项默认用 `module: '<id>'` 绑定单一模块；需要多个模块任一启用即生效时改用 `moduleAny: ['a', 'b']`，由 `isEntryEnabled` 统一判定（例如猎杀与外交共用的信符供给：执符使、猎杀营地与《山野猎法》）。猎杀数据与系统集中在 `modules/hunting/`，引擎不依赖 Vue 界面。停用模块读档时先验证并保留切片，再召回活动任务，保留历史和偏好；转世/飞升才重置本世切片。任务存档过滤异常结构与数值并重挂合法成员占用。
 
 更新：2026-10-13。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
 
-个人天赋配置在 `data/talents.js`，32条词条按修炼、岗位、突破类别互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`及DOM检查。完整规则见 [DISCIPLE-TALENTS.md](DISCIPLE-TALENTS.md)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。
+个人天赋配置在 `data/talents.js`，32条词条按修炼、岗位、突破类别互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`。完整规则见 [DISCIPLE-TALENTS.md](DISCIPLE-TALENTS.md)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。
 
-提示组件：所有tooltip统一使用`HoverTip`，不再使用`RuleTip`或原生`title`提示。组件负责正文外壳和标题：简单规则用`label`自动生成可聚焦的点状下划线入口；按钮与表格保留默认触发插槽，用`title`或`#heading`提供标题、`description`提供说明、`#tip`提供明细。所有内容共用`tip-desc`、`tip-section`、`tip-row`（左标签／右数值）及`tip-note`／`tip-flavor`（分隔线后的淡色左对齐备注），不在业务组件重复创建`tip-body`或`tip-title`。默认宽360px，复杂明细可指定宽度，均受视口约束；支持悬停、键盘聚焦、Escape关闭及触发器滚轮阅读，下拉框操作期间暂停提示。重复说明与开发信息从默认界面移除；实时数值、操作条件、缺料原因、身死总风险和读档覆盖提醒保留，重修确认流程不变。DOM检查验证默认隐藏、统一结构、提示内容与风险可见性。
+提示组件：所有tooltip统一使用`HoverTip`，不再使用`RuleTip`或原生`title`提示。组件负责正文外壳和标题：简单规则用`label`自动生成可聚焦的点状下划线入口；按钮与表格保留默认触发插槽，用`title`或`#heading`提供标题、`description`提供说明、`#tip`提供明细。所有内容共用`tip-desc`、`tip-section`、`tip-row`（左标签／右数值）及`tip-note`／`tip-flavor`（分隔线后的淡色左对齐备注），不在业务组件重复创建`tip-body`或`tip-title`。默认宽360px，复杂明细可指定宽度，均受视口约束；支持悬停、键盘聚焦、Escape关闭及触发器滚轮阅读，下拉框操作期间暂停提示。重复说明与开发信息从默认界面移除；实时数值、操作条件、缺料原因、身死总风险和读档覆盖提醒保留，重修确认流程不变。
 
-弟子管理的五个原生下拉框通过`StableSelect`隔离父页高频刷新；筛选选项固定，人数在栏外显示。岗位选项仅在解锁集合改变时更新，集合未变则复用数组；子组件不使用原生`v-model`每帧同步值，避免操作期间被页面刷新重写。DOM检查验证选项无额外变更、节点与焦点保留，以及尚未提交的选择不被重置。
+弟子管理的五个原生下拉框通过`StableSelect`隔离父页高频刷新；筛选选项固定，人数在栏外显示。岗位选项仅在解锁集合改变时更新，集合未变则复用数组；子组件不使用原生`v-model`每帧同步值，避免操作期间被页面刷新重写。
 
 建筑效果的资源条目由`describeEffects`和`describeJobEffects`携带`resource`标识，`BuildingButton`按`view.visibleResources`过滤每座效果；全局效果、职位开放和工位容量保留。过滤只影响展示，不改效果结算；合计仍按相同标签对应原始总效果。新增资源效果时沿用资源标识，避免按中文文案判断解锁。
 
@@ -22,7 +22,7 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 
 弟子状态与成长：`disciples.members`保存独立身份、姓名、岗位、境界、本境修为及调息剩余秒数；`nextId`分配身份。`data/disciples.js`统一配置修炼、个人倍率与宗门基础突破概率。`syncDisciples`兼容人数接口并同步个体，个体调岗动作反向汇总人数；岗位按`discipleJobWeights`汇总个人有效倍率，口粮按`discipleWeight`汇总。`tick`先推进已有弟子修炼，到来时只计入门后时间；事件招入补建个体，流失移除实际人选。旧档归一化补凡体记录，随机状态不参与姓名生成；重修清空个体。首版材料按目标基础费用1%逐项取整，失败只损失本境修为与调息。`tools/disciple-check.mjs`接入smoke验证保存、上限、失败、批量支付及离线。
 
-主动招募：`data/disciples.js` 的 `RECRUIT_TIERS` 定义三档礼聘（灵气×宗门境界倍率，高档叠加香火／灵机）与各自的 `realmWeights`／`tierWeights`／`countWeights`；`recruitCost` 折算花费，`recruitRealmRange` 给界面展示起点境界区间，`rollRecruitRealm` 用独立的 `recruitSeed` 序列按偏移权重抽取起点境界（宗门越高、档位越高则起点越高）；`data/talents.js` 的 `birthTalents`／`rollTalent` 增加可选 `{ tierWeights, countWeights }` 覆盖品级与条数分布，`newDisciple` 增加可选 `realm`／`quality`（缺省仍为凡体、基础分布）。系统层 `systems/disciples.js` 提供 `recruitPreview`／`recruitDisciple`，满员、离开风险、未解锁或付不起即拒绝且不扣料；`recruitArrivals` 与 `core.nextArrivalIn` 在 `derived.recruitModeUnlocked && settings.recruitMode === 'manual'` 时停止自动来人（按解锁判定，避免转世清空研究后被动锁死）。解锁标记由 `effects.recruitMode` 折入 `derived.recruitModeUnlocked`；`settings.recruitMode` 归一化只接受 `auto`／`manual`，`recruitSeed` 缺失时从 `rootSeed` 派生。规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.5，回归见 `tools/smoke.mjs` 与 `tools/dom-check.mjs`。
+主动招募：`data/disciples.js` 的 `RECRUIT_TIERS` 定义三档礼聘（灵气×宗门境界倍率，高档叠加香火／灵机）与各自的 `realmWeights`／`tierWeights`／`countWeights`；`recruitCost` 折算花费，`recruitRealmRange` 给界面展示起点境界区间，`rollRecruitRealm` 用独立的 `recruitSeed` 序列按偏移权重抽取起点境界（宗门越高、档位越高则起点越高）；`data/talents.js` 的 `birthTalents`／`rollTalent` 增加可选 `{ tierWeights, countWeights }` 覆盖品级与条数分布，`newDisciple` 增加可选 `realm`／`quality`（缺省仍为凡体、基础分布）。系统层 `systems/disciples.js` 提供 `recruitPreview`／`recruitDisciple`，满员、离开风险、未解锁或付不起即拒绝且不扣料；`recruitArrivals` 与 `core.nextArrivalIn` 在 `derived.recruitModeUnlocked && settings.recruitMode === 'manual'` 时停止自动来人（按解锁判定，避免转世清空研究后被动锁死）。解锁标记由 `effects.recruitMode` 折入 `derived.recruitModeUnlocked`；`settings.recruitMode` 归一化只接受 `auto`／`manual`，`recruitSeed` 缺失时从 `rootSeed` 派生。规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.5。
 
 手动合成：玩家与模拟脚本的手动制作通过`craft`即时结算；`craftBatch`按当前材料和仓容计算份数，再立即制作。不生成订单，不改变自动计时；自动加工仍受工位、供能、冷却、库存目标与材料保留量约束。`requestCraft`及订单管理只保留为旧版兼容与回归验证接口，旧存档的`craftOrders`继续加工，可暂停、恢复或取消，重修时清空。`processingBottleneck`复用加工计划和统一资源流量显示供料缓冲；`progression-diagnostics.mjs`输出破境缺料、仓容缺口、生产设施与未解锁扩仓前置。
 
@@ -107,7 +107,7 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 | npm run smoke | 数据、前置、供料、产出、实际操作、存档与离线 |
 | npm run check:render | Vue SSR模板与警告 |
 | npm run check:startup | 真实main入口、浏览器定时器接收对象、热更新保存与重启 |
-| npm run check:dom | jsdom真实挂载、主循环、更新日志与交互 |
+| npm run check:dom | jsdom真实挂载、主循环、更新日志与存档交互 |
 | npm run check:tools | 审计参数、临时修改还原与多路线统计 |
 | npm run check | 上述检查 |
 | npm run build | 生产构建 |

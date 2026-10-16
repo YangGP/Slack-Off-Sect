@@ -498,7 +498,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     }
   }
   for (const r of RESOURCES) {
-    // 猎备仓容完全独立：不乘仙缘仓储倍率（isolatedStorage），也不套通用扩仓（storageWeight 0）。
+    // 信符仓容完全独立：不乘仙缘仓储倍率（isolatedStorage），也不套通用扩仓（storageWeight 0）。
     if (Number.isFinite(max[r.id]) && !r.isolatedStorage) max[r.id] *= karmaStorageMult
     if (r.integer) max[r.id] = floorNumber(max[r.id])
   }

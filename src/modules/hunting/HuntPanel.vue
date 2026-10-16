@@ -1,12 +1,14 @@
 <script setup>
 /**
- * 猎杀页：猎妖师备猎 → 选猎场与弟子 → 出征 → 归队取兽材。
+ * 猎杀页：执符使开符 → 选猎场与弟子 → 出征 → 归队取兽材。
+ * 信符与宗门外交共用同一池子（见外交页）：备猎与互市抢同一份凭信。
  * 首轮只开放山麓；妖兽来袭关联与生态字段关闭（仅记统计）。
  * 本组件属于「妖兽猎杀」可选模块，由 src/modules/hunting/ui.js 导出。
  */
 import { computed } from 'vue'
 import { state, derived, view, actions } from '@/game/store'
 import { HUNT, HUNT_FIELDS, HUNT_FIELD_MAP } from './data.js'
+import { DIPLOMACY } from '@/modules/diplomacy/data.js'
 import { REALMS } from '@/data/realms'
 import { resourceName } from '@/data/resources'
 import { canDepart, huntableMembers, huntPreview } from '@/game/engine'
@@ -17,13 +19,13 @@ const fieldId = computed(() => state.hunting.settings.selectedFieldId)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])
 const unlocked = computed(() => state.upgrades.wildHunting && state.buildings.huntingCamp?.on)
 const mission = computed(() => view.huntMission.value)
-const prep = computed(() => state.resources.huntPreparation || 0)
-const prepMax = computed(() => derived.max.huntPreparation || 0)
-const prepRate = computed(() => derived.rates.huntPreparation || 0)
+const prep = computed(() => state.resources.warrant || 0)
+const prepMax = computed(() => derived.max.warrant || 0)
+const prepRate = computed(() => derived.rates.warrant || 0)
 const waitForPrep = computed(() =>
-  prep.value >= HUNT.PREPARATION_COST || prepRate.value <= 0
+  prep.value >= HUNT.WARRANT_COST || prepRate.value <= 0
     ? null
-    : (HUNT.PREPARATION_COST - prep.value) / prepRate.value,
+    : (HUNT.WARRANT_COST - prep.value) / prepRate.value,
 )
 
 const members = computed(() => huntableMembers(state))
@@ -62,7 +64,8 @@ const lastOutcome = computed(() => state.hunting.lastOutcome)
   <div class="box">
     <div class="box-head">
       <HoverTip label="妖兽猎杀"><template #tip>
-          <p>猎妖师在营地备下猎备，每趟出征消耗 {{ HUNT.PREPARATION_COST }}。选猎场与 1~{{ HUNT.TEAM_MAX }} 名弟子入山，归队后获得兽材。</p>
+          <p>执符使在营房开具信符，每趟出征消耗 {{ HUNT.WARRANT_COST }} 枚。选猎场与 1~{{ HUNT.TEAM_MAX }} 名弟子入山，归队后获得兽材。</p>
+          <p>信符与宗门外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚，两边抢同一份凭信。</p>
           <p>出征期间弟子停止原岗位，但仍修炼、消耗口粮；不能被转岗、逐出或再次派出。</p>
           <p>兽材按整数入库，不足 1 的部分跨任务累计，不丢失。</p>
         </template></HoverTip>
@@ -73,20 +76,20 @@ const lastOutcome = computed(() => state.hunting.lastOutcome)
         尚未开放猎杀：需掌握《山野猎法》，并启用猎杀营地（筑基期）。
       </div>
       <template v-else>
-        <!-- 猎备 -->
+        <!-- 信符 -->
         <table class="grid">
           <tbody>
             <tr>
-              <td class="dim nowrap">猎备</td>
+              <td class="dim nowrap">信符</td>
               <td class="num">
                 {{ fmtInt(prep) }} / {{ fmtInt(prepMax) }}
                 <span class="dim">（{{ fmtPercent(prepPct) }}）</span>
                 <div class="hunt-bar"><span :style="{ width: (prepPct * 100) + '%' }" /></div>
               </td>
-              <td class="dim nowrap">准备速度</td>
+              <td class="dim nowrap">开具速度</td>
               <td class="num">
                 <span v-if="prepRate > 0">{{ fmt(prepRate) }}/秒</span>
-                <span v-else class="warn">无（派猎妖师到营地）</span>
+                <span v-else class="warn">无（派执符使到营地）</span>
                 <span v-if="waitForPrep !== null" class="dim"> · 距一次出征约 {{ fmtTime(waitForPrep) }}</span>
               </td>
             </tr>
@@ -176,7 +179,7 @@ const lastOutcome = computed(() => state.hunting.lastOutcome)
     <div class="box-body">
       <div v-if="!lastOutcome" class="empty">还没有出征记录。</div>
       <template v-else-if="lastOutcome.cancelled">
-        <div class="small dim">已取消，弟子归队（不退猎备）。</div>
+        <div class="small dim">已取消，弟子归队（不退信符）。</div>
       </template>
       <template v-else>
         <div class="small">

@@ -41,8 +41,8 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
         changed = true
       }
     }
-    // 猎杀是任务来源，不在 jobs/crafts 中：营地、弟子容量与猎备齐备后，猎场产物算作已开放来源。
-    if (derived.maxDisciples > 0 && sources.has('huntPreparation') && derived.max.huntPreparation >= HUNT.PREPARATION_COST) {
+    // 猎杀是任务来源，不在 jobs/crafts 中：营地、弟子容量与信符齐备后，猎场产物算作已开放来源。
+    if (derived.maxDisciples > 0 && sources.has('warrant') && derived.max.warrant >= HUNT.WARRANT_COST) {
       for (const field of HUNT_FIELDS) {
         if (!E.isHuntUnlocked(state, field.id)) continue
         for (const res of Object.keys(field.baseYield)) {

@@ -8,6 +8,7 @@
  * 开关读 `state.settings.modules[<id>]`：缺省用 defaultEnabled（旧档自动按默认值补齐）。
  * 条目上带 `module: '<id>'` 的目录项（资源/岗位/建筑/配方/研究）在模块关闭时统一失效，
  * 判定集中在 core 的解锁函数与 economy 的累加循环里。
+ * 需要多个模块任一启用即生效的条目改用 `moduleAny: ['a', 'b']`（例如猎杀与外交共用的信符供给）。
  */
 export const MODULES = [
   {
@@ -15,7 +16,14 @@ export const MODULES = [
     name: '妖兽猎杀',
     // 界面标签 id（关闭后若正停留在该页则回退到宗门页）
     tabId: 'hunt',
-    desc: '猎场出征、猎备与兽材利用。关闭后隐藏猎杀页与相关建筑/岗位/研究，主线照常运行。',
+    desc: '猎场出征、信符与兽材利用。关闭后隐藏猎杀页与相关建筑/岗位/研究；信符供给在「外交」模块启用时保留。',
+    defaultEnabled: true,
+  },
+  {
+    id: 'diplomacy',
+    name: '宗门外交',
+    tabId: 'diplomacy',
+    desc: '与邻宗互市：以富余资源换取紧缺物资。关闭后隐藏外交页与相关研究；信符供给在「猎杀」模块启用时保留。',
     defaultEnabled: true,
   },
 ]
@@ -35,8 +43,9 @@ export function isModuleEnabled(state, id) {
   return value === undefined ? meta.defaultEnabled : value === true
 }
 
-/** 目录项是否实际生效：未标记模块恒为真，标记了则看开关 */
+/** 目录项是否实际生效：未标记模块恒为真；moduleAny 任一启用即生效；否则看 module 开关 */
 export function isEntryEnabled(state, entry) {
+  if (entry?.moduleAny) return entry.moduleAny.some((id) => isModuleEnabled(state, id))
   return !entry?.module || isModuleEnabled(state, entry.module)
 }
 
