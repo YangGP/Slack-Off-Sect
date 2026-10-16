@@ -63,6 +63,20 @@ export function runModuleTicks(state, derived, dt) {
   return changed
 }
 
+/**
+ * 长离线的有界近似推进：模块可选实现 `advanceOffline(state, derived, dt, ctx)`，
+ * 自己负责把整段时长批量结算（例如猎杀按可完成趟数估算），而不是逐次调用 `advance`。
+ * 未实现该钩子的模块在离线段内不推进 —— 与「离线不新增随机事件」的现行约定一致。
+ */
+export function runModuleOfflineTicks(state, derived, dt, ctx = {}) {
+  let changed = false
+  for (const m of MODULE_DESCRIPTORS) {
+    if (!isModuleEnabled(state, m.id)) continue
+    if (m.advanceOffline?.(state, derived, dt, ctx)) changed = true
+  }
+  return changed
+}
+
 /** 最近一个模块期限（毫秒，> now），无则 Infinity；主循环据此切步 */
 export function nextModuleDeadline(state, now) {
   let earliest = Infinity

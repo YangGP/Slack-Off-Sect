@@ -15,6 +15,8 @@ export default {
   normalizeState: system.normalizeHuntingState,
   rehydrate: system.rehydrateHuntOccupancy,
   advance: system.advanceHunt,
+  /** 长离线的有界快进：已有任务按剩余时长推进，自动重复按可完成趟数批量估算。 */
+  advanceOffline: system.advanceOfflineHunt,
   nextDeadline: system.nextHuntDeadline,
   deactivate: system.deactivateHunting,
 }

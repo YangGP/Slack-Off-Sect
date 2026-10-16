@@ -3,16 +3,17 @@ import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute, canReuseEconomy } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
-import { runModuleTicks, nextModuleDeadline } from '@/game/moduleRegistry'
+import { runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
 import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { BUILDINGS } from '@/data/buildings'
 import { ALL_UPGRADES } from '@/data/upgrades'
-import { runAutoCraft, runAutoCondense } from './crafting'
+import { runAutoCraft, runAutoCondense, runAutoCraftTimers, runIndustrialCraftBatch, runAutoCondenseBatch } from './crafting'
 import { CALENDAR } from '@/data/calendar'
 import { recruitArrivals, autoAssignTalentJobs } from './disciples'
+import { isLongOffline, offlineSegments, offlineSegmentCount, averageSeasonRatio, BUFF_BOUNDARY_EPS_MS } from './offlinePlan'
 
 export function checkAchievements(state, derived) {
   const newly = []
@@ -65,7 +66,7 @@ function createTickRunner(state, derived, seconds, opts) {
     !BUILDINGS.some(b => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0) &&
     !ALL_UPGRADES.some(u => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false) &&
     (opts.offline || opts.events === false)
-  const maxSliceMs = seconds > CONFIG.OFFLINE_COARSE_AFTER_SECONDS
+  const maxSliceMs = seconds > CONFIG.OFFLINE_EXACT_AFTER_SECONDS
     && stableProduction ? CONFIG.MAX_SLICE_SECONDS * 1000
     : CONFIG.TICK_SLICE_MS
   let reuseEconomy = false
@@ -267,23 +268,46 @@ export function seasonEffectText(ratio) {
   return parts.length ? parts.join('、') : '无影响'
 }
 
-/** 离线结算：把离线时间切成 1 秒一段推进，避免公式失真 */
+/**
+ * 离线结算入口（同步）。
+ *
+ * 两条路径（见 docs/ENGINEERING.md「离线结算」）：
+ * - 不超过 CONFIG.OFFLINE_EXACT_AFTER_SECONDS：沿用逐秒精确推进，与在线逐 tick 完全一致；
+ * - 超过：改走**有界近似**，把整段切成至多 OFFLINE_MAX_SEGMENTS 段批量结算，
+ *   计算量与离线时长脱钩，收益为估算值，可能与在线挂机不同。
+ */
 export function simulateOffline(state, derived, seconds, opts = {}) {
   const cap = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
   if (cap <= 0) return { seconds: 0, gains: {}, disciples: 0 }
   const before = { ...state.resources }
   const disciplesBefore = state.disciples.total
-  advanceTicks(state, derived, cap, { ...opts, offline: true, events: false })
+  const offline = { ...opts, offline: true, events: false }
+  if (isLongOffline(cap)) {
+    const runner = createOfflineSegmentRunner(state, derived, cap, offline)
+    runner.runBatch()
+    return offlineSummary(state, before, disciplesBefore, cap, runner.stats)
+  }
+  advanceTicks(state, derived, cap, offline)
   return offlineSummary(state, before, disciplesBefore, cap)
 }
 
-function offlineSummary(state, before, disciplesBefore, cap) {
+function offlineSummary(state, before, disciplesBefore, cap, stats = null) {
   const gains = {}
   for (const r of RESOURCES) {
     const diff = (state.resources[r.id] || 0) - (before[r.id] || 0)
     if (diff > 0.01) gains[r.id] = diff
   }
-  return { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
+  const summary = { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
+  // 有界近似额外报告实际工作量，便于基准与回归断言「计算量没有换到内部循环」。
+  if (stats) {
+    summary.approximate = true
+    summary.segments = stats.segments
+    summary.baseSegments = stats.baseSegments
+    summary.industryRounds = stats.industryRounds
+    summary.huntBatches = stats.huntBatches
+    summary.discipleDepartures = stats.departures
+  }
+  return summary
 }
 
 export function throwIfSimulationCancelled(opts) {
@@ -294,7 +318,7 @@ export function throwIfSimulationCancelled(opts) {
   }
 }
 
-/** 每批最多计算约8ms，随后让出主线程；仍逐秒处理所有游戏结算边界。 */
+/** 每批最多计算约8ms，随后让出主线程；同步与异步共用同一套推进器与段边界。 */
 export async function simulateOfflineAsync(state, derived, seconds, opts = {}) {
   throwIfSimulationCancelled(opts)
   const cap = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
@@ -309,7 +333,11 @@ export async function simulateOfflineAsync(state, derived, seconds, opts = {}) {
   progress(0)
   await yieldControl()
   throwIfSimulationCancelled(opts)
-  const runner = createTickRunner(state, derived, cap, { ...opts, offline: true, events: false })
+  const offline = { ...opts, offline: true, events: false }
+  // 批次只决定让出主线程的时机，不改变段边界与运算顺序：同一输入下同步与异步结果一致。
+  const runner = isLongOffline(cap)
+    ? createOfflineSegmentRunner(state, derived, cap, offline)
+    : createTickRunner(state, derived, cap, offline)
   while (!runner.done) {
     const batchStart = performance.now()
     let steps = 0
@@ -319,5 +347,232 @@ export async function simulateOfflineAsync(state, derived, seconds, opts = {}) {
     if (!runner.done) await yieldControl()
     throwIfSimulationCancelled(opts)
   }
-  return offlineSummary(state, before, disciplesBefore, cap)
+  return offlineSummary(state, before, disciplesBefore, cap, runner.stats)
+}
+
+/**
+ * 有界近似的分段推进器：一次规划全部分段，逐段执行，同步与异步共用。
+ *
+ * 段边界只由「基础分段数的等分点 + 初始有效增益的到期时刻 + 总时长」决定，
+ * 因此总步数与离线秒数无关；过程中新生成的任务不会追加边界。
+ */
+export function createOfflineSegmentRunner(state, derived, seconds, opts = {}) {
+  const startAt = opts.startAt ?? gameNow(state)
+  const endAt = startAt + seconds * 1000
+  const plan = offlineSegments(state, seconds, startAt)
+  const stats = {
+    baseSegments: offlineSegmentCount(seconds),
+    segments: plan.length,
+    industryRounds: 0,
+    huntBatches: 0,
+    departures: 0,
+    hungerDepartures: 0,
+    crowdingDepartures: 0,
+  }
+  const details = opts.offline !== true || opts.economyDetails === true
+  let index = 0
+  let finished = false
+  return {
+    stats,
+    get totalSegments() { return plan.length },
+    get done() { return index >= plan.length },
+    get completedSeconds() { return index >= plan.length ? seconds : plan[index].fromSeconds },
+    runBatch(shouldYield = () => false) {
+      while (index < plan.length) {
+        const segment = plan[index]
+        const segmentStart = startAt + segment.fromSeconds * 1000
+        const segmentEnd = index === plan.length - 1 ? endAt : startAt + segment.toSeconds * 1000
+        withGameContext(state, { now: () => segmentStart, economyDetails: details }, () => {
+          approximateSegment(state, derived, segment, { ...opts, startAt: segmentStart, endAt: segmentEnd, stats })
+        })
+        index++
+        if (shouldYield()) break
+      }
+      if (index < plan.length || finished) return
+      finished = true
+      // 收尾与逐秒路径相同：清理到期增益、结算超时威胁、对齐游戏时钟、补齐界面明细。
+      withGameContext(state, { now: () => endAt, economyDetails: true }, () => {
+        state.buffs = state.buffs.filter(buff => (Number(buff.until) || 0) > endAt)
+        settleExpiredThreat(state, derived)
+        state.lastTickAt = endAt
+        recompute(state, derived)
+      })
+      logOfflineDepartures(state, stats, endAt)
+    },
+  }
+}
+
+/**
+ * 长离线的一段有界近似推进。
+ *
+ * 每段只做固定次数的经济求解与批量结算：按段首状态与该段时长估算生产、口粮与维护供给，
+ * 按速率乘 dt 一次结算，段后再刷新派生数据。历法直接推进完整 dt，跨季节用加权倍率折算。
+ * 允许段内供给变化、加工重启与季节轮转带来误差，但不允许负数库存、超仓储增收或欠账。
+ */
+function approximateSegment(state, derived, segment, opts) {
+  const dt = segment.seconds
+  const startMs = opts.startAt
+  const stats = opts.stats
+  // 1) 到期增益在段开始前移除。边界已按到期时刻切分，容差只吸收秒↔毫秒的折算误差。
+  if (state.buffs.length) {
+    state.buffs = state.buffs.filter(buff => (Number(buff.until) || 0) > startMs + BUFF_BOUNDARY_EPS_MS)
+  }
+  const dayFrom = state.totalDays || 0
+  const dayTo = dayFrom + dt / CALENDAR.DAY_SECONDS
+  withGameContext(state, { seasonRatio: averageSeasonRatio(dayFrom, dayTo) }, () => {
+    // 2) 自动分工与段首经济求解：供给按本段时长估算，不足者整段按比例降载。
+    autoAssignTalentJobs(state)
+    recompute(state, derived, dt)
+
+    // 3) 已有弟子按段批量累计修炼、停留与调息；修满停止，离线仍不自动突破。
+    for (const member of state.disciples.members) cultivateDisciple(member, dt, derived.trainingActive)
+    if (settleExpiredThreat(state, derived)) recompute(state, derived, dt)
+
+    // 4) 个人口粮按实际有效境界与减耗累计；断供时按口粮与维护共有的供给比例记账。
+    const qiDemand = Math.max(0, -(derived.expense?.qi || 0) * dt)
+    const qiAvailable = Math.max(0, (state.resources.qi || 0) + (derived.rates.qi || 0) * dt)
+    const qiSupply = qiDemand > 0 ? Math.min(1, qiAvailable / qiDemand) : 0
+    if (derived.discipleWeight > 0 && derived.upkeep > 0) {
+      for (const member of state.disciples.members) {
+        const consumed = derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight * dt * qiSupply
+        member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + consumed)
+      }
+    }
+
+    // 5) 资源结算：段首速率乘 dt 一次计入，受实际可用量与仓储限制，不出现负数。
+    //    维护与加工共用同一份材料预算：两者都在这里按同一批库存封顶。
+    for (const r of RESOURCES) {
+      if (r.noProduction || r.id === 'qiEnergy') continue
+      let rate = derived.rates[r.id] || 0
+      if (derived.expense?.[r.id]) rate += derived.expense[r.id]
+      if (rate === 0) continue
+      const before = state.resources[r.id] || 0
+      let next = before + rate * dt
+      const max = derived.max[r.id]
+      // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
+      if (next > max && rate > 0) next = Math.max(before, max)
+      if (!Number.isFinite(next) || next < 0) next = 0
+      state.resources[r.id] = next
+      if (next > 0) state.seen[r.id] = true
+      const gained = next - before
+      if (gained > 0) {
+        if (r.id === 'qi') state.stats.totalQi += gained
+        if (r.id === 'insight') {
+          state.stats.totalInsight += gained
+          state.stats.lifeInsight = (state.stats.lifeInsight || 0) + gained
+        }
+        if (r.id === 'faith') state.stats.totalFaith += gained
+      }
+    }
+
+    // 6) 灵能：持续产出与每秒逸散的闭式解，兼顾消耗与仓储。
+    //    不能先把整段产出入库、再把全部产出按期初库存衰减 —— 那样稳定产出会长期归零。
+    {
+      const before = state.resources.qiEnergy || 0
+      const net = (derived.rates.qiEnergy || 0) + (derived.expense?.qiEnergy || 0)
+      const decay = clamp(CONFIG.QI_ENERGY_DECAY, 0, 1)
+      const remain = Math.pow(1 - decay, dt)
+      const lambda = decay > 0 && decay < 1 ? -Math.log(1 - decay) : 0
+      let next = before * remain + (lambda > 0 ? net / lambda * (1 - remain) : net * dt)
+      const max = derived.max.qiEnergy
+      if (next > max && net > 0) next = Math.max(before, max)
+      if (!Number.isFinite(next) || next < 0) next = 0
+      state.resources.qiEnergy = next
+      if (next > 0) state.seen.qiEnergy = true
+    }
+    trackPeak(state)
+
+    // 7) 可选模块的离线快进（猎杀按可完成趟数批量估算；无该钩子的模块不推进）。
+    if (runModuleOfflineTicks(state, derived, dt, { startAt: startMs, endAt: opts.endAt, stats })) {
+      recompute(state, derived, dt)
+    }
+
+    // 8) 宜居度：断供下滑、正常回升，触底即止。
+    const previousPenalty = state.habitabilityPenalty
+    const starving = (state.resources.qi || 0) <= 1 && derived.netQi < 0
+    state.habitabilityPenalty = clamp(
+      starving ? state.habitabilityPenalty - CONFIG.HABITABILITY_STARVE_RATE * dt
+        : state.habitabilityPenalty + CONFIG.HABITABILITY_RECOVER_RATE * dt,
+      -60,
+      0,
+    )
+    if (state.habitabilityPenalty !== previousPenalty) recompute(state, derived, dt)
+
+    // 9) 流失按次数与概率一次估出这段的人数，不逐 25/60 秒抽签，
+    //    也不因为长段只走一人而让数小时断粮几乎没有影响。
+    state.starvationTimer = starving ? (state.starvationTimer || 0) + dt : 0
+    state.leaveTimer = derived.leaveChance > 0 ? (state.leaveTimer || 0) + dt : 0
+    let hungerLeaves = 0
+    let crowdingLeaves = 0
+    if (state.disciples.total > 0) {
+      if (state.starvationTimer >= CONFIG.LEAVE_INTERVAL) {
+        hungerLeaves = Math.floor(state.starvationTimer / CONFIG.LEAVE_INTERVAL)
+        state.starvationTimer -= hungerLeaves * CONFIG.LEAVE_INTERVAL
+      }
+      if (state.leaveTimer >= CONFIG.HABITABILITY_LEAVE_INTERVAL) {
+        const checks = Math.floor(state.leaveTimer / CONFIG.HABITABILITY_LEAVE_INTERVAL)
+        state.leaveTimer -= checks * CONFIG.HABITABILITY_LEAVE_INTERVAL
+        // 一次抽签的批量期望代替每 60 秒一次抽签：期望值与逐次抽签一致，抽签次数与离线时长无关。
+        const expected = checks * derived.leaveChance
+        const whole = Math.floor(expected)
+        crowdingLeaves = whole + (gameRandom(state) < expected - whole ? 1 : 0)
+      }
+    }
+    const removed = batchRemoveDisciples(state, hungerLeaves + crowdingLeaves)
+    if (removed > 0) {
+      const hungerRemoved = Math.min(hungerLeaves, removed)
+      stats.hungerDepartures += hungerRemoved
+      stats.crowdingDepartures += removed - hungerRemoved
+      stats.departures += removed
+      recompute(state, derived, dt)
+    }
+
+    // 10) 自动制作：非工业配方按节拍批量出货，工业配方走有界批量路径（不按成品份数循环）。
+    const crafted = runAutoCraftTimers(state, derived, dt)
+    const processed = derived.industrial ? runIndustrialCraftBatch(state, derived, dt, stats) : false
+    if (crafted || processed) recompute(state, derived, dt)
+
+    // 11) 历法直接推进完整 dt（不穷举节气），凝灵诀按跨过的节气数批量估算。
+    state.totalDays = dayTo
+    if (runAutoCondenseBatch(state, derived, dayFrom, dayTo, dt)) recompute(state, derived, dt)
+
+    // 12) 弟子自动前来：沿用批量数量计算，新弟子只累计入门后的时间。
+    if (!starving && derived.leaveChance === 0) recruitArrivals(state, derived, dt, { silent: true })
+    else state.arrivalTimer = 0
+
+    // 13) 成就按段检查一次；离线不新增随机事件。
+    const counters = runtimeCounters(state)
+    counters.achievementSeconds += dt
+    if (counters.achievementSeconds >= 0.5) {
+      counters.achievementSeconds %= 0.5
+      checkAchievements(state, derived)
+    }
+
+    state.stats.playTime += dt
+  })
+}
+
+/** 有界批量流失：闲散弟子先走，其次是人数最多的岗位，最后才动农夫；不走随机抽签。 */
+function batchRemoveDisciples(state, count) {
+  if (!(count >= 1)) return 0
+  const jobs = state.disciples.jobs || {}
+  const pool = state.disciples.members.filter(member => !member.onMission)
+  if (!pool.length) return 0
+  const rank = member => !member.roleId || !jobs[member.roleId] ? 0 : member.roleId === 'farmer' ? 2 : 1
+  pool.sort((a, b) => rank(a) - rank(b) || (jobs[b.roleId] || 0) - (jobs[a.roleId] || 0) || a.id - b.id)
+  const removed = new Set(pool.slice(0, Math.min(count, pool.length)).map(member => member.id))
+  state.disciples.members = state.disciples.members.filter(member => !removed.has(member.id))
+  recountDisciples(state.disciples)
+  return removed.size
+}
+
+/** 离线流失只在窗口结束时汇总一条纪事，避免每个分段写一行。 */
+function logOfflineDepartures(state, stats, at) {
+  if (!(stats.departures > 0)) return
+  const parts = []
+  if (stats.hungerDepartures > 0) parts.push(`灵气长期断供 ${stats.hungerDepartures} 人`)
+  if (stats.crowdingDepartures > 0) parts.push(`宜居度不足、居所拥挤 ${stats.crowdingDepartures} 人`)
+  withGameContext(state, { now: () => at }, () => {
+    pushLog(state, `闭关期间，${parts.join('，')}收拾行囊下山了。`, 'bad')
+  })
 }

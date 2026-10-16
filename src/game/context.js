@@ -16,6 +16,14 @@ export function economyDetailsEnabled(state) {
   return contexts.get(state)?.economyDetails !== false
 }
 
+/**
+ * 有界近似的离线分段会把跨季节的长段折算成「按覆盖时长加权的季节倍率」，
+ * 由这里覆盖 recompute 默认取用的当前节气倍率；在线与逐秒精确路径恒为 null。
+ */
+export function seasonRatioOverride(state) {
+  return contexts.get(state)?.seasonRatio || null
+}
+
 export function setGameContext(state, context) {
   contexts.set(state, context)
 }

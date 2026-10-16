@@ -10,6 +10,7 @@ import { reactive, toRaw, watch } from 'vue'
 import { ACHIEVEMENTS } from '../src/data/achievements.js'
 import { EVENTS } from '../src/data/events.js'
 import { eventEligible } from '../src/game/systems/events.js'
+import { CONFIG } from '../src/data/config.js'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
@@ -77,7 +78,8 @@ export function runArchitectureChecks() {
   assert.equal(fractional.state.stats.playTime, 0.75)
   assert.equal(E.simulateOffline(fractional.state, fractional.derived, Infinity).seconds, 0)
 
-  // 超过粗步长门槛的离线结算必须与逐秒参考一致，包括跨季节与库存边界。
+  // 超过逐秒门槛的离线走有界近似：不再要求与逐秒参考逐位相同，
+  // 但仍须满足库存有限非负、人口口径一致、收益与参考同量级，且步数与离线时长无关。
   for (const withHousing of [false, true]) {
     const coarse = createInitialState(startAt)
     coarse.buildings.spiritField = { count: 1, on: true }
@@ -85,11 +87,26 @@ export function runArchitectureChecks() {
     if (withHousing) coarse.buildings.hut = { count: 1, on: true }
     const fine = normalizeState(JSON.parse(JSON.stringify(coarse)), { now: startAt })
     const cd = E.createDerived(), fd = E.createDerived()
-    E.simulateOffline(coarse, cd, 70, { startAt })
+    const report = E.simulateOffline(coarse, cd, 70, { startAt })
     for (let i = 0; i < 70; i++) E.tick(fine, fd, 1, { offline: true, events: false, startAt: startAt + i * 1000 })
-    for (const id of Object.keys(coarse.resources)) assert.ok(Math.abs(coarse.resources[id] - fine.resources[id]) < 1e-8, `长离线资源 ${id}, 居所=${withHousing}`)
-    assert.deepEqual(coarse.disciples, fine.disciples)
+    assert.equal(report.approximate, true)
+    assert.ok(report.segments <= E.offlineSegmentCount(70), `分段数不超过基础段数，居所=${withHousing}`)
+    for (const id of Object.keys(coarse.resources)) {
+      const value = coarse.resources[id]
+      assert.ok(Number.isFinite(value) && value >= 0, `长离线资源有限非负 ${id}, 居所=${withHousing}`)
+      // 近似允许段内供给与季节折算误差，但不允许量级偏差。
+      assert.ok(Math.abs(value - fine.resources[id]) <= Math.max(1, Math.abs(fine.resources[id]) * 0.25),
+        `长离线资源与逐秒参考同量级 ${id}, 居所=${withHousing}`)
+    }
+    assert.equal(coarse.disciples.total, fine.disciples.total, `长离线人口口径一致, 居所=${withHousing}`)
   }
+  // 计算量与离线时长脱钩：8 小时与 24 小时使用同一段数上限。
+  const shortWindow = createInitialState(startAt), longWindow = createInitialState(startAt)
+  for (const state of [shortWindow, longWindow]) state.buildings.spiritField = { count: 1, on: true }
+  const shortReport = E.simulateOffline(shortWindow, E.createDerived(), 600, { startAt })
+  const longReport = E.simulateOffline(longWindow, E.createDerived(), 24 * 3600, { startAt })
+  assert.equal(longReport.baseSegments, CONFIG.OFFLINE_MAX_SEGMENTS)
+  assert.equal(shortReport.segments, longReport.segments, '分段数与离线秒数无关')
 
   // 凝聚迁移只补历史能力的新增上游，标记独立于灵气分子字段并随存档持久化。
   for (const hasParticle of [false, true]) {

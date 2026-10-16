@@ -80,3 +80,13 @@ export const SEASONS = [
 
 export const DAYS_PER_SEASON = (TERMS.length / SEASONS.length) * CALENDAR.DAYS_PER_TERM
 export const DAYS_PER_YEAR = TERMS.length * CALENDAR.DAYS_PER_TERM
+
+/**
+ * 一段历法里跨过了几个节气边界。
+ * 长离线的有界近似用它直接算出「这段时间有几次节气结算」，避免逐节气循环。
+ */
+export function termCrossings(dayFrom, dayTo) {
+  const from = Math.floor(Math.max(0, dayFrom) / CALENDAR.DAYS_PER_TERM)
+  const to = Math.floor(Math.max(0, dayTo) / CALENDAR.DAYS_PER_TERM)
+  return Math.max(0, to - from)
+}

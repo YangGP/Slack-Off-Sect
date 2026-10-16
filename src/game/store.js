@@ -112,6 +112,16 @@ function applyOfflineProgress() {
   const seconds = Math.min(elapsed, capSeconds)
   return withOfflineLoading(async options => {
     const result = await game.simulateOfflineAsync(seconds, { ...options, startAt: restored.lastSaveAt })
+    /**
+     * 时间戳分两个口径，不能混用：
+     * - **已模拟到的游戏时刻**是 `state.lastTickAt`（= 存档时刻 + 实际结算时长）；
+     * - **本次已消费的现实窗口**是 [lastSaveAt, lastSaveAt + seconds]。
+     * 超出收益上限的现实时间不产出，但现实到期的增益与威胁仍要收尾 —— 与 advanceAsync 同一套语义。
+     */
+    const now = Date.now()
+    state.buffs = state.buffs.filter(buff => (buff.until || 0) > now)
+    E.settleExpiredThreat(state, derived)
+    E.recompute(state, derived)
     const gains = Object.entries(result.gains)
       .map(([id, amount]) => ({
         id,
@@ -123,6 +133,8 @@ function applyOfflineProgress() {
       awaySeconds: elapsed,
       simulatedSeconds: seconds,
       capped: elapsed > capSeconds,
+      // 长离线走有界近似：收益是估算值，界面需要如实说明，避免与在线挂机对不上号。
+      estimated: result.approximate === true,
       gains,
       disciples: result.disciples || 0,
     }
@@ -133,11 +145,14 @@ function applyOfflineProgress() {
     E.pushLog(
       state,
       `闭关 ${E.clamp(Math.floor(elapsed / 60), 0, 999999)} 分钟，弟子们替你干活${
-        gains.length ? '，收获见离线报告' : '，可惜库房已满'
+        gains.length ? '，收获见离线报告' : '，这次没有净增的库存'
       }${extra}`,
       'event',
     )
     E.recompute(state, derived)
+    // 已消费的窗口立刻落盘：此后再次读档不会重复领取同一段离线收益，
+    // 恢复在线后的运行时钟也不会因为结算耗时立刻形成第二次长补算。
+    runtime.save()
   })
 }
 

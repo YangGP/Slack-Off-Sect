@@ -65,6 +65,16 @@ export async function runOfflineAsyncChecks(ok) {
     ok(`异步离线与同步结果完全一致、进度递增且定时器持续执行（场景${index + 1}）`, true)
   }
 
+  // 批次预算只决定让出主线程的时机，不改变段边界与运算顺序。
+  {
+    const seed = normalizeState(initial, { now: startAt })
+    const tight = makeGame(seed), loose = makeGame(seed)
+    const one = await tight.game.simulateOfflineAsync(600.12345, { startAt, maxBatchSteps: 1, yieldControl: async () => {} })
+    const all = await loose.game.simulateOfflineAsync(600.12345, { startAt, maxBatchSteps: 4096, budgetMs: 1e9, yieldControl: async () => {} })
+    assert.deepEqual(tight.result(one), loose.result(all))
+    ok('切换异步批次预算不改变离线收益', true)
+  }
+
   for (const operation of ['abort', 'replace']) {
     const { game } = makeGame(seeds[0])
     const controller = new AbortController()

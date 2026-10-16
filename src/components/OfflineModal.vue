@@ -15,6 +15,10 @@ import { fmt, fmtAmount, fmtTime } from '@/game/format'
           >。
         </div>
 
+        <div v-if="ui.offlineReport.estimated" class="small dim" style="padding-top: 4px">
+          长离线的收益为估算，可能与在线挂机不同。
+        </div>
+
         <div v-if="ui.offlineReport.disciples > 0" class="small good" style="padding-top: 4px">
           另有 {{ ui.offlineReport.disciples }} 名弟子慕名而来。
         </div>
@@ -27,7 +31,9 @@ import { fmt, fmtAmount, fmtTime } from '@/game/format'
             </tr>
           </tbody>
         </table>
-        <div v-else class="empty">库房已满，弟子们只好坐着发呆。</div>
+        <div v-else class="empty">
+          这段闭关没有净增的库存：可能库房已满、供料不足，或收获刚好被口粮与维护吃掉。
+        </div>
       </div>
       <div class="dialog-foot">
         <button class="btn primary" @click="actions.dismissOffline()">继续摸鱼</button>

@@ -17,6 +17,8 @@
 
 `architecture-check`、`industry-check`、`disciple-check`、`talent-check`、`auto-talent-check`、`power-check`、`offline-check`、`offline-async-check` 是被 smoke 调用的专项检查，导入时不自行执行。不要为同一组断言另开一份副本。
 
+离线相关的分工：`offline-check` 管「同输入可复现、分段数与离线时长无关、库存与加工不越界、短窗口仍与逐秒参考一致」；`offline-async-check` 管「同步/异步一致、批次预算不改变结果、取消与异常不写回」；长离线的**收益不必与逐秒参考相同**（有界近似的既定口径），只断言上界与不变量。
+
 ## 审计与基准
 
 | 命令示例 | 用途 |
@@ -37,9 +39,11 @@
 | `npm run balance:events -- 24 0` | 事件种子与应对策略对照 |
 | `npm run balance:visits -- 24` | 固定开局及随机流，不同上线频率对照 |
 | `npm run bench:craft` | Vue 响应式状态下批量制作性能及扣料一致性 |
-| `npm run bench:offline -- "存档路径.txt" 28800 .smoke-offline-benchmark/result.json async` | 真实存档离线基准；模式 optimized/reference/async，输出快照可选，禁止覆盖输入存档 |
+| `npm run bench:offline -- "存档路径.txt" 28800 .smoke-offline-benchmark/result.json async` | 离线基准；首个参数可换成 `--fixture` 使用长离线专项夹具（72 名弟子、多配方工业、凝灵诀与自动猎杀，刻意让工业与自动重复在每个分段都有活干）。模式 optimized/reference/async，输出快照可选，禁止覆盖输入存档 |
 | `npm run docs:tables` | 从数据源码重新生成 TABLES |
 | `npm run clean` | 清理已知构建目录，检查项目边界并拒绝目录链接 |
+
+`bench:offline` 的 async 模式一批只跑一段，因此输出里的 `longestSegmentMs` 就是最长连续计算段；`segments`／`baseSegments`／`industryRounds`／`huntBatches` 证明计算量落在有界分段与有限轮数里，而不是移到了内部循环。没有真实存档时用 `--fixture` 即可复测同机耗时。
 
 可达性闭包不估计耗时；独立加工能力不代表共享材料下的并发产量；固定概率风险模型不包含生产时间及转世增长。综合报告、资源审计和专项报告保留各自口径，不合并成一个混杂的模拟器。
 
@@ -49,6 +53,7 @@
 - `lib/browser-env.mjs`：DOM 和启动检查共用全局量安装／恢复，退出时释放环境。
 - `lib/audit-context.mjs`：资源、加工链、上线频率审计使用固定开局、随机流和模拟时钟。
 - `lib/save-report.mjs`、`lib/breakthrough-risk.mjs`：可直接回归验证的报告计算，CLI 只处理输入输出。
+- `lib/offline-fixture.mjs`：长离线专项夹具，供离线检查与基准复用，不代表自然通关进度。
 - `engine-fixture.mjs`：兼容人数式审计夹具；`player-bot.mjs` 共用采购策略；`disciple-training.mjs` 共用培养策略。
 - `progression-reachability.mjs`、`progression-diagnostics.mjs`、`power-scenarios.mjs`：可达性、瓶颈与供能场景，供多个报告或检查复用。
 - `dom-entry.js` / `vite.domcheck.config.js`、`startup-entry.js`：分别提供客户端 DOM 与真实 main 启动夹具，保留不同构建方式。

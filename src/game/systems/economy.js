@@ -5,7 +5,7 @@ import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { treasureMult, habitabilityEffects, jobOutputs, softCap, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { JOBS } from '@/data/jobs'
-import { gameNow, economyDetailsEnabled } from '../context'
+import { gameNow, economyDetailsEnabled, seasonRatioOverride } from '../context'
 import { REALMS } from '@/data/realms'
 import { floorNumber } from '../numbers'
 import { PROCESSING_STATIONS } from '@/data/industry'
@@ -389,9 +389,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     }
   }
 
-  // 历法：季节直接乘进对应资源的产出（与建筑 / 修真的 ratio 同一层）
+  // 历法：季节直接乘进对应资源的产出（与建筑 / 修真的 ratio 同一层）。
+  // 有界近似的离线长段用「段内按覆盖时长加权的季节倍率」，在线与短离线用当前节气。
   const calendar = calendarAt(state.totalDays)
-  const seasonRatio = calendar.seasonRatio
+  const seasonRatio = seasonRatioOverride(state) || calendar.seasonRatio
 
   // 兼容旧派生字段；灵能改为实际供能，不再凭库存获得免费倍率。
   derived.energyBonus = 0

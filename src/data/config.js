@@ -105,12 +105,28 @@ export const CONFIG = {
   // 阵基冷却容量 = 全部工位容量之和的这个比例（晶核阵另加）
   PROCESSING_COOLING_CAPACITY_RATIO: 0.25,
   // 时间推进：切片步长。短时长（在线补算、短暂离开）保持逐秒精确，与主循环逐 tick
-  // 的结果完全一致；只有超过 OFFLINE_COARSE_AFTER_SECONDS 的长离线才启用自适应大步长
-  // （上限 MAX_SLICE_SECONDS），仅无弟子、维护、加工和灵能逸散时使用，
-  // 并在历法、增益与事务边界切步；其余场景维持逐秒结算。
+  // 的结果完全一致：不超过 OFFLINE_EXACT_AFTER_SECONDS 的补算全部逐秒结算，
+  // 其中无弟子、维护、加工和灵能逸散的稳定生产可用到 MAX_SLICE_SECONDS，
+  // 并在历法、增益与事务边界切步。
   TICK_SLICE_MS: 1000,
   MAX_SLICE_SECONDS: 10,
-  OFFLINE_COARSE_AFTER_SECONDS: 60,
+  /**
+   * 逐秒精确与有界近似的分界（秒）。
+   *
+   * 超过这个时长的离线改走「有界近似」：总时长等分为至多 OFFLINE_MAX_SEGMENTS 段，
+   * 每段按段首状态与该段时长估算供给后一次结算。**计算量与离线时长脱钩**，
+   * 代价是段内供给变化、加工重启与季节轮转按加权平均近似，
+   * 收益可能与在线挂机不同（见 docs/ENGINEERING.md「离线结算」）。
+   */
+  OFFLINE_EXACT_AFTER_SECONDS: 60,
+  /** 长离线的基础分段上限；另有初始有效增益的到期边界，步数上界与离线秒数无关。 */
+  OFFLINE_MAX_SEGMENTS: 64,
+  /**
+   * 每个离线分段内允许的「工位/配方扫描」轮数上限。
+   * 一轮 = 冻结一次工位分配、按可用加工时间与燃料预算批量结算；空出的工位在下一轮或下一段再分配。
+   * 禁止按预计成品份数循环。
+   */
+  OFFLINE_INDUSTRY_ROUNDS: 2,
   MAX_STEP_SECONDS: 60,
   // 旧版订单兼容：单个配方未完成订单的份数上限
   CRAFT_ORDER_CAP: 1000000,

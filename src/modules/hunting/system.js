@@ -386,8 +386,12 @@ export function advanceHunt(state, derived, dt) {
   return changed
 }
 
-/** 归队结算：逐人判定成功，按 T_base 与快照倍率计算兽材，整数入库、小数累计。 */
-export function settleMission(state, derived, mission) {
+/**
+ * 归队结算：逐人判定成功，按 T_base 与快照倍率计算兽材，整数入库、小数累计。
+ * `autoRepeat: false` 用于长离线的有界快进 —— 它自己统一处理后续批次与末趟，
+ * 否则这里的「立即再出发」会把队员再次标记为出征，让快进拿不到队伍与剩余时长。
+ */
+export function settleMission(state, derived, mission, { autoRepeat = true } = {}) {
   const hunting = state.hunting
   const rows = []
   let successCount = 0
@@ -453,7 +457,8 @@ export function settleMission(state, derived, mission) {
   )
 
   // 自动重复：归队、恢复岗位、下一次扣点与占用在同一结算边界处理。
-  if (hunting.settings.autoRepeat) autoRepeatDepart(state, derived, mission.fieldId)
+  // 离线的有界快进自己负责后续批次与末趟，因此显式关掉这里的副作用（见 advanceOfflineHunt）。
+  if (autoRepeat && hunting.settings.autoRepeat) autoRepeatDepart(state, derived, mission.fieldId)
   return { gains, successCount, teamSize: rows.length }
 }
 
@@ -462,6 +467,119 @@ function autoRepeatDepart(state, derived, fieldId) {
   const check = canDepart(state, derived, fieldId, ids)
   if (!check.ok) return false
   return departHunt(state, derived, { fieldId, teamIds: ids }).ok
+}
+
+/**
+ * 多趟批量结算的期望与**上界**估值（离线批量与界面上限共用同一口径）。
+ *
+ * 逐趟抽签的期望贡献是 `A × (p + 0.2 × (1 − p))`（失败保底 0.20），
+ * 上限是所有成员全部成功（Z = 1）。批量结算用期望值，因此收益必然落在 [期望, 上限] 之间，
+ * 回归检查据此断言「不得超过按规则可完成趟数对应的奖励上界」。
+ */
+export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
+  const support = rows[0]?.support ?? 1
+  const yieldBonus = 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0)
+  const expectedZ = rows.reduce((sum, row) => sum + row.A * (row.p + 0.2 * (1 - row.p)), 0)
+  const maximumZ = rows.reduce((sum, row) => sum + row.A, 0)
+  const scale = trips * support * yieldBonus * field.baseDuration
+  const scaleBy = factor => Object.fromEntries(Object.entries(field.baseYield || {})
+    .map(([res, base]) => [res, base * scale * factor]))
+  return {
+    trips,
+    support,
+    yieldBonus,
+    expected: scaleBy(expectedZ),
+    maximum: scaleBy(maximumZ),
+    expectedSuccess: Math.min(rows.length, rows.reduce((sum, row) => sum + row.p, 0)) * trips,
+  }
+}
+
+/**
+ * 长离线的有界快进（有界近似，见 docs/ENGINEERING.md「离线结算」）。
+ *
+ * - 已有已付费任务按实际剩余时长推进：到期在**真实归队时刻**结算一次并释放成员，未到期只推进进度；
+ *   结算时抑制 `settleMission` 的即时再出发，由本函数统一处理后续批次，剩余时长不会被吞掉。
+ * - 之后的自动重复按「整趟数」一次估算，趟数同时受任务时长与信符存量封顶，
+ *   奖励用当段快照的成功率期望代替逐趟抽签，不逐趟循环、不重复扣首趟费用；
+ * - 最后不足一趟的时长落成**一次已扣费的活动任务**，不把批量趟数变成下次在线的待补算队列。
+ *
+ * 除「已有已付费的那一趟」外，所有批次与末趟都必须先通过 `canDepart` 的统一出征条件
+ * （模块开关、研究、营地、境界、队伍、占用与信符），批量分支不能自己放宽资格。
+ *
+ * 与在线逐秒推进的差异是有意的：后续批次的随机序列与逐趟结果不同，
+ * 但总奖励不超过「按规则可完成趟数」对应的期望上界，统计、兽材余量与成员占用保持自洽。
+ * 批量批次不写 lastOutcome：它是单趟战报的结构，多趟汇总会与存档校验口径冲突。
+ */
+export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
+  if (!(dt > 0) || !state.hunting) return false
+  let now = Number.isFinite(ctx.startAt) ? ctx.startAt : gameNow(state)
+  let remaining = dt
+  let changed = false
+
+  const mission = activeMission(state)
+  if (mission) {
+    const left = Math.max(0, mission.actualDuration - mission.progressSeconds)
+    if (left > remaining) {
+      mission.progressSeconds += remaining
+      return false
+    }
+    remaining = Math.max(0, remaining - left)
+    now += left * 1000
+    // 已付费的这一趟允许按原规则完成；即时再出发交给下面的统一批次处理。
+    withGameContext(state, { now: () => now }, () => settleMission(state, derived, mission, { autoRepeat: false }))
+    changed = true
+  }
+
+  const hunting = state.hunting
+  if (!hunting.settings.autoRepeat) return changed
+  const fieldId = mission?.fieldId || hunting.settings.selectedFieldId
+  const field = HUNT_FIELD_MAP[fieldId]
+  if (!field) return changed
+  const ids = hunting.settings.teamIds || []
+  // 批量出征与末趟共用在线出征条件：研究、营地、境界、队伍、占用与信符都先过一遍。
+  if (!canDepart(state, derived, fieldId, ids).ok) return changed
+  const rows = evaluateTeam(state, derived, fieldId, ids)
+
+  const duration = huntDuration(field, derived?.huntDurationReduction || 0)
+  const affordable = Math.floor(warrantBalance(state) / HUNT.WARRANT_COST)
+  const trips = Math.max(0, Math.min(Math.floor((remaining + 1e-9) / duration), affordable))
+  if (trips > 0) {
+    const estimate = huntBatchGainEstimate(field, rows, derived, trips)
+    for (const [res, y] of Object.entries(estimate.expected)) {
+      const total = (hunting.yieldRemainders[res] || 0) + y
+      const whole = Math.floor(total + 1e-9)
+      hunting.yieldRemainders[res] = total - whole
+      if (whole > 0) addResource(state, res, whole, derived?.max?.[res] ?? Infinity)
+    }
+    state.resources.warrant = Math.max(0, (state.resources.warrant || 0) - trips * HUNT.WARRANT_COST)
+    const hunters = rows.length * trips
+    const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
+    hunting.statistics.departures += trips
+    hunting.statistics.completedMissions += trips
+    hunting.statistics.successfulHunters += successes
+    hunting.statistics.failedHunters += hunters - successes
+    const fieldState = hunting.fieldState[field.id] || {}
+    fieldState.lastHuntAt = now + trips * duration * 1000
+    fieldState.completedMissions = (fieldState.completedMissions || 0) + trips
+    fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successes
+    fieldState.failedHunters = (fieldState.failedHunters || 0) + hunters - successes
+    hunting.fieldState[field.id] = fieldState
+    remaining -= trips * duration
+    now += trips * duration * 1000
+    changed = true
+    if (ctx.stats) ctx.stats.huntBatches += 1
+  }
+
+  // 尾段：不足一趟的时长落成**一次已扣费的活动任务**（恰好用完时按 0 进度出发），
+  // 与在线的即时再出发一致，不把批量趟数变成下次在线的待补算队列。
+  if (warrantBalance(state) >= HUNT.WARRANT_COST) {
+    const departed = withGameContext(state, { now: () => now }, () => departHunt(state, derived, { fieldId: field.id, teamIds: ids }))
+    if (departed.ok) {
+      if (remaining > 1e-9) departed.mission.progressSeconds = remaining
+      changed = true
+    }
+  }
+  return changed
 }
 
 /** 设置：猎场 / 名单 / 自动重复（立即保存由调用方负责）。 */

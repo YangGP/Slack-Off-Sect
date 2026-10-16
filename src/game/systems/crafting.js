@@ -5,6 +5,7 @@ import { RECIPE_STATIONS, PROCESSING_STATIONS, PROCESSING_MODES } from '@/data/i
 import { recompute } from './economy'
 import { addResource, isCraftUnlocked, clamp, payCost, pushLog } from './core'
 import { CONFIG } from '@/data/config'
+import { termCrossings } from '@/data/calendar'
 import { RESOURCE_MAP } from '@/data/resources'
 
 /**
@@ -79,13 +80,29 @@ export function setCraftWeight(state, derived, recipeId, value) {
  */
 export function runAutoCraft(state, derived, dt) {
   if (!Number.isFinite(dt) || dt < 0) return false
+  const recipes = autoCraftOrder(state, derived)
+  const made = runAutoCraftTimers(state, derived, dt, recipes)
+  if (derived.industrial) return runIndustrialCraft(state, derived, dt, recipes) || made
+  return made
+}
+
+/** 《心有灵犀》的优先配方排在最前，其余保持数据表顺序。 */
+function autoCraftOrder(state, derived) {
+  const recipes = [...CRAFTS]
+  if (!derived.autoCraftUnlocked) return recipes
+  const priority = state.settings.autoCraftPriority
+  recipes.sort((a, b) => Number(b.id === priority) - Number(a.id === priority))
+  return recipes
+}
+
+/**
+ * 非工业配方的自动制作：按已攒时间一次算出到点的份数，
+ * 再受材料、逐项保留量、库存目标与仓储上限限制（不逐份循环）。
+ */
+export function runAutoCraftTimers(state, derived, dt, recipes = autoCraftOrder(state, derived)) {
+  if (!Number.isFinite(dt) || dt < 0) return false
   if (!state.craftTimers) state.craftTimers = {}
   let made = false
-  const recipes = [...CRAFTS]
-  if (derived.autoCraftUnlocked) {
-    const priority = state.settings.autoCraftPriority
-    recipes.sort((a, b) => Number(b.id === priority) - Number(a.id === priority))
-  }
   for (const recipe of recipes) {
     if (!isAutoCrafting(state, derived, recipe.id)) continue
     if (derived.industrial && RECIPE_STATIONS[recipe.id]) continue
@@ -110,7 +127,6 @@ export function runAutoCraft(state, derived, dt) {
     }
     state.craftTimers[recipe.id] = timer
   }
-  if (derived.industrial) made = runIndustrialCraft(state, derived, dt, recipes) || made
   return made
 }
 
@@ -169,6 +185,116 @@ export function runIndustrialCraft(state, derived, dt, recipes) {
 }
 
 /**
+ * 成品还能装下几份：与 settleCraftCopies 的房量口径一致，供本轮预算估算使用。
+ */
+function outputRoomCopies(state, derived, recipe, cap) {
+  const have = state.resources[recipe.out] || 0
+  const gain = craftYield(derived, recipe)
+  const progress = state.craftProgress[recipe.id] || 0
+  if (!Number.isFinite(gain) || gain <= 0) return 0
+  if (atLeast(have, cap)) return 0
+  return Math.max(0, ceilNumber((ceilNumber(cap - have) - progress) / gain))
+}
+
+/**
+ * 有界近似的工业批量结算（长离线专用）。
+ *
+ * 与在线 runIndustrialCraft 的区别是**有意为之**的近似（见 docs/ENGINEERING.md「离线结算」）：
+ * 在线按「下一份完成时刻」逐步推进，缺料、满仓与达标能在同一时间段内立刻重新分配工位；
+ * 离线每段只做固定轮数（CONFIG.OFFLINE_INDUSTRY_ROUNDS）的分配：一轮冻结一次工位分配，
+ * 按**本轮剩余的真实时间**算出份数，工位空出后到下一轮或下一段才重新分配，不补算段内所有停线与重启。
+ *
+ * 三条不因近似而放宽的硬约束：
+ * 1. **时间预算**：多轮只是重分配同一段真实时间 —— 每轮从剩余预算里取，扣掉本轮实际用掉的时间，
+ *    任一条线累计占用不超过「工位速度 × 本段时长」（`count * step + timer.t - before <= speed * dt`）。
+ * 2. **同一份库存预算**：原料与这一份自己的加工动力算作**同一份完整代价**，按配方固定顺序贪心分配，
+ *    并额外为本轮留下的小数进度预留一份动力；因此不会先发货后截零，自动保留量也不会被后置动力穿透。
+ * 3. **动力按各条线自己的真实加工时间计费**，不用最长线的时间给短线一并收费。
+ * 份数由材料、逐项保留量、目标、订单、仓储、时间与动力一次封顶，不按成品份数循环。
+ */
+export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
+  if (!(dt > 0) || !derived.industrial) return false
+  const rounds = Math.max(1, CONFIG.OFFLINE_INDUSTRY_ROUNDS)
+  let made = false
+  let usedRounds = 0
+  let budgetLeft = dt
+  for (let round = 0; round < rounds && budgetLeft > EPS; round++) {
+    const plan = processingPlan(state, derived)
+    const active = CRAFTS.filter(recipe => RECIPE_STATIONS[recipe.id] && (plan[recipe.id]?.speed || 0) > EPS)
+    if (!active.length) break
+    usedRounds++
+    let realUsed = 0
+    let completed = false
+    for (const recipe of active) {
+      const info = plan[recipe.id]
+      const speed = Math.max(info.speed, EPS)
+      const step = craftTime(recipe, derived)
+      const timer = state.craftTimers[recipe.id] ||= { t: 0, made: 0 }
+      const before = clamp(Number.isFinite(timer.t) ? timer.t : 0, 0, step)
+      const ordered = hasCraftOrder(state, derived, recipe.id)
+      const target = craftTarget(state, derived, recipe.id)
+      const cap = !ordered && target > 0 ? Math.min(target, derived.max[recipe.out]) : derived.max[recipe.out]
+      const cost = craftCost(derived, recipe)
+      const drain = info.powerDrain || {}
+      // 每份的完整代价 = 原料 + 这一份自己的加工动力；再为最多一份「遗留小数进度」预留同样的动力。
+      const fuelPer = {}
+      for (const [res, rate] of Object.entries(drain)) {
+        if (rate > EPS) fuelPer[res] = rate * step / speed
+      }
+      let copies = Math.max(0, Math.min(
+        floorNumber((before + budgetLeft * speed + EPS) / step),
+        outputRoomCopies(state, derived, recipe, cap),
+      ))
+      for (const res of new Set([...Object.keys(cost), ...Object.keys(fuelPer)])) {
+        const material = cost[res] > 0 ? cost[res] : 0
+        const fuel = fuelPer[res] || 0
+        const have = state.resources[res] || 0
+        if (material + fuel > 0) {
+          const pool = Math.max(0, have - autoCraftReserve(state, derived, res))
+          copies = Math.min(copies, floorNumber(Math.max(0, pool - fuel) / (material + fuel)))
+        }
+        if (fuel > 0) {
+          // 动力另有「至少留住一批」的下限：不能把动力预算吃进保留量里。
+          const fuelRoom = Math.max(0, have - processingFuelReserve(state, derived, res))
+          copies = Math.min(copies, floorNumber(Math.max(0, fuelRoom - fuel) / fuel))
+        }
+      }
+      const count = copies > 0 && canProcessCraft(state, derived, recipe)
+        ? settleCraftCopies(state, derived, recipe, copies, cap).count : 0
+      if (ordered && count > 0) {
+        state.craftOrders[recipe.id].remaining -= count
+        if (state.craftOrders[recipe.id].remaining <= 0) delete state.craftOrders[recipe.id]
+      }
+      // 原料扣除后，新增进度也只能使用剩余库存付得起的动力。
+      // copies 为零时同样需要限制，不能先攒满一份进度再截零扣费。
+      let grant = budgetLeft * speed
+      for (const [res, rate] of Object.entries(drain)) {
+        if (rate <= EPS) continue
+        const usable = Math.max(0, (state.resources[res] || 0) - autoCraftReserve(state, derived, res))
+        grant = Math.min(grant, usable / rate * speed)
+      }
+      // 缺料与满仓不在段内继续攒进度：小数进度最多保留一份待完成量，
+      // 恢复在线后不会倾泻整段欠账（与在线 runIndustrialCraft 的 timer 上限一致）。
+      timer.t = clamp(before + grant - count * step, 0, step)
+      timer.made += count
+      state.craftTimers[recipe.id] = timer
+      if (count > 0) { made = true; completed = true }
+      const consumed = Math.max(0, count * step + timer.t - before)
+      const real = consumed / speed
+      realUsed = Math.max(realUsed, real)
+      // 动力只为这条线自己的真实加工时间扣除：停料与满仓的工位空转不烧动力。
+      for (const [res, rate] of Object.entries(drain)) {
+        if (rate > EPS && real > 0) state.resources[res] = subtractResource(state.resources[res] || 0, rate * real)
+      }
+    }
+    budgetLeft = Math.max(0, budgetLeft - realUsed)
+    if (!completed) break
+  }
+  if (stats) stats.industryRounds += usedRounds
+  return made
+}
+
+/**
  * 《凝灵诀》：每逢节气，若灵气满仓，把仓内一定比例（AUTO_CONDENSE_RATIO）的灵气
  * 一次凝成灵液；需先掌握《凝气化液》，仓库没满时不动手，不要求整节气收支累计。
  * 由 tick 的历法推进在节气变化的那一刻调用（离线模拟同样逐步过 tick，所以离线也照做）。
@@ -191,6 +317,45 @@ export function runAutoCondense(state, derived) {
     made = true
   }
   return made
+}
+
+/**
+ * 《凝灵诀》的离线批量估算（有界近似）。
+ *
+ * 触发次数直接用历法差算出，不逐节气、更不逐份执行：每次触发都把仓内固定比例的灵气
+ * 凝成灵液，所以「本段可凝份数」由两件事封顶 ——
+ *   1. 本段跨过的节气数（triggers）；
+ *   2. 现有灵气 + 段内净产能够支撑几次「满仓凝一次」（heads / 每次掉的灵气）。
+ * 仍然只在**能满仓**时才动手（heads 不足一仓则不动）。实际扣料、出货与仓储截断交给
+ * settleCraftCopies，与普通凝液配方共享同一份材料预算，并遵守解锁、总开关、保留量与目标。
+ */
+export function runAutoCondenseBatch(state, derived, dayFrom, dayTo, dt) {
+  if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
+  const triggers = termCrossings(dayFrom, dayTo)
+  if (triggers <= 0) return false
+  const recipe = CRAFT_MAP.condenseLiquid
+  if (!isCraftUnlocked(state, recipe)) return false
+  const cost = craftCost(derived, recipe)
+  const qiCost = cost.qi || 0
+  const cap = derived.max.qi || 0
+  if (!(qiCost > 0) || !(cap > 0)) return false
+  const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
+  const perTrigger = floorNumber((cap * ratio) / qiCost)
+  if (perTrigger <= 0) return false
+  const netRate = (derived.rates.qi || 0) + (derived.expense?.qi || 0)
+  const heads = Math.max(0, (state.resources.qi || 0) + Math.max(0, netRate) * dt)
+  if (heads < cap) return false // 段内到不了满仓，凝灵诀不动手
+  const sustainable = Math.floor(heads / (perTrigger * qiCost))
+  let copies = Math.min(triggers, sustainable) * perTrigger
+  if (copies <= 0) return false
+  const target = craftTarget(state, derived, recipe.id)
+  if (target > 0 && (state.resources[recipe.out] || 0) >= target) return false
+  const capOut = target > 0 ? Math.min(target, derived.max[recipe.out]) : derived.max[recipe.out]
+  for (const [res, amount] of Object.entries(cost)) {
+    if (amount > 0) copies = Math.min(copies, floorNumber(subtractResource(state.resources[res] || 0, autoCraftReserve(state, derived, res)) / amount))
+  }
+  if (copies <= 0) return false
+  return settleCraftCopies(state, derived, recipe, copies, capOut).count > 0
 }
 
 export function setAutoCraftSpeed(state, derived, recipeId, speed) {

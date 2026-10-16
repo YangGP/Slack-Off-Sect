@@ -82,8 +82,19 @@ const online = normalizeState(JSON.parse(JSON.stringify(s))), offline = normaliz
 const od = E.createDerived(), fd = E.createDerived()
 E.recompute(online, od); E.recompute(offline, fd)
 for (let i = 0; i < 120; i++) E.tick(online, od, 1, { events: false, offline: true })
-E.simulateOffline(offline, fd, 120)
-assert('multiple powered stations agree online and offline', Object.keys(s.resources).every(id => Math.abs(online.resources[id] - offline.resources[id]) < 1e-6))
+const longReport = E.simulateOffline(offline, fd, 120)
+// 长离线改走有界近似（段内供给与工位重分配按段估算），不再要求与逐秒参考逐位相同；
+// 但库存必须有限非负、加工不得积攒欠账，产量与逐秒参考保持同一量级。
+assert('long offline keeps powered stations finite and nonnegative',
+  Object.keys(s.resources).every(id => Number.isFinite(offline.resources[id]) && offline.resources[id] >= 0))
+assert('long offline reports bounded segments and industry rounds',
+  longReport.approximate === true && longReport.segments <= longReport.baseSegments &&
+  longReport.industryRounds <= longReport.segments * 2)
+assert('long offline does not accumulate processing backlog',
+  Object.entries(offline.craftTimers).every(([id, timer]) => !CRAFT_MAP[id] || timer.t <= craftTime(CRAFT_MAP[id], fd) + 1e-9))
+assert('multiple powered stations approximate the per-second reference within the same order',
+  ['steel', 'qi', 'qiEnergy'].every(id => Math.abs(online.resources[id] - offline.resources[id])
+    <= Math.max(1, Math.abs(online.resources[id]) * 0.5)))
 
 const polar = fixture()
 polar.s.buildings.polarizeArray = { count: 2, on: true }
