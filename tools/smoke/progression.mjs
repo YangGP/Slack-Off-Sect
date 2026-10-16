@@ -200,6 +200,11 @@ export function breakthroughRisk({ ok, close, section }) {
       s.dao = 2
       E.recompute(s, d)
       for (const id of Object.keys(s.resources)) s.resources[id] = 100000
+      // 风险边界用例先备足当前境界的完整护道报价，避免调价后变成材料不足用例。
+      const aids = Object.fromEntries((BREAKTHROUGH_AIDS[realm + 1] || []).map(aid => [aid.id, true]))
+      for (const [id, amount] of Object.entries(E.breakthroughPreview(s, d, aids).cost)) {
+        s.resources[id] = Math.max(s.resources[id] || 0, amount)
+      }
       return [s, d]
     }
     for (let realm = 0; realm < 10; realm++) {

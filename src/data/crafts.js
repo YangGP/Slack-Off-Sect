@@ -12,6 +12,24 @@ import { HUNT_CRAFTS, HUNT_CRAFT_ANCHOR } from '../modules/hunting/data.js'
 
 const CORE_CRAFTS = [
   {
+    id: 'recordDaoNote', name: '记录道札', out: 'daoNote', amount: 1, tier: 1,
+    primary: ['insight', 'wood'], cost: { insight: 100, wood: 50 }, time: 4,
+    desc: '以灵木为书写载体，将研读与试验所得整理成可保存的道札。',
+    needs: { realm: 4, upgrades: ['preachArt'] },
+  },
+  {
+    id: 'compileDaoTreatise', name: '汇编道论', out: 'daoTreatise', amount: 1, tier: 2,
+    primary: ['daoNote', 'insight'], cost: { daoNote: 20, insight: 1500 }, time: 8,
+    desc: '交互核验道札中的记录，将零散认识整理为可复用的理论。',
+    needs: { realm: 5, upgrades: ['preachArt', 'crystalTheory'] },
+  },
+  {
+    id: 'drawArrayDiagram', name: '绘制阵图', out: 'arrayDiagram', amount: 1, tier: 3,
+    primary: ['daoTreatise', 'insight'], cost: { daoTreatise: 10, insight: 6000, talisman: 5 }, time: 12,
+    desc: '以道论验算阵位，用符箓标定纹路，绘成可直接施工的工程阵图。',
+    needs: { realm: 6, upgrades: ['crystalTheory', 'compositeRune', 'astrologyArt'] },
+  },
+  {
     // 搬迁自宗门页的手动按钮：现在它就是炼制页里的一条普通配方，
     // 于是"点一下立刻出一份"（制作是瞬发的）、满仓自动停下、连同自动炼制一并免费得到。
     id: 'growWood',
@@ -224,7 +242,7 @@ const CORE_CRAFTS = [
     out: 'spiritMortar',
     amount: 1,
     tier: 2,
-    cost: { stone: 20, spiritLiquid: 2 },
+    cost: { stone: 60, spiritLiquid: 4 },
     time: 4,
     desc: '将灵石现场磨成粉末，与灵液拌合固化，制成一份混灵土。',
     needs: { realm: 5, upgrades: ['spiritMortarArt'] },
@@ -235,7 +253,7 @@ const CORE_CRAFTS = [
     out: 'ironMortar',
     amount: 1,
     tier: 2,
-    cost: { spiritMortar: 2, ore: 50 },
+    cost: { spiritMortar: 4, ore: 50 },
     time: 5,
     desc: '将玄铁骨架埋入混灵土，浇筑成能承受大型建筑负荷的结构件。',
     needs: { realm: 6, upgrades: ['ironMortarArt'] },
@@ -246,7 +264,7 @@ const CORE_CRAFTS = [
     out: 'mithril',
     amount: 1,
     tier: 2,
-    cost: { rock: 150, qi: 150 },
+    cost: { rock: 300, qi: 150 },
     time: 6,
     desc: '从矿石中分离储灵金属，以灵气检验和精炼，取得秘银。',
     needs: { realm: 7, upgrades: ['mithrilArt'] },
@@ -293,7 +311,7 @@ export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
+export const ADVANCED_CRAFT_OUTPUTS = ['daoNote', 'daoTreatise', 'arrayDiagram', 'spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]

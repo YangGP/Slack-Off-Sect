@@ -9,6 +9,51 @@ import { SEASONS, CALENDAR } from '../../src/data/calendar.js'
 import { newGame, newGameRunning } from './fixtures.mjs'
 
 export function playerBot({ ok, section }) {
+  section('自动目标解锁前的手动备料')
+  {
+    const { state: s, derived: d } = newGame()
+    s.realm = 2
+    s.upgrades.alchemyArt = true
+    s.buildings.hut = { count: 1, on: true }
+    s.buildings.alchemyRoom = { count: 1, on: true }
+    Object.assign(s.resources, { qi: 20000, herb: 20000 })
+    E.recompute(s, d)
+    const bot = createBot(s, d, { realmCost: () => ({ pill: 26 }), breakthrough: () => false })
+    for (let i = 0; i < 5; i++) bot.act()
+    ok('手动炼丹按近期需求停产，不持续囤到满仓', s.resources.pill > 0 && s.resources.pill <= 35)
+    ok('手动备料策略不提前开放自动目标能力', !d.craftTargetsUnlocked && !s.upgrades.intuition && Object.keys(s.craftTargets).length === 0)
+  }
+  section('突破优先的多层扩仓')
+  {
+    const { state: s, derived: d } = newGame()
+    s.realm = 4
+    for (const [id, count] of Object.entries({ spiritField: 3, hut: 10, lumberYard: 2, granary: 10, quarry: 2, library: 3, logHouse: 8, herbGarden: 3, ironFurnace: 1, alchemyRoom: 2, scriptureArchive: 24, warehouse: 2, forge: 1, talismanHall: 1, gate: 1 })) s.buildings[id] = { count, on: true }
+    for (const id of ['qiOrigin', 'homePlanning', 'herbStudy', 'alchemyArt', 'prospectStudy', 'oralTeaching', 'quarryArt', 'woodworking', 'earthArt', 'qiGazing', 'forgeArt', 'talismanArt', 'incenseVow', 'qiMeasure', 'qiLiquid', 'storeFrameArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
+    E.recompute(s, d)
+    for (const res of RESOURCES) s.resources[res.id] = d.max[res.id]
+    const bot = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayBase: 4 }), breakthrough: () => false })
+    const archiveCost = E.buildingCost(s, 'scriptureArchive', 1)
+    ok('回归夹具确实受灵机及典籍库建材仓容限制', d.max.insight < UPGRADE_MAP.arrayAssembly.cost.insight && archiveCost.rock > d.max.rock)
+    ok('扩仓计划保留超出当前建材仓容的典籍库目标', bot.prerequisites().buildings.get('scriptureArchive') === 25)
+    bot.act()
+    ok('先扩原料仓解决科研扩仓的建材上限', E.countOf(s, 'warehouse') > 2)
+    s.upgrades.arrayAssembly = true
+    E.recompute(s, d)
+    const afterAssembly = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ insight: 12000 }), breakthrough: () => false })
+    ok('能支付讲经前置后转向讲经堂，不永久堆典籍库', afterAssembly.prerequisites().upgrades.has('preachArt') && afterAssembly.prerequisites().buildings.has('academy'))
+    s.realm = 7
+    s.upgrades.earthEssence = true
+    s.buildings.depot = { count: 1, on: true }
+    E.recompute(s, d)
+    for (const res of RESOURCES) s.resources[res.id] = d.max[res.id]
+    E.recompute(s, d)
+    ok('必需仓储即使不在旧采购表中也能实际建造', bot.buildStep(0, null, [], new Map([['grandStore', 1]])) && E.countOf(s, 'grandStore') === 1)
+    s.realm = 6
+    for (const id of ['intuition', 'preachArt', 'crystalTheory', 'compositeRune', 'astrologyArt']) s.upgrades[id] = true
+    E.recompute(s, d)
+    createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayDiagram: 3 }), breakthrough: () => false }).act()
+    ok('知识加工按近期需求设目标而非无上限抢占灵机', s.craftTargets.drawArrayDiagram === 3 && s.craftTargets.recordDaoNote > 0 && s.craftTargets.compileDaoTreatise > 0)
+  }
   section('模拟玩家（机器人）短跑')
   {
     // 机器人是「按 id 到条目列表里查表」的典型消费方，两层拆开后最容易在这里脱节，

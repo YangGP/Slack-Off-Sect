@@ -214,8 +214,10 @@ export function createBot(state, derived, policy = {}) {
     const qiBudget = Math.max(0, (state.resources.qi || 0) - reserveQi)
     let bestId = null
     let bestScore = Infinity
-    for (let idx = 0; idx < PRIORITY.length; idx++) {
-      const id = PRIORITY[idx]
+    // 依赖追踪选中的设施必须可买，不能因旧的可选采购表遗漏而永久等仓容。
+    const candidates = [...new Set([...PRIORITY, ...requiredBuildings.keys()])]
+    for (let idx = 0; idx < candidates.length; idx++) {
+      const id = candidates[idx]
       if (!derived.unlockedBuildings.includes(id)) continue
       const cost = E.buildingCost(state, id, 1)
       // 攒破境前置研究期间：先别买吃这些资源的建筑，把手头那份攒够再去点研究。
@@ -341,13 +343,33 @@ export function createBot(state, derived, policy = {}) {
     if (!policy.onlyBreakthrough && state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) visitBuilding('depot')
     // 扩仓设施的建材也属于破境前置，不能只追踪破境配方。
     // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
+    const canOpenForCapacity = (needs, res, path = new Set()) => {
+      if ((needs?.realm || 0) > state.realm) return false
+      for (const id of [...(needs?.upgrades || []), ...(needs?.upgrade ? [needs.upgrade] : [])]) {
+        if (state.upgrades[id]) continue
+        const u = E.UPGRADE_MAP[id]
+        if (!u || path.has(id) || (u.cost?.[res] || 0) > (derived.max[res] || 0)) return false
+        if (!canOpenForCapacity(u.needs, res, new Set([...path, id]))) return false
+      }
+      for (const requirement of [needs?.building, ...(needs?.buildings || [])].filter(Boolean)) {
+        if (E.countOf(state, requirement.id) >= requirement.count) continue
+        const b = E.BUILDING_MAP[requirement.id]
+        const key = `building:${requirement.id}`
+        if (!b || path.has(key) || (E.buildingCost(state, b.id, 1)[res] || 0) > (derived.max[res] || 0)) return false
+        if (!canOpenForCapacity(b.needs, res, new Set([...path, key]))) return false
+      }
+      return true
+    }
     for (const [res, amount] of Object.entries(capacityDemand(next, chain, buildings))) {
       if (amount <= (derived.max[res] || 0)) continue
       const expansion = E.BUILDINGS.filter(b => (b.needs?.realm == null || b.needs.realm <= state.realm) &&
         ((b.effects?.storage?.[res] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
         .map(b => ({ id: b.id, cost: E.buildingCost(state, b.id, 1) }))
-        .filter(b => Object.entries(b.cost).every(([r, v]) => v <= derived.max[r]))
-        .sort((a, b) => Object.values(a.cost).reduce((sum, v) => sum + v, 0) - Object.values(b.cost).reduce((sum, v) => sum + v, 0))[0]
+        // 优先选择前置能由当前目标仓容承接的设施，避免研究自锁；
+        // 同时允许学习可支付的前置，不能永远堆典籍库而不开放讲经堂。
+        // 目标仓库的建材若超仓，也必须追踪：capacityDemand会把它暴露为下一层扩仓需求。
+        .sort((a, b) => Number(canOpenForCapacity(E.BUILDING_MAP[b.id].needs, res)) - Number(canOpenForCapacity(E.BUILDING_MAP[a.id].needs, res)) ||
+          Object.values(a.cost).reduce((sum, v) => sum + v, 0) - Object.values(b.cost).reduce((sum, v) => sum + v, 0))[0]
       if (expansion) visitBuilding(expansion.id, E.countOf(state, expansion.id) + 1)
     }
     return { upgrades: chain, buildings }
@@ -373,6 +395,7 @@ export function createBot(state, derived, policy = {}) {
       if ((state.upgradeEnabled.energyCore !== false) !== ready) E.toggleUpkeepUpgrade(state, derived, 'energyCore')
     }
     let craftDemand = {}
+    const manualTargets = {}
     let rushDemand = null
     if (policy.onlyBreakthrough) {
       rushDemand = { ...(realmNeed() || {}) }
@@ -405,7 +428,8 @@ export function createBot(state, derived, policy = {}) {
     }
     // 金丹后按近期建筑/研究/破境需求设置加工库存目标，避免把原料无限加工。
     // 这是新目标控件允许玩家执行的策略，手动与自动制作使用同一目标。
-    if (derived.craftTargetsUnlocked) {
+    // 自动目标尚未解锁时，玩家仍会按近期需要手动停产，不能每轮炼十份直到满仓。
+    {
       const demand = { ...(realmNeed() || {}) }
       for (const id of derived.availableUpgrades) {
         if (!wantsComfortUpgrade(E.UPGRADE_MAP[id])) continue
@@ -420,7 +444,8 @@ export function createBot(state, derived, policy = {}) {
       for (const c of CRAFTS) {
         // 灵石（stone）必须在这张名单里：破境与研究都要它，而它的唯一来源就是点石成灵。
         // 早先漏了它，参照玩家于是把矿石与灵气堆到满仓、却一件灵石都不做（实测卡在筑基期/元婴期）。
-        if (!['plank', 'pill', 'talisman', 'artifact', 'arrayBase', 'stone'].includes(c.out)) continue
+        const knowledge = ['daoNote', 'daoTreatise', 'arrayDiagram'].includes(c.out)
+        if (!knowledge && !['plank', 'pill', 'talisman', 'artifact', 'arrayBase', 'stone'].includes(c.out)) continue
         // 阵基的下料也是短期需求；普通成品还预留进阶配方的一份料。
         let inputDemand = 0
         for (const recipe of CRAFTS) {
@@ -429,7 +454,8 @@ export function createBot(state, derived, policy = {}) {
           const floor = policy?.floors?.[c.out] || (policy?.base === c.out ? policy.floor : 0)
           inputDemand = Math.max(inputDemand, recipe.cost[c.out] || 0, floor)
         }
-        E.setCraftTarget(state, derived, c.id, Math.ceil(Math.max(20, craftDemand[c.out] || 0, rushDemand ? 0 : inputDemand) * 1.25))
+        manualTargets[c.id] = Math.ceil(Math.max(knowledge ? 1 : 20, craftDemand[c.out] || 0, rushDemand ? 0 : inputDemand) * (knowledge ? 1 : 1.25))
+        E.setCraftTarget(state, derived, c.id, manualTargets[c.id])
       }
     }
     // —— 财政：灵气要见底时，把吃灵气的建筑停掉；缓过来再开 ——
@@ -624,7 +650,7 @@ export function createBot(state, derived, policy = {}) {
       const order = state.craftOrders?.[c.id]
       if (order && order.paused !== !!blocked) E.manageCraftOrder(state, derived, c.id, blocked ? 'pause' : 'resume')
       if (blocked) continue
-      const target = E.craftTarget(state, derived, c.id)
+      const target = E.craftTarget(state, derived, c.id) || manualTargets[c.id] || 0
       if (target > 0 && (state.resources[c.out] || 0) >= target) continue
       if (c.id === 'infuseStone' && state.resources.qi < STONE_QI_FLOOR) continue
       const rescue = RESCUE_CRAFTS[c.id]

@@ -61,6 +61,7 @@ export function createDerived() {
     rawUpkeep: 0,
     /** 每名弟子每秒的口粮（已含境界倍率，未含减耗） */
     discipleUpkeep: 0,
+    populationUpkeepMult: 1,
     discipleWeight: 0,
     discipleJobWeights: {},
     netQi: 0,

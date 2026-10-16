@@ -443,7 +443,7 @@ const CORE_TECHNIQUES = [
     name: '口传心授',
     glyph: '授',
     cost: { insight: 35, wood: 400 },
-    desc: '当面讲解、抄录归档。灵机产出 +10%，典籍库自身提供的灵机上限 +40%。',
+    desc: '当面讲解、抄录归档。灵机产出 +10%，典籍库自身提供的灵机与道札仓容 +40%。',
     effects: { ratio: { insight: 0.1 }, buildingStorageRatio: { scriptureArchive: 0.4 } },
     needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
   },
@@ -464,6 +464,25 @@ const CORE_TECHNIQUES = [
     desc: '坐忘则神凝，悟道者一坐便是一昼夜。悟道者产出 +35%。',
     effects: { jobRatio: { scholar: 0.35 }, storageRatio: { insight: 0.6 } },
     needs: { upgrades: ['starReading'], building: { id: 'library', count: 5 } },
+  },
+
+  {
+    id: 'scriptureDebate',
+    name: '经义互证',
+    glyph: '证',
+    cost: { insight: 3000, plank: 20, arrayBase: 4, daoNote: 4 },
+    desc: '分席研读、相互诘问，以阵基记录论证中的分歧。悟道者产出 +25%，与坐忘功的岗位加成相加。',
+    effects: { jobRatio: { scholar: 0.25 } },
+    needs: { realm: 5, upgrades: ['zuowangArt'], building: { id: 'academy', count: 2 } },
+  },
+  {
+    id: 'celestialDeduction',
+    name: '观象参同',
+    glyph: '参',
+    cost: { insight: 12000, crystal: 20, arrayBase: 8, talisman: 20, daoTreatise: 4 },
+    desc: '用灵晶留存星象，以阵基和符箓反复验算，将观测与经义相互印证。悟道者产出 +35%，与已有岗位加成相加。',
+    effects: { jobRatio: { scholar: 0.35 } },
+    needs: { realm: 6, upgrades: ['scriptureDebate', 'astrologyArt'], building: { id: 'observatory', count: 1 } },
   },
 
   // ============================================================

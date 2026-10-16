@@ -63,6 +63,7 @@ function reincarnate() {
       <HoverTip label="修行境界"><template #tip>
           <p>{{ REALMS[state.realm].desc }}</p>
           <p>当前宗门境界提供全局产出倍率，口粮也随倍率增加。化神期起可转世，渡劫期可飞升。</p>
+          <p>前{{ CONFIG.POPULATION_UPKEEP_FREE }}名弟子按基础口粮供养，此后规模越大，全体口粮越高，最多增至{{ 1 + CONFIG.POPULATION_UPKEEP_EXTRA_CAP }}倍；当前规模额外口粮 +{{ Math.round(((derived.populationUpkeepMult || 1) - 1) * 1000) / 10 }}%。灵气明细可查看额外开销。</p>
         </template></HoverTip>
     </div>
     <div class="box-body">

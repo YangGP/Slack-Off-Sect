@@ -13,6 +13,7 @@ export const PROCESSING_STATION_MAP = Object.fromEntries(PROCESSING_STATIONS.map
 export const PROCESSING_MODES = ['normal', 'overload', 'energy']
 export const PROCESSING_POWER_COST = { overload: { qi: 10 }, energy: { qiEnergy: 0.1 } }
 export const RECIPE_STATIONS = {
+  recordDaoNote: 'inscription', compileDaoTreatise: 'inscription', drawArrayDiagram: 'inscription',
   sawPlank: 'woodwork', mixSpiritMortar: 'woodwork', reinforceSpiritMortar: 'woodwork',
   forgeArtifact: 'forge', refineSteel: 'forge', forgeSpiritArtifact: 'forge',
   forgeSpiritTreasure: 'forge', refineMithril: 'forge', smeltArcaneGold: 'forge',

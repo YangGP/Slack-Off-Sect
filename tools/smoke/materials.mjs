@@ -12,6 +12,85 @@ import { unlockGroups } from '../../src/game/unlockText.js'
 import { newGame, successfulBreakthrough } from './fixtures.mjs'
 
 export function goldenCoreProduction({ ok, close, section }) {
+  section('知识加工链：来源、消费、自动与旧档')
+  {
+    const { state: s, derived: d } = newGame()
+    const recipes = ['recordDaoNote', 'compileDaoTreatise', 'drawArrayDiagram'].map(id => CRAFT_MAP[id])
+    for (const id of ['preachArt', 'crystalTheory', 'compositeRune', 'astrologyArt', 'intuition']) s.upgrades[id] = true
+    for (const [id, count] of Object.entries({ scriptureArchive: 20, academy: 5, observatory: 5, warehouse: 10, talismanHall: 4 })) s.buildings[id] = { count, on: true }
+    for (const [realm, expected] of [[3, 0], [4, 1], [5, 2], [6, 3]]) {
+      s.realm = realm
+      E.recompute(s, d)
+      ok(`知识链在境界${realm}只开放前${expected}层`, recipes.filter(c => E.isCraftUnlocked(s, c)).length === expected)
+    }
+    s.resources.insight = 20000
+    s.resources.wood = 10000
+    ok('道札可手动批量制作，扣除灵机和书写材料', E.craft(s, d, 'recordDaoNote', { times: 200 }) === 200 && s.resources.daoNote === 200 && s.resources.insight === 0 && s.resources.wood === 0)
+    s.resources.insight = 15000
+    ok('道札汇为道论，确实消耗上游知识', E.craft(s, d, 'compileDaoTreatise', { times: 10 }) === 10 && s.resources.daoNote === 0 && s.resources.daoTreatise === 10 && s.resources.insight === 0)
+    Object.assign(s.resources, { insight: 6000, talisman: 5 })
+    ok('道论与符箓绘为阵图', E.craft(s, d, 'drawArrayDiagram') === 1 && s.resources.daoTreatise === 0 && s.resources.arrayDiagram === 1 && s.resources.insight === 0 && s.resources.talisman === 0)
+    Object.assign(s.resources, UPGRADE_MAP.particleTheory.cost)
+    s.upgrades.particleTheory = false
+    const theoryNeed = s.resources.daoTreatise
+    ok('灵子论研究实际消耗道论', E.research(s, d, 'particleTheory') && theoryNeed > 0 && s.resources.daoTreatise === 0)
+    Object.assign(s.resources, E.buildingCost(s, 'observatory', 1))
+    const notes = s.resources.daoNote
+    ok('观星台扩建实际消耗道札', E.buyBuilding(s, d, 'observatory', 1) === 1 && notes > 0 && s.resources.daoNote === 0)
+    s.buildings.workshop = { count: 1, on: true }
+    E.recompute(s, d)
+    Object.assign(s.resources, { insight: 1700, wood: 850, daoNote: 0 })
+    ok('知识材料沿用制作增产和小数累计', E.craft(s, d, 'recordDaoNote', { times: 17 }) === 18 && close(s.craftProgress.recordDaoNote, 0.02))
+    Object.assign(s.resources, { insight: 750, wood: 2000, daoNote: 0, daoTreatise: 0, arrayDiagram: 0 })
+    s.settings.autoCraftOn = true
+    s.autoCraft.recordDaoNote = true
+    E.setCraftTarget(s, d, 'recordDaoNote', 2)
+    s.settings.craftReserves = { insight: 500 }
+    E.simulateOffline(s, d, 120)
+    ok('知识自动加工遵守目标和灵机保留量', s.resources.daoNote === 2 && s.resources.insight >= 500 && s.resources.insight < 750)
+    const restored = parseImport(exportSave(s))
+    ok('知识库存、进度与自动设置可以存读档', restored.resources.daoNote === 2 && close(restored.craftProgress.recordDaoNote, s.craftProgress.recordDaoNote) && restored.autoCraft.recordDaoNote && restored.settings.craftReserves.insight === 500)
+    const legacy = normalizeState({ realm: 6, upgrades: { particleTheory: true }, buildings: { observatory: { count: 1, on: true } }, resources: { insight: 100 } })
+    ok('旧档知识补零、不追缴已有研究建筑', recipes.every(c => legacy.resources[c.out] === 0) && legacy.upgrades.particleTheory && legacy.buildings.observatory.count === 1 && legacy.resources.insight === 100)
+    resetForReincarnation(s, 0)
+    ok('重修清空本世知识库存', recipes.every(c => s.resources[c.out] === 0))
+  }
+  section('悟道专精：门槛、扣料与实际岗位产出')
+  {
+    const { state: s, derived: d } = newGame()
+    s.realm = 4
+    s.upgrades.zuowangArt = true
+    s.buildings.library = { count: 5, on: true }
+    s.buildings.academy = { count: 2, on: true }
+    s.buildings.scriptureArchive = { count: 30, on: true }
+    s.disciples.total = 1
+    s.disciples.jobs.scholar = 1
+    E.recompute(s, d)
+    ok('经义互证不能在金丹提前购买', !E.isUpgradeUnlocked(s, UPGRADE_MAP.scriptureDebate) && !E.research(s, d, 'scriptureDebate'))
+    s.realm = 5
+    E.recompute(s, d)
+    const baseInsight = d.rates.insight
+    const baseQi = d.rates.qi
+    Object.assign(s.resources, UPGRADE_MAP.scriptureDebate.cost)
+    ok('元婴买入经义互证并扣除完整材料', E.research(s, d, 'scriptureDebate') && Object.keys(UPGRADE_MAP.scriptureDebate.cost).every(id => s.resources[id] === 0))
+    ok('经义互证使岗位倍率1.35到1.60且不增加灵气', close(d.rates.insight / baseInsight, 1.6 / 1.35) && close(d.rates.qi, baseQi))
+    s.buildings.observatory = { count: 4, on: true }
+    s.upgrades.astrologyArt = true
+    E.recompute(s, d)
+    ok('观象参同仍须达到化神', !E.isUpgradeUnlocked(s, UPGRADE_MAP.celestialDeduction))
+    s.realm = 6
+    s.upgrades.scriptureDebate = false
+    E.recompute(s, d)
+    ok('化神也不能跳过经义互证', !E.isUpgradeUnlocked(s, UPGRADE_MAP.celestialDeduction))
+    s.upgrades.scriptureDebate = true
+    E.recompute(s, d)
+    const before = d.rates.insight
+    Object.assign(s.resources, UPGRADE_MAP.celestialDeduction.cost)
+    ok('上游仓储可容纳专精费用并能实际参悟', Object.entries(UPGRADE_MAP.celestialDeduction.cost).every(([id, amount]) => d.max[id] >= amount) && E.research(s, d, 'celestialDeduction'))
+    ok('两段专精相加使岗位倍率1.60到1.95', close(d.jobRatio.scholar, 0.95) && close(d.rates.insight / before, 1.95 / 1.6))
+    const restored = parseImport(exportSave(s))
+    ok('两项专精随存档保留', restored.upgrades.scriptureDebate && restored.upgrades.celestialDeduction)
+  }
   section('金丹：修真、工艺、材料与建设闭环')
   {
     const { state: s, derived: d } = newGame()

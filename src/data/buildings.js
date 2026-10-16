@@ -374,7 +374,7 @@ const CORE_BUILDINGS = [
     cost: { wood: 60, rock: 80 },
     priceRatio: 1.14,
     desc: '书架分格、典籍归档，保存悟道所得，也方便弟子查阅。每座灵机上限 +80、灵机产出 +5%。',
-    effects: { storage: { insight: 80 }, ratio: { insight: 0.05 } },
+    effects: { storage: { insight: 80, daoNote: 20 }, ratio: { insight: 0.05 } },
     needs: { building: { id: 'library', count: 1 } },
     unlockRatio: 0,
   },
@@ -383,10 +383,10 @@ const CORE_BUILDINGS = [
     name: '讲经堂',
     glyph: '讲',
     group: 'cultivate',
-    cost: { arrayBase: 4, plank: 25 },
+    cost: { arrayBase: 4, plank: 25, insight: 200 },
     priceRatio: 1.25,
     desc: '长老登坛讲经，一人讲、百人悟。',
-    effects: { ratio: { insight: 0.35 }, storage: { insight: 800 } },
+    effects: { ratio: { insight: 0.35 }, storage: { insight: 800, daoTreatise: 10 } },
     // 造价含阵基，而阵基要「阵基装配」才产得出：列进前置，避免先露面却找不到来源。
     needs: { upgrades: ['preachArt', 'arrayAssembly'] },
     unlockRatio: 0,
@@ -396,13 +396,13 @@ const CORE_BUILDINGS = [
     name: '观星台',
     glyph: '星',
     group: 'cultivate',
-    cost: { crystal: 50, plank: 30, ore: 1000 },
+    cost: { crystal: 50, plank: 30, ore: 1000, insight: 600, daoNote: 6 },
     priceRatio: 1.3,
     desc: '夜观天象，把满天星斗读成一部功法。',
     // 后期改"比例 + 定额并存"：比例让仓容随产业一起长，定额保证「首座洞天/通天塔」这类
     // 下游花费仍然买得起（早先只留比例时，渡劫期破境 200000 灵机与通天塔 250000 直接越界）。
     // 灵机仓容分工：建筑只给定额（压低），百分比由技艺与「修真应用·仓储」研究节点提供（见 techniques.js 的叠匣术等）。
-    effects: { ratio: { insight: 0.5 }, storage: { insight: 3000 } },
+    effects: { ratio: { insight: 0.5 }, storage: { insight: 3000, arrayDiagram: 5 } },
     needs: { upgrades: ['astrologyArt'] },
     unlockRatio: 0,
   },
@@ -577,7 +577,7 @@ const CORE_BUILDINGS = [
     glyph: '通',
     group: 'wonder',
     // 复合结构承重，玄金储灵、晶银控气，灵符镇住高塔气机。
-    cost: { ironMortar: 100, arcaneGold: 20, crystalSilver: 10, stone: 60000, artifact: 100, insight: 60000, spiritTalisman: 100 },
+    cost: { ironMortar: 100, arcaneGold: 20, crystalSilver: 10, stone: 60000, artifact: 100, insight: 36000, spiritTalisman: 100, arrayDiagram: 8 },
     priceRatio: 1.6,
     desc: '塔尖直插云海，聚气存念并镇住灵气分子与正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
     effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000, immortalForce: 40000 } },
@@ -625,7 +625,7 @@ const CORE_BUILDINGS = [
     glyph: '湮',
     group: 'wonder',
     // 化神可达：造价用灵器／灵符／灵晶／玄钢等化神前已有来源的材料，不依赖炼虚的秘银与合体的玄金。
-    cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, stone: 30000, artifact: 40 },
+    cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, stone: 30000, artifact: 30, arrayDiagram: 2 },
     priceRatio: 1.6,
     desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座运行的湮灭炉还会为宗门添一层全局增产。',
     // 化神入门：既产灵能，又是那层全局增产（参考猫国核反应堆）。毛输出 0.06，炉内自用 0.015，净 0.045。
@@ -643,7 +643,7 @@ const CORE_BUILDINGS = [
     name: '采仙台',
     glyph: '仙',
     group: 'wonder',
-    cost: { mithril: 8, crystal: 40, arrayBase: 12, artifact: 30, stone: 20000, insight: 30000, spiritArtifact: 4 },
+    cost: { mithril: 8, crystal: 40, arrayBase: 12, artifact: 30, stone: 20000, insight: 18000, spiritArtifact: 4, arrayDiagram: 3 },
     priceRatio: 1.5,
     desc: '高台上的相激之场缓缓运转，把天地间自然聚成的仙灵力一丝丝拢住。取之极慢，却已足够看清这一味材料。',
     effects: { prod: { immortalForce: 0.002 } },

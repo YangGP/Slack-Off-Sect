@@ -375,7 +375,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const karmaBonus = softCap(karmaRaw, CONFIG.KARMA_BONUS_CAP)
   const karmaMult = 1 + karmaBonus + acc.karmaRatio
   const karmaStorageMult = 1 + softCap(Math.max(0, state.karma || 0) * CONFIG.KARMA_STORAGE_PER_POINT, CONFIG.KARMA_STORAGE_CAP)
-  /** 道果（飞升层）：每颗 +5% 全局产出，不设上限 —— 因为拿到它的成本极高（一次飞升约 90 小时） */
+  /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。 */
   const daoMult = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_PRODUCTION_BONUS
   const globalMult = realmMult * karmaMult * habitabilityMult * daoMult * (1 + buffAll)
 
@@ -418,10 +418,15 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
    *
    * 产出被 realmMult 放大，口粮若保持常数，一名阵徒的「毛产出 ÷ 口粮」就会从
    * 凡体的 2.4:1 涨到渡劫期的 48:1 —— 弟子越到后期越接近免费，人口只剩盖房子一道闸门。
-   * 指数取 1 时口粮与境界倍率同倍上涨，这个比值在任何境界都固定在 0.25/0.6 ≈ 42%。
+   * 基准口粮随境界倍率上涨，实际费用另受人口规模与减耗影响。
    */
-  const discipleUpkeep = CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
-  const rawUpkeep = derived.discipleWeight * discipleUpkeep
+  const population = state.disciples.members.length
+  const populationUpkeepMult = 1 + Math.min(CONFIG.POPULATION_UPKEEP_EXTRA_CAP,
+    Math.max(0, population - CONFIG.POPULATION_UPKEEP_FREE) * CONFIG.POPULATION_UPKEEP_PER_DISCIPLE)
+  const baseDiscipleUpkeep = CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
+  const discipleUpkeep = baseDiscipleUpkeep * populationUpkeepMult
+  const baseRawUpkeep = derived.discipleWeight * baseDiscipleUpkeep
+  const rawUpkeep = baseRawUpkeep * populationUpkeepMult
   const reduction = rawUpkeep * Math.min(CONFIG.UPKEEP_REDUCTION_CAP, acc.consumeReduction)
   const upkeep = rawUpkeep - reduction
 
@@ -444,8 +449,14 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       id: 'disciples',
       label: '弟子',
       count: state.disciples.total,
-      value: -rawUpkeep,
+      value: -baseRawUpkeep,
     })
+    if (rawUpkeep > baseRawUpkeep) {
+      items.splice(1, 0, {
+        kind: 'upkeep', id: 'population', label: '宗门规模口粮',
+        count: population, value: -(rawUpkeep - baseRawUpkeep),
+      })
+    }
     if (reduction > 0) {
       items.splice(1, 0, {
         kind: 'reduce',
@@ -540,6 +551,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.upkeep = upkeep
   derived.rawUpkeep = rawUpkeep
   derived.discipleUpkeep = discipleUpkeep
+  derived.populationUpkeepMult = populationUpkeepMult
   derived.netQi = net.qi
   derived.habitability = habitability
   derived.habitabilityBonus = habitabilityBonus

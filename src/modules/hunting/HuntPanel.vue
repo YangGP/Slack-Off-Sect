@@ -12,21 +12,13 @@ import { DIPLOMACY } from '@/modules/diplomacy/data.js'
 import { REALMS } from '@/data/realms'
 import { resourceName } from '@/data/resources'
 import { canDepart, huntableMembers, huntPreview } from '@/game/engine'
-import { fmt, fmtInt, fmtPercent, fmtTime } from '@/game/format'
+import { fmtPercent, fmtTime } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
 
 const fieldId = computed(() => state.hunting.settings.selectedFieldId)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])
 const unlocked = computed(() => state.upgrades.wildHunting && state.buildings.huntingCamp?.on)
 const mission = computed(() => view.huntMission.value)
-const prep = computed(() => state.resources.warrant || 0)
-const prepMax = computed(() => derived.max.warrant || 0)
-const prepRate = computed(() => derived.rates.warrant || 0)
-const waitForPrep = computed(() =>
-  prep.value >= HUNT.WARRANT_COST || prepRate.value <= 0
-    ? null
-    : (HUNT.WARRANT_COST - prep.value) / prepRate.value,
-)
 
 const members = computed(() => huntableMembers(state))
 const selectedIds = computed(() => state.hunting.settings.teamIds || [])
@@ -46,9 +38,6 @@ function selectField(id) {
   actions.huntSetField(id)
 }
 
-const prepPct = computed(() =>
-  prepMax.value > 0 ? Math.min(1, prep.value / Math.max(1, prepMax.value)) : 0,
-)
 const missionPct = computed(() => {
   const m = mission.value
   return m ? Math.min(1, m.progressSeconds / Math.max(1, m.actualDuration)) : 0
@@ -76,26 +65,6 @@ const lastOutcome = computed(() => state.hunting.lastOutcome)
         尚未开放猎杀：需掌握《山野猎法》，并启用猎杀营地（筑基期）。
       </div>
       <template v-else>
-        <!-- 信符 -->
-        <table class="grid">
-          <tbody>
-            <tr>
-              <td class="dim nowrap">信符</td>
-              <td class="num">
-                {{ fmtInt(prep) }} / {{ fmtInt(prepMax) }}
-                <span class="dim">（{{ fmtPercent(prepPct) }}）</span>
-                <div class="hunt-bar"><span :style="{ width: (prepPct * 100) + '%' }" /></div>
-              </td>
-              <td class="dim nowrap">开具速度</td>
-              <td class="num">
-                <span v-if="prepRate > 0">{{ fmt(prepRate) }}/秒</span>
-                <span v-else class="warn">无（派执符使到营地）</span>
-                <span v-if="waitForPrep !== null" class="dim"> · 距一次出征约 {{ fmtTime(waitForPrep) }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
         <!-- 猎场选择 -->
         <div class="box-sub">猎场</div>
         <div class="hunt-fields">

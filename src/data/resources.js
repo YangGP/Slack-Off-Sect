@@ -98,6 +98,21 @@ const CORE_RESOURCES = [
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
+    id: 'daoNote', name: '道札', glyph: '札', color: '#d8c99f',
+    baseMax: 50, storageWeight: 0.04, integer: true,
+    desc: '将研读与试验所得记在灵木书札上。用于中期研究、科研建设与汇编道论。',
+  },
+  {
+    id: 'daoTreatise', name: '道论', glyph: '论', color: '#b5c8eb',
+    baseMax: 20, storageWeight: 0.015, integer: true,
+    desc: '汇集道札、交互论证而成的理论成果。用于灵子研究、高级技艺与绘制阵图。',
+  },
+  {
+    id: 'arrayDiagram', name: '阵图', glyph: '图', color: '#c6b5eb',
+    baseMax: 10, storageWeight: 0.005, integer: true,
+    desc: '将道论落实为符纹、阵位与工序齐备的工程图。用于湮灭、仙灵研究和高级建设。',
+  },
+  {
     id: 'steel',
     name: '玄钢',
     glyph: '钢',
@@ -370,6 +385,7 @@ export const VISIBLE_RESOURCES = RESOURCES.filter((r) => !r.hidden).map((r) => r
 /** 左栏按用途分组；混合来源的灵石、玄铁仍属于基础原料。 */
 export const RESOURCE_GROUPS = [
   { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'faith', 'warrant'] },
+  { id: 'knowledge', name: '知识典籍', resources: ['daoNote', 'daoTreatise', 'arrayDiagram'] },
   { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
   { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
   { id: 'crafted', name: '丹符器物', resources: ['pill', 'condensePill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },

@@ -9,9 +9,35 @@ import { CALENDAR } from '../../src/data/calendar.js'
 import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, newGameRunning } from './fixtures.mjs'
+import { discipleDismissalCost } from '../../src/data/disciples.js'
 
 export function incomeBreakdown({ ok, close, section }) {
   section('进项来源明细')
+  {
+    const { state, derived } = newGame()
+    state.realm = 4
+    let dismissal = null
+    for (const [population, multiplier] of [[20, 1], [21, 1.005], [100, 1.4], [220, 2], [400, 2]]) {
+      state.disciples.total = population
+      E.recompute(state, derived)
+      ok(`人口${population}人的规模倍率为${multiplier}`, close(derived.populationUpkeepMult, multiplier, 1e-9))
+      const base = derived.discipleWeight * CONFIG.DISCIPLE_UPKEEP * derived.realmMult ** CONFIG.DISCIPLE_UPKEEP_REALM_EXP
+      ok('规模口粮计入实际扣费及来源总额', close(derived.upkeep, base * multiplier, 1e-9) &&
+        close(derived.expenseSources.qi.reduce((sum, item) => sum + item.value, 0), -derived.upkeep, 1e-9))
+      const fee = discipleDismissalCost(state.disciples.members[0], state.realm)
+      if (dismissal === null) dismissal = fee
+      ok('人口规模不改变逐出定价', fee === dismissal)
+    }
+    state.disciples.members[0].realm = 2
+    state.resources.qi = 100000
+    E.recompute(state, derived)
+    const upkeep = derived.upkeep
+    const consumed = state.disciples.members.reduce((sum, member) => sum + member.totalQiConsumed, 0)
+    E.tick(state, derived, 1, { events: false })
+    const consumedAfter = state.disciples.members.reduce((sum, member) => sum + member.totalQiConsumed, 0)
+    ok('不同个体境界的口粮分摊包含规模成本且只扣一次',
+      close(consumedAfter - consumed, upkeep, 1e-6) && close(100000 - state.resources.qi, upkeep, 1e-6))
+  }
   {
     const { state, derived } = newGameRunning()
     state.resources.qi = 5000

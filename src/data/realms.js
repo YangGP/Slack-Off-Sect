@@ -37,33 +37,34 @@ export const REALMS = [
     name: '元婴期',
     mult: 2.6,
     desc: '元婴出窍，神游百里而肉身不动 —— 神识所及，已能分辨并驱使正负灵子。',
-    cost: { insight: 700, qi: 12000, pill: 180, stone: 1200, talisman: 80 },
+    // 金丹后新记录道札、凝聚灵液，避免只靠筑基时的丹药库存连续跨境。
+    cost: { insight: 3000, qi: 12000, pill: 180, stone: 1200, talisman: 80, daoNote: 30, spiritLiquid: 60 },
   },
   {
     name: '化神期',
     mult: 3.4,
     desc: '神识与灵能合一：灵子之云、之波、之势尽收眼底，山门内外如观掌纹。',
     // 灵晶在元婴开放，先掌握凝聚产业再化神；三境使用同一组材料。
-    cost: { insight: 1200, qi: 18000, spiritLiquid: 90, crystal: 35, artifact: 80, arrayBase: 10 },
+    cost: { insight: 9000, qi: 18000, spiritLiquid: 90, crystal: 35, artifact: 80, arrayBase: 10 },
   },
   {
     name: '炼虚期',
     mult: 4.4,
     desc: '炼化虚空，能提取自由灵子、结成灵子束与灵子对 —— 举手投足皆是天地之力。',
-    cost: { insight: 2000, qi: 20000, spiritLiquid: 180, crystal: 100, artifact: 160, arrayBase: 20 },
+    cost: { insight: 30000, qi: 20000, spiritLiquid: 180, crystal: 100, artifact: 160, arrayBase: 20 },
   },
   {
     name: '合体期',
     mult: 5.8,
     desc: '与道合真：肉身与天地灵能共振，人与宗门同呼吸。',
-    cost: { insight: 3200, qi: 30000, spiritLiquid: 360, crystal: 280, artifact: 320, arrayBase: 40 },
+    cost: { insight: 60000, qi: 30000, spiritLiquid: 360, crystal: 280, artifact: 320, arrayBase: 40 },
   },
   {
     name: '大乘期',
     mult: 7.5,
     desc: '灵子与灵能的运化之则已尽在掌中 —— 此界修行之极，再往前便是天。',
     cost: {
-      insight: 5000,
+      insight: 120000,
       qi: 38000,
       // 元婴已能参悟灵子论并布分灵阵；化神布偏极阵；合体布湮灭炉并固结阵印。先掌握离析，再进大乘。
       qiParticle: 120,
@@ -77,7 +78,7 @@ export const REALMS = [
     mult: 10,
     desc: '体内正负失衡在即，天雷 —— 天地之力贯穿失衡之躯 —— 在头顶盘旋，只等一个正负归一、飞升而去的时机。',
     cost: {
-      insight: 8000,
+      insight: 240000,
       qi: 45000,
       // 稳定阵印为主，灵宝与晶银辅助；不额外要求囤积会逸散的灵能。
       ascensionSeal: 300,

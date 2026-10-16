@@ -1,6 +1,6 @@
 # 文档导航
 
-整理：2026-10-14。先读当前规则，再按系统查专题；未完成方案单独列出。
+整理：2026-10-16。先读当前规则，再按系统查专题；未完成方案单独列出。
 
 ## 当前规则与开发
 
@@ -11,6 +11,7 @@
 | [TABLES](TABLES.md) | 源码生成的完整条目、费用、前置与效果；用 `npm run docs:tables` 更新 |
 | [RESEARCH](RESEARCH.md) | 研究分组、依赖原则、能力递进与评估边界 |
 | [CRAFT-PROGRESSION](CRAFT-PROGRESSION.md) | 制作、自动工业、符文载体、防护及后期建材 |
+| [KNOWLEDGE-CRAFTS](KNOWLEDGE-CRAFTS.md) | 已实现的道札→道论→阵图加工、仓储、科研及工程消费 |
 | [HABITABILITY](HABITABILITY.md) | 宜居度公式、人口风险与供给 |
 | [DISCIPLE-PROGRESSION](DISCIPLE-PROGRESSION.md) | 已实现的个体成长、突破、管理、传功与护道，以及待完善问题 |
 | [DISCIPLE-TALENTS](DISCIPLE-TALENTS.md) | 已实现的天赋获取、效果、等级成长与存档契约 |
@@ -21,8 +22,11 @@
 
 | 文档 | 维护范围与状态 |
 | --- | --- |
-| [ROADMAP](ROADMAP.md) | 后续工作入口；具体方案与参数引用专题，避免重复维护 |
-| [MATERIAL-RESEARCH](MATERIAL-RESEARCH.md) | 丹道／香火／土木三条材料研究线的缺口与策划方向（未排期工作草案） |
+| [ROADMAP](ROADMAP.md) | 待实施项总览，区分已策划、讨论稿、待校准及暂缓项；已完成内容不再作为待办 |
+| [PACING-AUDIT](PACING-AUDIT.md) | 2026-10-17突破优先实测；严格节省、产能投资及护道路线的逐境时间与瓶颈 |
+| [BUILDING-PRICE-COMPARISON](BUILDING-PRICE-COMPARISON.md) | 猫国建筑基础价格、涨价率与扩建回报对照；科研、高档住宅与仓储的待测价格建议 |
+| [RESEARCH-CRAFT-PRICE-COMPARISON](RESEARCH-CRAFT-PRICE-COMPARISON.md) | 科研与合成基线对照；第6节为已实施的建材、灵机与科研预算试调及验证 |
+| [MATERIAL-RESEARCH](MATERIAL-RESEARCH.md) | 丹道／香火／土木研究已实施，保留设计依据与待校准事项 |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 灵子、灵能与香火因果的世界观；仙灵力与粒子供能已实施 |
 | [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓猎杀已实现；深山、禁地与来袭关联等仍待扩展 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现；散修、邻宗与长期准备能力仍为草案 |
