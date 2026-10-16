@@ -258,7 +258,7 @@ const CORE_BUILDINGS = [
     cost: { wood: 150, rock: 200 },
     priceRatio: 1.35,
     desc: '平整出一片料场，原料按堆码放，另设石匣存放灵石。用于早期补充仓储，大量囤料需建库房。',
-    effects: { storage: { rock: 500, ore: 150, wood: 400, herb: 200, stone: 150 } },
+    effects: { storage: { rock: 500, ore: 150, wood: 400, herb: 200, stone: 250 } },
     needs: { upgrades: ['quarryArt'] },
   },
   {
@@ -274,7 +274,7 @@ const CORE_BUILDINGS = [
     // 原料保留挂机缓冲；灵石按矿井与点石成灵的实际流量分配，避免低速资源提前扩出数小时空仓。
     // 涨价率略高于谷仓，批量扩容需与采集、加工扩产一起推进。
     // 灵气上限归「谷仓」，灵机归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
-    effects: { storage: { wood: 1000, stone: 250, rock: 600, ore: 400, herb: 500 } },
+    effects: { storage: { wood: 1000, stone: 500, rock: 600, ore: 400, herb: 500 } },
     needs: { upgrades: ['earthArt'] },
   },
   {
@@ -512,7 +512,8 @@ const CORE_BUILDINGS = [
     cost: { wood: 360, rock: 200, ore: 40 },
     priceRatio: 1.3,
     desc: '山门一立，香客便知此处有仙。开放香使职位，派遣弟子接待香客才能收取香火。',
-    effects: { storage: { faith: 80 } },
+    // 香火是全局最易贴顶的资源（72h 实测 100%），每座仓位按灵木档位的同量级上调
+    effects: { storage: { faith: 240 } },
     needs: { upgrades: ['incenseVow'], building: { id: 'hut', count: 3 } },
   },
   {
@@ -523,7 +524,7 @@ const CORE_BUILDINGS = [
     cost: { ore: 300, plank: 4 },
     priceRatio: 1.3,
     desc: '青铜大鼎终日不熄，把念力一炉炉炼成香火。',
-    effects: { ratio: { faith: 0.3 }, habitability: 3, storage: { faith: 120 } },
+    effects: { ratio: { faith: 0.3 }, habitability: 3, storage: { faith: 240 } },
     upkeep: { wood: 0.12 }, // 鼎里得一直添香柴
 
     needs: { building: { id: 'gate', count: 2 }, upgrades: ['incenseStudy'] },

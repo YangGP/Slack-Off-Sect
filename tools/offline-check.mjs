@@ -94,7 +94,7 @@ export function runOfflineChecks(ok) {
   hunting.buildings.huntingCamp = { count: 1, on: true }
   hunting.buildings.warmFurChamber = { count: 1, on: true }
   hunting.resources.beastHide = 0
-  hunting.resources.huntPreparation = 100
+  hunting.resources.warrant = 100
   hunting.disciples.members[0].realm = 4
   const hd = E.createDerived()
   setGameContext(hunting, { now: () => startAt, random: () => 0 })

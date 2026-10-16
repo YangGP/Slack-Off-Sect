@@ -68,7 +68,7 @@ const CORE_JOBS = [
   },
 ]
 
-/** 核心岗位 + 可选模块（猎杀）贡献的岗位（猎妖师，追加在末尾） */
+/** 核心岗位 + 可选模块（猎杀）贡献的岗位（执符使，追加在末尾） */
 export const JOBS = [...CORE_JOBS, ...HUNT_JOBS]
 
 export const JOB_MAP = Object.fromEntries(JOBS.map((j) => [j.id, j]))

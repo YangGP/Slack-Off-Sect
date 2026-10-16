@@ -12,12 +12,31 @@ import { normalizeDisciples } from '@/data/disciples'
 export function migrateState(state, fresh, { preferMembers = false } = {}) {
   const merged = { ...fresh, ...state }
   merged.resources = { ...fresh.resources, ...(state.resources || {}) }
+  // 猎备（huntPreparation）更名为信符（warrant）：旧档存量平移，外交与猎杀自此共用。
+  // 新旧数值各自独立校验（有限非负），避免非法旧值把合法新值污染成 NaN 后归零。
+  if (Object.hasOwn(merged.resources, 'huntPreparation')) {
+    const validNew = Number.isFinite(merged.resources.warrant) && merged.resources.warrant >= 0 ? merged.resources.warrant : 0
+    const validOld = Number.isFinite(merged.resources.huntPreparation) && merged.resources.huntPreparation >= 0 ? merged.resources.huntPreparation : 0
+    merged.resources.warrant = Math.max(validNew, validOld)
+    delete merged.resources.huntPreparation
+  }
   // 整枚计数的资源（灵石/丹药/符箓/法器）在旧档里可能被算成小数（涨价/折扣/祭炼留下的），读档时抹平
   for (const r of RESOURCES) {
     if (r.integer) merged.resources[r.id] = floorNumber(merged.resources[r.id] || 0)
   }
   merged.seen = { ...fresh.seen, ...(state.seen || {}) }
-  merged.peak = state.peak || {}
+  merged.peak = { ...(state.peak || {}) }
+  // 旧档的 seen/peak 里可能残留 huntPreparation：迁移到 warrant，只认字面 true 的 seen 标记。
+  if (Object.hasOwn(merged.seen, 'huntPreparation')) {
+    if (merged.seen.huntPreparation === true) merged.seen.warrant = true
+    delete merged.seen.huntPreparation
+  }
+  if (Object.hasOwn(merged.peak, 'huntPreparation')) {
+    const validNew = Number.isFinite(merged.peak.warrant) && merged.peak.warrant >= 0 ? merged.peak.warrant : 0
+    const validOld = Number.isFinite(merged.peak.huntPreparation) && merged.peak.huntPreparation >= 0 ? merged.peak.huntPreparation : 0
+    merged.peak.warrant = Math.max(validNew, validOld)
+    delete merged.peak.huntPreparation
+  }
   merged.disciples = {
     ...fresh.disciples,
     ...(state.disciples || {}),

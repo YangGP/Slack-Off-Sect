@@ -15,7 +15,7 @@
 | `npm run check:industry` | 工业供料、共享冷却和粒子配对负载实验 |
 | `npm run check:encoding` | 项目文本 BOM / 换行检查；跳过产物、外部参考项目及目录链接 |
 
-`architecture-check`、`industry-check`、`disciple-check`、`talent-check`、`auto-talent-check`、`alchemy-migration-check`、`recruit-unlock-check`、`power-check`、`offline-check`、`offline-async-check` 是被 smoke 调用的专项检查，导入时不自行执行。不要为同一组断言另开一份副本。
+`architecture-check`、`industry-check`、`disciple-check`、`talent-check`、`auto-talent-check`、`power-check`、`offline-check`、`offline-async-check` 是被 smoke 调用的专项检查，导入时不自行执行。不要为同一组断言另开一份副本。
 
 ## 审计与基准
 

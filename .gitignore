@@ -13,6 +13,8 @@ docs/DISCIPLE-GROWTH-DATA.json
 # 杂项
 *.log
 .env*
+# DeepSeek 使用设置
+.ds
 .tmp-alias-shim.mjs
 # tools 下的临时脚本 / 提交信息草稿（点文件一律不入库）
 tools/.*

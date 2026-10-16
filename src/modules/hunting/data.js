@@ -13,8 +13,8 @@
 
 /** 通用参数（首轮试调值） */
 export const HUNT = {
-  /** 每次出征消耗的猎备 */
-  PREPARATION_COST: 100,
+  /** 每次出征消耗的信符（与外交交易共用同一资源，见 resources.js 的 warrant） */
+  WARRANT_COST: 100,
   /** 单队人数与同时任务数 */
   TEAM_MIN: 1,
   TEAM_MAX: 5,
@@ -58,20 +58,8 @@ export const DEFAULT_HUNT_FIELD = HUNT_FIELDS[0].id
 // 目录贡献（由核心数据文件拼装）
 // ============================================================
 
-/** 资源：猎备、灵兽皮、灵兽骨（禁区/深山材料待实现） */
+/** 资源：灵兽皮、灵兽骨（信符已抽成核心资源；禁区/深山材料待实现） */
 export const HUNT_RESOURCES = [
-  {
-    id: 'huntPreparation',
-    name: '猎备',
-    glyph: '备',
-    color: '#d8b98a',
-    baseMax: 0,
-    // 仓容完全独立：不套通用扩仓（比例为 0），也不乘仙缘仓储倍率（isolatedStorage）。
-    storageWeight: 0,
-    isolatedStorage: true,
-    desc: '弓弩、干粮、缚兽索——猎妖师在营地备下的行装。每趟出征消耗 100，仓容由猎杀营地单独提供。',
-    module: 'hunting',
-  },
   {
     id: 'beastHide',
     name: '灵兽皮',
@@ -97,17 +85,17 @@ export const HUNT_RESOURCES = [
 /** 资源插回锚点：保持拆分前位于「灵草」之后 */
 export const HUNT_RESOURCE_ANCHOR = 'herb'
 
-/** 岗位：猎妖师（末尾追加，拆分前即在 JOBS 末尾） */
+/** 岗位：执符使（核心岗位，产信符供猎杀与外交共用；模块关闭时随目录项失效） */
 export const HUNT_JOBS = [
   {
     id: 'huntPlanner',
-    name: '猎妖师',
-    glyph: '猎',
-    desc: '在营地打理弓弩、干粮与缚兽索，为出征备下猎备。不产兽材——兽材由出征任务带回。',
-    resource: 'huntPreparation',
+    name: '执符使',
+    glyph: '符',
+    desc: '在营房备弓弩、刻符牌，为宗门开具差遣凭信：入山猎妖、拜访邻宗都要用它。不产兽材——兽材由出征任务带回。',
+    resource: 'warrant',
     base: 0.2,
     needs: { building: { id: 'huntingCamp', count: 1 } },
-    module: 'hunting',
+    moduleAny: ['hunting', 'diplomacy'],
   },
 ]
 
@@ -120,11 +108,11 @@ export const HUNT_BUILDINGS = [
     group: 'hunt',
     cost: { wood: 500, rock: 200, stone: 60 },
     priceRatio: 1.35,
-    desc: '扎在近山处的营寨，弓箭、缚索与兽栏一应俱全。猎妖师在此备猎，也是出征的起点。',
-    // 猎备仓容单独配置，不套通用仓储加成；兽皮兽骨按普通材料计容。
-    effects: { storage: { huntPreparation: 300, beastHide: 200, beastBone: 150 } },
+    desc: '扎在近山处的营寨，弓箭、缚索与兽栏一应俱全。执符使在此开符备猎，也是出征的起点。',
+    // 信符仓容单独配置，不套通用仓储加成；兽皮兽骨按普通材料计容。
+    effects: { storage: { warrant: 300, beastHide: 200, beastBone: 150 } },
     needs: { realm: 3, upgrades: ['wildHunting'] },
-    module: 'hunting',
+    moduleAny: ['hunting', 'diplomacy'],
   },
   {
     id: 'warmFurChamber',
@@ -145,7 +133,7 @@ export const HUNT_BUILDINGS = [
 export const HUNT_BUILDING_ORDER_ANCHOR = 'ancestorHall'
 
 /** 建筑分组：猎杀 */
-export const HUNT_BUILDING_GROUP = { id: 'hunt', name: '猎杀', hint: '营地、猎备与兽材' }
+export const HUNT_BUILDING_GROUP = { id: 'hunt', name: '猎杀', hint: '营地、信符与兽材' }
 
 /** 配方：兽骨炼器 */
 export const HUNT_CRAFTS = [
@@ -174,13 +162,13 @@ export const HUNT_UPGRADES = [
     name: '山野猎法',
     glyph: '猎',
     cost: { insight: 300, wood: 200, stone: 30 },
-    desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建猎杀营地，并布置暖裘居室。',
+    desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建猎杀营地，并布置暖裘居室；营地开出的信符也供邻宗互市使用。',
     effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
     note: '解锁建筑：猎杀营地、暖裘居室',
-    effectDesc: '因此敢入山猎兽：有了稳定的兽材来源。',
+    effectDesc: '因此敢入山猎兽：有了稳定的兽材来源，信符也可供互市。',
     // 承草木（灵植术）与起居（引泉净水）两线：研究可先掌握，实际应用仍需筑基与木屋等条件。
     needs: { upgrades: ['herbStudy', 'waterSanitation'] },
-    module: 'hunting',
+    moduleAny: ['hunting', 'diplomacy'],
   },
   {
     id: 'beastMaterialArt',
@@ -223,7 +211,7 @@ export const HUNT_TECHNIQUES = [
     name: '筹猎章',
     glyph: '筹',
     cost: { insight: 350, wood: 300 },
-    desc: '把弓弩、干粮、缚索列成册子，行前清点不遗漏。猎妖师备猎速度 +25%。',
+    desc: '把弓弩、干粮、缚索列成册子，行前清点不遗漏。执符使开符速度 +25%。',
     effects: { jobRatio: { huntPlanner: 0.25 } },
     needs: { upgrades: ['wildHunting'] },
     module: 'hunting',

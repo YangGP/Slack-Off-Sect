@@ -640,6 +640,13 @@ export const actions = {
     saveNow()
     return true
   },
+  diplomacyTrade(sectId) {
+    const result = E.tradeWithSect(state, derived, sectId)
+    if (!result.ok) { toast(result.reason || '无法交易', 'bad'); return false }
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
   toggleResourceGroup(id) {
     if (!RESOURCE_GROUPS.some(group => group.id === id)) return false
     const collapsed = { ...state.ui.collapsedResourceGroups }

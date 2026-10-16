@@ -1,4 +1,5 @@
 import hunting from '@/modules/hunting/index.js'
+import diplomacy from '@/modules/diplomacy/index.js'
 import { isModuleEnabled } from '@/data/modules'
 
 /**
@@ -10,7 +11,7 @@ import { isModuleEnabled } from '@/data/modules'
  * 注意依赖方向：本文件可以 import 模块，模块内部的系统代码只能 import 核心的系统/数据，
  * 不能反向 import 本文件，否则会形成环（架构检查会验证）。
  */
-export const MODULE_DESCRIPTORS = [hunting]
+export const MODULE_DESCRIPTORS = [hunting, diplomacy]
 
 export const MODULE_DESCRIPTOR_MAP = Object.fromEntries(MODULE_DESCRIPTORS.map((m) => [m.id, m]))
 
