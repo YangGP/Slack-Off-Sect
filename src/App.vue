@@ -24,6 +24,7 @@ import TotalsPanel from './components/TotalsPanel.vue'
 import BuffBar from './components/BuffBar.vue'
 import OfflineModal from './components/OfflineModal.vue'
 import ChangelogModal from './components/ChangelogModal.vue'
+import AnalyticsModal from './components/AnalyticsModal.vue'
 import HabitabilityTip from './components/HabitabilityTip.vue'
 import HoverTip from './components/HoverTip.vue'
 
@@ -64,6 +65,8 @@ const waitNext = computed(() => nextArrivalIn(state, derived))
 const status = computed(() => ui.toast?.text || '')
 /** 离线进度是有界比例（Number），取整只在脚本里做 */
 const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
+const analyticsDialogOpen = computed(() => !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
+  && (ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen))
 </script>
 
 <template>
@@ -81,7 +84,7 @@ const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
       </div>
     </div>
   </div>
-  <div class="wrap" :inert="ui.offlineLoading" :aria-busy="ui.offlineLoading">
+  <div class="wrap" :inert="ui.offlineLoading || analyticsDialogOpen" :aria-busy="ui.offlineLoading">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
       <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>
@@ -153,4 +156,5 @@ const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
     <OfflineModal />
   </div>
   <ChangelogModal />
+  <AnalyticsModal />
 </template>

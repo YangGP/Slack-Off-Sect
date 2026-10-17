@@ -10,6 +10,29 @@ export async function checkMount(context) {
     mountError = err
   }
   ok('应用成功挂载', !mountError, mountError?.message || '')
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const consentDialog = window.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
+  ok('首次进入展示数据采集选择，尚未开启统计', !!consentDialog && ui.analyticsConsent === 'unknown' && state.settings.analyticsEnabled === false)
+  const declineButton = [...(consentDialog?.querySelectorAll('button') || [])].find(button => button.textContent === '暂不开启')
+  ok('首次提示默认聚焦暂不开启', !!declineButton && window.document.activeElement === declineButton)
+  declineButton?.click()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  ok('拒绝后弹窗关闭并记住浏览器选择', !window.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
+    && window.localStorage.getItem('slack-off-sect.analytics.consent.v1') === 'denied' && !state.settings.analyticsEnabled)
+  // 自动化环境不加载真实 GA，用设置入口回归失败回退，避免测试污染正式统计。
+  context.actions.setSetting('analyticsEnabled', true)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  ok('采集不可用时弹窗提示且开关回退为关闭', ui.analyticsFailureOpen && ui.analyticsStatus === 'failed'
+    && !state.settings.analyticsEnabled && ui.analyticsConsent === 'denied'
+    && window.localStorage.getItem('slack-off-sect.analytics.consent.v1') === 'denied')
+  const failureDialog = window.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
+  ok('开启失败弹窗提供继续游戏入口', failureDialog?.textContent.includes('数据采集未能开启')
+    && failureDialog?.textContent.includes('继续游戏'))
+  failureDialog?.querySelector('button')?.click()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  ok('关闭失败弹窗后不阻挡游戏且不加载统计标签', !ui.analyticsFailureOpen
+    && !window.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
+    && !window.document.querySelector('script[src*="googletagmanager.com"]'))
   const app = window.document.getElementById('app')
   const text = () => app.textContent || ''
   const html = () => app.innerHTML || ''

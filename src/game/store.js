@@ -17,6 +17,7 @@ import { fmtAmount, fmtCost, fmtInt } from './format'
 import { cloneRuntime } from './clone'
 import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
+import * as analytics from '@/analytics/collector'
 import { deactivateModule } from './moduleRegistry'
 
 // ============================================================
@@ -28,6 +29,7 @@ let initialized = false
 let initializing = null
 let loopRequested = false
 let offlineController = null
+const ANALYTICS_CONSENT_KEY = 'slack-off-sect.analytics.consent.v1'
 export const state = reactive(createInitialState())
 export const derived = reactive(E.createDerived())
 
@@ -35,6 +37,10 @@ export const derived = reactive(E.createDerived())
 export const ui = reactive({
   saveLoadError: '',
   saveRecoveryNotice: '',
+  analyticsConsent: 'unknown',
+  analyticsStatus: 'disabled',
+  analyticsFailureReason: '',
+  analyticsFailureOpen: false,
   debug: false,
   debugPage: false,
   offlineReport: null,
@@ -50,6 +56,26 @@ export const ui = reactive({
    */
   highlight: { need: [], lack: [] },
 })
+
+// 同意选择属于当前浏览器，导入游戏存档或重开不能代替玩家授权。
+function applyAnalyticsConsent() {
+  state.settings.analyticsEnabled = ui.analyticsConsent === 'granted'
+}
+
+function handleAnalyticsStatus({ status, reason }) {
+  if (status === 'failed') {
+    // 开启失败要真正退回关闭状态，不能只弹提示而留下已勾选的设置。
+    state.settings.analyticsEnabled = false
+    ui.analyticsConsent = 'denied'
+    try { localStorage.setItem(ANALYTICS_CONSENT_KEY, 'denied') } catch {}
+    analytics.setAnalyticsEnabled(false)
+    saveNow()
+    ui.analyticsFailureOpen = true
+  }
+  // 关闭传输会同步回调 disabled，最后保留原来的失败原因供弹窗显示。
+  ui.analyticsStatus = status
+  ui.analyticsFailureReason = reason
+}
 
 const game = createGame({ state, derived,
   // 运行时快照必须保留 Decimal 金额：JSON 往返会把金额变成字符串，structuredClone 会丢掉原型。
@@ -67,6 +93,14 @@ export function initializeGame() {
   if (initialized) return initializing
   initialized = true
   restored = runtime.load()
+  try {
+    const consent = localStorage.getItem(ANALYTICS_CONSENT_KEY)
+    if (consent === 'granted' || consent === 'denied') ui.analyticsConsent = consent
+  } catch {}
+  applyAnalyticsConsent()
+  // 采集在离线结算之前初始化：离线成功结算的秒数要计入本世时钟。
+  analytics.initAnalytics({ state, derived, restored: !!restored, debug: ui.debug === true,
+    onStatus: handleAnalyticsStatus })
   ui.saveLoadError = repository.loadError
   ui.saveRecoveryNotice = restored?.__recoveryNotice || ''
   ui.lastSavedAt = restored?.lastSaveAt || 0
@@ -83,6 +117,8 @@ export function initializeGame() {
       get() {
         ui.debug = true
         ui.debugPage = true
+        // 本世一旦用过调试入口就永久标 debug：关闭调试不能把样本洗白。
+        analytics.markDebug()
         return '调试模式已开启'
       },
     })
@@ -155,6 +191,7 @@ function applyOfflineProgress() {
       'event',
     )
     E.recompute(state, derived)
+    analytics.noteOfflineSettled(seconds)
     // 已消费的窗口立刻落盘：此后再次读档不会重复领取同一段离线收益，
     // 恢复在线后的运行时钟也不会因为结算耗时立刻形成第二次长补算。
     runtime.save()
@@ -166,6 +203,8 @@ async function withOfflineLoading(run) {
   offlineController = controller
   ui.offlineLoading = true
   ui.offlineProgress = { completedSeconds: 0, totalSeconds: 0, percent: 0 }
+  // 离线/长间隔追赶期间暂停前台计时与卡点采样，完成后再重设基准。
+  analytics.pauseSampling()
   try {
     await nextTick()
     // 先绘制进度条；随后引擎按时间预算分批结算，每批之间让出主线程。
@@ -187,6 +226,7 @@ async function withOfflineLoading(run) {
       offlineController = null
       ui.offlineLoading = false
     }
+    analytics.resumeSampling()
   }
 }
 
@@ -208,6 +248,8 @@ export function advance(dt) {
 }
 
 function reportAdvance(dt, result) {
+  // 长间隔走离线/追赶分支（引擎返回实际结算秒数），短步长是在线推进；两者互斥，不重复累计。
+  analytics.noteAdvance(Number.isFinite(result?.seconds) ? result.seconds : dt, !!result)
   if (!result || dt <= 60) return
   const parts = Object.entries(result.gains).slice(0, 4)
     .map(([id, amount]) => `${resourceName(id)}+${fmtAmount(amount)}`)
@@ -237,7 +279,11 @@ export function startLoop() {
       },
     )
   }
+  // 首次选择之前不推进游戏，也不加载统计，避免先采集后询问。
+  if (ui.analyticsConsent === 'unknown') return
   if (!runtime.start()) return
+  // 主循环真正跑起来后才启用前台计时与卡点采样（读档失败时游戏没在跑，不能采集）。
+  analytics.markReady()
   document.addEventListener('visibilitychange', onHide)
   window.addEventListener('beforeunload', onBeforeUnload)
 }
@@ -246,6 +292,7 @@ export function stopLoop() {
   loopRequested = false
   cancelOfflineProgress()
   runtime.stop()
+  analytics.stopAnalytics()
   if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide)
   if (typeof window !== 'undefined') window.removeEventListener('beforeunload', onBeforeUnload)
 }
@@ -282,6 +329,7 @@ export const actions = {
    */
   setDebugResource(id, amount) {
     if (!ui.debug) return false
+    analytics.markDebug()
     if (ui.saveLoadError) {
       toast('存档读取失败，请先在设置中导入有效备份', 'bad')
       return false
@@ -489,7 +537,34 @@ export const actions = {
   },
   breakthrough(options = {}) {
     const deaths = state.stats.breakthroughDeaths || 0
+    // 只有真实扣料后的判定才是一次尝试：资源不足/已达最高境界不发事件。
+    const hasNext = state.realm + 1 < REALMS.length
+    const preview = hasNext ? E.breakthroughPreview(state, derived, options) : null
+    const attempt = !!preview && E.canAfford(state, preview.cost)
+    const snapshot = attempt ? analytics.captureRun() : null
+    const sourceRealm = state.realm
+    // 判定可能改变境界：先把旧境界的卡点余量提交并重切采样基准。
+    if (attempt) analytics.beforeRealmChange()
     const ok = E.breakthrough(state, derived, options)
+    if (attempt) {
+      const result = ok ? 'success'
+        : (state.stats.breakthroughDeaths || 0) > deaths ? 'death'
+          : state.realm < sourceRealm ? 'regression' : 'fail'
+      const aids = preview.availableAids || []
+      analytics.noteBreakthrough({
+        sourceRealm,
+        targetRealm: sourceRealm + 1,
+        result,
+        preview,
+        aidCount: aids.filter(aid => options[aid.id] === true).length,
+        aidMask: aids.map(aid => (options[aid.id] === true ? '1' : '0')).join(''),
+      })
+      if (result === "death") {
+        // 身死属于旧世：先发旧世结果，再结束旧世并开新世。
+        analytics.endRun(snapshot, { reason: 'death', karmaGain: preview.deathKarma, daoGain: 0 })
+        analytics.beginRun('death', { debug: ui.debug === true })
+      }
+    }
     if (ok) toast(`突破成功：${REALMS[state.realm].name}`, 'good')
     else toast((state.stats.breakthroughDeaths || 0) > deaths ? '身死道消，仙缘减半，已重开' : '突破未成，请查看宗门纪事', 'bad')
     saveNow()
@@ -507,8 +582,12 @@ export const actions = {
     }
     const gain = E.reincarnationGain(state, derived)
     const name = REALMS[state.realm].name
+    const snapshot = analytics.captureRun()
+    analytics.beforeStateReplace()
     resetForReincarnation(state, gain)
     E.recompute(state, derived)
+    analytics.endRun(snapshot, { reason: 'reincarnation', karmaGain: gain, daoGain: 0 })
+    analytics.beginRun('reincarnation', { debug: ui.debug === true })
     E.pushLog(state, `自【${name}】转世重修，携仙缘 ${fmtInt(gain)} 点再入红尘`, 'realm')
     saveNow()
     toast(`转世成功，获得仙缘 ${fmtInt(gain)}`, 'good')
@@ -522,8 +601,13 @@ export const actions = {
     // 结算的仙缘是金额（Decimal）：跨世累加在 resetForAscension 里走 Decimal 加法。
     const gain = E.ascensionGain(state, derived)
     const name = REALMS[state.realm].name
+    const snapshot = analytics.captureRun()
+    analytics.beforeStateReplace()
     resetForAscension(state, gain)
     E.recompute(state, derived)
+    // 飞升实际额外结一颗道果，与 resetForAscension 的结算一致。
+    analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain: 1 })
+    analytics.beginRun('ascension', { debug: ui.debug === true })
     E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtInt(gain)} 点转世重修`, 'realm')
     saveNow()
     toast(`飞升成功，获得仙缘 ${fmtInt(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
@@ -540,6 +624,7 @@ export const actions = {
   },
   triggerEvent() {
     if (!ui.debug) return false
+    analytics.markDebug()
     E.fireEvent(state, derived)
     E.recompute(state, derived)
     afterAction('', '')
@@ -560,8 +645,12 @@ export const actions = {
     const next = parseImport(text)
     cancelOfflineProgress()
     ui.saveRecoveryNotice = next.__recoveryNotice || ''
+    analytics.beforeStateReplace()
     game.replaceState(next)
+    applyAnalyticsConsent()
     runtime.resetClock()
+    // 回档不能复用旧的分析 run_id：换新世身份，本世标 partial，不补发 run_start。
+    analytics.noteImport({ debug: ui.debug === true })
     ui.offlineReport = null
     ui.highlight = { need: [], lack: [] }
     const recovering = !!ui.saveLoadError
@@ -577,8 +666,11 @@ export const actions = {
     cancelOfflineProgress()
     const recovering = !!ui.saveLoadError
     ui.saveLoadError = ''
+    analytics.beforeStateReplace()
     game.reset()
+    applyAnalyticsConsent()
     runtime.resetClock()
+    analytics.startFreshSave({ debug: ui.debug === true })
     ui.saveRecoveryNotice = ''
     saveNow()
     if (recovering) startLoop()
@@ -606,8 +698,26 @@ export const actions = {
       saveNow()
       return
     }
+    if (key === 'analyticsEnabled') {
+      const firstChoice = ui.analyticsConsent === 'unknown'
+      ui.analyticsConsent = value === true ? 'granted' : 'denied'
+      try { localStorage.setItem(ANALYTICS_CONSENT_KEY, ui.analyticsConsent) } catch {}
+      ui.analyticsFailureOpen = false
+      state.settings.analyticsEnabled = value === true
+      // 新档尚未开始运行，玩家同意后才建立完整的第一世观测起点。
+      if (firstChoice && value === true && !restored && !ui.saveLoadError) {
+        analytics.startFreshSave({ debug: ui.debug === true })
+      }
+      analytics.setAnalyticsEnabled(value === true)
+      saveNow()
+      if (firstChoice && loopRequested) startLoop()
+      return
+    }
     state.settings[key] = value
     saveNow()
+  },
+  dismissAnalyticsFailure() {
+    ui.analyticsFailureOpen = false
   },
   /** 开关可选模块：关闭时立即清理该模块状态（如召回出征弟子），并回退页面 */
   setModuleEnabled(id, enabled) {

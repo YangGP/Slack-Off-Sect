@@ -106,6 +106,10 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 
 存档结构版本为 **3**，沿用原有 localStorage 键以便发现旧档。金额字段按 `src/game/moneyFields.js` 的**显式白名单**序列化为十进制字符串（允许科学计数法），控制域继续保存 JSON number；不依赖任意对象的 `toJSON`。`serialize` 返回独立的普通数据（深拷贝，不暴露状态的嵌套引用）。读档顺序固定：解析 → 结构检查 → **按字段解码/清洗金额** → 执行涉及金额算术的历史迁移 → 目标状态校验；v1/v2/无版本的有限非负 number 金额迁入 Decimal，旧值已丢失的精度不做补偿。v2 起 `disciples.members` 就是权威个体数据，版本升到 3 不会重建弟子，历史补偿也不会重复发放。未知版本或结构冲突时只继承有效的仙缘与道果并显示恢复说明；无法解析的文件保留原档并阻止自动覆盖。金额字符串限制 256 字符，拒绝空串、布尔、数组、对象与十进制以外的语法（`0x10` 之类不算存档格式）。上线前用现有导出功能保留 v2 备份；回退旧客户端需恢复该备份，v3 字符串存档不承诺由旧客户端读取。
 
+存档里另有 `analytics` 元数据（`src/game/analyticsState.js`）：本世 `run_id`、`save_id`、`run_index`、`cohort`（fresh/legacy/imported）、`data_quality`（clean/partial/debug）、四项时钟累计、首次到达表、按目标境界的尝试次数与上一世摘要。它只服务 GA4 平衡采集，不参与任何数值计算；读档由 `validateState` 归一化，旧档缺失时补默认值并由采集侧标为 partial。采集分两层：`src/analytics/collector.js` 管世生命周期、计时器、可见性与卡点采样，`src/analytics/ga.js` 按需加载，只做 gtag 注入与发送；引擎不依赖 window/gtag。
+
+采集默认关闭，首次进入用弹窗询问，作出选择后启动游戏；授权单独保存在浏览器的 `slack-off-sect.analytics.consent.v1` 中，导入存档不会替代授权。设置入口为「允许游玩数据采集」。`VITE_GA_MEASUREMENT_ID` 缺失、开发环境未通过 `VITE_GA_DEBUG=1` 显式开启、自动化环境或玩家关闭开关时停用。模块或标签加载失败时弹窗提示、取消勾选并记住关闭选择，刷新后不自动重试。标签加载成功只表示浏览器采集端就绪，不代表 GA4 服务端已收到事件；发送是尽力而为，关闭或失败时丢弃队列，不补发。
+
 `tools/offline-benchmark.mjs` 可在同一夹具上比较迁移前后的 8/24 小时耗时、最长连续计算段与分段数（见「分析工具及口径」）。2026-10 迁移到 Decimal 的实测（Windows / Node 24，同一 `--fixture`，各取 2~3 次的中位）：
 
 | 场景 | 迁移前 | 迁移后 | 说明 |

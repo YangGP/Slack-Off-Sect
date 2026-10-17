@@ -55,7 +55,16 @@ const url = pathToFileURL(root + '.smoke-startup/startup.js').href
 try {
   const oldHot = globalThis.__gameHot = hotContext()
   const first = await import(url + '?first')
-  assert.equal(intervals.size, 1, 'main 自动启动且只有一个主循环')
+  assert.equal(intervals.size, 0, '首次选择采集之前不启动游戏循环')
+  assert.equal(first.ui.analyticsConsent, 'unknown', '首次访问尚未作出采集选择')
+  const consentDialog = browser.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
+  assert.ok(consentDialog?.textContent.includes('是否开启游玩数据采集'), '真实入口展示首次采集询问')
+  const declineButton = [...consentDialog.querySelectorAll('button')].find(button => button.textContent === '暂不开启')
+  declineButton.click()
+  await Promise.resolve()
+  assert.equal(browser.localStorage.getItem('slack-off-sect.analytics.consent.v1'), 'denied', '拒绝采集保存在浏览器中')
+  assert.equal(first.state.settings.analyticsEnabled, false, '拒绝采集不勾选开关')
+  assert.equal(intervals.size, 1, '作出选择后启动且只有一个主循环')
   first.state.buildings.spiritField = { count: 1, on: true }
   // 资源、仙缘与道果都是金额：入口夹具也必须构造成 Decimal。
   first.state.resources.qi = money(100)
@@ -80,6 +89,7 @@ try {
   browser.document.getElementById('app').__vue_app__.unmount()
   globalThis.__gameHot = hotContext()
   const reloaded = await import(url + '?reloaded')
+  assert.equal(reloaded.ui.analyticsConsent, 'denied', '页面重载保留采集选择，不再次询问')
   assert.equal(intervals.size, 1, '重载后重新启动一个主循环')
   assert.ok(moneyEq(reloaded.state.karma, 44), '重载后仙缘保持不变')
   assert.ok(moneyEq(reloaded.state.dao, 11), '重载后道果保持不变')

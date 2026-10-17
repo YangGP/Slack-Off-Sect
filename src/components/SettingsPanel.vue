@@ -102,6 +102,17 @@ function doReset() {
       <label class="sw">
         <input
           type="checkbox"
+          :checked="state.settings.analyticsEnabled"
+          @change="actions.setSetting('analyticsEnabled', $event.target.checked)"
+        />
+        允许游玩数据采集
+      </label>
+      <div v-if="state.settings.analyticsEnabled" class="small dim" role="status" style="padding-top: 4px">
+        {{ ui.analyticsStatus === 'loading' ? '正在开启数据采集…' : ui.analyticsStatus === 'ready' ? '数据采集已启用' : ui.analyticsStatus === 'failed' ? '数据采集未能开启，不影响游戏' : '已允许采集，当前未启动' }}
+      </div>
+      <label class="sw">
+        <input
+          type="checkbox"
           :checked="state.settings.autoCraftOn"
           @change="actions.setSetting('autoCraftOn', $event.target.checked)"
         />

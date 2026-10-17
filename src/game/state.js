@@ -8,6 +8,7 @@ import { migrateState } from './migrations'
 import { initialModuleState, rehydrateModules, resetModules } from './moduleRegistry'
 import { ZERO, moneyMax } from './decimal'
 import { decodeMoneyFields } from './moneyFields'
+import { createAnalyticsState } from './analyticsState'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -88,6 +89,9 @@ export function createInitialState(now = Date.now()) {
     // 金丹周边事务：安宁期与同类威胁冷却，随本世重置。
     affairs: { beastPeaceUntil: 0, beastCooldownUntil: 0 },
 
+    // GA4 平衡采集的持久元数据：世身份、本世时钟、首次到达表与上一世摘要。
+    analytics: createAnalyticsState(),
+
     log: [],
     logSeq: 0,
     nextEventAt: now + 90000,
@@ -125,6 +129,8 @@ export function createInitialState(now = Date.now()) {
       craftWeights: {},
       processingModes: {},
       offlineProgress: true,
+      // 匿名平衡统计：关闭后立即停止发送，不补发。
+      analyticsEnabled: false,
       craftReservePercent: 20,
       craftReserves: {},
       autoCraftPriority: 'infuseStone',

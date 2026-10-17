@@ -8,6 +8,7 @@ import { REALMS } from '@/data/realms'
 import { MODULES } from '@/data/modules'
 import { moduleSaveKeys, normalizeModuleSlices } from '@/game/moduleRegistry'
 import { ZERO, floorMoney, moneyNonNegative } from '@/game/decimal'
+import { normalizeAnalytics } from '@/game/analyticsState'
 
 /** 存档结构版本：v3 起金额字段以十进制字符串保存（v1/v2 为 JSON number）。 */
 export const SAVE_VERSION = 3
@@ -18,7 +19,7 @@ const CORE_SAVE_FIELDS = [
   'industryVersion', 'qiLiquidVersion', 'alchemyProgressionVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
-  'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'ui',
+  'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'analytics', 'ui',
 ]
 export const SAVE_FIELDS = [...CORE_SAVE_FIELDS, ...moduleSaveKeys()]
 
@@ -80,6 +81,8 @@ export function validateState(state, fresh) {
   const result = Object.fromEntries(SAVE_FIELDS.map(key => [key, state[key] ?? fresh[key]]))
   result.version = SAVE_VERSION
   result.legacyNineTurnPill = result.legacyNineTurnPill === true
+  // 采集元数据只保留已知形状；旧档缺失时补默认值（读取端另行标注 partial）。
+  result.analytics = normalizeAnalytics(result.analytics)
   // 先定下模块开关：模块切片归一化要据此判断「关闭时丢弃活动状态」
   const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {
@@ -137,7 +140,7 @@ export function validateState(state, fresh) {
   }
   result.log = result.log.filter(entry => isRecord(entry) && typeof entry.text === 'string')
     .map(entry => ({ ...entry, id: safeNumber(entry.id), at: safeNumber(entry.at) }))
-  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress']) {
+  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress', 'analyticsEnabled']) {
     result.settings[key] = typeof result.settings[key] === 'boolean' ? result.settings[key] : fresh.settings[key]
   }
   result.settings = Object.fromEntries(Object.keys(fresh.settings).map(key => [key, result.settings[key] ?? fresh.settings[key]]))
