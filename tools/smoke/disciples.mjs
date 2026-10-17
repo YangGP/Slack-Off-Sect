@@ -13,6 +13,7 @@ export function discipleArrivals({ ok, close, section }) {
 
     state.resources.qi = E.money(2000)
     state.resources.stone = E.money(100)
+    state.resources.wood = E.money(20)
     state.resources.qi = E.money(2000)
     state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
     state.buildings.granary = { count: 20, on: true } // 抬灵气上限，才买得起一次九座

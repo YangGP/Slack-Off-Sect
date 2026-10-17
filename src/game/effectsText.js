@@ -142,7 +142,7 @@ export function describeEffects(ef) {
   if (ef.arrivalBonus) push('弟子前来速度', `+${fmtPercent(ef.arrivalBonus)}`, 'good')
   if (ef.breakthroughDiscount) push('破境花费', `-${fmtPercent(ef.breakthroughDiscount)}`, 'good')
   // 身死减免（香火线《愿力护道》等）：作用于所有身死道消境界，与 progression 的 deathReduce 同源。
-  if (ef.tribulationSafety) push('身死概率', `-${fmtPercent(ef.tribulationSafety)}`, 'good')
+  if (ef.tribulationSafety) push('突破失败后身死概率', `-${fmtPercent(ef.tribulationSafety).replace('%', ' 个百分点')}（最低0%）`, 'good')
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
   if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
@@ -208,7 +208,7 @@ export function describeJobEffects(buildingId, count = 1) {
 /** 破境护道的附加效果文案（如「立愿应劫」的 deathReduce）；无附加效果时返回空串。 */
 export function aidExtraText(aid) {
   if (!aid?.deathReduce) return ''
-  return `，身死概率 -${fmtPercent(aid.deathReduce)}`
+  return `，突破失败后身死概率 -${fmtPercent(aid.deathReduce).replace('%', ' 个百分点')}（最低0%）`
 }
 
 /** 把解锁条件翻译成人话 */

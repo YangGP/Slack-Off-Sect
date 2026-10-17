@@ -108,7 +108,7 @@ export function createDerived() {
     consumeReduction: 0,
     arrivalBonus: 0,
     breakthroughDiscount: 0,
-    /** 渡劫身死概率减免（百分点），由香火线《愿力护道》等累加 */
+    /** 突破失败后身死概率减免（百分点），由香火线《愿力护道》等累加 */
     tribulationSafety: 0,
     offlineHours: CONFIG.OFFLINE_CAP_HOURS,
     autoCraftUnlocked: false,
@@ -203,7 +203,7 @@ export function checkNeeds(state, needs) {
  * 建筑是否露面（对标猫国的 `unlockRatio: 0.3`）：
  *   1. 已经建过 → 一直显示；
  *   2. `needs` 条件满足；
- *   3. 花费「见到了」：每种花费资源的**历史最高水位**达到成本的 unlockRatio（默认 0.3）。
+ *   3. 每种花费资源的历史最高水位都达到基础成本的30%。
  * 用历史峰值而不是当前值，是为了避免「把资源花光后建筑又消失」导致列表跳动（§14.4）。
  */
 export function isBuildingUnlocked(state, id) {
@@ -213,12 +213,14 @@ export function isBuildingUnlocked(state, id) {
   if (!isEntryEnabled(state, meta)) return false
   if (countOf(state, id) > 0) return true
   if (!checkNeeds(state, meta.needs)) return false
-  const ratio = meta.unlockRatio == null ? CONFIG.BUILDING_UNLOCK_RATIO : meta.unlockRatio
-  if (ratio <= 0) return true
-  const revealCost = id === 'hut' && !state.starterHutBuilt ? { qi: meta.cost.qi } : meta.cost
-  for (const res in revealCost || {}) {
+  return isCostRevealed(state, meta.cost)
+}
+
+/** 所有费用资源均达到基础费用的展示水位；花费后沿用峰值，不让条目反复隐藏。 */
+export function isCostRevealed(state, cost) {
+  for (const res in cost || {}) {
     const seen = moneyMax(state.peak?.[res] ?? ZERO, state.resources[res] ?? ZERO)
-    if (!atLeast(seen, money(revealCost[res]).times(ratio))) return false
+    if (!atLeast(seen, money(cost[res]).times(CONFIG.BUILDING_UNLOCK_RATIO))) return false
   }
   return true
 }
@@ -247,7 +249,8 @@ export function isUpgradeUnlocked(state, up) {
 }
 
 /** 只预告当前分支的下一步，不在开局列出整棵研究和工艺树。 */
-export function isProgressionVisible(state, needs) {
+export function isProgressionVisible(state, needs, cost) {
+  if (!isCostRevealed(state, cost)) return false
   if (!needs) return true
   if (needs.realm != null && state.realm < needs.realm) return false
   const upgrades = [...(needs.upgrades || []), ...(needs.upgrade ? [needs.upgrade] : [])]
@@ -329,18 +332,17 @@ export function scaleCost(cost, factor) {
 }
 
 /** 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。 */
-export function buildingPriceAt(meta, index, starterHut = false) {
+export function buildingPriceAt(meta, index) {
   const factor = money(meta.priceRatio || 1.15).pow(index)
   const cost = scaleCost(meta.cost, factor)
-  if (meta.id === 'hut' && index === 0 && starterHut) delete cost.wood
   return cost
 }
 
 /** 购买 count 座建筑从 from 开始的总价：逐座取整后再求和，不用几何总和代替。 */
-export function buildingCostFrom(meta, from, count, starterHut = false) {
+export function buildingCostFrom(meta, from, count) {
   const total = {}
   for (let i = 0; i < count; i++) {
-    const price = buildingPriceAt(meta, from + i, starterHut)
+    const price = buildingPriceAt(meta, from + i)
     for (const k in price) total[k] = (total[k] ?? ZERO).plus(price[k])
   }
   return total
@@ -349,7 +351,7 @@ export function buildingCostFrom(meta, from, count, starterHut = false) {
 export function buildingCost(state, id, count = 1) {
   const meta = BUILDING_MAP[id]
   if (!meta) return {}
-  return buildingCostFrom(meta, countOf(state, id), count, !state.starterHutBuilt)
+  return buildingCostFrom(meta, countOf(state, id), count)
 }
 
 /** 在现有资源下最多能买几座（上限 cap 防止死循环） */
@@ -360,7 +362,7 @@ export function maxAffordable(state, id, cap = 500) {
   const running = {}
   let n = 0
   for (; n < cap; n++) {
-    const price = buildingPriceAt(meta, from + n, !state.starterHutBuilt)
+    const price = buildingPriceAt(meta, from + n)
     let ok = true
     for (const k in price) {
       const have = state.resources[k] ?? ZERO

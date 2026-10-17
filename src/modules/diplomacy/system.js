@@ -12,7 +12,7 @@ import { atLeast } from '@/game/numbers'
  *
  * 交易 = 玩家主动发起（在线），按固定汇率付出富余资源、另付信符（与猎杀共用同一池子）换回稀缺资源。
  * 机缘骰用独立随机序列（同猎杀），掉落按产能定价、有保底与仓储份额上限。
- * 规则见 docs/BALANCE-PRIORITY.md D6。
+ * 规则见 docs/ROADMAP.md D6。
  */
 
 export const DIPLOMACY_SCHEMA_VERSION = 1

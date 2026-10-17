@@ -65,7 +65,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     }
   }
   merged.scriptureArchiveVersion = 1
-  // 旧档已有人口或建设进度时视为已领取首屋，防止拆屋读档重复免木料。
+  // 保留旧档首屋历史标记供拆除兼容；这些字段不再影响新建费用或展示。
   merged.starterHutBuilt = typeof state.starterHutBuilt === 'boolean' ? state.starterHutBuilt :
     ((merged.buildings.hut?.count || 0) > 0 || (merged.disciples.total || 0) > 0 || (state.stats?.recruits || 0) > 0 ||
       ['logHouse', 'mansion', 'caveDwelling'].some(id => (merged.buildings[id]?.count || 0) > 0))

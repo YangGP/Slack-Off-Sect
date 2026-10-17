@@ -7,7 +7,7 @@
  */
 import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible } from '@/game/engine'
+import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible, isCostRevealed } from '@/game/engine'
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
@@ -47,7 +47,7 @@ const capacityReady = (u) => {
   return moneyGte(moneyMax(derived.max.insight ?? ZERO, state.resources.insight ?? ZERO), cost)
 }
 const capacityLocked = computed(() => props.list
-  .filter((u) => availableIds.value.includes(u.id) && !capacityReady(u))
+  .filter((u) => availableIds.value.includes(u.id) && isCostRevealed(state, u.cost) && !capacityReady(u))
   .sort((a, b) => money(a.cost.insight).cmp(money(b.cost.insight))))
 
 /**
@@ -86,6 +86,7 @@ const available = computed(() =>
   availableIds.value
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
+    .filter((u) => isCostRevealed(state, u.cost))
     .filter(capacityReady)
     // 修真页按研究分组排序，同组保持数据顺序。
     .sort((a, b) => (stageOf(a.id)?.index ?? 99) - (stageOf(b.id)?.index ?? 99))
@@ -99,7 +100,7 @@ const available = computed(() =>
 const locked = computed(() =>
   props.list
     .filter((u) => !state.upgrades[u.id] && !availableIds.value.includes(u.id))
-    .filter((u) => isProgressionVisible(state, u.needs))
+    .filter((u) => isProgressionVisible(state, u.needs, u.cost))
     .map((u) => ({
       meta: u,
       needs: describeNeeds(u.needs).join('，') || '条件未知',

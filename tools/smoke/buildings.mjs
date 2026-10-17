@@ -31,6 +31,7 @@ export function buildingActions({ ok, close, section }) {
     const { state, derived } = newGame()
     state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
     state.resources.qi = E.money(1000)
+    state.resources.wood = E.money(20)
     state.resources.stone = E.money(100)
     E.trackPeak(state)
 

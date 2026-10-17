@@ -4,7 +4,7 @@ import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
 import { PROCESSING_STATIONS } from '@/data/industry'
-import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, isProgressionVisible, processingPlan, processingBottleneck } from '@/game/engine'
+import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck } from '@/game/engine'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
 import { ZERO, MONEY_INFINITY, money, moneyGte, moneyGt, moneyLt, moneySum, moneyToCount, moneyToRatio } from '@/game/decimal'
@@ -89,7 +89,7 @@ const BATCHES = [
 ]
 
 const allRows = computed(() =>
-  CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => {
+  CRAFTS.filter((c) => isCraftUnlocked(state, c) && isCostRevealed(state, c.cost)).map((c) => {
     // 份数是金额：按钮可用性与「¼料 / ½料 / 全部」都用完整份数，不截成安全整数。
     const canMakeMoney = maxCraftableMoney(state, derived, c.id)
     const canMake = moneyToCount(canMakeMoney)
@@ -128,7 +128,7 @@ const rows = computed(() => {
 })
 
 const locked = computed(() =>
-  CRAFTS.filter((c) => !isCraftUnlocked(state, c) && isProgressionVisible(state, c.needs)).map((c) => ({
+  CRAFTS.filter((c) => !isCraftUnlocked(state, c) && isProgressionVisible(state, c.needs, c.cost)).map((c) => ({
     meta: c,
     needs: describeNeeds(c.needs).join('，'),
   })),

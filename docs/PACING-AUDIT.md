@@ -58,7 +58,7 @@
 
 ## 6. 验证与复核
 
-完整检查935项冒烟、19项渲染、123项DOM通过；新增手动按需停产和不提前开放自动能力的回归。来源／仓容审计通过。完整数据表按当前源码生成。
+以下为原实施记录，本次文档整理未重新执行：完整检查935项冒烟、19项渲染、123项DOM通过；新增手动按需停产和不提前开放自动能力的回归。来源／仓容审计通过。完整数据表按当前源码生成。
 
 审计工具新增逐境前后库存、产量、制作倍率和设施快照；快照独立拷贝建筑对象，避免后续扩建改写历史。可选第7参数stopRealm默认为10；本轮使用6，到化神停止，结果另存realm6后缀。命令示例：
 
@@ -68,4 +68,4 @@ npm run audit:breakthrough -- aided 1 24 full success 6
 npm run audit:breakthrough -- rush 1 36 full success 6
 ```
 
-修正策略后的未调价参考保存为.smoke-breakthrough-time/result-baseline-1-realm6-before-smoothing.json；调整后结果为同目录result-{mode}-1-realm6.json。本地实施记录为.ds/tasks/2026-10-17-foundation-spirit-pacing.md。未提交、推送或发布。
+修正策略后的未调价参考保存为.smoke-breakthrough-time/result-baseline-1-realm6-before-smoothing.json；调整后结果为同目录result-{mode}-1-realm6.json。本地实施记录为.ds/tasks/archive/2026-10-17-foundation-spirit-pacing.md。提交状态以Git记录为准。

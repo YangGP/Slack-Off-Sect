@@ -1,40 +1,44 @@
 # 文档导航
 
-整理：2026-10-16。先读当前规则，再按系统查专题；未完成方案单独列出。
+更新：2026-10-17，对照v0.384。了解当前游戏先读DESIGN，查待开发项读ROADMAP，查完整参数读TABLES。研究、工艺、弟子等专题分别维护细节，避免同一状态或费用多处漂移。
 
-## 当前规则与开发
+## 当前规则与工程
 
 | 文档 | 维护范围 |
 | --- | --- |
-| [DESIGN](DESIGN.md) | 游戏总览、跨系统规则、结算与存档 |
-| [ENGINEERING](ENGINEERING.md) | 工程分层、接口、交互约定、验证与审计命令 |
-| [TABLES](TABLES.md) | 源码生成的完整条目、费用、前置与效果；用 `npm run docs:tables` 更新 |
-| [RESEARCH](RESEARCH.md) | 研究分组、依赖原则、能力递进与评估边界 |
-| [CRAFT-PROGRESSION](CRAFT-PROGRESSION.md) | 制作、自动工业、符文载体、防护及后期建材 |
-| [KNOWLEDGE-CRAFTS](KNOWLEDGE-CRAFTS.md) | 已实现的道札→道论→阵图加工、仓储、科研及工程消费 |
-| [HABITABILITY](HABITABILITY.md) | 宜居度公式、人口风险与供给 |
-| [DISCIPLE-PROGRESSION](DISCIPLE-PROGRESSION.md) | 已实现的个体成长、突破、管理、传功与护道，以及待完善问题 |
-| [DISCIPLE-TALENTS](DISCIPLE-TALENTS.md) | 已实现的天赋获取、效果、等级成长与存档契约 |
+| [DESIGN](DESIGN.md) | 游戏总览、跨系统规则、结算和存档 |
+| [ENGINEERING](ENGINEERING.md) | 工程分层、数值类型、交互约定、工具与部署 |
+| [TABLES](TABLES.md) | 源码生成的完整条目、费用、前置和效果；数据变化时用 `npm run docs:tables` 更新 |
+| [RESEARCH](RESEARCH.md) | 研究分组、依赖与能力递进原则 |
+| [CRAFT-PROGRESSION](CRAFT-PROGRESSION.md) | 手动／自动加工、动力冷却、符文、防护、建材，以及道札→道论→阵图知识链 |
+| [MATERIAL-RESEARCH](MATERIAL-RESEARCH.md) | 已实现的丹道、香火与土木研究，兼容边界和待校准项 |
+| [HABITABILITY](HABITABILITY.md) | 宜居度、人口风险与供给 |
+| [DISCIPLE-PROGRESSION](DISCIPLE-PROGRESSION.md) | 个体成长、传功、护道、招募与尚未实现的自动培养方案 |
+| [DISCIPLE-TALENTS](DISCIPLE-TALENTS.md) | 天赋获取、效果、等级与存档契约 |
 
-## 设定与工作方案
+## 开发方向与系统扩展
 
-这些文档同时包含设定、已实施部分和未实施方案，以各节状态为准。
-
-| 文档 | 维护范围与状态 |
+| 文档 | 状态与范围 |
 | --- | --- |
-| [ROADMAP](ROADMAP.md) | 待实施项总览，区分已策划、讨论稿、待校准及暂缓项；已完成内容不再作为待办 |
-| [PACING-AUDIT](PACING-AUDIT.md) | 2026-10-17突破优先实测；严格节省、产能投资及护道路线的逐境时间与瓶颈 |
-| [BUILDING-PRICE-COMPARISON](BUILDING-PRICE-COMPARISON.md) | 猫国建筑基础价格、涨价率与扩建回报对照；科研、高档住宅与仓储的待测价格建议 |
-| [RESEARCH-CRAFT-PRICE-COMPARISON](RESEARCH-CRAFT-PRICE-COMPARISON.md) | 科研与合成基线对照；第6节为已实施的建材、灵机与科研预算试调及验证 |
-| [MATERIAL-RESEARCH](MATERIAL-RESEARCH.md) | 丹道／香火／土木研究已实施，保留设计依据与待校准事项 |
-| [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 灵子、灵能与香火因果的世界观；仙灵力与粒子供能已实施 |
-| [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓猎杀已实现；深山、禁地与来袭关联等仍待扩展 |
-| [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现；散修、邻宗与长期准备能力仍为草案 |
-| [炼虚后变更文档](炼虚后变更文档.md) | 后期供能与仙灵力的待测与校准清单（变更 5、6 已实施） |
+| [ROADMAP](ROADMAP.md) | 待办与优先级的统一入口；D2待校准，D7香火长期成长为设计建议，D5＋D9／D8待设计或实施，D3暂缓 |
+| [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
+| [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现，深山、禁地与生态来袭联动待扩展 |
+| [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |
+
+## 测量与对照参考
+
+| 文档 | 阅读边界 |
+| --- | --- |
+| [PACING-AUDIT](PACING-AUDIT.md) | 2026-10-17修正备料策略后的逐境测量，截至化神；当前完整首飞尚未重测 |
+| [BUILDING-PRICE-COMPARISON](BUILDING-PRICE-COMPARISON.md) | 建筑报价与扩张回报分析；候选涨价不等于现价 |
+| [RESEARCH-CRAFT-PRICE-COMPARISON](RESEARCH-CRAFT-PRICE-COMPARISON.md) | 科研、材料与专精分析；早期试调值已部分由知识费用替换 |
+| [KITTENS-BALANCE-COMPARISON](KITTENS-BALANCE-COMPARISON.md) | 早期猫国结构对照与D编号依据，旧数值和诊断以当前规则及路线图修正为准 |
+| [KITTENS-RESEARCH-REFERENCE](KITTENS-RESEARCH-REFERENCE.md) | 猫国研究设计参考，不是本作现行规则 |
 
 ## 维护原则
 
-- 源码与生成表维护完整数值；规则专题只保留必要示例，不另建完整手写数据表。
-- 跨系统行为写入 DESIGN；系统细节写入对应专题，其他文档通过链接引用。
-- ROADMAP 记录未完成工作；已实施部分转为专题背景，不继续列作待开发项。
-- 过时规则、已完成实施清单与旧测量报告直接删除，不保留归档或备份；同步修复引用。TABLES 从源码生成。
+- 完整数值以源码和生成表为准，专题只保留必要示例与约束；数据或生成说明变化时同步更新TABLES。
+- 跨系统规则写入DESIGN，专题维护系统细节，未完成状态和处理顺序统一放在ROADMAP。
+- 明确区分已实现、待校准、未定案和暂缓，不把已完成方案继续列为开发任务。
+- 过时规则、已完成实施清单与旧测量报告直接清理，不另存备份；合并时同步修复引用，保留仍有效的兼容契约。
+- 测量需注明版本、策略、种子和在线／离线口径，原有通过记录不代表本轮重新执行。验证命令是否运行服从项目协作约定与用户授权。

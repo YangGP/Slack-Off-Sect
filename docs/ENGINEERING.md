@@ -158,6 +158,8 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 
 ## 验证命令
 
+下表为工具用途索引，不代表当前任务已获执行授权。运行范围服从项目AGENTS.md、`.ds/RULES.md`及用户最新指令；未明确授权时不主动运行测试，不为文档整理新增测试文件。
+
 `tools/smoke.mjs` 只负责运行测试清单、架构检查和结果汇总。功能用例位于 `tools/smoke/`，由 `checks.mjs` 显式保持执行顺序，`tools/lib/checks.mjs` 统一断言统计，`fixtures.mjs` 提供公共存档夹具；已有专项检查继续复用。新增用例的放置与登记方式见 [smoke 维护说明](../tools/smoke/README.md)。
 
 | 命令 | 覆盖 |
