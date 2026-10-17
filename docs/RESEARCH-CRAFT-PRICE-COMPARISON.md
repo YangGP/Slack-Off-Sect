@@ -1,6 +1,6 @@
 # 科研与材料合成价格对照
 
-更新：2026-10-16，基于 v0.384 工作区。第1～6节记录价格诊断及先前试调，第7节记录悟道专精；**当前已接入道札／道论／阵图，相关现价和规则见 [KNOWLEDGE-CRAFTS](KNOWLEDGE-CRAFTS.md)**。早期价格及未采用候选不代表现行数据，完整报价以生成表为准。建筑部分见 [BUILDING-PRICE-COMPARISON.md](BUILDING-PRICE-COMPARISON.md)。
+更新：2026-10-16，基于 v0.384 工作区。第1～6节记录价格诊断及先前试调，第7节记录悟道专精；**当前已接入道札／道论／阵图，相关现价和规则见 [知识加工](CRAFT-PROGRESSION.md#知识加工)**。早期价格及未采用候选不代表现行数据，完整报价以生成表为准。建筑部分见 [BUILDING-PRICE-COMPARISON.md](BUILDING-PRICE-COMPARISON.md)。
 
 本作依据 `src/data/upgrades.js`、`techniques.js`、`crafts.js`、`buildings.js` 及 `src/game/systems/craftingRules.js`。猫国参考本地源码，并核对官方 [science.js](https://raw.githubusercontent.com/nuclear-unicorn/kittensgame/master/js/science.js)、[workshop.js](https://raw.githubusercontent.com/nuclear-unicorn/kittensgame/master/js/workshop.js)。本地猫国副本并非最新，例如纲要配方旧版为科学10000＋手稿50，官方当前为科学9000＋手稿55；下文采用官方现值。
 

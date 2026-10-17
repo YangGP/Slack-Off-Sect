@@ -132,7 +132,6 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
-    unlockRatio: 0,
     desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座提高灵液、灵晶制作产出各15%，并保存备用晶核。',
     effects: { craftBonusByResource: { spiritLiquid: 0.15, crystal: 0.15 }, storage: { crystal: 15 } },
     upkeep: { qi: 1 },
@@ -147,7 +146,7 @@ const CORE_BUILDINGS = [
     group: 'home',
     cost: { qi: 80, wood: 20 },
     priceRatio: 1.55,
-    desc: '能住两名弟子。本世第一间以灵气搭起临时居所，不需灵木；后续营造需要灵木与灵气。',
+    desc: '能住两名弟子。营造需要灵木与灵气，开局可先催生灵木备料。',
     effects: { maxDisciples: 2, storage: { qi: 60 } },
     needs: { building: { id: 'spiritField', count: 1 } },
   },
@@ -376,7 +375,6 @@ const CORE_BUILDINGS = [
     desc: '书架分格、典籍归档，保存悟道所得，也方便弟子查阅。每座灵机上限 +80、灵机产出 +5%。',
     effects: { storage: { insight: 80, daoNote: 20 }, ratio: { insight: 0.05 } },
     needs: { building: { id: 'library', count: 1 } },
-    unlockRatio: 0,
   },
   {
     id: 'academy',
@@ -389,7 +387,6 @@ const CORE_BUILDINGS = [
     effects: { ratio: { insight: 0.35 }, storage: { insight: 800, daoTreatise: 10 } },
     // 造价含阵基，而阵基要「阵基装配」才产得出：列进前置，避免先露面却找不到来源。
     needs: { upgrades: ['preachArt', 'arrayAssembly'] },
-    unlockRatio: 0,
   },
   {
     id: 'observatory',
@@ -404,7 +401,6 @@ const CORE_BUILDINGS = [
     // 灵机仓容分工：建筑只给定额（压低），百分比由技艺与「修真应用·仓储」研究节点提供（见 techniques.js 的叠匣术等）。
     effects: { ratio: { insight: 0.5 }, storage: { insight: 3000, arrayDiagram: 5 } },
     needs: { upgrades: ['astrologyArt'] },
-    unlockRatio: 0,
   },
   {
     id: 'meditationPool',
@@ -418,7 +414,6 @@ const CORE_BUILDINGS = [
     // 造价含混灵土与阵基：混灵土要「混灵土工艺」（配方还需境界 5），阵基要「阵基装配」。
     // 都列进前置（含境界），避免先露面却找不到来源。
     needs: { realm: 5, upgrades: ['calmMind', 'spiritMortarArt', 'arrayAssembly'] },
-    unlockRatio: 0,
   },
   {
     id: 'trialTower',

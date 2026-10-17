@@ -98,7 +98,7 @@ export const CONFIG = {
   AUTO_CONDENSE_RATIO: 0.5,
   // 日志上限
   LOG_LIMIT: 220,
-  // 建筑渐进露出：资源峰值达到初始造价的这个比例才可见（单栋可用 unlockRatio 覆盖）
+  // 建筑、研究、技艺、法宝与配方渐进露出：每种费用资源的峰值均须达到基础费用的这个比例。
   BUILDING_UNLOCK_RATIO: 0.3,
   // 维护费供给迭代的收敛上限（防死循环）；供给不足时按实际比例缩放
   SUPPLY_ITERATION_MAX: 40,

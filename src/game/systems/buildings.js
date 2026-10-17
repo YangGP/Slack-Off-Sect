@@ -1,5 +1,5 @@
 import { BUILDING_MAP } from '@/data/buildings'
-import { checkNeeds, buildingCost, canAfford, payCost, countOf, entryOf, pushLog, buildingCostFrom } from './core'
+import { checkNeeds, buildingCost, canAfford, payCost, entryOf, pushLog, buildingCostFrom } from './core'
 import { recompute } from './economy'
 import { RESOURCE_MAP } from '@/data/resources'
 import { MONEY_INFINITY, ZERO, floorMoney, money, moneyMin } from '../decimal'
@@ -13,10 +13,6 @@ export function buyBuilding(state, derived, id, count = 1) {
   const cost = buildingCost(state, id, count)
   if (!canAfford(state, cost)) return 0
   payCost(state, cost)
-  if (id === 'hut') {
-    if (!state.starterHutBuilt && countOf(state, id) === 0) state.starterHutStanding = true
-    state.starterHutBuilt = true
-  }
   const e = entryOf(state, id)
   e.count += count
   if (e.on === undefined) e.on = true
@@ -32,8 +28,12 @@ export function sellBuilding(state, derived, id, count = 1) {
   const e = state.buildings[id]
   if (!meta || !e || e.count <= 0) return 0
   const n = Math.min(count, e.count)
-  const refund = buildingCostFrom(meta, e.count - n, n, !!state.starterHutStanding)
-  if (id === 'hut' && e.count === n) state.starterHutStanding = false
+  const refund = buildingCostFrom(meta, e.count - n, n)
+  if (id === 'hut' && e.count === n) {
+    // 旧档免木料首屋拆除时不返还未支付的木料；新建茅屋不再享受优惠。
+    if (state.starterHutStanding) refund.wood = refund.wood.minus(meta.cost.wood)
+    state.starterHutStanding = false
+  }
   for (const k in refund) {
     // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」。
     const half = refund[k].times('0.5')

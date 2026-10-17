@@ -38,11 +38,12 @@ export function initialState({ ok, close, section }) {
     ok('聚灵阵产出灵气（春季 +20% 后 0.36/s）', close(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
     ok('有聚灵阵后点击收益提高到 3.0', close(E.clickGain(state, derived), 3, 1e-9))
 
-    // 茅屋：第一间房子花「吸来的灵气 + 炼出来的灵石」，并且要先有一座聚灵阵（对标猫国小屋）
+    // 茅屋：第一间同样消耗灵气与灵木，并且要先有一座聚灵阵。
     const hut = E.BUILDING_MAP.hut
-    ok('首屋仅需灵气，后续茅屋需要木料', E.moneyEq(E.buildingCost(state, 'hut').qi, 80) && !E.buildingCost(state, 'hut').wood && hut.cost.wood === 20)
+    ok('首屋同样需要灵气80与灵木20', E.moneyEq(E.buildingCost(state, 'hut').qi, 80) && E.moneyEq(E.buildingCost(state, 'hut').wood, 20) && hut.cost.wood === 20)
     ok('茅屋要一座聚灵阵（第 1 分钟只有聚灵阵可选）', !!hut.needs?.building, JSON.stringify(hut.needs))
     state.resources.qi = E.money(80)
+    state.resources.wood = E.money(20)
     state.resources.stone = E.money(4)
     E.trackPeak(state)
     ok('材料齐了能建茅屋', E.buyBuilding(state, derived, 'hut', 1) === 1)
