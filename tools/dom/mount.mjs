@@ -33,6 +33,28 @@ export async function checkMount(context) {
   ok('关闭失败弹窗后不阻挡游戏且不加载统计标签', !ui.analyticsFailureOpen
     && !window.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
     && !window.document.querySelector('script[src*="googletagmanager.com"]'))
+  {
+    const previousPending = state.pendingChoice
+    const at = Date.now()
+    state.pendingChoice = { id: 'beastThreat', at, deadline: at + 300000 }
+    await new Promise(resolve => setTimeout(resolve, 0))
+    context.actions.openEventModal({ kind: 'choice', eventId: 'beastThreat', at, instanceId: 'focus-regression' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const eventDialog = window.document.querySelector('[aria-labelledby="event-dialog-title"]')
+    const closeButton = eventDialog?.querySelector('.dialog-foot button')
+    ok('事件首选项材料不足时仍将焦点放在可用关闭按钮', eventDialog?.querySelector('button')?.disabled
+      && !!closeButton && window.document.activeElement === closeButton)
+    closeButton?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    ok('键盘关闭事件弹窗保留待决选择', !ui.eventModal && state.pendingChoice?.at === at)
+    context.actions.openEventModal({ kind: 'choice', eventId: 'beastThreat', at, instanceId: 'blocked-regression' })
+    ui.offlineLoading = true
+    await new Promise(resolve => setTimeout(resolve, 0))
+    ok('高优先级离线状态立即收起事件框且不抢回焦点', !ui.eventModal
+      && !window.document.querySelector('[aria-labelledby="event-dialog-title"]'))
+    ui.offlineLoading = false
+    state.pendingChoice = previousPending
+  }
   const app = window.document.getElementById('app')
   const text = () => app.textContent || ''
   const html = () => app.innerHTML || ''

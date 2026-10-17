@@ -120,112 +120,180 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
 </script>
 
 <template>
-  <div class="box">
-    <div class="box-head">香火修持</div>
-    <div class="box-body">
-      <div class="small dim">
-        香火 → 愿力 → 道心。愿力随本世清空；道心与永久修持跨轮回保留。
-      </div>
-      <div class="res-line" style="padding-top: 6px">
-        香火 <b>{{ fmt(state.resources.faith || ZERO) }}</b>
-        <span class="sep">·</span>愿力 <b>{{ fmt(vowBalance) }}</b>
-        <span class="sep">·</span>道心 <b>{{ fmt(daoHeartBalance) }}</b>
-        <span class="dim">（累计 {{ fmt(daoHeartTotal) }}）</span>
-      </div>
-      <div class="small dim">
-        香火保留量 {{ fmt(reserve) }}；香火产出加成 +{{ fmtPercent(faithRatioBonus(state) + scriptureBonus) }}（仪轨 +{{ fmtPercent(faithRatioBonus(state)) }}、大乘愿典 +{{ fmtPercent(scriptureBonus) }}），仓容加成 +{{ fmtPercent(faithStorageRatio(state)) }}。
+  <div class="faith-panel">
+    <div class="box faith-overview">
+      <div class="box-head">香火修持</div>
+      <div class="box-body">
+        <p class="small dim faith-note">香火 → 愿力 → 道心。愿力随本世清空；道心与永久修持跨轮回保留。</p>
+        <div class="faith-balances">
+          <div class="faith-balance">
+            <span class="k">香火</span>
+            <b>{{ fmt(state.resources.faith || ZERO) }}</b>
+            <span class="small dim">本世余额，凝愿后减少</span>
+          </div>
+          <div class="faith-balance">
+            <span class="k">愿力</span>
+            <b>{{ fmt(vowBalance) }}</b>
+            <span class="small dim">本世积累，转世／飞升清空</span>
+          </div>
+          <div class="faith-balance">
+            <span class="k">道心</span>
+            <b>{{ fmt(daoHeartBalance) }}</b>
+            <span class="small dim">累计 {{ fmt(daoHeartTotal) }} · 跨轮回保留</span>
+          </div>
+        </div>
+        <p class="small dim faith-note">
+          香火保留量 {{ fmt(reserve) }}；香火产出加成 +{{ fmtPercent(faithRatioBonus(state) + scriptureBonus) }}（仪轨 +{{ fmtPercent(faithRatioBonus(state)) }}、大乘愿典 +{{ fmtPercent(scriptureBonus) }}），仓容加成 +{{ fmtPercent(faithStorageRatio(state)) }}。
+        </p>
       </div>
     </div>
-  </div>
 
-  <div class="box">
-    <div class="box-head">凝愿</div>
-    <div class="box-body">
-      <div class="small dim">
-        香火按当前《凝愿真解》等级转换为愿力；当前增益 +{{ fmtPercent(moneyToNumber(vowGainFactor(state))) }}。
+    <div class="faith-convert">
+      <div class="box faith-card">
+        <div class="box-head">凝愿</div>
+        <div class="box-body">
+          <p class="small dim faith-note">
+            香火按当前《凝愿真解》等级转换为愿力；当前增益 +{{ fmtPercent(moneyToNumber(vowGainFactor(state))) }}。
+          </p>
+          <div class="btn-row faith-actions">
+            <input v-model="condenseDraft" class="qty" inputmode="decimal" aria-label="凝愿投入香火" placeholder="投入香火">
+            <button class="btn" :disabled="!condenseReady" @click="fillCondense(0.25)">25%</button>
+            <button class="btn" :disabled="!condenseReady" @click="fillCondense(0.5)">50%</button>
+            <button class="btn" :disabled="!condenseReady" @click="fillCondense(1)">全部</button>
+            <button class="btn primary" :disabled="!condenseReady" @click="doCondense">凝愿</button>
+          </div>
+          <div v-if="!condenseReady" class="small dim">需学会《凝愿法》，且当前境界至少金丹。</div>
+        </div>
       </div>
-      <div class="btn-row" style="padding-top: 6px">
-        <input v-model="condenseDraft" class="qty" inputmode="decimal" aria-label="凝愿投入香火" placeholder="投入香火">
-        <button class="btn" :disabled="!condenseReady" @click="fillCondense(0.25)">25%</button>
-        <button class="btn" :disabled="!condenseReady" @click="fillCondense(0.5)">50%</button>
-        <button class="btn" :disabled="!condenseReady" @click="fillCondense(1)">全部</button>
-        <button class="btn primary" :disabled="!condenseReady" @click="doCondense">凝愿</button>
-      </div>
-      <div v-if="!condenseReady" class="small dim">需学会《凝愿法》，且当前境界至少金丹。</div>
-    </div>
-  </div>
 
-  <div class="box">
-    <div class="box-head">证心</div>
-    <div class="box-body">
-      <div class="small dim">愿力按 10000 : 1 证为道心；只扣当前余额，不重置宗门与仪轨。</div>
-      <div class="btn-row" style="padding-top: 6px">
-        <input v-model="attestDraft" class="qty" inputmode="decimal" aria-label="证心投入愿力" placeholder="投入愿力">
-        <button class="btn" :disabled="!attestReady" @click="fillAttest(0.25)">25%</button>
-        <button class="btn" :disabled="!attestReady" @click="fillAttest(0.5)">50%</button>
-        <button class="btn" :disabled="!attestReady" @click="fillAttest(1)">全部</button>
-        <button class="btn primary" :disabled="!attestReady" @click="doAttest">证心</button>
-      </div>
-      <div v-if="!attestReady" class="small dim">需学会《凝愿法》，且当前境界至少化神。</div>
-    </div>
-  </div>
-
-  <div class="box">
-    <div class="box-head">本世仪轨</div>
-    <div class="box-body">
-      <div v-for="row in ritualRows" :key="row.meta.id" class="small">
-        <b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.cap }}
-        <span class="dim">· {{ row.meta.desc }}</span>
-        <div class="btn-row" style="padding: 4px 0 8px">
-          <span class="small">下一级 {{ fmt(row.cost) }} 愿力</span>
-          <button class="btn" :disabled="row.level >= row.cap || !row.affordable || !row.ready" @click="actions.buyRitual(row.meta.id)">升级</button>
-          <span v-if="row.missing.length" class="small bad">{{ missingText(row.missing) }}</span>
+      <div class="box faith-card">
+        <div class="box-head">证心</div>
+        <div class="box-body">
+          <p class="small dim faith-note">愿力按 10000 : 1 证为道心；只扣当前余额，不重置宗门与仪轨。</p>
+          <div class="btn-row faith-actions">
+            <input v-model="attestDraft" class="qty" inputmode="decimal" aria-label="证心投入愿力" placeholder="投入愿力">
+            <button class="btn" :disabled="!attestReady" @click="fillAttest(0.25)">25%</button>
+            <button class="btn" :disabled="!attestReady" @click="fillAttest(0.5)">50%</button>
+            <button class="btn" :disabled="!attestReady" @click="fillAttest(1)">全部</button>
+            <button class="btn primary" :disabled="!attestReady" @click="doAttest">证心</button>
+          </div>
+          <div v-if="!attestReady" class="small dim">需学会《凝愿法》，且当前境界至少化神。</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="box">
-    <div class="box-head">道心修持</div>
-    <div class="box-body">
-      <div v-for="row in cultivationRows" :key="row.meta.id" class="small">
-        <b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.meta.max }}
-        <span class="dim">· {{ row.meta.desc }}</span>
-        <div class="btn-row" style="padding: 4px 0 8px">
-          <span class="small">下一级 {{ fmt(row.cost) }} 道心</span>
-          <button class="btn" :disabled="row.level >= row.meta.max || !row.affordable || !row.ready" @click="actions.buyCultivation(row.meta.id)">升级</button>
-          <span v-if="row.missing.length" class="small bad">{{ missingText(row.missing) }}</span>
+    <div class="box faith-card">
+      <div class="box-head">本世仪轨</div>
+      <div class="box-body">
+        <div v-for="row in ritualRows" :key="row.meta.id" class="small faith-entry">
+          <div class="faith-entry-head"><b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.cap }}</div>
+          <div class="dim faith-note">{{ row.meta.desc }}</div>
+          <div class="btn-row faith-actions">
+            <span class="small">下一级 {{ fmt(row.cost) }} 愿力</span>
+            <button class="btn" :disabled="row.level >= row.cap || !row.affordable || !row.ready" @click="actions.buyRitual(row.meta.id)">升级</button>
+            <span v-if="row.missing.length" class="small bad">{{ missingText(row.missing) }}</span>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="box">
-    <div class="box-head">护道与法器</div>
-    <div class="box-body">
-      <div v-for="row in oneTime" :key="row.meta.id" class="small">
-        <b>{{ row.meta.name }}</b>
-        <span v-if="row.owned" class="good">已掌握</span>
-        <span v-else class="dim">· {{ row.meta.desc || row.meta.effectDesc }}</span>
-
-        <template v-if="row.owned && row.treasure">
-          <div class="small dim" style="padding: 4px 0">
-            祭炼 {{ row.treasure.level }} 级 · 当前效果 ×{{ row.treasure.mult.toFixed(2) }} → 下级 ×{{ row.treasure.nextMult.toFixed(2) }}
+    <div class="box faith-card">
+      <div class="box-head">道心修持</div>
+      <div class="box-body">
+        <div v-for="row in cultivationRows" :key="row.meta.id" class="small faith-entry">
+          <div class="faith-entry-head"><b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.meta.max }}</div>
+          <div class="dim faith-note">{{ row.meta.desc }}</div>
+          <div class="btn-row faith-actions">
+            <span class="small">下一级 {{ fmt(row.cost) }} 道心</span>
+            <button class="btn" :disabled="row.level >= row.meta.max || !row.affordable || !row.ready" @click="actions.buyCultivation(row.meta.id)">升级</button>
+            <span v-if="row.missing.length" class="small bad">{{ missingText(row.missing) }}</span>
           </div>
-          <div class="btn-row" style="padding: 4px 0 8px">
-            <span class="small">下级祭炼 {{ row.treasure.costText }}</span>
-            <button class="btn" :disabled="!row.treasure.canRefine" @click="actions.refineTreasure('vowCauldron')">祭炼</button>
-          </div>
-        </template>
+        </div>
+      </div>
+    </div>
 
-        <div v-else-if="!row.owned" class="btn-row" style="padding: 4px 0 8px">
-          <span class="small">费用 {{ row.costText }}</span>
-          <button class="btn" :disabled="!row.affordable || row.locked" @click="row.action()">
-            {{ row.meta.id === 'vowPower' || row.meta.id === 'vowCauldron' ? '参悟' : '修持' }}
-          </button>
-          <span v-if="row.locked" class="small bad">{{ missingText(row.missing) }}</span>
+    <div class="box faith-card">
+      <div class="box-head">护道与法器</div>
+      <div class="box-body">
+        <div v-for="row in oneTime" :key="row.meta.id" class="small faith-entry">
+          <div class="faith-entry-head">
+            <b>{{ row.meta.name }}</b>
+            <span v-if="row.owned" class="good">已掌握</span>
+          </div>
+          <div v-if="!row.owned" class="dim faith-note">{{ row.meta.desc || row.meta.effectDesc }}</div>
+
+          <template v-if="row.owned && row.treasure">
+            <div class="small dim faith-note">
+              祭炼 {{ row.treasure.level }} 级 · 当前效果 ×{{ row.treasure.mult.toFixed(2) }} → 下级 ×{{ row.treasure.nextMult.toFixed(2) }}
+            </div>
+            <div class="btn-row faith-actions">
+              <span class="small">下级祭炼 {{ row.treasure.costText }}</span>
+              <button class="btn" :disabled="!row.treasure.canRefine" @click="actions.refineTreasure('vowCauldron')">祭炼</button>
+            </div>
+          </template>
+
+          <div v-else-if="!row.owned" class="btn-row faith-actions">
+            <span class="small">费用 {{ row.costText }}</span>
+            <button class="btn" :disabled="!row.affordable || row.locked" @click="row.action()">
+              {{ row.meta.id === 'vowPower' || row.meta.id === 'vowCauldron' ? '参悟' : '修持' }}
+            </button>
+            <span v-if="row.locked" class="small bad">{{ missingText(row.missing) }}</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.faith-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.faith-balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 6px 0;
+}
+.faith-balance {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #d8d0bd);
+  border-radius: 6px;
+}
+.faith-balance .k { font-size: 12px; color: var(--dim, #777); }
+.faith-balance b { font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
+.faith-convert {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.faith-card { min-width: 0; }
+.faith-entry { padding: 6px 0; border-top: 1px solid var(--line, #e2dccb); min-width: 0; }
+.faith-entry:first-of-type { border-top: 0; }
+.faith-entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.faith-actions { padding: 4px 0 6px; }
+.faith-note { margin: 4px 0; overflow-wrap: anywhere; }
+.faith-panel :deep(.btn-row) {
+  flex-wrap: wrap;
+  white-space: normal;
+  gap: 6px 10px;
+}
+.faith-panel :deep(input.qty) {
+  width: min(9em, 100%);
+  min-width: 0;
+}
+.faith-panel :deep(.btn) { min-height: 32px; }
+.faith-panel :deep(.btn.primary) { min-height: 36px; }
+.faith-panel :deep(.btn:focus-visible) { outline: 2px solid #7a5c2e; outline-offset: 2px; }
+.faith-panel :deep(.btn:disabled) { opacity: 0.55; cursor: not-allowed; }
+@media (max-width: 420px) {
+  .faith-convert { grid-template-columns: 1fr; }
+}
+</style>

@@ -312,7 +312,7 @@ export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
-export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
+export const DEFAULT_QUICK_CRAFTS = ['growWood', 'infuseStone', 'refinePill', 'sawPlank']
 export const ADVANCED_CRAFT_OUTPUTS = ['daoNote', 'daoTreatise', 'arrayDiagram', 'spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {

@@ -1,6 +1,6 @@
 # 工程约定与工具
 
-可选模块由 `data/modules.js` 定义开关，`game/moduleRegistry.js` 接入初始化、存档、时间推进与停用清理，`modules/uiRegistry.js` 单独接入界面。目录项默认用 `module: '<id>'` 绑定单一模块；需要多个模块任一启用即生效时改用 `moduleAny: ['a', 'b']`，由 `isEntryEnabled` 统一判定（例如猎杀与外交共用的信符供给：执符使、猎杀营地与《山野猎法》）。猎杀数据与系统集中在 `modules/hunting/`，引擎不依赖 Vue 界面。停用模块读档时先验证并保留切片，再召回活动任务，保留历史和偏好；转世/飞升才重置本世切片。任务存档过滤异常结构与数值并重挂合法成员占用。
+可选模块由 `data/modules.js` 定义开关，`game/moduleRegistry.js` 接入初始化、存档、时间推进与停用清理，`modules/uiRegistry.js` 单独接入界面。目录项默认用 `module: '<id>'` 绑定单一模块；需要多个模块任一启用即生效时改用 `moduleAny: ['a', 'b']`，由 `isEntryEnabled` 统一判定（例如猎杀与外交共用的信符供给：执符使、执符堂与《山野猎法》）。猎杀数据与系统集中在 `modules/hunting/`，引擎不依赖 Vue 界面。停用模块读档时先验证并保留切片，再召回活动任务，保留历史和偏好；转世/飞升才重置本世切片。任务存档过滤异常结构与数值并重挂合法成员占用。
 
 更新：2026-10-13。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
 

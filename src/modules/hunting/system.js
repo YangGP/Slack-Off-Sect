@@ -297,7 +297,7 @@ export function canDepart(state, derived, fieldId, teamIds) {
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field) return { ok: false, reason: '未知猎场' }
   if (!state.upgrades?.wildHunting) return { ok: false, reason: '尚未掌握《山野猎法》' }
-  if (activeOf(state, 'huntingCamp') <= 0) return { ok: false, reason: '需要启用中的猎杀营地' }
+  if (activeOf(state, 'huntingCamp') <= 0) return { ok: false, reason: '需要启用中的执符堂' }
   if (state.realm < field.entryRealm) return { ok: false, reason: '宗门境界不足' }
   if (activeMission(state)) return { ok: false, reason: '已有出征任务在进行' }
   const rows = evaluateTeam(state, derived, fieldId, teamIds)
@@ -539,7 +539,7 @@ export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
  * - 最后不足一趟的时长落成**一次已扣费的活动任务**，不把批量趟数变成下次在线的待补算队列。
  *
  * 除「已有已付费的那一趟」外，所有批次与末趟都必须先通过 `canDepart` 的统一出征条件
- * （模块开关、研究、营地、境界、队伍、占用与信符），批量分支不能自己放宽资格。
+ * （模块开关、研究、执符堂、境界、队伍、占用与信符），批量分支不能自己放宽资格。
  *
  * 与在线逐秒推进的差异是有意的：后续批次的随机序列与逐趟结果不同，
  * 但总奖励不超过「按规则可完成趟数」对应的期望上界，统计、兽材余量与成员占用保持自洽。
@@ -571,7 +571,7 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field) return changed
   const ids = hunting.settings.teamIds || []
-  // 批量出征与末趟共用在线出征条件：研究、营地、境界、队伍、占用与信符都先过一遍。
+  // 批量出征与末趟共用在线出征条件：研究、执符堂、境界、队伍、占用与信符都先过一遍。
   if (!canDepart(state, derived, fieldId, ids).ok) return changed
   const rows = evaluateTeam(state, derived, fieldId, ids)
 

@@ -28,6 +28,13 @@ export function setGameContext(state, context) {
   contexts.set(state, context)
 }
 
+/** 运行层事件通知：只对 live 实例回调，引擎本身不依赖 DOM。 */
+export function notifyGameEvent(state, payload) {
+  const ctx = contexts.get(state)
+  if (!ctx || ctx.live !== true || typeof ctx.onEvent !== 'function') return
+  ctx.onEvent(payload)
+}
+
 /** 同步模拟期间临时覆盖时钟；异常时也恢复原实例上下文。 */
 export function withGameContext(state, context, run) {
   const previous = contexts.get(state)

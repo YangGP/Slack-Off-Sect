@@ -24,7 +24,7 @@ const CORE_RESOURCES = [
     // 仓容完全独立：不套通用扩仓（比例为 0），也不乘仙缘仓储倍率（isolatedStorage）。
     storageWeight: 0,
     isolatedStorage: true,
-    desc: '宗门开具的差遣凭信：入山猎妖每趟百枚，拜访邻宗互市每回五十枚。基础备百枚之量，猎杀营地每座再供 300。',
+    desc: '宗门开具的差遣凭信：入山猎妖每趟百枚，拜访邻宗互市每回五十枚。基础备百枚之量，执符堂每座再供 300。',
   },
   {
     id: 'wood',

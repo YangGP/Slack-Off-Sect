@@ -64,7 +64,7 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
   <div class="box">
     <div class="box-head">
       <HoverTip label="妖兽猎杀"><template #tip>
-          <p>执符使在营房开具信符，每趟出征消耗 {{ HUNT.WARRANT_COST }} 枚。选猎场与 1~{{ HUNT.TEAM_MAX }} 名弟子入山，归队后获得兽材。</p>
+          <p>执符使在执符堂开具信符，每趟出征消耗 {{ HUNT.WARRANT_COST }} 枚。选猎场与 1~{{ HUNT.TEAM_MAX }} 名弟子入山，归队后获得兽材。</p>
           <p>信符与宗门外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚，两边抢同一份凭信。</p>
           <p>出征期间弟子停止原岗位，但仍修炼、消耗口粮；不能被转岗、逐出或再次派出。</p>
           <p>兽材按整数入库，不足 1 的部分跨任务累计，不丢失。</p>
@@ -73,7 +73,7 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
     </div>
     <div class="box-body">
       <div v-if="!unlocked" class="empty">
-        尚未开放猎杀：需掌握《山野猎法》，并启用猎杀营地（筑基期）。
+        尚未开放猎杀：需掌握《山野猎法》，并启用执符堂（筑基期）。
       </div>
       <template v-else>
         <!-- 猎场选择 -->

@@ -1,11 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { state, derived, actions } from '@/game/store'
-import { fmtClock, fmtAmount, fmtTime } from '@/game/format'
-import { ZERO, moneyIsPositive, moneyLt } from '@/game/decimal'
+import { fmtClock, fmtTime } from '@/game/format'
 import { EVENT_MAP, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
-import { resourceName } from '@/data/resources'
-import { eventOutcome, eventEffect } from '@/game/engine'
+import { eventOutcome } from '@/game/engine'
+import { eventPreview } from '@/game/eventPreview'
 import HoverTip from './HoverTip.vue'
 
 const FILTERS = [
@@ -38,26 +37,6 @@ const peaceTime = computed(() => {
   state.stats.playTime
   return Math.max(0, ((state.affairs?.beastPeaceUntil || 0) - Date.now()) / 1000)
 })
-function preview(effect) {
-  if (effect?.decline) return '不消耗物资，不领取奖励'
-  const { rows, recruits, required, affordable } = eventOutcome(state, derived, effect || {})
-  if (!affordable) return '材料不足：' + Object.entries(required)
-    .filter(([res, amount]) => moneyLt(state.resources[res] ?? ZERO, amount))
-    .map(([res, amount]) => `${resourceName(res)} 需${fmtAmount(amount)}`).join('，')
-  const parts = []
-  for (const row of rows) {
-    const name = resourceName(row.res)
-    // 事件增减是金额：正负判断走 Decimal，不能用对象真假或与 0 比较。
-    if (moneyIsPositive(row.lost)) parts.push(`${name} −${fmtAmount(row.lost)}`)
-    if (moneyIsPositive(row.gained)) parts.push(`${name} +${fmtAmount(row.gained)}`)
-    if (moneyIsPositive(row.overflow)) parts.push(`${name} ${fmtAmount(row.overflow)} 装不下`)
-  }
-  if (effect?.recruit) parts.push(recruits ? `弟子 +${recruits}` : '居所已满，无法收徒')
-  const resolved = eventEffect(state, derived, effect || {})
-  if (resolved.buff) parts.push(`${resolved.buff.name}：灵草产出 −25%，${fmtTime(resolved.buff.duration)}`)
-  if (resolved.peaceSeconds) parts.push(`安宁 ${fmtTime(resolved.peaceSeconds)}`)
-  return parts.join('，') || '当前无物资变化'
-}
 </script>
 
 <template>
@@ -91,7 +70,7 @@ function preview(effect) {
       <div v-for="(opt, i) in pending.options" :key="opt.label" class="choice-row">
         <button class="btn primary" :disabled="!eventOutcome(state, derived, opt.effect || {}).affordable" @click="actions.resolveChoice(i)">{{ opt.label }}</button>
         <span class="small dim">{{ opt.desc }}</span>
-        <div class="small choice-preview">{{ preview(opt.effect) }}</div>
+        <div class="small choice-preview">{{ eventPreview(state, derived, opt.effect) }}</div>
       </div>
     </div>
 

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
 import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { ZERO, moneyIsPositive, moneySubtract } from '@/game/decimal'
@@ -27,6 +27,7 @@ import BuffBar from './components/BuffBar.vue'
 import OfflineModal from './components/OfflineModal.vue'
 import ChangelogModal from './components/ChangelogModal.vue'
 import AnalyticsModal from './components/AnalyticsModal.vue'
+import EventModal from './components/EventModal.vue'
 import HabitabilityTip from './components/HabitabilityTip.vue'
 import HoverTip from './components/HoverTip.vue'
 
@@ -71,6 +72,146 @@ const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
 const analyticsDialogOpen = computed(() => !ui.rulesetBlock && !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
   && (ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen))
 
+// 事件提示只在“真实操作完成后的安全时机”打开；其他高优先级弹窗优先。
+const externalBlocked = computed(() => !!ui.rulesetBlock || !!ui.saveLoadError || ui.offlineLoading
+  || !!ui.offlineReport || ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen || ui.changelogOpen)
+const promptShown = new Set()
+let promptTimer = null
+let promptMuteUntil = 0
+let confirmDepth = 0
+let lastConfirmAt = 0
+let restoreConfirm = null
+let promptRevision = 0
+let composing = false
+function cancelPrompt() {
+  globalThis.clearTimeout(promptTimer)
+  promptTimer = null
+  promptRevision += 1
+}
+function isEditing(target) {
+  if (!target) return false
+  if (target.isContentEditable || target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return true
+  return !!target.closest?.('label')?.control
+}
+function choiceKey(pending) { return pending ? 'choice:' + pending.id + ':' + pending.at : '' }
+function promptContextOk() {
+  return typeof document !== 'undefined' && document.visibilityState === 'visible'
+    && document.hasFocus() && !externalBlocked.value && !ui.eventModal
+    && !composing && !isEditing(document.activeElement)
+    && confirmDepth === 0 && Date.now() - lastConfirmAt >= 300 && Date.now() >= promptMuteUntil
+}
+function tryOpenPrompt() {
+  if (!promptContextOk()) return
+  const pending = state.pendingChoice
+  const key = choiceKey(pending)
+  if (pending && !promptShown.has(key)) {
+    promptShown.add(key)
+    actions.openEventModal({ kind: 'choice', instanceId: key, eventId: pending.id, at: pending.at })
+    return
+  }
+  const notice = ui.eventNotice
+  if (!notice) return
+  if (Date.now() - notice.receivedAt > 60000 || promptShown.has(notice.instanceId)) {
+    ui.eventNotice = null
+    return
+  }
+  promptShown.add(notice.instanceId)
+  ui.eventNotice = null
+  actions.openEventModal({
+    kind: 'notice', instanceId: notice.instanceId, eventId: notice.eventId,
+    level: notice.level, title: notice.title, text: notice.summary || notice.text,
+  })
+}
+function schedulePrompt(event) {
+  if (!event?.isTrusted) return
+  cancelPrompt()
+  if (event.type === 'keyup' && (event.isComposing || event.repeat)) return
+  // 点击、滚轮及键盘操作编辑区都不弹框；label 同样可能把焦点送入输入控件。
+  if (isEditing(event.target)) return
+  if (event.target?.closest?.('[role="dialog"], .mask')) return
+  if (!promptContextOk()) return
+  const revision = promptRevision
+  promptTimer = globalThis.setTimeout(() => {
+    promptTimer = null
+    if (revision === promptRevision) tryOpenPrompt()
+  }, 80)
+}
+function hidePrompt() {
+  cancelPrompt()
+  if (ui.eventModal) actions.closeEventModal()
+}
+function onFocusIn(event) {
+  if (isEditing(event.target)) cancelPrompt()
+}
+function onCompositionStart() {
+  composing = true
+  cancelPrompt()
+}
+function onCompositionEnd() { composing = false }
+function onVisibilityChange() {
+  if (document.visibilityState !== 'visible') hidePrompt()
+}
+onMounted(() => {
+  // 原生 confirm 没有事件可监听：临时包一层，确认期间与确认后短时间内不弹事件框。
+  const nativeConfirm = window.confirm
+  if (typeof nativeConfirm === 'function') {
+    const wrapped = (...args) => {
+      cancelPrompt()
+      confirmDepth += 1
+      try { return nativeConfirm.apply(window, args) }
+      finally { confirmDepth -= 1; lastConfirmAt = Date.now() }
+    }
+    try {
+      window.confirm = wrapped
+      restoreConfirm = () => { if (window.confirm === wrapped) window.confirm = nativeConfirm }
+    } catch { restoreConfirm = null }
+  }
+  window.addEventListener('pointerup', schedulePrompt, true)
+  window.addEventListener('click', schedulePrompt, true)
+  window.addEventListener('keyup', schedulePrompt, true)
+  window.addEventListener('wheel', schedulePrompt, { capture: true, passive: true })
+  window.addEventListener('blur', hidePrompt)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  document.addEventListener('focusin', onFocusIn)
+  document.addEventListener('compositionstart', onCompositionStart)
+  document.addEventListener('compositionend', onCompositionEnd)
+})
+onBeforeUnmount(() => {
+  cancelPrompt()
+  restoreConfirm?.()
+  window.removeEventListener('pointerup', schedulePrompt, true)
+  window.removeEventListener('click', schedulePrompt, true)
+  window.removeEventListener('keyup', schedulePrompt, true)
+  window.removeEventListener('wheel', schedulePrompt, true)
+  window.removeEventListener('blur', hidePrompt)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('focusin', onFocusIn)
+  document.removeEventListener('compositionstart', onCompositionStart)
+  document.removeEventListener('compositionend', onCompositionEnd)
+})
+watch(externalBlocked, (blocked) => { if (blocked) hidePrompt() }, { flush: 'sync' })
+watch(() => ui.eventPromptEpoch, () => {
+  cancelPrompt()
+  promptShown.clear()
+}, { flush: 'sync' })
+watch(() => ui.eventPromptRevision, cancelPrompt, { flush: 'sync' })
+// 身死重开也是换世：清掉旧局提示资格与已排队通知。
+watch(() => state.stats.breakthroughDeaths || 0, (next, prev) => {
+  if (next === prev) return
+  promptShown.clear()
+  actions.clearEventPrompt()
+})
+// 关闭弹窗后的同一次按键／手势不立即串出下一条提示。
+watch(() => ui.eventModal, (value, oldValue) => { if (!value && oldValue) promptMuteUntil = Date.now() + 300 })
+watch(() => choiceKey(state.pendingChoice), (key) => {
+  if (!key) {
+    if (ui.eventModal?.kind === 'choice') actions.closeEventModal()
+    return
+  }
+  // 待决选择优先于普通事件提示：收起普通提示，下一次独立操作再弹选择。
+  if (ui.eventModal && (ui.eventModal.kind !== 'choice' || ui.eventModal.instanceId !== key)) actions.closeEventModal()
+})
+
 /** D7 大版本提示：导出的是旧键原始载荷，不是内存里的空白新状态。 */
 function downloadLegacy() {
   const text = actions.exportLegacySave()
@@ -114,7 +255,7 @@ function downloadLegacy() {
       </div>
     </div>
   </div>
-  <div class="wrap" :inert="!!ui.rulesetBlock || ui.offlineLoading || analyticsDialogOpen" :aria-busy="ui.offlineLoading">
+  <div class="wrap" :inert="!!ui.rulesetBlock || ui.offlineLoading || analyticsDialogOpen || !!ui.eventModal" :aria-busy="ui.offlineLoading">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
       <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>
@@ -191,4 +332,5 @@ function downloadLegacy() {
   </div>
   <ChangelogModal />
   <AnalyticsModal />
+  <EventModal />
 </template>
