@@ -3,7 +3,7 @@
  * check(state) 返回 true 即达成，engine 每帧检查一次。
  * 累计产出、累计香火与仙缘都是 Decimal 金额，比较必须走金额助手（不能用原生 >=）。
  */
-import { ZERO, moneyGte } from '../game/decimal'
+import { ZERO, moneyGte } from '../game/decimal.js'
 /**
  * 每条成就的全局产出加成。
  *

@@ -14,6 +14,7 @@ import { computeAutoCraftDrain } from './craftingRules'
 import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
 import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
+import { faithRatioBonus, faithStorageRatio, realmProductionMultiplier, ritualLevel } from './faith'
 import { registerStaticMoneyCache } from '../staticMoneyCache'
 
 /**
@@ -21,6 +22,11 @@ import { registerStaticMoneyCache } from '../staticMoneyCache'
  * 它们互为燃料与产物，属能源产业闭环；排除后粒子链保持一对一配比，也不会出现燃料自增。
  */
 export const REACTOR_EXCLUDED = new Set(['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy'])
+
+/** 湮灭炉增产是否作用于该资源；香火由香火页条目独立提供，不吃湮灭炉。 */
+export function reactorAppliesTo(res) {
+  return !REACTOR_EXCLUDED.has(res) && res !== 'faith'
+}
 
 // 非持续产出的物料（如兽皮）耗尽后，只会由制作或模块结算补回。
 // 这些动作仍检查库存并重算，因此单独缺此类物料的停机设施可以保留零供给。
@@ -136,7 +142,7 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.ascendBonus) acc.ascendBonus += ef.ascendBonus * mult
   if (ef.arrivalBonus) acc.arrivalBonus += ef.arrivalBonus * mult
   if (ef.breakthroughDiscount) acc.breakthroughDiscount += ef.breakthroughDiscount * mult
-  // 渡劫身死减免（香火线《愿力护道》等）：累加为百分点，progression 结算身死概率时扣减。
+  // 突破失败后身死减免（香火线《愿力护道》等）：累加为百分点，progression 结算身死概率时扣减。
   if (ef.tribulationSafety) acc.tribulationSafety += ef.tribulationSafety * mult
   if (ef.offlineHours) acc.offlineHours += ef.offlineHours * mult
   if (ef.karmaRatio) acc.karmaRatio += ef.karmaRatio * mult
@@ -421,6 +427,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   }
 
   const realmMult = REALMS[state.realm]?.mult ?? 1
+  /** D7 万民归心：只强化“境界生产奖励”，不改口粮、加工节拍与单份产量。 */
+  const realmProductionMult = realmProductionMultiplier(state, realmMult)
   derived.craftSpeed = Math.max(1, Math.sqrt(realmMult / CONFIG.CRAFT_SPEED_REALM_BASE))
   /**
    * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
@@ -434,7 +442,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const karmaStorageMult = ONE.plus(softCap(karma.times(CONFIG.KARMA_STORAGE_PER_POINT), CONFIG.KARMA_STORAGE_CAP))
   /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。道果无上界，倍率走 Decimal。 */
   const daoMult = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_PRODUCTION_BONUS))
-  const globalMult = money(realmMult).times(karmaMult).times(habitabilityMult).times(daoMult).times(ONE.plus(buffAll))
+  // DEBUG 专属独立乘区；运行时字段不进存档，离线快照仍保留本次会话的开关。
+  const debugProductionMult = state.__debugProductionBoost === true ? 10 : 1
+  const globalMult = money(realmProductionMult).times(karmaMult).times(habitabilityMult).times(daoMult)
+    .times(ONE.plus(buffAll)).times(debugProductionMult)
 
   // 工业提速同时扩大进料与出料；专业资源增益另外提高转化收益。
   for (const [res, entries] of Object.entries(expenseRaw)) {
@@ -454,6 +465,17 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   // 兼容旧派生字段；灵能改为实际供能，不再凭库存获得免费倍率。
   derived.energyBonus = 0
 
+  // D7 香火修持：聚香法每级 +30%、大乘愿典 +120%，与既有 ratio 同层相加。
+  const faithBonusRatio = faithRatioBonus(state)
+  if (faithBonusRatio) {
+    ratio.faith = (ratio.faith || 0) + faithBonusRatio
+    if (!bonus.ratio.faith) bonus.ratio.faith = []
+    bonus.ratio.faith.push({
+      kind: 'ritual', id: 'gatherIncense', label: '聚香法',
+      count: ritualLevel(state, 'gatherIncense'), value: faithBonusRatio,
+    })
+  }
+
   const rates = {}
   for (const r of RESOURCES) {
     if (r.noProduction) {
@@ -466,7 +488,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
         .times(ONE.plus(acc.ratioAll))
         .times(ONE.plus(seasonRatio[r.id] || 0))
     // 湮灭炉增产：作用于持续产出，唯独不作用于粒子链（分子 / 正负灵子 / 灵能），保持一对一配比与燃料自洽。
-    const reactor = REACTOR_EXCLUDED.has(r.id) ? ONE : ONE.plus(acc.reactorRatio)
+    // 湮灭炉的全局增产不作用于香火：香火成长只来自香火页条目。
+    const reactor = reactorAppliesTo(r.id) ? ONE.plus(acc.reactorRatio) : ONE
     rates[r.id] = base.times(globalMult).times(ONE.plus(buffRes[r.id] || 0)).times(reactor)
   }
 
@@ -579,6 +602,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       if (acc.storageRatio[k] > 0) max[k] = (max[k] ?? ZERO).times(ONE.plus(acc.storageRatio[k]))
     }
   }
+  // D7 收愿仪：只放大香火仓容，放在定额与比例加仓之后，不重复计入 storageRatio。
+  const holdVowRatio = faithStorageRatio(state)
+  if (holdVowRatio > 0) max.faith = (max.faith ?? ZERO).times(ONE.plus(holdVowRatio))
   // 整枚计数资源的仓容在**所有加仓之后**统一取整：比例加仓也参与，
   // 避免出现「4.5 枚灵石」这种取整后仍然带小数的上限。
   for (const r of RESOURCES) {
@@ -596,6 +622,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     buffAll: bonusBuffAll,
     buffRes: bonusBuffRes,
     realmMult,
+    realmProductionMult,
+    debugProductionMult,
     karmaMult,
     habitabilityMult,
     buffAllTotal: buffAll,
@@ -625,6 +653,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.maxDisciples = Math.floor(acc.maxDisciples)
   derived.globalMult = globalMult
   derived.realmMult = realmMult
+  derived.realmProductionMult = realmProductionMult
+  derived.faithRatioBonus = faithBonusRatio
+  derived.faithStorageRatio = holdVowRatio
   derived.daoMult = daoMult
   derived.karmaMult = karmaMult
   derived.ratioAll = acc.ratioAll
@@ -658,7 +689,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.consumeReduction = acc.consumeReduction
   derived.arrivalBonus = acc.arrivalBonus
   derived.breakthroughDiscount = acc.breakthroughDiscount
-  // 暴露给 progression：渡劫身死减免（预览 / 结算同源）。
+  // 暴露给 progression：突破失败后身死减免（预览 / 结算同源）。
   derived.tribulationSafety = acc.tribulationSafety
   derived.offlineHours = acc.offlineHours
   derived.daoAutomation = money(state.dao ?? ZERO).gte(1)
@@ -686,8 +717,9 @@ export function finishDerived(state, derived) {
   // 解锁列表
   derived.unlockedBuildings = BUILDINGS.filter((b) => isBuildingUnlocked(state, b.id)).map((b) => b.id)
   derived.unlockedJobs = JOBS.filter((j) => isJobUnlocked(state, j)).map((j) => j.id)
+  // 香火专属条目只在香火页购买，不进入普通参悟列表。
   derived.availableUpgrades = ALL_UPGRADES.filter(
-    (u) => !state.upgrades[u.id] && isUpgradeUnlocked(state, u),
+    (u) => u.page !== 'faith' && !state.upgrades[u.id] && isUpgradeUnlocked(state, u),
   ).map((u) => u.id)
   derived.availableCrafts = CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => c.id)
   for (const rows of Object.values(derived.sources)) rows.sort((a, b) => b.value.cmp(a.value))

@@ -111,6 +111,8 @@ export const BREAKTHROUGH = {
   tribulationChance: 0.60,
   chanceDrop: 0.05,
   chanceCap: 0.99,
+  // D7：后期三档的满配上限（基础 + 材料护道 + 应劫正愿 5 级）。
+  lateChanceCaps: { 8: 0.70, 9: 0.65, 10: 0.60 },
   deathRealm: 4,
   regressionRealm: 7,
   deathChances: { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }, // 按冲关前境界，失败后身死概率
@@ -160,19 +162,19 @@ export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
     aid('香火祈愿', { faith: 1200 }, 0.06),
   ],
   8: [
-    aid('九转合真', { nineTurnPill: 4 }, 0.16),
-    aid('银器共鸣', { mithril: 12, spiritArtifact: 3 }, 0.24),
+    aid('九转合真', { nineTurnPill: 4 }, 0.10),
+    aid('银器共鸣', { mithril: 12, spiritArtifact: 3 }, 0.15),
     aid('香火祈愿', { faith: 2400 }, 0.10),
   ],
   9: [
-    aid('灵子归一', { qiParticle: 40, crystal: 20 }, 0.16),
-    aid('玄金护道', { arcaneGold: 8, spiritArtifact: 4 }, 0.26),
+    aid('灵子归一', { qiParticle: 40, crystal: 20 }, 0.10),
+    aid('玄金护道', { arcaneGold: 8, spiritArtifact: 4 }, 0.12),
     aid('香火祈愿', { faith: 5000 }, 0.08),
   ],
   10: [
-    aid('灵宝挡劫', { spiritTreasure: 2, nineTurnPill: 8 }, 0.16),
-    aid('阵印封雷', { ascensionSeal: 60, crystalSilver: 12 }, 0.28),
-    // 「香火祈愿」升级为「立愿应劫」：渡劫唯一的香火护道，既提高成功率、又降低身死概率（见 §2.3）。
+    aid('灵宝挡劫', { spiritTreasure: 2, nineTurnPill: 8 }, 0.08),
+    aid('阵印封雷', { ascensionSeal: 60, crystalSilver: 12 }, 0.11),
+    // 「香火祈愿」升级为「立愿应劫」：渡劫唯一的香火护道，既提高成功率、又降低失败后身死概率（见 §2.3）。
     // id 仍为 10:2（数组下标不变），旧档勾选不失效。数额与 deathReduce 待校准。
     aid('立愿应劫', { faith: 20000 }, 0.06, { deathReduce: 0.10 }),
   ],

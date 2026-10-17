@@ -89,7 +89,7 @@ const BATCHES = [
 ]
 
 const allRows = computed(() =>
-  CRAFTS.filter((c) => isCraftUnlocked(state, c) && isCostRevealed(state, c.cost)).map((c) => {
+  CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => {
     // 份数是金额：按钮可用性与「¼料 / ½料 / 全部」都用完整份数，不截成安全整数。
     const canMakeMoney = maxCraftableMoney(state, derived, c.id)
     const canMake = moneyToCount(canMakeMoney)
@@ -123,8 +123,10 @@ function updateReserve(id, event) {
 const someAuto = computed(() => allRows.value.some(row => row.auto))
 
 const rows = computed(() => {
+  // 30% 峰值露出只约束完整炼制页；左栏快捷入口是玩家已固定的配方，不能因为还没见过费用资源就整块消失。
   if (props.compact) return allRows.value.filter(row => state.settings.quickCrafts.includes(row.meta.id))
-  return allRows.value.filter(row => filter.value === 'auto' ? row.auto : filter.value === 'basic' ? !ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : filter.value === 'advanced' ? ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : true)
+  const revealed = allRows.value.filter(row => isCostRevealed(state, row.meta.cost))
+  return revealed.filter(row => filter.value === 'auto' ? row.auto : filter.value === 'basic' ? !ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : filter.value === 'advanced' ? ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : true)
 })
 
 const locked = computed(() =>

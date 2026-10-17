@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { state, view, actions, ui } from '@/game/store'
 import { ACHIEVEMENTS } from '@/data/achievements'
-import { canAfford, idleDisciples } from '@/game/engine'
+import { canAfford, faithUnlocked, idleDisciples } from '@/game/engine'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { isModuleEnabled, insertAfter } from '@/data/modules'
 import { MODULE_UI } from '@/modules/uiRegistry'
@@ -13,6 +13,7 @@ const CORE_TABS = [
   { id: 'cultivation', name: '修真' },
   { id: 'skills', name: '技艺' },
   { id: 'craft', name: '炼制' },
+  { id: 'faith', name: '香火' },
   { id: 'realm', name: '境界' },
   { id: 'achievements', name: '成就' },
   { id: 'settings', name: '设置' },
@@ -27,6 +28,7 @@ const badges = computed(() => ({
 /** 核心标签 + 已启用模块标签（按各自锚点插回，关闭则不显示） */
 const tabs = computed(() => {
   let list = [...CORE_TABS]
+  if (!faithUnlocked(state)) list = list.filter(t => t.id !== 'faith')
   for (const m of MODULE_UI) {
     if (!isModuleEnabled(state, m.id)) continue
     list = insertAfter(list, m.tab.after, [m.tab])

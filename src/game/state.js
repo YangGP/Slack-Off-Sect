@@ -6,7 +6,8 @@ import { DEFAULT_QUICK_CRAFTS } from '@/data/crafts'
 import { defaultModules } from '@/data/modules'
 import { migrateState } from './migrations'
 import { initialModuleState, rehydrateModules, resetModules } from './moduleRegistry'
-import { ZERO, moneyMax } from './decimal'
+import { ZERO, moneyIsPositive, moneyMax } from './decimal'
+import { D7_RULESET, createFaithProgression, normalizeFaithProgression } from '@/data/faith'
 import { decodeMoneyFields } from './moneyFields'
 import { createAnalyticsState } from './analyticsState'
 
@@ -29,6 +30,7 @@ export function createInitialState(now = Date.now()) {
 
   return {
     version: SAVE_VERSION,
+    ruleset: D7_RULESET,
     createdAt: now,
     lastTickAt: now,
     lastSaveAt: now,
@@ -65,6 +67,7 @@ export function createInitialState(now = Date.now()) {
     beastRetirementVersion: 1,
 
     buildings: {},
+    // 兼容旧档免费首屋的拆除记录；新建首屋同样支付木料。
     starterHutBuilt: false,
     starterHutStanding: false,
     upgrades: {},
@@ -91,6 +94,8 @@ export function createInitialState(now = Date.now()) {
 
     // GA4 平衡采集的持久元数据：世身份、本世时钟、首次到达表与上一世摘要。
     analytics: createAnalyticsState(),
+    // D7 香火修持：本世仪轨等级、永久道心修持等级与累计道心。
+    faithProgression: createFaithProgression(),
 
     log: [],
     logSeq: 0,
@@ -194,10 +199,15 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   const fresh = createInitialState(gameNow(state))
   resetRuntimeCounters(state)
 
-  state.resources = { ...fresh.resources }
+  // 道心与永久修持跨轮回保留；愿力、仪轨与一次性专属研究随本世清空。
+  const keptFaith = normalizeFaithProgression(state.faithProgression)
+  const keptDaoHeart = moneyMax(ZERO, state.resources?.daoHeart ?? ZERO)
+  const keptPeakDaoHeart = moneyMax(keptDaoHeart, state.peak?.daoHeart ?? ZERO)
+  state.resources = { ...fresh.resources, daoHeart: keptDaoHeart }
   // 飞升是「转世重修」：连开局那点家底也没有，跟第一次开山一样从点击起步（§3.4）
-  state.seen = { qi: true }
-  state.peak = {}
+  state.seen = { qi: true, ...(moneyIsPositive(keptDaoHeart) ? { daoHeart: true } : {}) }
+  state.peak = moneyIsPositive(keptPeakDaoHeart) ? { daoHeart: keptPeakDaoHeart } : {}
+  state.faithProgression = { ...createFaithProgression(), cultivation: { ...keptFaith.cultivation }, totalDaoHeart: keptFaith.totalDaoHeart }
   state.disciples = { ...fresh.disciples, jobs: { ...fresh.disciples.jobs }, members: [] }
   state.arrivalTimer = 0
   state.buildings = {}

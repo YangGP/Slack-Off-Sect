@@ -47,7 +47,7 @@ export async function checkLayout(context) {
     ok('空的后期资源分组不显示', !doc.querySelector('[aria-label="灵子与灵能分组"]'))
     button()?.click()
     await new Promise(r => setTimeout(r, 50))
-    ok('点击分组收起资源行并保存偏好', button()?.getAttribute('aria-expanded') === 'false' && names().length === 0 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.v1')).ui.collapsedResourceGroups.basic)
+    ok('点击分组收起资源行并保存偏好', button()?.getAttribute('aria-expanded') === 'false' && names().length === 0 && JSON.parse(window.localStorage.getItem('slack-off-sect.save.d7.v1')).ui.collapsedResourceGroups.basic)
     ui.highlight = { need: ['wood'], lack: ['wood'] }
     await new Promise(r => setTimeout(r, 50))
     ok('造价预览临时展开折叠组并标出缺料', button()?.getAttribute('aria-expanded') === 'true' && !!doc.querySelector('#res-group-basic .res-lack') && button().textContent.includes('查看用料'))

@@ -3,10 +3,13 @@ import { SAVE_VERSION, SAVE_FIELDS, isRecord } from './saveSchema'
 import { ZERO, floorMoney, moneyNonNegative } from './decimal'
 import { cloneRuntime } from './clone'
 import { encodeMoneyFields } from './moneyFields'
+import { D7_RULESET } from '@/data/faith'
 
-export { SAVE_VERSION }
+export { SAVE_VERSION, D7_RULESET }
 
-export const SAVE_KEY = 'slack-off-sect.save.v1'
+/** D7 新代专用键；旧键只作为原始备份读取，永不被本代覆盖。 */
+export const SAVE_KEY = 'slack-off-sect.save.d7.v1'
+export const LEGACY_SAVE_KEY = 'slack-off-sect.save.v1'
 const emptyStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 const browserStorage = () => typeof localStorage !== 'undefined' ? localStorage : emptyStorage
 
@@ -21,7 +24,14 @@ export function serialize(state, now = Date.now()) {
   ]))
   copy.lastSaveAt = now
   copy.version = SAVE_VERSION
+  copy.ruleset = D7_RULESET
   return encodeMoneyFields(copy)
+}
+
+/** 规则代际不符一律拒绝；不能在 normalizeState / 离线结算之前放行。 */
+function assertRuleset(data) {
+  if (!isRecord(data)) throw new Error('格式不正确')
+  if (data.ruleset !== D7_RULESET) throw new Error('存档不属于当前规则代际')
 }
 
 /** 存储适配器可由浏览器、内存或测试夹具提供；错误保护按实例隔离。 */
@@ -31,6 +41,16 @@ export function createSaveRepository({ storage = browserStorage, now = () => Dat
   return {
     get loadError() { return loadError },
     allowRecovery() { loadError = '' },
+    /** 旧键仍是原始载荷：只读，用于导出与提示，不参与本代加载。 */
+    legacyPayload() {
+      try { return target().getItem(LEGACY_SAVE_KEY) } catch { return null }
+    },
+    legacyOnly() {
+      try {
+        if (target().getItem(SAVE_KEY)) return false
+        return !!target().getItem(LEGACY_SAVE_KEY)
+      } catch { return false }
+    },
     save(state) {
       if (loadError) return false
       try {
@@ -47,7 +67,9 @@ export function createSaveRepository({ storage = browserStorage, now = () => Dat
       try {
         const raw = target().getItem(SAVE_KEY)
         if (!raw) return null
-        const restored = restoreSave(JSON.parse(raw), { now: now() })
+        const data = JSON.parse(raw)
+        assertRuleset(data)
+        const restored = restoreSave(data, { now: now(), allowRecovery: false })
         loadError = ''
         return restored
       } catch (error) {
@@ -56,6 +78,7 @@ export function createSaveRepository({ storage = browserStorage, now = () => Dat
         return null
       }
     },
+    /** 只删除当前新代键；旧键备份保留。 */
     clear() {
       try {
         target().removeItem(SAVE_KEY)
@@ -76,7 +99,7 @@ export function exportJson(state) {
   return JSON.stringify(serialize(state), null, 2)
 }
 
-/** 导入：base64 或原始 JSON 都可以 */
+/** 导入：base64 或原始 JSON 都可以；异代存档直接拒绝。 */
 export function parseImport(text) {
   const trimmed = String(text || '').trim()
   if (!trimmed) throw new Error('内容为空')
@@ -85,20 +108,29 @@ export function parseImport(text) {
     json = decodeURIComponent(atob(trimmed))
   }
   const data = JSON.parse(json)
-  return restoreSave(data)
+  assertRuleset(data)
+  return restoreSave(data, { allowRecovery: false })
 }
 
-/** 旧档尽量完整恢复；未知版本或结构冲突只继承仙缘和道果。 */
-export function restoreSave(data, { now = Date.now() } = {}) {
+/**
+ * 浏览器加载/导入使用 allowRecovery: false：结构冲突必须抛错并保留原档。
+ * 默认 allowRecovery: true 仅保留给显式工具入口，此时未知版本或结构冲突只继承仙缘和道果。
+ * 规则代际由调用方（load / parseImport）先行校验；这里不再处理异代。
+ */
+export function restoreSave(data, { now = Date.now(), allowRecovery = true } = {}) {
   if (!isRecord(data)) throw new Error('格式不正确')
-  try {
+  const restoreStrict = () => {
     if (data.version != null && (!Number.isInteger(data.version) || data.version < 1 || data.version > SAVE_VERSION)) {
       throw new Error('存档版本无法兼容')
     }
     const version = Number.isInteger(data.version) ? data.version : 0
-    // v2 起个体成员就是权威数据：升到 v3 不能因为版本号判断变化而重建弟子。
     const preferMembers = version >= 2 && Array.isArray(data.disciples?.members)
     return normalizeState(data, { now, preferMembers })
+  }
+  // 浏览器加载/导入走 allowRecovery=false：结构冲突必须冒泡到读档失败保护，不能静默重开。
+  if (!allowRecovery) return restoreStrict()
+  try {
+    return restoreStrict()
   } catch (error) {
     const state = createInitialState(now)
     // 结构冲突时只继承永久货币：按金额域安全解码，不经 Number 或 MAX_SAFE_INTEGER 夹取。

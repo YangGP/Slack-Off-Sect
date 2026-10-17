@@ -17,6 +17,7 @@
  * 两者共用「灵机」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
  */
 import { TECHNIQUES } from './techniques.js'
+import { FAITH_UPGRADES } from './faith.js'
 import { HUNT_UPGRADES } from '../modules/hunting/data.js'
 
 const CORE_CULTIVATION = [
@@ -297,9 +298,9 @@ const CORE_CULTIVATION = [
     id: 'mahayanaArt',
     name: '大乘心经',
     glyph: '经',
-    cost: { insight: 160000, artifact: 60, talisman: 60, pill: 60, faith: 6000 },
-    desc: '以心养药，以愿证道。灵机与香火产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。',
-    effects: { ratio: { insight: 1.2, faith: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
+    cost: { insight: 160000, artifact: 60, talisman: 60, pill: 60 },
+    desc: '以心养药，以愿证道。灵机产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。香火增产改由《大乘愿典》承接。',
+    effects: { ratio: { insight: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
     needs: { upgrades: ['greatVehicleSeal'] },
   },
 
@@ -537,15 +538,16 @@ const CORE_CULTIVATION = [
   // 香火族工艺层：承接渡劫护道机制（见 docs/MATERIAL-RESEARCH.md §2.3），故进修真族而非技艺页。
   {
     id: 'vowPower',
-    name: '愿力',
+    name: '凝愿法',
     glyph: '愿',
-    cost: { insight: 26000, faith: 8000 }, // 待校准
-    desc: '把香客的念力立成可承天劫的大愿：愿力愈厚，渡劫愈稳。',
-    effectDesc: '因此参悟得出《愿力护道》—— 渡劫时多一分护身之力。',
-    // effects 留空并附注释：本节点解锁的是下方护道与技艺，本身不直接加数值。
+    kind: 'faith',
+    page: 'faith',
+    cost: { insight: 200, faith: 200 },
+    desc: '把香客的念力立成可积累的大愿，是凝愿、证心与本世仪轨的总前提。',
+    effectDesc: '因此可凝愿积德，并继续参悟香火修持。',
     effects: { unlockBuildings: [] },
-    note: '开启参悟：愿力护道',
-    needs: { upgrades: ['ancestorArt'], realm: 9 }, // 大乘档（待校准）
+    note: '开启：凝愿、证心与香火修持',
+    needs: { upgrades: ['incenseVow'], building: { id: 'gate', count: 1 }, realm: 4 },
   },
 
   // ---------- 土木族 ----------
@@ -848,7 +850,7 @@ const CORE_CULTIVATION = [
 
   // ============ 修真应用 · 原理：资格 / 解锁型 ============
   // 自身不直接加数值，只作下游增益条目的资格前置，并附带解锁一座对应建筑。
-  // 下游落库复用 needs.upgrades（见 docs/炼虚后变更文档.md 变更 2）；不接入首份产出来源。
+  // 下游落库复用 needs.upgrades（见 docs/SPIRIT-ENERGY.md §十一）；不接入首份产出来源。
   {
     id: 'etchTheory',
     name: '蚀刻原理',
@@ -916,7 +918,7 @@ const CORE_CULTIVATION = [
 export const CULTIVATION = [...CORE_CULTIVATION, ...HUNT_UPGRADES]
 
 /** 两层合起来的完整列表：产出计算、解锁判定、文案都要用它 */
-export const ALL_UPGRADES = [...CULTIVATION, ...TECHNIQUES]
+export const ALL_UPGRADES = [...CULTIVATION, ...TECHNIQUES, ...FAITH_UPGRADES]
 
 /**
  * 修真页的分组（界面上按它分组显示）：主线五章 + 心法支线 + 材料七族 + 宗门经营。

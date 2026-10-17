@@ -222,6 +222,8 @@ export function resourceSourcesAndSinks({ ok, section }) {
   {
     // 尊贵资源（道果 / 仙缘）的来源是转世与飞升、去向是当乘区，单独放行
     const prestige = new Set(['dao', 'karma'])
+    // 愿力/道心由香火页的凝愿、证心兑换产生与消耗，不在 jobs/crafts 静态表里。
+    const exchange = new Set(['vow', 'daoHeart'])
     // 逸散也算"去向"：灵能是被自身衰减消耗掉的，不写进任何造价
     const decaying = new Set(['qiEnergy'])
     const sourced = new Set()
@@ -249,9 +251,9 @@ export function resourceSourcesAndSinks({ ok, section }) {
     }
     sunk.add('warrant')
 
-    const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
+    const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !exchange.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
     const noSink = RESOURCES.filter(
-      (r) => !prestige.has(r.id) && !decaying.has(r.id) && !sunk.has(r.id),
+      (r) => !prestige.has(r.id) && !exchange.has(r.id) && !decaying.has(r.id) && !sunk.has(r.id),
     ).map((r) => r.name)
     ok('每个资源都有来源（没有凭空出现的）', noSource.length === 0, noSource.join('、') || '全部有')
     ok('每个资源都有去向（没有死资源）', noSink.length === 0, noSink.join('、') || '全部有')

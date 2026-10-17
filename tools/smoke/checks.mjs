@@ -46,6 +46,7 @@ export const smokeChecks = [
   materials.goldenCoreProduction,
   money.moneyDomain,
   progression.breakthroughRisk,
+  progression.faithProgression,
   extensions.industryScenarios,
   extensions.discipleScenarios,
   extensions.offlineScenarios,

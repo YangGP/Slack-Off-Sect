@@ -7,6 +7,7 @@ import { BUILDINGS, BUILDING_GROUPS } from '../src/data/buildings.js'
 import { JOBS } from '../src/data/jobs.js'
 import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
 import { TECHNIQUES } from '../src/data/techniques.js'
+import { RITUALS, CULTIVATION as FAITH_CULTIVATION } from '../src/data/faith.js'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
@@ -50,6 +51,7 @@ const needs = (n) => {
   if (n.upgrade) out.push(`《${uname(n.upgrade)}》`)
   if (n.upgrades) for (const u of n.upgrades) out.push(`《${uname(u)}》`)
   if (n.realm != null) out.push(`境界 ≥ ${REALMS[n.realm].name}`)
+  if (n.ritual) for (const [id, level] of Object.entries(n.ritual)) out.push(`《${RITUALS.find(r => r.id === id)?.name || id}》≥ ${level} 级`)
   return out.join('、')
 }
 const effects = (e) => {
@@ -84,8 +86,8 @@ const effects = (e) => {
   if (e.ascendBonus) out.push(`仙缘 +${pct(e.ascendBonus)}`)
   if (e.arrivalBonus) out.push(`弟子前来间隔 −${pct(e.arrivalBonus)}`)
   if (e.breakthroughDiscount) out.push(`破境 −${pct(e.breakthroughDiscount)}`)
-  // 渡劫身死减免（香火线《愿力护道》）：与 effectsText.js 同步。
-  if (e.tribulationSafety) out.push(`身死概率 −${pct(e.tribulationSafety)}`)
+  // 突破失败后身死减免（香火线《愿力护道》）：与 effectsText.js 同步。
+  if (e.tribulationSafety) out.push(`突破失败后身死概率 −${pct(e.tribulationSafety).replace('%', ' 个百分点')}（最低0%）`)
   if (e.offlineHours) out.push(`离线 +${e.offlineHours}h`)
   if (e.karmaRatio) out.push(`仙缘产出乘区固定 +${e.karmaRatio}`)
   if (e.autoCraft) out.push('自动制作')
@@ -135,7 +137,7 @@ for (const g of BUILDING_GROUPS) {
 emit('## A.4 修真（研究 / 解锁层）\n')
 emit('| 修真 | id | 花费 | 效果 | 解锁 |')
 emit('| --- | --- | --- | --- | --- |')
-for (const u of CULTIVATION) {
+for (const u of CULTIVATION.filter((x) => x.page !== 'faith')) {
   emit(
     `| ${u.name} | \`${u.id}\` | ${cost(u.cost)} | ${[effects(u.effects), u.note].filter(Boolean).join('；')} | ${needs(u.needs)} |`,
   )
@@ -144,7 +146,7 @@ for (const u of CULTIVATION) {
 emit('\n## A.5 技艺（自己练的手艺）\n')
 emit('| 技艺 | id | 花费 | 效果 | 解锁 |')
 emit('| --- | --- | --- | --- | --- |')
-for (const t of TECHNIQUES.filter((x) => x.kind !== 'treasure')) {
+for (const t of TECHNIQUES.filter((x) => x.kind !== 'treasure' && x.page !== 'faith')) {
   emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${effects(t.effects)} | ${needs(t.needs)} |`)
 }
 
@@ -152,7 +154,7 @@ emit('\n## A.6 法宝（由修真解锁的器物）\n')
 emit('炼成后基础效果生效；祭炼 n 级效果 ×(1 + 0.3n)，费用按当前等级以 1.7 倍递增。非灵机材料沿用炼成费用，灵机使用下表祭炼基价，无等级硬上限。\n')
 emit('| 法宝 | id | 炼成花费 | 祭炼基础灵机 | 效果 | 解锁 |')
 emit('| --- | --- | --- | --- | --- | --- |')
-for (const t of TECHNIQUES.filter((x) => x.kind === 'treasure')) {
+for (const t of TECHNIQUES.filter((x) => x.kind === 'treasure' && x.page !== 'faith')) {
   const upkeep = t.upkeep ? '；满供消耗 ' + Object.entries(t.upkeep).map(([r, n]) => `${res(r)} ${n}/s`).join('、') + '（随祭炼增长，缺供按比例停效）' : ''
   emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${t.refine?.insight || 0} | ${effects(t.effects)}${upkeep} | ${needs(t.needs)} |`)
 }
@@ -160,6 +162,35 @@ emit('\n进阶祭炼附加材料：达到指定层数后开始支付，按1.7倍
 emit('| 法宝 | 第几次祭炼起 | 起始附加材料 |')
 emit('| --- | --- | --- |')
 for (const t of TECHNIQUES.filter(t => t.refine?.materials)) emit(`| ${t.name} | ${(t.refine.materialFromLevel || 0) + 1} | ${cost(t.refine.materials)} |`)
+
+emit('\n## A.6b 香火修持（D7）\n')
+emit('香火 → 愿力 → 道心。一次性条目在香火页购买；本世仪轨随本世清空，永久修持跨轮回保留。\n')
+emit('| 条目 | id | 类型 | 花费 | 效果 | 前置 |')
+emit('| --- | --- | --- | --- | --- | --- |')
+for (const u of ALL_UPGRADES.filter((x) => x.page === 'faith')) {
+  emit(`| ${u.name} | \`${u.id}\` | 一次性 | ${cost(u.cost)} | ${[effects(u.effects), u.note].filter(Boolean).join('；') || '—'} | ${needs(u.needs)} |`)
+}
+for (const u of RITUALS) {
+  emit(`| ${u.name} | \`${u.id}\` | 本世仪轨 | 愿力 ${u.baseCost} × 1.6^l | ${u.desc} | ${REALMS[u.needs.realm]?.name}、《${uname(u.needs.upgrade)}》 |`)
+}
+for (const u of FAITH_CULTIVATION) {
+  emit(`| ${u.name} | \`${u.id}\` | 永久修持 | 道心 ${u.baseCost} × 2^l | ${u.desc} | ${REALMS[u.needs.realm]?.name}、《${uname(u.needs.upgrade)}》 |`)
+}
+const faithTreasures = ALL_UPGRADES.filter(u => u.page === 'faith' && u.kind === 'treasure')
+if (faithTreasures.length) {
+  emit('\n香火页法宝（炼成后仍可祭炼，费用按 1.7 倍增长）：\n')
+  emit('| 法宝 | id | 炼成花费 | 祭炼基础灵机 | 效果 | 前置 |')
+  emit('| --- | --- | --- | --- | --- | --- |')
+  for (const t of faithTreasures) emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${t.refine?.insight || 0} | ${effects(t.effects)} | ${needs(t.needs)} |`)
+  const withMaterials = faithTreasures.filter(x => x.refine?.materials)
+  emit('\n祭炼费用 = 炼成费用中的材料 ×1.7^当前等级 + 灵机 ×1.7^当前等级。\n')
+  if (withMaterials.length) {
+    emit('| 法宝 | 第几次祭炼起 | 起始附加材料 |')
+    emit('| --- | --- | --- |')
+    for (const t of withMaterials) emit(`| ${t.name} | ${(t.refine.materialFromLevel || 0) + 1} | ${cost(t.refine.materials)} |`)
+  }
+}
+emit('')
 
 emit('\n## A.7 制作配方\n')
 emit('秒数为自动加工基础间隔；实际间隔除以境界加工速度，手动制作瞬时完成。每份收益另乘通用与专业制作加成，普通生产倍率不直接提高配方收益。\n')
@@ -179,7 +210,7 @@ emit('护道费用另加于基础破境费用，不享受破境折扣。各组�
 emit('| 目标境界 | 方案 | 材料要求 | 成功率加成 |')
 emit('| --- | --- | --- | --- |')
 for (const [index, aids] of Object.entries(BREAKTHROUGH_AIDS)) {
-  for (const aid of aids) emit(`| ${REALMS[index].name} | ${aid.name} | ${cost(aid.cost)} | +${Math.round(aid.bonus * 100)}${aid.deathReduce ? `（身死 −${Math.round(aid.deathReduce * 100)} 个百分点）` : ''} |`)
+  for (const aid of aids) emit(`| ${REALMS[index].name} | ${aid.name} | ${cost(aid.cost)} | +${Math.round(aid.bonus * 100)}${aid.deathReduce ? `（突破失败后身死 −${Math.round(aid.deathReduce * 100)} 个百分点，最低0%）` : ''} |`)
 }
 
 emit('\n## A.9 成就\n')

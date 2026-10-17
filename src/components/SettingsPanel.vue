@@ -52,7 +52,7 @@ async function doImport(event) {
 }
 
 function doReset() {
-  if (window.confirm('确定要重新开山立派吗？当前进度会被清空（成就与仙缘也一并清空）。')) {
+  if (window.confirm('确定要彻底重开吗？当前新代进度、成就、仙缘、道果与道心都会被清空；旧代备份不会被删除。')) {
     actions.resetGame()
     importError.value = ''
   }

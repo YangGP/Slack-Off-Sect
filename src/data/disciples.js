@@ -3,7 +3,7 @@ import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
 import { CONFIG } from './config'
-import { ZERO, ceilMoney, money, moneyNonNegative } from '../game/decimal'
+import { ZERO, ceilMoney, money, moneyNonNegative } from '../game/decimal.js'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,

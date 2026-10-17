@@ -22,7 +22,7 @@ const DEV_OPT_IN = String(env.VITE_GA_DEBUG || '') === '1'
 const FORCE_DEBUG_MODE = String(env.VITE_GA_DEBUG_MODE || '') === '1'
 
 /** 数值配置版本：平衡数值改动时同步更新（与游戏版本独立）。 */
-export const BALANCE_VERSION = '2026-10-17.1'
+export const BALANCE_VERSION = '2026-10-17.d7.1'
 
 const TICK_MS = 5000
 const SAMPLE_MS = 30000

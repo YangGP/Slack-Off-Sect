@@ -8,6 +8,70 @@ import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, successfulBreakthrough } from './fixtures.mjs'
 
+export function faithProgression({ ok, close, section }) {
+  section('D7 香火兑换、加成与抗劫')
+  const { state: s, derived: d } = newGame()
+  s.realm = 6
+  s.upgrades.vowPower = true
+  s.resources.faith = E.money('1.6')
+  s.settings.craftReserves.faith = E.money('0.8')
+  ok('凝愿保留量不足时拒绝且不扣款', !E.condenseVow(s, 1).ok && s.resources.faith.eq('1.6'))
+  ok('小数香火精确转换并保留预算', E.condenseVow(s, '0.8').ok && s.resources.faith.eq('0.8') && s.resources.vow.eq('0.8'))
+  ok('小数愿力精确证心并累计', E.attestDaoHeart(s, '0.8').ok && s.resources.vow.isZero() &&
+    s.resources.daoHeart.eq('0.00008') && s.faithProgression.totalDaoHeart.eq('0.00008'))
+  for (const invalid of [0, -1, 'NaN', 'Infinity']) {
+    ok('兑换拒绝非法金额 ' + invalid, !E.condenseVow(s, invalid).ok && !E.attestDaoHeart(s, invalid).ok)
+  }
+  s.faithProgression.cultivation.vowInsight = 2
+  s.resources.faith = E.money('10.8')
+  const gain = E.condenseVow(s, 10).gained
+  ok('凝愿真解按Decimal平方根增益', gain.eq(14))
+  s.realm = 9
+  s.resources.vow = E.money(6000)
+  ok('大乘愿典缺研究拒绝购买且不扣费', !E.buyFaithUpgrade(s, 'greatVowScripture') && s.resources.vow.eq(6000))
+  s.upgrades.mahayanaArt = true
+  s.buildings.gate = { count: 3, on: true }
+  s.upgrades.incenseVow = true
+  s.disciples.total = 1
+  s.disciples.jobs.incenseKeeper = 1
+  s.faithProgression.rituals.gatherIncense = 1
+  E.recompute(s, d)
+  const before = d.rates.faith
+  ok('专属条目不可通过普通研究绕过', !E.research(s, d, 'greatVowScripture') && s.resources.vow.eq(6000))
+  ok('愿典只叠加一次120%资源增益', E.buyFaithUpgrade(s, 'greatVowScripture') && (() => {
+    E.recompute(s, d)
+    return before.gt(0) && close(d.rates.faith.div(before), 2.5 / 1.3)
+  })())
+  for (const [target, base, per] of [[8, 0.55, 0.03], [9, 0.45, 0.04], [10, 0.35, 0.05]]) {
+    s.realm = target - 1
+    const aids = Object.fromEntries(BREAKTHROUGH_AIDS[target].map(aid => [aid.id, true]))
+    for (const level of [0, 1, 3, 5]) {
+      s.faithProgression.cultivation.tribulationVow = level
+      ok(`目标${target}应劫${level}级满配成功率`, close(E.breakthroughPreview(s, d, aids).chance, base + per * level))
+    }
+  }
+  for (const outcome of ['death', 'regress', 'hold']) {
+    const { state, derived } = newGame()
+    state.realm = 9
+    state.upgrades.vowGuard = true
+    Object.assign(state.faithProgression.cultivation, { tribulationVow: 5, deathInsight: 5, realmStability: 5 })
+    state.resources.daoHeart = E.money('0.8')
+    for (const id of Object.keys(state.resources)) if (id !== 'daoHeart') state.resources[id] = E.money(1e9)
+    E.recompute(state, derived)
+    const aids = Object.fromEntries(BREAKTHROUGH_AIDS[10].map(aid => [aid.id, true]))
+    const preview = E.breakthroughPreview(state, derived, aids)
+    ok('满配渡劫预览为60%成功、失败后3%死/72.75%退/24.25%保', close(preview.chance, 0.6) &&
+      close(preview.deathOnFailure, 0.03) && close(preview.regressionOnFailure, 0.7275) && close(preview.holdOnFailure, 0.2425))
+    const fate = outcome === 'death' ? preview.deathOnFailure / 2 : outcome === 'regress'
+      ? preview.deathOnFailure : preview.deathOnFailure + preview.regressionOnFailure
+    let rolls = 0
+    E.breakthrough(state, derived, aids, () => rolls++ === 0 ? 0.99 : fate)
+    ok('失败互斥结果及边界：' + outcome, state.realm === ({ death: 0, regress: 8, hold: 9 })[outcome] && rolls === 2)
+    ok('失败分支保留永久道心与修持：' + outcome, state.resources.daoHeart.eq('0.8') && state.faithProgression.cultivation.deathInsight === 5)
+    if (outcome !== 'death') ok('存活失败仍有调养惩罚：' + outcome, state.buffs.some(buff => buff.id === 'breakthroughInjury'))
+  }
+}
+
 export function researchAndAscension({ ok, close, section }) {
   section('修真·技艺 / 境界 / 飞升')
   {
@@ -61,6 +125,8 @@ export function researchAndAscension({ ok, close, section }) {
     ok('境界不到渡劫期则不能飞升', E.canAscend(s2) === false)
     s2.realm = ASCEND_REALM_INDEX
 
+    const keptDaoHeart = E.money(123)
+    s2.resources.daoHeart = keptDaoHeart
     s2.stats.lifeInsight = E.money(2e6)
     const gain = E.ascensionGain(s2, d2)
     ok('飞升可获得仙缘', E.moneyIsPositive(gain), `实际 ${gain}`)
@@ -78,12 +144,12 @@ export function researchAndAscension({ ok, close, section }) {
     ok('飞升后弟子归零', s2.disciples.total === 0, `实际 ${s2.disciples.total}`)
     ok('飞升后职位清空', Object.values(s2.disciples.jobs).every((n) => n === 0))
     ok('飞升后弟子上限为 0（没有居所）', d2.maxDisciples === 0, `实际 ${d2.maxDisciples}`)
-    ok('飞升后资源清空', E.RESOURCES.filter(r => r.id !== 'karma' && r.id !== 'dao').every(v => E.moneyIsZero(s2.resources[v.id])))
+    ok('飞升后资源清空（道心跨轮回保留）', E.RESOURCES.filter(r => !['karma', 'dao', 'daoHeart'].includes(r.id)).every(v => E.moneyIsZero(s2.resources[v.id])) && E.moneyEq(s2.resources.daoHeart, keptDaoHeart))
     // 永久货币在 resources 里有镜像（见 docs/ENGINEERING.md「数值与存档」）：两处必须一致。
     ok('飞升后永久货币镜像一致', s2.resources.karma.eq(s2.karma) && s2.resources.dao.eq(s2.dao))
     ok('飞升后修真与技艺清空', Object.keys(s2.upgrades).length === 0)
     ok('飞升后法宝祭炼等级清空', Object.keys(s2.treasureLevels).length === 0)
-    ok('飞升后左栏回到只有灵气', Object.keys(s2.seen).join() === 'qi')
+    ok('飞升后左栏只保留灵气与已见过的道心', Object.keys(s2.seen).every(k => k === 'qi' || k === 'daoHeart') && s2.seen.qi === true)
     ok('飞升后建筑列表回到开局（渐进露出重置）', !E.isBuildingUnlocked(s2, 'lumberYard'))
     ok('飞升后仍然没有任何建筑可造（连聚灵阵都还没露面）', !E.isBuildingUnlocked(s2, 'spiritField'))
     ok('飞升后制作进度与自动开关清空', Object.keys(s2.craftProgress).length === 0 && Object.keys(s2.autoCraft).length === 0)
@@ -221,7 +287,7 @@ export function breakthroughRisk({ ok, close, section }) {
       const options = Object.fromEntries(p.availableAids.map(aid => [aid.id, true]))
       const aided = E.breakthroughPreview(s, d, options)
       ok(`目标境界${realm + 1}独立配置两组护道与香火`, p.availableAids.length === 3 && p.availableAids[2].cost.faith > 0)
-      ok(`目标境界${realm + 1}满配概率符合设计`, close(aided.chance, realm < 3 ? 0.99 : realm === 3 ? 0.90 : 0.85 - (realm - 4) * 0.05) && close(p.maxChance, aided.chance))
+      ok(`目标境界${realm + 1}满配概率符合设计`, close(aided.chance, realm < 3 ? 0.99 : realm === 3 ? 0.90 : realm === 7 ? 0.55 : realm === 8 ? 0.45 : realm === 9 ? 0.35 : 0.85 - (realm - 4) * 0.05) && close(p.maxChance, aided.chance))
       const expected = { ...E.realmCost(s, d, realm + 1) }
       for (const aid of p.availableAids) {
         for (const [res, amount] of Object.entries(aid.cost)) expected[res] = E.money(expected[res]).plus(amount)

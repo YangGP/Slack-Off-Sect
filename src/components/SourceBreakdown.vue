@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { state, derived } from '@/game/store'
 import { CRAFTS } from '@/data/crafts'
-import { isCraftUnlocked, resourceFlow, REACTOR_EXCLUDED } from '@/game/engine'
+import { isCraftUnlocked, resourceFlow, reactorAppliesTo } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
 import { MONEY_INFINITY, ONE, ZERO, money, moneyToNumber, moneyToRatio } from '@/game/decimal'
@@ -100,7 +100,7 @@ const bonusRows = computed(() => {
     })
   }
   // 湮灭炉增产：独立一层，唯独不作用于粒子链（分子 / 正负灵子 / 灵能）。
-  const reactorList = REACTOR_EXCLUDED.has(res) ? [] : (b.reactorRatio || [])
+  const reactorList = reactorAppliesTo(res) ? (b.reactorRatio || []) : []
   if (reactorList.length) {
     rows.push({
       key: 'reactor',
@@ -140,6 +140,8 @@ const bonusRows = computed(() => {
         `仙缘 ×${b.karmaMult.toFixed(2)}`,
         `宜居度 ×${b.habitabilityMult.toFixed(2)}`,
       ]
+        .concat(b.realmProductionMult > b.realmMult ? [`万民归心 ×${(b.realmProductionMult / b.realmMult).toFixed(2)}`] : [])
+        .concat(b.debugProductionMult > 1 ? [`DEBUG产出 ×${b.debugProductionMult}`] : [])
         .concat(Math.abs(b.buffAllTotal || 0) > 0.0005 ? [`天象 ×${(1 + b.buffAllTotal).toFixed(2)}`] : [])
         .join(' · '),
     })

@@ -15,6 +15,7 @@ import CultivationPanel from './components/CultivationPanel.vue'
 import SkillPanel from './components/SkillPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
+import FaithPanel from './components/FaithPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugPanel from './components/DebugPanel.vue'
@@ -34,6 +35,7 @@ const corePanels = {
   cultivation: CultivationPanel,
   skills: SkillPanel,
   craft: CraftPanel,
+  faith: FaithPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,
@@ -65,11 +67,38 @@ const waitNext = computed(() => nextArrivalIn(state, derived))
 const status = computed(() => ui.toast?.text || '')
 /** 离线进度是有界比例（Number），取整只在脚本里做 */
 const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
-const analyticsDialogOpen = computed(() => !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
+const analyticsDialogOpen = computed(() => !ui.rulesetBlock && !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
   && (ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen))
+
+/** D7 大版本提示：导出的是旧键原始载荷，不是内存里的空白新状态。 */
+function downloadLegacy() {
+  const text = actions.exportLegacySave()
+  if (!text) return
+  const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '摸鱼宗门-旧规则存档备份.json'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 </script>
 
 <template>
+  <div v-if="ui.rulesetBlock" class="offline-loading" role="alertdialog" aria-modal="true" aria-label="规则代际提示">
+    <div class="offline-loading-content">
+      <div class="offline-loading-head">规则代际更新：需要开始新宗门</div>
+      <div class="box-body">
+        <p class="small">检测到旧规则存档（D7 之前的代际）。新规则不继承资源、建筑、弟子、研究、仙缘、道果、成就及累计统计；旧存档保留为原始备份，不会被删除或覆盖。</p>
+        <div class="btn-row">
+          <button class="btn" @click="downloadLegacy">导出旧存档</button>
+          <button class="btn primary" @click="actions.startNewGeneration()">开始新宗门</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div v-if="ui.offlineLoading" class="offline-loading" role="status" aria-live="polite">
     <div class="offline-loading-content">
       <div class="offline-loading-head">
@@ -84,7 +113,7 @@ const analyticsDialogOpen = computed(() => !ui.offlineLoading && !ui.offlineRepo
       </div>
     </div>
   </div>
-  <div class="wrap" :inert="ui.offlineLoading || analyticsDialogOpen" :aria-busy="ui.offlineLoading">
+  <div class="wrap" :inert="!!ui.rulesetBlock || ui.offlineLoading || analyticsDialogOpen" :aria-busy="ui.offlineLoading">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
       <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>

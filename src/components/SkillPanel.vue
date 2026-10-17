@@ -20,9 +20,11 @@ const FILTERS = [
 const filter = computed(() => state.ui.skillFilter || 'all')
 const list = computed(() => {
   const f = filter.value
-  if (f === 'treasure') return TECHNIQUES.filter((t) => t.kind === 'treasure')
-  if (f === 'skill') return TECHNIQUES.filter((t) => t.kind !== 'treasure')
-  return TECHNIQUES
+  // 香火专属条目只在香火页出现，避免两处重复购买。
+  const base = TECHNIQUES.filter((t) => t.page !== 'faith')
+  if (f === 'treasure') return base.filter((t) => t.kind === 'treasure')
+  if (f === 'skill') return base.filter((t) => t.kind !== 'treasure')
+  return base
 })
 </script>
 

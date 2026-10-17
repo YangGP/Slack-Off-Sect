@@ -9,6 +9,7 @@ import { MODULES } from '@/data/modules'
 import { moduleSaveKeys, normalizeModuleSlices } from '@/game/moduleRegistry'
 import { ZERO, floorMoney, moneyNonNegative } from '@/game/decimal'
 import { normalizeAnalytics } from '@/game/analyticsState'
+import { D7_RULESET, normalizeFaithProgression } from '@/data/faith'
 
 /** 存档结构版本：v3 起金额字段以十进制字符串保存（v1/v2 为 JSON number）。 */
 export const SAVE_VERSION = 3
@@ -20,6 +21,7 @@ const CORE_SAVE_FIELDS = [
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'analytics', 'ui',
+  'ruleset', 'faithProgression',
 ]
 export const SAVE_FIELDS = [...CORE_SAVE_FIELDS, ...moduleSaveKeys()]
 
@@ -50,16 +52,22 @@ export function moneyMap(values, catalog, { integer = false } = {}) {
 /** 经济累计类统计：这些键是金额，其余统计仍是 Number 计数。 */
 const STATS_MONEY_KEYS = ['totalQi', 'totalInsight', 'totalFaith', 'lifeInsight', 'offlineGains']
 
-/** 结构冲突与单个数值损坏分开处理；结构冲突允许保留永久货币重开。 */
+/** 结构冲突与单个数值损坏分开处理；浏览器加载／导入遇结构冲突时保护原档。 */
 export function assertSaveShape(data) {
   if (!isRecord(data)) throw new Error('存档必须是对象')
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
     'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
-    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', ...moduleSaveKeys()]) {
+    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', ...moduleSaveKeys()]) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
   for (const key of ['jobs']) {
     if (data.disciples?.[key] != null && !isRecord(data.disciples[key])) throw new Error(`存档结构冲突：disciples.${key}`)
+  }
+  // 缺失切片／子映射沿用默认值；已有字段结构损坏不能静默清空永久修持。
+  for (const key of ['rituals', 'cultivation']) {
+    if (data.faithProgression?.[key] != null && !isRecord(data.faithProgression[key])) {
+      throw new Error(`存档结构冲突：faithProgression.${key}`)
+    }
   }
   // 防止损坏的人数导致读档生成海量个体；不影响已有成员的正常存取。
   if (data.disciples?.total > 100000) throw new Error('存档人数超出可恢复范围')
@@ -83,6 +91,8 @@ export function validateState(state, fresh) {
   result.legacyNineTurnPill = result.legacyNineTurnPill === true
   // 采集元数据只保留已知形状；旧档缺失时补默认值（读取端另行标注 partial）。
   result.analytics = normalizeAnalytics(result.analytics)
+  result.ruleset = D7_RULESET
+  result.faithProgression = normalizeFaithProgression(result.faithProgression)
   // 先定下模块开关：模块切片归一化要据此判断「关闭时丢弃活动状态」
   const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {

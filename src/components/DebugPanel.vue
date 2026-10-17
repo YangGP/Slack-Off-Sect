@@ -35,6 +35,12 @@ function apply(id) {
   <div class="box debug-panel">
     <div class="box-head">调试页面 <button class="btn" @click="actions.closeDebug()">关闭调试</button></div>
     <div class="box-body">
+      <p>
+        <label><input type="checkbox" :checked="state.__debugProductionBoost === true"
+          :disabled="!!ui.saveLoadError || !!ui.rulesetBlock || ui.offlineLoading"
+          @change="actions.setDebugProductionBoost($event.target.checked)" /> 全局产出 ×10</label>
+        <span class="small dim">（独立乘区；关闭调试或刷新后取消）</span>
+      </p>
       <input v-model="search" type="search" aria-label="搜索调试资源" placeholder="搜索资源名称或 ID" />
       <p v-if="error" class="bad" role="alert">{{ error }}</p>
       <div class="debug-table-wrap">

@@ -130,7 +130,12 @@ export function goldenCoreProduction({ ok, close, section }) {
     s.realm = 5
     E.recompute(s, d)
     ok('元婴研究凝晶原理后仍需掌握造价来源才露出晶核阵', E.research(s, d, 'crystalTheory') && !d.unlockedBuildings.includes('crystalArray'))
-    ok('凝晶工艺在元婴用旧材料起步并露出晶核阵', E.research(s, d, 'crystalCraft') && d.unlockedBuildings.includes('crystalArray'))
+    const ccOk = E.research(s, d, 'crystalCraft')
+    // 30% 峰值展示：夹具直接标记已见过灵晶与阵基，晶核阵才会露面（不消耗后续用例的材料）。
+    s.peak.crystal = E.moneyMax(s.peak.crystal ?? E.ZERO, E.money(3))
+    s.peak.arrayBase = E.moneyMax(s.peak.arrayBase ?? E.ZERO, E.money(2))
+    E.recompute(s, d)
+    ok('凝晶工艺在元婴用旧材料起步并露出晶核阵', ccOk && d.unlockedBuildings.includes('crystalArray'))
     const qiBefore = s.resources.qi
     const liquidBefore = s.resources.spiritLiquid
     const talismanBefore = s.resources.talisman
