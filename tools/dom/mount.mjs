@@ -99,7 +99,7 @@ export async function checkMount(context) {
     await new Promise(r => setTimeout(r, 50))
   }
   ok('资源栏渲染出来了', text().includes('灵气') && text().includes('灵木'))
-  ok('顶栏状态行带弟子与灵气账目', /弟子 \d+\/\d+/.test(text()) && text().includes('净额'))
+  ok('顶栏状态行带弟子与产出摘要', /弟子 \d+\/\d+/.test(text()) && text().includes('全局') && text().includes('挂机'))
   ok('顶栏宜居度使用点数而非士气百分比', /宜居度\s*-?\d+(?![\d.%])/.test(window.document.querySelector('.stat-line')?.textContent || '') && !window.document.querySelector('.stat-line')?.textContent.includes('士气'))
   ok(
     '宗门概况通栏已移除',

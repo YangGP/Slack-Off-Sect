@@ -1,9 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
-import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
-import { ZERO, moneyIsPositive, moneySubtract } from '@/game/decimal'
-import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
+import { fmtCost, fmtInt, fmtPercent, fmtTime } from '@/game/format'
+import { enough } from '@/game/pricing'
+import { resourceName } from '@/data/resources'
+import { moneyIsPositive } from '@/game/decimal'
+import { breakthroughPreview, canAfford, idleDisciples, nextArrivalIn } from '@/game/engine'
+import { REALMS } from '@/data/realms'
 import { CURRENT_VERSION } from '@/data/changelog'
 import { IS_DEV_PREVIEW } from '@/game/deployment'
 import { isModuleEnabled } from '@/data/modules'
@@ -54,14 +57,10 @@ const panels = computed(() => {
 
 const activePanel = computed(() => ui.debug && ui.debugPage ? DebugPanel : panels.value[state.ui.tab] || SectPanel)
 const idle = computed(() => idleDisciples(state))
-const qiFlow = computed(() => resourceFlow(derived, 'qi'))
-/** 顶栏的灵气出项与阵眼维护按正数展示：金额取反只能在脚本里用 Decimal 助手算 */
-const qiExpense = computed(() => moneySubtract(ZERO, qiFlow.value.expense))
-const qiMaintenance = computed(() => moneySubtract(ZERO, derived.maintenance?.qi ?? ZERO))
-/** 维护费是金额（Decimal 恒为真）：只有真的非零才写「含阵眼维护」 */
-const hasQiMaintenance = computed(() => moneyIsPositive(derived.maintenance?.qi ?? ZERO))
-/** 净额正负：金额是对象，模板里不能直接和 0 比较 */
-const qiNetNegative = computed(() => qiFlow.value.net.isNegative())
+const nextRealm = computed(() => REALMS[state.realm + 1] || null)
+// 顶栏仅预览未选额外护道材料的方案，不读取境界面板内的临时选择。
+const breakthroughSummary = computed(() => nextRealm.value ? breakthroughPreview(state, derived, {}) : null)
+const breakthroughReady = computed(() => breakthroughSummary.value ? canAfford(state, breakthroughSummary.value.cost) : false)
 const karmaPositive = computed(() => moneyIsPositive(state.karma))
 /** 有空房时顶栏显示「下一位弟子还有多久」 */
 const waitNext = computed(() => nextArrivalIn(state, derived))
@@ -276,29 +275,37 @@ function downloadLegacy() {
     </div>
 
     <div class="stat-line">
-      境界 <b>{{ view.realmName.value }}</b>
-      <span class="sep">·</span>弟子 <b>{{ state.disciples.total }}/{{ derived.maxDisciples }}</b>
-      <template v-if="waitNext !== null">
-        <span class="dim">（下一位 {{ fmtTime(waitNext) }}）</span>
-      </template>
-      <template v-if="idle > 0">
-        <span class="sep">·</span>闲散 <b class="warn">{{ idle }}</b>
-      </template>
-      <span class="sep">·</span><HabitabilityTip />
-      <span v-if="derived.discipleMult < 1" class="bad">（弟子产出减半）</span>
-      <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
-      <span class="sep">·</span>灵气进项 <b class="good">{{ fmtRate(qiFlow.income) }}</b>
-      <span class="sep">·</span>出项
-      <b class="bad">{{ fmtRate(qiExpense) }}</b>
-      <span class="dim" v-if="hasQiMaintenance">（含阵眼维护 {{ fmtRate(qiMaintenance) }}）</span>
-      <span class="sep">·</span>净额
-      <b :class="qiNetNegative ? 'bad' : 'good'">{{ fmtRate(qiFlow.net) }}</b>
-      <span class="sep">·</span>全局 <b>×{{ derived.globalMult.toFixed(2) }}</b>
-      <span class="dim">（加成 +{{ fmtPercent(derived.ratioAll) }}）</span>
-      <template v-if="karmaPositive">
-        <span class="sep">·</span>仙缘 <b>{{ fmtInt(state.karma) }}</b>
-      </template>
-      <span class="sep">·</span>挂机 <b>{{ fmtTime(state.stats.playTime) }}</b>
+      <div class="stat-group stat-breakthrough">
+        <span>境界 <b>{{ view.realmName.value }}</b><template v-if="nextRealm"> → <b>{{ nextRealm.name }}</b></template></span>
+        <template v-if="breakthroughSummary">
+          <span class="stat-materials">
+            <HoverTip :width="380">
+              <span class="tip-label" tabindex="0">基础材料 <b :class="breakthroughReady ? 'good' : 'warn'">{{ breakthroughReady ? '已备齐' : '待备齐' }}</b></span>
+              <template #tip>未选额外护道材料，最终方案在境界页查看。材料备齐仅表示能够支付基础费用；不足的材料标红。</template>
+            </HoverTip>
+            <span v-for="(amount, res) in breakthroughSummary.cost" :key="res" :class="{ bad: !enough(state, res, amount) }">
+              {{ resourceName(res) }} <b>{{ fmtCost(amount) }}</b>
+            </span>
+          </span>
+          <span>未选护道成功率 <b>{{ fmtPercent(breakthroughSummary.chance) }}</b></span>
+          <span v-if="breakthroughSummary.deathRisk > 0" class="bad">本次身死概率 <b>{{ fmtPercent(breakthroughSummary.deathRisk, breakthroughSummary.deathRisk < 0.01 ? 2 : 1) }}</b></span>
+          <span v-if="breakthroughSummary.regressionRisk > 0" class="bad">本次退境概率 <b>{{ fmtPercent(breakthroughSummary.regressionRisk, breakthroughSummary.regressionRisk < 0.01 ? 2 : 1) }}</b></span>
+        </template>
+        <span v-else>已至此界尽头</span>
+        <button class="btn" type="button" @click="actions.setTab('realm')">{{ nextRealm ? '查看突破' : '前往境界' }}</button>
+      </div>
+      <div class="stat-group">
+        <span>弟子 <b>{{ state.disciples.total }}/{{ derived.maxDisciples }}</b><span v-if="waitNext !== null">（下一位 {{ fmtTime(waitNext) }}）</span></span>
+        <span v-if="idle > 0">闲散 <b class="warn">{{ idle }}</b></span>
+        <span>
+          <HabitabilityTip />
+          <span v-if="derived.discipleMult < 1" class="bad">（弟子产出减半）</span>
+          <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
+        </span>
+        <span>全局 <b>×{{ derived.globalMult.toFixed(2) }}</b>（加成 +{{ fmtPercent(derived.ratioAll) }}）</span>
+        <span v-if="karmaPositive">仙缘 <b>{{ fmtInt(state.karma) }}</b></span>
+        <span>挂机 <b>{{ fmtTime(state.stats.playTime) }}</b></span>
+      </div>
     </div>
 
     <div class="status-line">{{ status }}</div>

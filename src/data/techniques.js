@@ -84,6 +84,34 @@ const CORE_TECHNIQUES = [
     // 解耦炼器术：丹道工艺可独立推进（见 docs/MATERIAL-RESEARCH.md §1.5/§1.6）。
     needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
+  // ---------- D5＋D9：丹道效率专精（三项连续） ----------
+  {
+    id: 'pillBatching',
+    name: '丹火定候',
+    glyph: '候',
+    cost: { insight: 8000, herb: 4000, pill: 40 },
+    desc: '丹火分段定候，减少开炉波动。采药制丹加工效率 +25%，不改变每份用料与产出。',
+    effects: { craftSpeedByRecipe: { refinePill: 0.25 } },
+    needs: { realm: 6, upgrades: ['spiritCultivation'], building: { id: 'alchemyRoom', count: 1 } },
+  },
+  {
+    id: 'condensePillBatching',
+    name: '凝元分炉',
+    glyph: '炉',
+    cost: { insight: 16000, condensePill: 12, spiritLiquid: 40 },
+    desc: '分炉凝元，火候与投料各走专线。凝元炼丹加工效率 +25%，不改变每份用料与产出。',
+    effects: { craftSpeedByRecipe: { condensePill: 0.25 } },
+    needs: { realm: 6, upgrades: ['pillBatching', 'alchemyEssence', 'liquidArt'], building: { id: 'alchemyRoom', count: 1 } },
+  },
+  {
+    id: 'nineTurnBatching',
+    name: '连炉九转',
+    glyph: '转',
+    cost: { insight: 30000, nineTurnPill: 4, crystal: 20 },
+    desc: '连炉承接九转火候，减少反复起炉。九转炼丹加工效率 +50%，不改变每份用料与产出。',
+    effects: { craftSpeedByRecipe: { refineNineTurnPill: 0.5 } },
+    needs: { realm: 7, upgrades: ['condensePillBatching', 'alchemyEssence', 'crystalCraft'], building: { id: 'pillFurnace', count: 1 } },
+  },
   {
     id: 'flowField',
     name: '灵流要诀',
@@ -229,6 +257,34 @@ const CORE_TECHNIQUES = [
     desc: '灵火助锻、灵场选矿。玄铁产出 +20%，玄钢制作产出 +20%。',
     effects: { ratio: { ore: 0.2 }, craftBonusByResource: { steel: 0.2 } },
     needs: { upgrades: ['steelWorking', 'spiritSmelting', 'temperTheory'] },
+  },
+  // ---------- D5＋D9：炼器效率专精（三项连续） ----------
+  {
+    id: 'steelBatching',
+    name: '炉批定标',
+    glyph: '批',
+    cost: { insight: 8000, ore: 3000, steel: 10 },
+    desc: '为淬钢定下炉批节拍。淬玄成钢加工效率 +25%，不改变每份用料与产出。',
+    effects: { craftSpeedByRecipe: { refineSteel: 0.25 } },
+    needs: { realm: 6, upgrades: ['forgeApp'], building: { id: 'forge', count: 1 } },
+  },
+  {
+    id: 'artifactBatching',
+    name: '器胚连锻',
+    glyph: '锻',
+    cost: { insight: 16000, steel: 20, crystal: 8 },
+    desc: '器胚连续锻打，减少换炉等待。淬炼法器加工效率 +25%，不改变每份用料与产出。',
+    effects: { craftSpeedByRecipe: { forgeArtifact: 0.25 } },
+    needs: { realm: 6, upgrades: ['steelBatching', 'forgeArt', 'crystalCraft'], building: { id: 'forge', count: 1 } },
+  },
+  {
+    id: 'spiritArtifactBatching',
+    name: '连炉铸灵',
+    glyph: '铸',
+    cost: { insight: 30000, spiritArtifact: 4, crystal: 20 },
+    desc: '连炉温养，灵器出得更快。铸灵器加工效率 +50%，不改变每份用料与产出。',
+    effects: { craftSpeedByRecipe: { forgeSpiritArtifact: 0.5 } },
+    needs: { realm: 7, upgrades: ['artifactBatching', 'compositeRune', 'crystalCraft'], building: { id: 'forge', count: 1 } },
   },
   // 自修真页迁入：阵道精通的成果兑现，灵气主线的增益出口
   {

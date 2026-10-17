@@ -116,6 +116,8 @@ DEBUG 页的全局产出×10开关使用独立乘区，追加于现有全局倍�
 
 GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions → Variables** 新增仓库变量 `VITE_GA_MEASUREMENT_ID`，值为 GA4 网页数据流的 `G-…` 衡量 ID（不是 API secret）。工作流在构建步骤将该仓库变量注入 Vite；本地未跟踪的 `.env` 不会进入 Actions，仅在 `github-pages` 部署环境中配置变量也不会传给当前独立的 build job。变量在构建时写入页面产物，新增或修改后须重新运行部署工作流，刷新旧页面不会更新配置。正式版使用该 ID；`/dev/` 预览版仍按渠道策略停用采集。缺少变量时开启采集会显示“当前页面尚未配置数据采集”，不会抛出控制台异常。
 
+页面访问沿用手动 `page_view`：关闭默认自动页面事件，仅在已授权、采集开启且标签就绪时，每次完整页面加载向目标ID发送一次。游戏切页、读档或同页关闭再开启采集不会重复记访问；加载中关闭采集不发，之后重新授权可发送本页尚未记录的首次访问。访问URL仅保留origin与pathname，不携带查询参数或hash。排查时先核对GA4网页数据流ID，再看实时报告与浏览器Network中的 `g/collect` 请求及其 `tid`／事件名；页面访问与 `bottleneck_sample`、`realm_reached` 等业务事件分开检查。采样每5分钟汇总，读档不补开局事件；常规报表存在处理延迟。标签就绪或请求发出均不能替代GA4后台收件确认，排查无需清除站点存档。
+
 `tools/offline-benchmark.mjs` 可在同一夹具上比较迁移前后的 8/24 小时耗时、最长连续计算段与分段数（见「分析工具及口径」）。2026-10 迁移到 Decimal 的实测（Windows / Node 24，同一 `--fixture`，各取 2~3 次的中位）：
 
 | 场景 | 迁移前 | 迁移后 | 说明 |

@@ -226,9 +226,9 @@ function reincarnate() {
                   </span>
                   <template #heading>
                     {{ next.name }}
-                                            <span class="tip-right">境界倍率 ×{{ next.mult.toFixed(2) }}</span>
+                    <span class="tip-right">基础境界倍率 ×{{ next.mult.toFixed(2) }}</span>
                   </template>
-      <template #tip>
+                  <template #tip>
                     <div class="tip-desc">{{ next.desc }}</div>
 
                     <CostRows :cost="cost" />
@@ -236,11 +236,11 @@ function reincarnate() {
                     <div class="tip-section">效果</div>
                     <div class="tip-row">
                       <span class="k">破境后</span>
-                      <span class="v good">全局产出 ×{{ next.mult.toFixed(2) }}</span>
+                      <span class="v good">全局产出 ×{{ realmProductionMultiplier(state, next.mult).toFixed(2) }}</span>
                     </div>
                     <div class="tip-row">
                       <span class="k">现在</span>
-                      <span class="v">全局产出 ×{{ (REALMS[state.realm]?.mult ?? 1).toFixed(2) }}</span>
+                      <span class="v">全局产出 ×{{ derived.realmProductionMult.toFixed(2) }}</span>
                     </div>
                     <!-- 口粮随境界倍率上涨（§5.4）：破境是一次「产能升级」，也是一次「养人涨价」，
                          不写出来玩家会在破境那一刻突然发现灵气净额变负 -->
