@@ -4,6 +4,7 @@ import { state, derived, actions, ui, saveNow } from '@/game/store'
 import { fmtClock, fmtTime, fmt } from '@/game/format'
 import { CONFIG } from '@/data/config'
 import { MODULES, isModuleEnabled } from '@/data/modules'
+import { IS_DEV_PREVIEW } from '@/game/deployment'
 import HoverTip from './HoverTip.vue'
 
 const fileInput = ref(null)
@@ -103,10 +104,12 @@ function doReset() {
         <input
           type="checkbox"
           :checked="state.settings.analyticsEnabled"
+          :disabled="IS_DEV_PREVIEW"
           @change="actions.setSetting('analyticsEnabled', $event.target.checked)"
         />
         允许游玩数据采集
       </label>
+      <div v-if="IS_DEV_PREVIEW" class="small dim">开发预览版不采集游玩数据。</div>
       <div v-if="state.settings.analyticsEnabled" class="small dim" role="status" style="padding-top: 4px">
         {{ ui.analyticsStatus === 'loading' ? '正在开启数据采集…' : ui.analyticsStatus === 'ready' ? '数据采集已启用' : ui.analyticsStatus === 'failed' ? '数据采集未能开启，不影响游戏' : '已允许采集，当前未启动' }}
       </div>

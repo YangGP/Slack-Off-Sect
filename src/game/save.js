@@ -4,12 +4,13 @@ import { ZERO, floorMoney, moneyNonNegative } from './decimal'
 import { cloneRuntime } from './clone'
 import { encodeMoneyFields } from './moneyFields'
 import { D7_RULESET } from '@/data/faith'
+import { STORAGE_PREFIX } from './deployment'
 
 export { SAVE_VERSION, D7_RULESET }
 
 /** D7 新代专用键；旧键只作为原始备份读取，永不被本代覆盖。 */
-export const SAVE_KEY = 'slack-off-sect.save.d7.v1'
-export const LEGACY_SAVE_KEY = 'slack-off-sect.save.v1'
+export const SAVE_KEY = `${STORAGE_PREFIX}.save.d7.v1`
+export const LEGACY_SAVE_KEY = `${STORAGE_PREFIX}.save.v1`
 const emptyStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 const browserStorage = () => typeof localStorage !== 'undefined' ? localStorage : emptyStorage
 

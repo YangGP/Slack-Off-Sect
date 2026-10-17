@@ -5,6 +5,7 @@ import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { ZERO, moneyIsPositive, moneySubtract } from '@/game/decimal'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import { CURRENT_VERSION } from '@/data/changelog'
+import { IS_DEV_PREVIEW } from '@/game/deployment'
 import { isModuleEnabled } from '@/data/modules'
 import { MODULE_UI } from '@/modules/uiRegistry'
 import ResourcePanel from './components/ResourcePanel.vue'
@@ -121,9 +122,13 @@ function downloadLegacy() {
     <div v-if="ui.saveRecoveryNotice" class="update-notice" role="status">{{ ui.saveRecoveryNotice }}</div>
     <div class="title-line">
       摸鱼宗门<span class="sub">Slack Off Sect</span>
+      <span v-if="IS_DEV_PREVIEW" class="small warn">开发预览版 · dev1</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
     </div>
 
+    <div v-if="IS_DEV_PREVIEW" class="update-notice" role="note" aria-label="开发预览提示">
+      开发预览版使用独立存档，可能随开发调整规则；游玩数据采集已关闭。
+    </div>
     <div class="update-notice" role="note" aria-label="版本更新提示">
       <HoverTip :label="`${CURRENT_VERSION} · 更新说明`"><template #tip><p>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</p></template></HoverTip>
       <button class="btn" type="button" @click="actions.setTab('realm')">前往境界</button>

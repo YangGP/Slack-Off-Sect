@@ -2,6 +2,7 @@ import { REALMS } from '@/data/realms'
 import { CURRENT_VERSION } from '@/data/changelog'
 import { realmCost } from '@/game/systems/core'
 import { ZERO, money } from '@/game/decimal'
+import { IS_DEV_PREVIEW, STORAGE_PREFIX } from '@/game/deployment'
 import {
   ANALYTICS_SCHEMA_VERSION, bandOf, normalizeAnalytics, realmIdOf,
 } from '@/game/analyticsState'
@@ -29,8 +30,8 @@ const SAMPLE_MS = 30000
 const FLUSH_MS = 300000
 /** 超过这个间隔的采样缺口丢弃，不凭末态倒推中间时间。 */
 const MAX_SAMPLE_GAP = 60
-const LEADER_KEY = 'slack-off-sect.analytics.leader'
-const SENT_PREFIX = 'slack-off-sect.analytics.sent.'
+const LEADER_KEY = `${STORAGE_PREFIX}.analytics.leader`
+const SENT_PREFIX = `${STORAGE_PREFIX}.analytics.sent.`
 const LEADER_TTL_MS = 12000
 
 const instanceId = randomId('tab')
@@ -164,6 +165,7 @@ function isAutomatedBrowser() {
 }
 
 function isEnabled() {
+  if (IS_DEV_PREVIEW) return false
   if (!ctx || isAutomatedBrowser()) return false
   if (transportFailed) return false
   if (!MEASUREMENT_ID) return false
@@ -322,6 +324,7 @@ function sendRunStart(reason) {
 
 export function initAnalytics({ state: gameState, derived: gameDerived, restored = false, debug = false,
   onStatus = null } = {}) {
+  if (IS_DEV_PREVIEW) return false
   if (typeof window === 'undefined' || typeof document === 'undefined') return false
   if (!gameState || !gameDerived) return false
   ctx = { state: gameState, derived: gameDerived, onStatus }

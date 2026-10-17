@@ -19,6 +19,7 @@ import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
 import * as analytics from '@/analytics/collector'
 import { deactivateModule } from './moduleRegistry'
+import { IS_DEV_PREVIEW, STORAGE_PREFIX } from './deployment'
 
 // ============================================================
 // 单例状态
@@ -29,7 +30,7 @@ let initialized = false
 let initializing = null
 let loopRequested = false
 let offlineController = null
-const ANALYTICS_CONSENT_KEY = 'slack-off-sect.analytics.consent.v1'
+const ANALYTICS_CONSENT_KEY = `${STORAGE_PREFIX}.analytics.consent.v1`
 export const state = reactive(createInitialState())
 export const derived = reactive(E.createDerived())
 
@@ -39,7 +40,7 @@ export const ui = reactive({
   saveRecoveryNotice: '',
   // D7：只存在旧代存档时的阻断提示（不加载、不结算、不覆盖）。
   rulesetBlock: null,
-  analyticsConsent: 'unknown',
+  analyticsConsent: IS_DEV_PREVIEW ? 'denied' : 'unknown',
   analyticsStatus: 'disabled',
   analyticsFailureReason: '',
   analyticsFailureOpen: false,
@@ -61,7 +62,7 @@ export const ui = reactive({
 
 // 同意选择属于当前浏览器，导入游戏存档或重开不能代替玩家授权。
 function applyAnalyticsConsent() {
-  state.settings.analyticsEnabled = ui.analyticsConsent === 'granted'
+  state.settings.analyticsEnabled = !IS_DEV_PREVIEW && ui.analyticsConsent === 'granted'
 }
 
 function handleAnalyticsStatus({ status, reason }) {
@@ -97,7 +98,7 @@ export function initializeGame() {
   // 采集偏好属于浏览器，必须先于旧代分支读取；读取偏好本身不启动采集。
   try {
     const consent = localStorage.getItem(ANALYTICS_CONSENT_KEY)
-    if (consent === 'granted' || consent === 'denied') ui.analyticsConsent = consent
+    if (!IS_DEV_PREVIEW && (consent === 'granted' || consent === 'denied')) ui.analyticsConsent = consent
   } catch {}
   // D7：只有旧代存档时进入独立的大版本提示；确认前不读档、不结算、不写新键。
   if (repository.legacyOnly()) {
@@ -778,6 +779,11 @@ export const actions = {
       return
     }
     if (key === 'analyticsEnabled') {
+      if (IS_DEV_PREVIEW) {
+        ui.analyticsConsent = 'denied'
+        state.settings.analyticsEnabled = false
+        return false
+      }
       const firstChoice = ui.analyticsConsent === 'unknown'
       ui.analyticsConsent = value === true ? 'granted' : 'denied'
       try { localStorage.setItem(ANALYTICS_CONSENT_KEY, ui.analyticsConsent) } catch {}

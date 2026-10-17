@@ -80,7 +80,11 @@ npm run balance:visits -- 24               # 持续操作与间歇上线
 
 ## 部署与产物
 
-推送 main 后，GitHub Actions 先检查，再构建发布到 Pages。首次在仓库 Settings → Pages 中选择 GitHub Actions；流程见 .github/workflows/deploy-pages.yml。Vite使用相对路径，可在子目录部署。
+推送 main 或 dev1 后，GitHub Actions 分别检出这两个分支并检查、构建，将 main 放在站点根目录、dev1 放在 `/dev/`，合并为一个 Pages 产物后一次发布；任一分支检查或构建失败则不发布。正式地址为 https://YangGP.github.io/Slack-Off-Sect/ ，开发预览地址为 https://YangGP.github.io/Slack-Off-Sect/dev/ 。Vite使用相对路径，可在子目录部署。
+
+首次启用：先将包含预览隔离代码和新版工作流的提交推送到 dev1，再把新版工作流同步到 main，确保后续两个分支都使用合并发布流程。在 Settings → Pages 中选择 GitHub Actions；Settings → Environments → github-pages 如限制部署分支，须允许 main、dev1。配置见 `.github/workflows/deploy-pages.yml`。
+
+开发构建注入 `VITE_DEPLOY_CHANNEL=dev`，显示预览标识，存档与旧代备份键使用独立的 `slack-off-sect.dev.*` 前缀，不自动读取正式存档；统计采集强制关闭且不弹授权框。正式构建保持原存档键与授权流程。同代存档仍可由玩家主动导出／导入，独立存储不等于禁止手动复制进度。
 
 npm run clean 清理 dist/、dist-ssr/、.smoke*/、.early/ 和 .vite/。本地依赖 node_modules/、源码和正式数据表保留。导出的存档由用户选择保管，清理脚本不扫描存档文件。
 
