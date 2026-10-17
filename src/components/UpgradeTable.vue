@@ -11,6 +11,7 @@ import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisibl
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
+import { ZERO, money, moneyGte, moneyMax } from '@/game/decimal'
 import { enough as enoughOf } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { CULTIVATION, CULTIVATION_STAGE_OF } from '@/data/upgrades'
@@ -39,12 +40,15 @@ const researchedIds = computed(() =>
   props.kind === 'technique' ? view.researchedSkills.value : view.researchedCultivation.value,
 )
 
-// 仓容只影响列表分组；已有库存能支付时仍允许参悟。
-const capacityReady = (u) => props.kind !== 'cultivation' ||
-  (u.cost?.insight || 0) <= Math.max(derived.max.insight || 0, state.resources.insight || 0)
+// 仓容只影响列表分组；已有库存能支付时仍允许参悟。仓容与存量都是金额，比较留在 Decimal 域。
+const capacityReady = (u) => {
+  if (props.kind !== 'cultivation') return true
+  const cost = money(u.cost?.insight ?? ZERO)
+  return moneyGte(moneyMax(derived.max.insight ?? ZERO, state.resources.insight ?? ZERO), cost)
+}
 const capacityLocked = computed(() => props.list
   .filter((u) => availableIds.value.includes(u.id) && !capacityReady(u))
-  .sort((a, b) => a.cost.insight - b.cost.insight))
+  .sort((a, b) => money(a.cost.insight).cmp(money(b.cost.insight))))
 
 /**
  * 「效果」列的文本。

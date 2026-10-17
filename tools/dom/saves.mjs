@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url'
 
 export async function checkSaves(context) {
-  let { ok, bundlePath, window, state, ui, actions, startLoop, stopLoop, saveNow, text, doc } = context
+  let { ok, bundlePath, window, state, ui, actions, startLoop, stopLoop, saveNow, text, doc, engine } = context
   console.log('\n== 存档 ==')
   saveNow()
   {
@@ -27,7 +27,7 @@ export async function checkSaves(context) {
     ok('Debug starts hidden after reload', !recoveryModule.ui.debug && !recoveryModule.ui.debugPage)
     window.DEBUG
     const stockBeforeFailure = recoveryModule.state.resources.stone
-    ok('Debug cannot overwrite unreadable save', !recoveryModule.actions.setDebugResource('stone', 123) && recoveryModule.state.resources.stone === stockBeforeFailure && window.localStorage.getItem('slack-off-sect.save.v1') === brokenRaw)
+    ok('Debug cannot overwrite unreadable save', !recoveryModule.actions.setDebugResource('stone', 123) && engine.moneyEq(recoveryModule.state.resources.stone, stockBeforeFailure) && window.localStorage.getItem('slack-off-sect.save.v1') === brokenRaw)
     recoveryModule.actions.importText(previousRaw)
     ok('导入有效存档解除保护并恢复进度', !recoveryModule.ui.saveLoadError && recoveryModule.state.realm === state.realm && JSON.stringify(recoveryModule.state.buildings) === JSON.stringify(state.buildings) && recoveryModule.saveNow())
     recoveryModule.stopLoop()

@@ -1,5 +1,6 @@
 import { createInitialState } from '../../src/game/state.js'
 import { syncDisciples } from '../../src/data/disciples.js'
+import { money } from '../../src/game/decimal.js'
 
 /**
  * 长离线专项夹具：典型后期宗门（72 名弟子、多配方工业、凝灵诀与自动猎杀）。
@@ -23,7 +24,8 @@ const INDUSTRIAL_RECIPES = [
 export function longOfflineFixture(startAt = OFFLINE_FIXTURE_START) {
   const state = createInitialState(startAt)
   state.realm = 5
-  state.dao = 1
+  // 道果是金额货币：必须构造 Decimal，写 Number 会让后续引擎运算拿到 Number。
+  state.dao = money(1)
   state.settings.craftReservePercent = 0
   state.settings.autoCraftSpeeds = { refineSteel: 5, drawTalisman: 5 }
   state.buildings = {
@@ -48,8 +50,9 @@ export function longOfflineFixture(startAt = OFFLINE_FIXTURE_START) {
   }
   Object.assign(state.resources, {
     // 原料刻意远超单段消耗：让工业在整段窗口里持续有活干，而不是第一段就缺料停线。
-    qi: 60000000, wood: 12000000, ore: 12000000, herb: 8000000, rock: 200000,
-    insight: 100000, faith: 100000, stone: 20000, beastHide: 200000, warrant: 200000,
+    qi: money(60000000), wood: money(12000000), ore: money(12000000), herb: money(8000000),
+    rock: money(200000), insight: money(100000), faith: money(100000), stone: money(20000),
+    beastHide: money(200000), warrant: money(200000),
   })
   for (const id of INDUSTRIAL_RECIPES) state.autoCraft[id] = true
   state.disciples.total = 72

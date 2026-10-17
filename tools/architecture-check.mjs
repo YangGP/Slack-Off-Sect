@@ -67,12 +67,12 @@ export function runArchitectureChecks() {
   }
   assert.equal(offline.state.buffs.length, 0)
   assert.equal(offline.state.lastTickAt, startAt + 10000)
-  assert.ok(Math.abs(offline.state.resources.qi - online.state.resources.qi) < 1e-9)
+  assert.ok(offline.state.resources.qi.minus(online.state.resources.qi).abs().lt('1e-9'))
   const base = make()
   base.state.buffs = []
   E.simulateOffline(base.state, base.derived, 10, { startAt })
   // 加成仅覆盖前 2.5 秒，而非整个十秒结算。
-  assert.ok(Math.abs(offline.state.resources.qi / base.state.resources.qi - 1.25) < 1e-9)
+  assert.ok(offline.state.resources.qi.div(base.state.resources.qi).minus('1.25').abs().lt('1e-9'))
   const fractional = make()
   E.simulateOffline(fractional.state, fractional.derived, 0.75, { startAt })
   assert.equal(fractional.state.stats.playTime, 0.75)
@@ -93,9 +93,9 @@ export function runArchitectureChecks() {
     assert.ok(report.segments <= E.offlineSegmentCount(70), `分段数不超过基础段数，居所=${withHousing}`)
     for (const id of Object.keys(coarse.resources)) {
       const value = coarse.resources[id]
-      assert.ok(Number.isFinite(value) && value >= 0, `长离线资源有限非负 ${id}, 居所=${withHousing}`)
+      assert.ok(E.moneyFinite(value) && !value.isNegative(), `长离线资源有限非负 ${id}, 居所=${withHousing}`)
       // 近似允许段内供给与季节折算误差，但不允许量级偏差。
-      assert.ok(Math.abs(value - fine.resources[id]) <= Math.max(1, Math.abs(fine.resources[id]) * 0.25),
+      assert.ok(value.minus(fine.resources[id]).abs().lte(E.moneyMax(E.money(1), fine.resources[id].abs().times('0.25'))),
         `长离线资源与逐秒参考同量级 ${id}, 居所=${withHousing}`)
     }
     assert.equal(coarse.disciples.total, fine.disciples.total, `长离线人口口径一致, 居所=${withHousing}`)
@@ -185,7 +185,7 @@ export function runArchitectureChecks() {
   assert.equal(retiredBeasts.upgrades.beastBell, undefined)
   assert.equal(retiredBeasts.treasureLevels.beastBell, undefined)
   for (const [resource, amount] of Object.entries({ wood: 3000, plank: 15, herb: 13500,
-    stone: 13800, insight: 65200, pill: 40 })) assert.equal(retiredBeasts.resources[resource], amount)
+    stone: 13800, insight: 65200, pill: 40 })) assert.ok(E.moneyEq(retiredBeasts.resources[resource], amount), `兽栏退役返还 ${resource}`)
   const beastReloaded = parseImport(exportJson(retiredBeasts))
   assert.deepEqual(beastReloaded.resources, retiredBeasts.resources)
   assert.equal(beastReloaded.log.length, retiredBeasts.log.length)
@@ -194,11 +194,11 @@ export function runArchitectureChecks() {
   extremeBeasts.buildings.beastGarden = { count: Number.MAX_SAFE_INTEGER, on: true }
   extremeBeasts.upgrades.beastBell = true
   extremeBeasts.treasureLevels.beastBell = Number.MAX_SAFE_INTEGER
-  assert.ok(Object.values(normalizeState(extremeBeasts).resources).every(Number.isFinite))
+  assert.ok(Object.values(normalizeState(extremeBeasts).resources).every(E.moneyFinite))
   const unownedBell = createInitialState(startAt)
   delete unownedBell.beastRetirementVersion
   unownedBell.treasureLevels.beastBell = 5
-  assert.equal(normalizeState(unownedBell).resources.insight, 0)
+  assert.ok(E.moneyIsZero(normalizeState(unownedBell).resources.insight))
 
   // 加工耗尽维护材料后，收徒与事件必须读取刷新后的供给，不能沿用加工前的设施效果。
   const markAchievements = state => {
@@ -206,12 +206,12 @@ export function runArchitectureChecks() {
   }
   for (const offlineMode of [false, true]) {
     const seed = createInitialState(startAt)
-    seed.dao = 1
+    seed.dao = E.money(1)
     seed.settings.craftReservePercent = 0
     seed.buildings = { hut: { count: 40, on: true }, incenseCauldron: { count: 1, on: true },
       talismanHall: { count: 1, on: true } }
     seed.disciples.total = 72
-    Object.assign(seed.resources, { qi: 1000, wood: 125.32 })
+    Object.assign(seed.resources, { qi: E.money(1000), wood: E.money('125.32') })
     seed.arrivalTimer = 14
     seed.autoCraft.drawTalisman = true
     seed.craftTimers.drawTalisman = { t: 1, made: 0 }
@@ -223,17 +223,17 @@ export function runArchitectureChecks() {
       if (offlineMode) E.simulateOffline(state, derived, 1, { startAt })
       else E.tick(state, derived, 1, { startAt, events: false })
     })
-    assert.equal(state.resources.talisman, 1)
-    assert.equal(state.resources.wood, 0)
+    assert.ok(E.moneyEq(state.resources.talisman, 1))
+    assert.ok(E.moneyIsZero(state.resources.wood))
     assert.equal(state.disciples.total, 72)
     assert.equal(state.stats.recruits, 0)
     assert.equal(derived.leaveChance, 0.04)
   }
   const disasterState = createInitialState(startAt), disasterDerived = E.createDerived()
-  disasterState.dao = 1
+  disasterState.dao = E.money(1)
   disasterState.settings.craftReservePercent = 0
   disasterState.buildings.mountainArray = { count: 1, on: true }
-  Object.assign(disasterState.resources, { qi: 8, wood: 100, herb: 100, ore: 100 })
+  Object.assign(disasterState.resources, { qi: E.money(8), wood: E.money(100), herb: E.money(100), ore: E.money(100) })
   disasterState.autoCraft.growWood = true
   disasterState.nextEventAt = startAt
   markAchievements(disasterState)
@@ -248,20 +248,22 @@ export function runArchitectureChecks() {
     assert.equal(disasterDerived.disasterGuard, 0.15)
     E.tick(disasterState, disasterDerived, 1, { startAt })
   })
-  assert.equal(disasterState.resources.qi, 0)
+  assert.ok(E.moneyIsZero(disasterState.resources.qi))
   assert.equal(disasterDerived.disasterGuard, 0)
   assert.equal(disasterState.stats.disasters, 1)
-  assert.equal(disasterState.resources.ore, 94)
+  assert.ok(E.moneyEq(disasterState.resources.ore, 94))
   assert.ok(!disasterState.log.some(entry => entry.text.includes('大阵挡下')))
 
   const loaded = normalizeState({ buffs: make().state.buffs, lastSaveAt: startAt })
   assert.equal(loaded.buffs.length, 1)
   const restored = parseImport(exportJson(loaded))
   assert.equal(restored.buffs.length, 1)
-  const dirty = normalizeState({ resources: { qi: '100', wood: -5 }, realm: 999, strangeField: true,
+  const dirty = normalizeState({ resources: { qi: 'abc', wood: -5 }, realm: 999, strangeField: true,
     buildings: { spiritField: { count: -1 }, absent: { count: 3 } } })
-  assert.equal(dirty.resources.qi, 0)
-  assert.equal(dirty.resources.wood, 0)
+  assert.ok(E.moneyIsZero(dirty.resources.qi))
+  // 十进制字符串是 v3 存档的合法金额写法：不能把它当损坏数据丢掉。
+  assert.ok(E.moneyEq(normalizeState({ resources: { qi: '100' } }).resources.qi, 100))
+  assert.ok(E.moneyIsZero(dirty.resources.wood))
   assert.equal(dirty.realm, 0)
   assert.equal(dirty.buildings.spiritField.count, 0)
   assert.equal(dirty.buildings.absent, undefined)
@@ -269,12 +271,12 @@ export function runArchitectureChecks() {
   const validLegacy = restoreSave({ version: 1, karma: 12, dao: 3, realm: 4,
     resources: { qi: 123 }, buildings: { spiritField: { count: 2, on: true } } })
   assert.equal(validLegacy.realm, 4)
-  assert.equal(validLegacy.resources.qi, 123)
+  assert.ok(E.moneyEq(validLegacy.resources.qi, 123))
   assert.equal(validLegacy.version, SAVE_VERSION)
   for (const conflict of [{ version: SAVE_VERSION + 1 }, { buildings: [] }]) {
     const recovered = restoreSave({ karma: 12, dao: 3, realm: 4, ...conflict })
-    assert.equal(recovered.karma, 12)
-    assert.equal(recovered.dao, 3)
+    assert.ok(E.moneyEq(recovered.karma, 12))
+    assert.ok(E.moneyEq(recovered.dao, 3))
     assert.equal(recovered.realm, 0)
     assert.ok(recovered.__recoveryNotice)
   }
@@ -322,8 +324,8 @@ export function runArchitectureChecks() {
   assert.equal(timeline.state.lastTickAt, startAt + 3000)
   timeline.restore({ version: 999, karma: 7, dao: 2, realm: 6 })
   assert.equal(timeline.state.realm, 0)
-  assert.equal(timeline.state.karma, 7)
-  assert.equal(timeline.state.dao, 2)
+  assert.ok(E.moneyEq(timeline.state.karma, 7))
+  assert.ok(E.moneyEq(timeline.state.dao, 2))
   E.fireEvent(a.state, a.derived)
   E.fireEvent(b.state, b.derived)
   assert.notEqual(a.state.nextEventAt, b.state.nextEventAt)
@@ -373,7 +375,7 @@ export function runArchitectureChecks() {
   catchupSeed.disciples.jobs = { farmer: 30, scholar: 10 }
   catchupSeed.upgrades = { qiOrigin: true, qiGazing: true, qiMeasure: true, qiLiquid: true,
     liquidArt: true, condenseArt: true, talismanArt: true, intuition: true }
-  Object.assign(catchupSeed.resources, { qi: 1000, wood: 5000, stone: 100 })
+  Object.assign(catchupSeed.resources, { qi: E.money(1000), wood: E.money(5000), stone: E.money(100) })
   catchupSeed.autoCraft.drawTalisman = true
   catchupSeed.buffs = make().state.buffs
   const catchupResults = []
@@ -384,7 +386,7 @@ export function runArchitectureChecks() {
     let randomCalls = 0, resourceChanges = 0
     const game = createGame({ state, derived, now: () => startAt + 600100,
       random: () => { randomCalls++; return 0.9 },
-      snapshotState: snapshot ? value => JSON.parse(JSON.stringify(toRaw(value))) : null })
+      snapshotState: snapshot ? value => E.cloneRuntime(toRaw(value)) : null })
     runtimeCounters(state).achievementSeconds = 0.3
     const unwatch = snapshot ? watch(() => state.resources.qi, () => resourceChanges++, { flush: 'sync' }) : () => {}
     const report = game.advance(600.1, { startAt })

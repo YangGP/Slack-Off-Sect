@@ -19,7 +19,7 @@ export function runOfflineChecks(ok) {
    */
   function compare(label, seed, seconds = 180) {
     const run = cacheEconomy => {
-      const state = structuredClone(seed), derived = E.createDerived()
+      const state = E.cloneRuntime(seed), derived = E.createDerived()
       let randomSeed = 2468
       setGameContext(state, { now: () => startAt, random: () => {
         randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >>> 0
@@ -42,7 +42,7 @@ export function runOfflineChecks(ok) {
     s.buildings.spiritField = { count: 40, on: true }
     s.disciples.total = 4
     syncDisciples(s.disciples)
-    s.resources.qi = 2000
+    s.resources.qi = E.money(2000)
     return s
   }
 
@@ -50,7 +50,7 @@ export function runOfflineChecks(ok) {
   const full = populated()
   full.settings.recruitMode = 'manual'
   full.upgrades.seekTalents = true
-  full.resources.qi = 100000
+  full.resources.qi = E.money(100000)
   full.totalDays = 89.8
   full.buffs = [{ id: 'fractional', mult: 0.3, until: startAt + 1500 },
     { id: 'season', mult: 0.2, target: 'qi', until: startAt + 45125 }]
@@ -58,7 +58,7 @@ export function runOfflineChecks(ok) {
 
   const annual = populated()
   annual.totalDays = 350
-  annual.resources.qi = 100000
+  annual.resources.qi = E.money(100000)
   compare('跨年长离线的季节加权折算', annual, 4000)
 
   const training = populated()
@@ -67,29 +67,29 @@ export function runOfflineChecks(ok) {
   training.disciples.members[0].cultivation = cultivationRequired(0) - 2
   compare('传功修满后停功停费', training)
   training.buildings.spiritField.count = 0
-  training.resources.qi = 1
+  training.resources.qi = E.money(1)
   compare('传功断供、饥饿与人口流失', training)
 
   const crafting = populated()
-  crafting.dao = 1
+  crafting.dao = E.money(1)
   crafting.upgrades.earthArt = true
   crafting.upgrades.talismanArt = true
   crafting.settings.craftReservePercent = 0
   crafting.buildings.incenseCauldron = { count: 3, on: true }
   crafting.buildings.talismanHall = { count: 1, on: true }
   crafting.autoCraft.drawTalisman = true
-  crafting.resources.wood = 125.5
-  crafting.resources.insight = 1000
-  crafting.craftTargets.drawTalisman = 4
+  crafting.resources.wood = E.money('125.5')
+  crafting.resources.insight = E.money(1000)
+  crafting.craftTargets.drawTalisman = E.money(4)
   compare('自动加工耗尽维护物料、库存目标与保留量', crafting)
-  crafting.settings.craftReserves = { wood: 125 }
+  crafting.settings.craftReserves = { wood: E.money(125) }
   compare('逐项保留材料限制加工', crafting)
 
   const condensed = populated()
   condensed.upgrades.qiLiquid = true
   condensed.upgrades.condenseArt = true
   condensed.upgrades.liquidArt = true
-  condensed.dao = 1
+  condensed.dao = E.money(1)
   condensed.buildings.spiritField.count = 2000
   compare('节气满仓凝液', condensed)
 
@@ -106,8 +106,8 @@ export function runOfflineChecks(ok) {
   hunting.upgrades.wildHunting = true
   hunting.buildings.huntingCamp = { count: 1, on: true }
   hunting.buildings.warmFurChamber = { count: 1, on: true }
-  hunting.resources.beastHide = 0
-  hunting.resources.warrant = 100
+  hunting.resources.beastHide = E.money(0)
+  hunting.resources.warrant = E.money(100)
   hunting.disciples.members[0].realm = 4
   const hd = E.createDerived()
   setGameContext(hunting, { now: () => startAt, random: () => 0 })
@@ -117,7 +117,7 @@ export function runOfflineChecks(ok) {
 
   // 短时离线仍走逐秒精确路径：与逐秒参考完全一致（长离线的近似不影响短窗口）。
   {
-    const seed = populated(), state = structuredClone(seed), reference = structuredClone(seed)
+    const seed = populated(), state = E.cloneRuntime(seed), reference = E.cloneRuntime(seed)
     const sd = E.createDerived(), rd = E.createDerived()
     setGameContext(state, { now: () => startAt, random: () => 0.5 })
     setGameContext(reference, { now: () => startAt, random: () => 0.5 })
@@ -125,7 +125,7 @@ export function runOfflineChecks(ok) {
     for (let i = 0; i < 45; i++) E.tick(reference, rd, 1, { offline: true, events: false, startAt: startAt + i * 1000 })
     assert.equal(report.approximate, undefined, '不超过门槛仍走精确路径')
     for (const r of RESOURCES) {
-      assert.ok(Math.abs(state.resources[r.id] - reference.resources[r.id]) < 1e-9, `短时精确：${r.id}`)
+      assert.ok(state.resources[r.id].minus(reference.resources[r.id]).abs().lt('1e-9'), `短时精确：${r.id}`)
     }
     ok('不超过门槛的离线仍与逐秒参考完全一致', true)
   }
@@ -144,10 +144,10 @@ export function runOfflineChecks(ok) {
     assert.ok(report.baseSegments <= CONFIG.OFFLINE_MAX_SEGMENTS, '基础段数封顶')
     for (const r of RESOURCES) {
       const value = state.resources[r.id]
-      assert.ok(Number.isFinite(value) && value >= 0, `${r.id} 有限且非负`)
+      assert.ok(E.moneyFinite(value) && !value.isNegative(), `${r.id} 有限且非负`)
       const cap = derived.max[r.id]
-      if (r.id !== 'karma' && Number.isFinite(cap)) {
-        assert.ok(value <= Math.max(before[r.id] || 0, cap) + 1e-6, `${r.id} 不超仓储`)
+      if (r.id !== 'karma' && cap.isFinite()) {
+        assert.ok(value.lte(E.moneyMax(before[r.id] ?? E.ZERO, cap).plus('1e-6')), `${r.id} 不超仓储`)
       }
     }
     for (const [id, timer] of Object.entries(state.craftTimers)) {
@@ -177,7 +177,7 @@ export function runOfflineChecks(ok) {
     for (const seconds of [10, 60, 450]) {
       const state = longOfflineFixture(startAt)
       state.autoCraft = { sawPlank: true }
-      state.resources.plank = 0
+      state.resources.plank = E.money(0)
       const derived = E.createDerived()
       setGameContext(state, { now: () => startAt, random: () => 0.5 })
       E.recompute(state, derived)
@@ -202,8 +202,8 @@ export function runOfflineChecks(ok) {
       state.autoCraft = { condenseLiquid: true }
       state.settings.processingModes.condensation = 'overload'
       state.settings.autoCraftSpeeds.condenseLiquid = 10
-      state.resources.qi = 900
-      state.resources.spiritLiquid = 0
+      state.resources.qi = E.money(900)
+      state.resources.spiritLiquid = E.money(0)
       const derived = E.createDerived()
       setGameContext(state, { now: () => startAt, random: () => 0.5 })
       E.recompute(state, derived)
@@ -216,25 +216,26 @@ export function runOfflineChecks(ok) {
     const step = craftTime(recipe, derived)
     E.runIndustrialCraftBatch(state, derived, 1000)
     const made = state.craftTimers.condenseLiquid.made
-    const spent = 900 - state.resources.qi
-    const minimumFuel = made * (step / line.speed) * (line.powerDrain.qi || 0)
-    assert.ok(state.resources.qi >= 0, '灵气不为负')
-    assert.ok(made > 0 && state.resources.spiritLiquid === made, '产出与份数一致')
-    assert.ok(made * cost.qi + minimumFuel <= 900 + 1e-9,
-      `已完成份数的原料与最低动力都付得起（需 ${made * cost.qi + minimumFuel}，有 900）`)
-    assert.ok(spent <= 900 + 1e-9, '原料与动力合计不超过可用量')
+    const available = E.money(900)
+    const spent = available.minus(state.resources.qi)
+    const minimumFuel = line.powerDrain.qi.times(step).div(line.speed).times(made)
+    assert.ok(!state.resources.qi.isNegative(), '灵气不为负')
+    assert.ok(made > 0 && state.resources.spiritLiquid.eq(made), '产出与份数一致')
+    assert.ok(cost.qi.times(made).plus(minimumFuel).lte(available.plus('1e-9')),
+      `已完成份数的原料与最低动力都付得起（需 ${cost.qi.times(made).plus(minimumFuel)}，有 900）`)
+    assert.ok(spent.lte(available.plus('1e-9')), '原料与动力合计不超过可用量')
     // 动力与原料都耗尽后停线：不再扣动力、不再积攒进度。
     const qiAfter = state.resources.qi
     const progressAfter = state.craftTimers.condenseLiquid.t
     E.runIndustrialCraftBatch(state, derived, 1000)
-    assert.ok(state.resources.qi === qiAfter && state.craftTimers.condenseLiquid.t === progressAfter,
+    assert.ok(state.resources.qi.eq(qiAfter) && state.craftTimers.condenseLiquid.t === progressAfter,
       '缺料且无动力时停线，不继续扣动力或积攒进度')
     // 自动保留量不能被后置的动力扣除穿透。
     const { state: reserved, derived: rd } = overloaded()
-    reserved.settings.craftReserves = { qi: 400 }
+    reserved.settings.craftReserves = { qi: E.money(400) }
     E.recompute(reserved, rd)
     E.runIndustrialCraftBatch(reserved, rd, 1000)
-    assert.ok(reserved.resources.qi >= 400 - 1e-9, `自动保留量不被穿透（剩 ${reserved.resources.qi}）`)
+    assert.ok(E.moneyGte(reserved.resources.qi, E.money(400).minus('1e-9')), `自动保留量不被穿透（剩 ${reserved.resources.qi}）`)
     ok('原料与超载动力共用同一份库存预算，保留量不被穿透', true)
   }
 
@@ -244,10 +245,10 @@ export function runOfflineChecks(ok) {
       for (const prepaidFraction of [0, 0.5]) {
         const state = longOfflineFixture(startAt)
         state.autoCraft = { sawPlank: true }
-        state.resources.plank = 0
-        state.resources.wood = 100000
-        state.resources.qi = reserve + 1
-        state.settings.craftReserves = { qi: reserve }
+        state.resources.plank = E.money(0)
+        state.resources.wood = E.money(100000)
+        state.resources.qi = E.money(1).plus(reserve)
+        state.settings.craftReserves = { qi: E.money(reserve) }
         state.settings.processingModes.woodwork = 'overload'
         state.settings.autoCraftSpeeds.sawPlank = 10
         const derived = E.createDerived()
@@ -257,16 +258,16 @@ export function runOfflineChecks(ok) {
         const step = craftTime(CRAFT_MAP.sawPlank, derived)
         const before = step * prepaidFraction
         state.craftTimers.sawPlank = { t: before, made: 0 }
-        assert.ok(line.powerDrain.qi > 0, '夹具确实启用了超载动力')
+        assert.ok(line.powerDrain.qi.gt(0), '夹具确实启用了超载动力')
         E.runIndustrialCraftBatch(state, derived, 1000)
         const timer = state.craftTimers.sawPlank
         const newWork = timer.made * step + timer.t - before
-        const fuel = newWork / line.speed * line.powerDrain.qi
-        const spent = reserve + 1 - state.resources.qi
+        const fuel = line.powerDrain.qi.times(newWork).div(line.speed)
+        const spent = E.money(1).plus(reserve).minus(state.resources.qi)
         assert.equal(timer.made, 0, '临界燃料不足以完成一份')
-        assert.ok(newWork > 0 && fuel <= 1 + 1e-9, '新增进度受可用燃料约束')
-        assert.ok(state.resources.qi >= reserve - 1e-9, '未完成进度不穿透保留量')
-        assert.ok(Math.abs(spent - fuel) < 1e-9, '只对新增进度付费且足额付清')
+        assert.ok(newWork > 0 && fuel.lte(E.money(1).plus('1e-9')), '新增进度受可用燃料约束')
+        assert.ok(E.moneyGte(state.resources.qi, E.money(reserve).minus('1e-9')), '未完成进度不穿透保留量')
+        assert.ok(spent.minus(fuel).abs().lt('1e-9'), '只对新增进度付费且足额付清')
       }
     }
     ok('临界燃料限制未完成进度，保留量和已付进度均正确', true)
@@ -274,13 +275,13 @@ export function runOfflineChecks(ok) {
 
   const strained = longRun(8 * 3600, state => {
     state.settings.craftReservePercent = 40
-    state.settings.craftReserves = { wood: 9000 }
-    state.craftTargets.drawTalisman = 5
-    state.resources.ore = 0
+    state.settings.craftReserves = { wood: E.money(9000) }
+    state.craftTargets.drawTalisman = E.money(5)
+    state.resources.ore = E.money(0)
   })
   // 库存目标仍生效：达到目标后停线，只允许共享的 settleCraftCopies 释放小数进度时多出不到一份。
   const talismanYield = E.craftYield(strained.derived, CRAFT_MAP.drawTalisman)
-  assert.ok((strained.state.resources.talisman || 0) <= 5 + Math.ceil(talismanYield),
+  assert.ok(strained.state.resources.talisman.lte(E.money(5).plus(E.moneyToCount(talismanYield))),
     `库存目标仍然生效（实际 ${strained.state.resources.talisman}）`)
   ok('缺料、满仓、目标与保留量同时生效时仍不越界', true)
 
@@ -302,17 +303,17 @@ export function runOfflineChecks(ok) {
 
   // 灵能：持续产出与逸散用闭式解，不能先把整段产出入库、再整体衰减到零。
   {
-    const state = structuredClone(powerFixture({ chains: 2, core: true }).state)
+    const state = E.cloneRuntime(powerFixture({ chains: 2, core: true }).state)
     const derived = E.createDerived()
     setGameContext(state, { now: () => startAt, random: () => 0.5 })
     E.recompute(state, derived)
     for (let i = 0; i < 60; i++) E.tick(state, derived, 1, { offline: true, events: false, startAt: startAt + i * 1000 })
     const bootstrapped = state.resources.qiEnergy
     E.simulateOffline(state, derived, 3600, { startAt: startAt + 60000 })
-    assert.ok(bootstrapped > 0, '起步一分钟已产出灵能')
-    assert.ok(state.resources.qiEnergy > 0, '稳定产出的灵能不会长期归零')
-    assert.ok(state.resources.qiEnergy >= bootstrapped, '稳态继续逼近，不因整段衰减回落')
-    assert.ok(state.resources.qiEnergy <= derived.max.qiEnergy + 1e-6, '灵能不超仓储')
+    assert.ok(bootstrapped.gt(0), '起步一分钟已产出灵能')
+    assert.ok(state.resources.qiEnergy.gt(0), '稳定产出的灵能不会长期归零')
+    assert.ok(E.moneyGte(state.resources.qiEnergy, bootstrapped), '稳态继续逼近，不因整段衰减回落')
+    assert.ok(state.resources.qiEnergy.lte(derived.max.qiEnergy.plus('1e-6')), '灵能不超仓储')
     ok('长离线灵能走闭式解，稳定产出不归零也不越仓储', true)
   }
 

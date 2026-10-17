@@ -3,6 +3,7 @@ import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
 import { CONFIG } from './config'
+import { ZERO, ceilMoney, money, moneyNonNegative } from '../game/decimal'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,
@@ -94,15 +95,18 @@ export function discipleResidenceYears(member) {
   return Math.floor((member.residenceSeconds || 0) / DISCIPLE_DISMISSAL.yearSeconds)
 }
 
-/** 当前一年基础口粮：沿用口粮的境界倍率，不计减耗、供给或其他培养费用。 */
+/** 当前一年基础口粮：沿用口粮的境界倍率，不计减耗、供给或其他培养费用。金额为 Decimal。 */
 export function discipleAnnualBaseUpkeep(member, sectRealm) {
   const realmMult = REALMS[sectRealm]?.mult ?? 1
-  return CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
-    * discipleFactor(member, sectRealm) * DISCIPLE_DISMISSAL.yearSeconds
+  return money(CONFIG.DISCIPLE_UPKEEP)
+    .times(money(realmMult).pow(CONFIG.DISCIPLE_UPKEEP_REALM_EXP))
+    .times(discipleFactor(member, sectRealm))
+    .times(DISCIPLE_DISMISSAL.yearSeconds)
 }
 
+/** 逐出费用（灵气）：年基础口粮 ×（已满年数 + 1），逐人向上取整。 */
 export function discipleDismissalCost(member, sectRealm) {
-  return Math.ceil(discipleAnnualBaseUpkeep(member, sectRealm) * (discipleResidenceYears(member) + 1))
+  return ceilMoney(discipleAnnualBaseUpkeep(member, sectRealm).times(discipleResidenceYears(member) + 1))
 }
 
 export const SPIRITUAL_ROOTS = [
@@ -148,11 +152,11 @@ export function trainingBonus(member, trainingActive = false) {
   return DISCIPLE_TRAINING.speed
 }
 
-/** 传功每秒灵气：按弟子有效境界递增；未受传功或本境已修满不收费。 */
+/** 传功每秒灵气：按弟子有效境界递增；未受传功或本境已修满不收费。金额为 Decimal。 */
 export function discipleTrainingCost(member, sectRealm) {
-  if (!member.mentored) return 0
-  if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return 0
-  return DISCIPLE_TRAINING.qiPerSecond * discipleFactor(member, sectRealm)
+  if (!member.mentored) return ZERO
+  if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return ZERO
+  return money(DISCIPLE_TRAINING.qiPerSecond).times(discipleFactor(member, sectRealm))
 }
 
 export function cultivationRate(member, trainingActive = false) {
@@ -192,7 +196,7 @@ export function newDisciple(data, spiritualRoot = null, { legacy = false, realm 
   const names = ['清禾', '云舟', '知秋', '明尘', '望舒', '青岚', '怀瑾', '听雨', '景行', '若水', '星河', '长宁', '松雪']
   return { id, name: surnames[(id * 7) % surnames.length] + names[(id * 11) % names.length],
     realm: clampRealm(realm | 0), cultivation: 0, roleId: null, cooldown: 0,
-    residenceSeconds: 0, totalQiConsumed: 0, mentored: false, aidBonus: 0,
+    residenceSeconds: 0, totalQiConsumed: ZERO, mentored: false, aidBonus: 0,
     spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)),
     talents: legacy ? [] : birthTalents(() => talentRandom(data), quality) }
 }
@@ -239,7 +243,8 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
         cultivation: Number.isFinite(member.cultivation) ? Math.max(0, Math.min(cultivationRequired(realm), member.cultivation)) : 0,
         cooldown: Number.isFinite(member.cooldown) ? Math.max(0, Math.min(DISCIPLE_GROWTH.cooldown, member.cooldown)) : 0,
         residenceSeconds: Number.isFinite(member.residenceSeconds) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.residenceSeconds)) : 0,
-        totalQiConsumed: Number.isFinite(member.totalQiConsumed) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.totalQiConsumed)) : 0,
+        // 个人口粮累计是金额：损坏值回退 0，按 Decimal 归一化，不再截断到 MAX_SAFE_INTEGER。
+        totalQiConsumed: moneyNonNegative(member.totalQiConsumed, ZERO),
         spiritualRoot: Object.hasOwn(SPIRITUAL_ROOT_MAP, member.spiritualRoot) ? member.spiritualRoot : 'triple',
         mentored: member.mentored === true,
         aidBonus: Number.isFinite(member.aidBonus) ? Math.max(0, Math.min(0.2, member.aidBonus)) : 0,

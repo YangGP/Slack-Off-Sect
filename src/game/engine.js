@@ -1,5 +1,5 @@
 /** 游戏引擎公共入口；业务模块只依赖具体系统，避免经此入口形成循环。 */
-export { craftYield, maxCraftable, isAutoCrafting, processingPlan, autoCraftStatus, canAutoCraft, craftTarget, resourceFlow, processingBottleneck, clickGain } from './systems/craftingRules'
+export { craftYield, maxCraftable, maxCraftableMoney, isAutoCrafting, processingPlan, autoCraftStatus, canAutoCraft, craftTarget, resourceFlow, processingBottleneck, clickGain } from './systems/craftingRules'
 export { clamp, habitabilityEffects, softCap, createDerived, entryOf, countOf, activeOf, jobOutputs, idleDisciples, checkNeeds, isBuildingUnlocked, trackPeak, isJobUnlocked, isUpgradeUnlocked, isProgressionVisible, isCraftUnlocked, canAfford, payCost, addResource, roundCost, scaleCost, buildingPriceAt, buildingCostFrom, buildingCost, maxAffordable, calendarAt, arrivalInterval, nextArrivalIn, isManualRecruit, realmCost, pushLog, treasureLevel, treasureMult, refineCost, isTreasureForged } from './systems/core'
 export { timeToAfford } from './systems/queries'
 export { recompute, REACTOR_EXCLUDED } from './systems/economy'
@@ -20,3 +20,8 @@ export { TECHNIQUES } from '@/data/techniques'
 export { CRAFTS, CRAFT_MAP, craftTime } from '@/data/crafts'
 export { REALMS } from '@/data/realms'
 export { RESOURCES, RESOURCE_MAP } from '@/data/resources'
+/** 经济数值层：工具与检查通过引擎入口取用统一的 Decimal 助手。 */
+export { Dec, ZERO, ONE, MONEY_INFINITY, money, isMoney, moneyFinite, requireFiniteMoney, moneyNonNegative, moneyFromSave, moneyGte, moneyGt, moneyLt, moneyLte, moneyEq, moneyIsZero, moneyIsPositive, moneyMin, moneyMax, moneyClamp, moneySum, moneySubtract, moneyAvailable, floorMoney, ceilMoney, moneyToNumber, moneyToCount, moneyToRatio, moneyWithin } from './decimal'
+export { cloneRuntime } from './clone'
+export { invalidateStaticMoneyCaches } from './staticMoneyCache'
+export { atLeast, subtractResource, nearlyEqual, floorNumber, ceilNumber } from './numbers'

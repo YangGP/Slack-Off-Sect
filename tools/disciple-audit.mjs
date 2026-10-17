@@ -40,7 +40,7 @@ function runOnce(seed, training) {
     aidSpent: {}, aidApplied: 0, aidBonusInjected: 0, aidAttempts: 0, aidArmedSuccess: 0, aidInjectedOnArmed: 0,
     sectMilestones: {}, discipleMilestones: {}, snapshots: [] }
   let previousRealm = 0
-  const qiStart = state.stats.totalQi || 0
+  const qiStart = E.money(state.stats.totalQi)
   for (let t = 1; t <= hours * 3600; t++) {
     now = epoch + t * 1000
     const population = state.disciples.total
@@ -48,7 +48,7 @@ function runOnce(seed, training) {
     E.tick(state, derived, 1, { events: false, startAt: now - 1000 })
     if (derived.trainingActive) {
       report.trainingActiveSeconds++
-      report.trainingQiSpent += derived.trainingCost
+      report.trainingQiSpent = E.money(report.trainingQiSpent).plus(derived.trainingCost)
     }
     if (roots === 'triple') for (const member of state.disciples.members) member.spiritualRoot = 'triple'
     if (t % 5 === 0) bot.act()
@@ -69,13 +69,13 @@ function runOnce(seed, training) {
         report.failed += result.failed
         report.attempts += result.success + result.failed
         report.reserved += result.reserved
-        for (const [id, amount] of Object.entries(result.spent)) report.spent[id] = (report.spent[id] || 0) + amount
+        for (const [id, amount] of Object.entries(result.spent)) report.spent[id] = E.money(report.spent[id]).plus(amount)
         report.aidApplied += result.aidApplied
         report.aidBonusInjected += result.aidBonusInjected
-        for (const [id, amount] of Object.entries(result.aidSpent)) report.aidSpent[id] = (report.aidSpent[id] || 0) + amount
+        for (const [id, amount] of Object.entries(result.aidSpent)) report.aidSpent[id] = E.money(report.aidSpent[id]).plus(amount)
       }
     }
-    if (state.resources.qi <= 1 && derived.netQi < 0) report.starvingSeconds++
+    if (E.moneyGte(1, state.resources.qi) && E.moneyLt(derived.netQi, 0)) report.starvingSeconds++
     if (state.stats.breakthroughDeaths === deaths) report.lostDisciples += Math.max(0, population - state.disciples.total)
     if (state.realm !== previousRealm) {
       report.sectMilestones[REALMS[state.realm].name] ??= t / 3600
@@ -92,14 +92,15 @@ function runOnce(seed, training) {
         if (member.realm < REALMS.length - 1 && member.cultivation >= cultivationRequired(member.realm)) waiting++
       }
       report.waitingHours += waiting / 60
-      if (Object.values(state.resources).some(value => !Number.isFinite(value) || value < -1e-8)) throw new Error(`库存异常：${t}s`)
+      if (Object.values(state.resources).some(value => !E.moneyFinite(value) || E.moneyLt(value, -1e-8))) throw new Error(`库存异常：${t}s`)
       if (t % 21600 === 0 || t === Math.floor(hours * 3600)) {
         const snapshot = { hours: t / 3600, sect: REALMS[state.realm].name, population: state.disciples.total,
-          counts, rootCounts, waiting, upkeep: derived.upkeep, qiIncome: derived.rates.qi, netQi: derived.netQi,
-          trainingCost: derived.trainingCost, trainingActive: derived.trainingActive,
+          counts, rootCounts, waiting, upkeep: E.moneyToNumber(derived.upkeep),
+          qiIncome: E.moneyToNumber(derived.rates.qi), netQi: E.moneyToNumber(derived.netQi),
+          trainingCost: E.moneyToNumber(derived.trainingCost), trainingActive: derived.trainingActive,
           mentoredCount: state.disciples.members.filter(member => member.mentored).length,
           aidPending: state.disciples.members.filter(member => (member.aidBonus || 0) > 0).length,
-          netQiPerPop: derived.netQi / Math.max(1, state.disciples.total),
+          netQiPerPop: E.moneyToNumber(derived.netQi) / Math.max(1, state.disciples.total),
           success: report.success, failed: report.failed, starvingSeconds: report.starvingSeconds, lostDisciples: report.lostDisciples }
         report.snapshots.push(snapshot)
         console.log(JSON.stringify(snapshot))
@@ -107,11 +108,16 @@ function runOnce(seed, training) {
     }
   }
   report.finalRealm = REALMS[state.realm].name
-  report.finalKarma = state.karma
+  report.finalKarma = E.moneyToNumber(state.karma)
   report.deaths = state.stats.breakthroughDeaths
-  report.qiGained = (state.stats.totalQi || 0) - qiStart
-  report.trainingQiShare = report.qiGained > 0 ? report.trainingQiSpent / report.qiGained : 0
-  if (report.trainingQiSpent < 0 || Object.values(report.aidSpent).some(value => value < 0)) throw new Error('培养开销异常')
+  report.qiGained = E.moneyToNumber(E.moneySubtract(state.stats.totalQi, qiStart))
+  report.trainingQiShare = report.qiGained > 0 ? E.moneyToNumber(report.trainingQiSpent) / report.qiGained : 0
+  if (E.moneyLt(report.trainingQiSpent, 0) || Object.values(report.aidSpent).some(value => E.moneyLt(value, 0))) throw new Error('培养开销异常')
+  // 报告边界：金额统一降到 Number 再输出。
+  report.trainingQiSpent = E.moneyToNumber(report.trainingQiSpent)
+  for (const key of ['spent', 'aidSpent']) {
+    report[key] = Object.fromEntries(Object.entries(report[key]).map(([id, amount]) => [id, E.moneyToNumber(amount)]))
+  }
   console.log(`RESULT ${JSON.stringify(report)}`)
 }
 

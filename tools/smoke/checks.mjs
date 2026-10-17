@@ -16,6 +16,7 @@ import * as hunting from './hunting.mjs'
 import * as diplomacy from './diplomacy.mjs'
 import * as power from './power.mjs'
 import * as materials from './materials.mjs'
+import * as money from './money.mjs'
 import * as extensions from './extensions.mjs'
 
 export const smokeChecks = [
@@ -43,6 +44,7 @@ export const smokeChecks = [
   events.eventCategories,
   storage.storageAndRefinement,
   materials.goldenCoreProduction,
+  money.moneyDomain,
   progression.breakthroughRisk,
   extensions.industryScenarios,
   extensions.discipleScenarios,

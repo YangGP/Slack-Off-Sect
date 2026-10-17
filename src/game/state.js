@@ -6,6 +6,8 @@ import { DEFAULT_QUICK_CRAFTS } from '@/data/crafts'
 import { defaultModules } from '@/data/modules'
 import { migrateState } from './migrations'
 import { initialModuleState, rehydrateModules, resetModules } from './moduleRegistry'
+import { ZERO, moneyMax } from './decimal'
+import { decodeMoneyFields } from './moneyFields'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -13,10 +15,13 @@ import { initialModuleState, rehydrateModules, resetModules } from './moduleRegi
  *
  * **开局真的什么都没有**：0 灵气、0 弟子、没有任何建筑。
  * 第一步只能点「吸取天地灵气」把灵气攒够，然后盖起第一座聚灵阵。
+ *
+ * 金额字段（资源、仓容、经济累计、制作进度与目标、口粮累计）一律初始化成 Decimal；
+ * ZERO 是不可变值，允许在多个字段间共享引用。时间与计数域仍为 Number。
  */
 export function createInitialState(now = Date.now()) {
   const resources = {}
-  for (const r of RESOURCES) resources[r.id] = 0
+  for (const r of RESOURCES) resources[r.id] = ZERO
 
   const jobs = {}
   for (const j of JOBS) jobs[j.id] = 0
@@ -72,8 +77,8 @@ export function createInitialState(now = Date.now()) {
     ...initialModuleState(),
 
     realm: 0,
-    karma: 0,
-    dao: 0,
+    karma: ZERO,
+    dao: ZERO,
     habitabilityPenalty: 0,
     starvationTimer: 0,
     leaveTimer: 0,
@@ -88,10 +93,10 @@ export function createInitialState(now = Date.now()) {
     nextEventAt: now + 90000,
 
     stats: {
-      totalQi: 0,
-      totalInsight: 0,
-      totalFaith: 0,
-      lifeInsight: 0,
+      totalQi: ZERO,
+      totalInsight: ZERO,
+      totalFaith: ZERO,
+      lifeInsight: ZERO,
       /** 做过几次选择（选择类事件） */
       choicesMade: 0,
       crafted: {},
@@ -104,7 +109,7 @@ export function createInitialState(now = Date.now()) {
       reincarnations: 0,
       breakthroughDeaths: 0,
       bestRealm: 0,
-      offlineGains: 0,
+      offlineGains: ZERO,
       eventsSeen: 0,
       /** 手动「吸取天地灵气」的次数 */
       clicks: 0,
@@ -141,11 +146,17 @@ export function createInitialState(now = Date.now()) {
   }
 }
 
-/** 修正旧存档里缺失的字段，保证结构完整 */
+/**
+ * 修正旧存档里缺失的字段，保证结构完整。
+ *
+ * 三段顺序固定：**先按字段解析/清洗金额**（v3 字符串或旧 number → Decimal），
+ * 再执行涉及金额算术的历史迁移，最后做目标状态校验。v1/v2 的金额若已丢失精度不再补偿。
+ */
 export function normalizeState(state, { now = Date.now(), preferMembers = false } = {}) {
   assertSaveShape(state)
+  const decoded = decodeMoneyFields(state)
   const fresh = createInitialState(now)
-  const normalized = validateState(migrateState(state, fresh, { preferMembers }), fresh)
+  const normalized = validateState(migrateState(decoded, fresh, { preferMembers }), fresh)
   // 成员占用等属于运行时字段：读档后按活动任务重新标记（仅启用的模块）。
   rehydrateModules(normalized)
   return normalized
@@ -199,9 +210,14 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.autoCraft = {}
   state.craftTargets = {}
   state.realm = 0
-  state.karma = state.karma + karmaGain
+  // 仙缘与道果是金额：加法走 Decimal，不能原生相加（会把数值拼成字符串）。
+  state.karma = moneyMax(ZERO, state.karma ?? ZERO).plus(karmaGain ?? ZERO)
   // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
-  if (kind === 'ascension') state.dao = (state.dao || 0) + 1
+  if (kind === 'ascension') state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(1).floor()
+  // 永久货币镜像立即同步：转世/飞升后 resources.karma/dao 必须与顶层字段同值，
+  // 否则界面与下一次写档会出现两套金额（旧实现只在读档校验里补镜像）。
+  state.resources.karma = state.karma
+  state.resources.dao = state.dao
   state.habitabilityPenalty = 0
   state.starvationTimer = 0
   state.leaveTimer = 0
@@ -209,7 +225,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.pendingChoice = null
   state.affairs = { ...fresh.affairs }
   resetModules(state, fresh)
-  state.stats.lifeInsight = 0
+  state.stats.lifeInsight = ZERO
   if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
   else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1
   else state.stats.ascensions += 1

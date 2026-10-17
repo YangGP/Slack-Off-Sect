@@ -20,8 +20,8 @@ function fixture() {
   s.buildings.grotto = { count: 1, on: true }
   s.buildings.annihilationFurnace = { count: 4, on: true }
   E.recompute(s, d)
-  for (const id of Object.keys(s.resources)) if (Number.isFinite(d.max[id])) s.resources[id] = d.max[id] * 0.8
-  s.resources.steel = s.resources.plank = s.resources.talisman = s.resources.pill = s.resources.spiritLiquid = 0
+  for (const id of Object.keys(s.resources)) if (d.max[id].isFinite()) s.resources[id] = d.max[id].times('0.8')
+  for (const id of ['steel', 'plank', 'talisman', 'pill', 'spiritLiquid']) s.resources[id] = E.money(0)
   s.settings.craftReservePercent = 0
   s.autoCraft.refineSteel = true
   s.settings.autoCraftSpeeds.refineSteel = 10
@@ -33,24 +33,24 @@ function run(mode, seconds = 600, adjust = () => {}) {
   adjust(s, d)
   E.recompute(s, d)
   assert(`valid mode ${mode}`, E.setProcessingMode(s, d, 'forge', mode))
-  let chargedQi = 0, chargedEnergy = 0, boostedSeconds = 0
+  let chargedQi = E.money(0), chargedEnergy = E.money(0), boostedSeconds = 0
   for (let i = 0; i < seconds; i++) {
     const line = E.processingPlan(s, d).refineSteel
     if (line.boost > 0) boostedSeconds++
-    chargedQi += line.powerDrain.qi || 0
-    chargedEnergy += line.powerDrain.qiEnergy || 0
+    chargedQi = chargedQi.plus(line.powerDrain.qi ?? E.ZERO)
+    chargedEnergy = chargedEnergy.plus(line.powerDrain.qiEnergy ?? E.ZERO)
     E.tick(s, d, 1, { events: false, offline: true })
-    assert('stocks stay finite and nonnegative', Object.values(s.resources).every(n => Number.isFinite(n) && n >= 0))
+    assert('stocks stay finite and nonnegative', Object.values(s.resources).every(n => E.moneyFinite(n) && !n.isNegative()))
   }
   const timer = s.craftTimers.refineSteel || { made: 0, t: 0 }
-  return { mode, seconds, output: s.resources.steel, processingSeconds: +(timer.made * craftTime(CRAFT_MAP.refineSteel, d) + timer.t).toFixed(4), boostedSeconds,
-    estimatedExtraQi: +chargedQi.toFixed(4), estimatedExtraEnergy: +chargedEnergy.toFixed(4), energyLeft: +s.resources.qiEnergy.toFixed(4) }
+  return { mode, seconds, output: E.moneyToNumber(s.resources.steel), processingSeconds: +(timer.made * craftTime(CRAFT_MAP.refineSteel, d) + timer.t).toFixed(4), boostedSeconds,
+    estimatedExtraQi: +E.moneyToNumber(chargedQi).toFixed(4), estimatedExtraEnergy: +E.moneyToNumber(chargedEnergy).toFixed(4), energyLeft: +E.moneyToNumber(s.resources.qiEnergy).toFixed(4) }
 }
 
 const sustained = ['normal', 'overload', 'energy'].map(mode => run(mode))
 assert('overload performs more processing than normal', sustained[1].processingSeconds > sustained[0].processingSeconds * 1.9)
 assert('sustained energy performs more processing than normal', sustained[2].processingSeconds > sustained[0].processingSeconds * 1.9)
-const noSupply = run('energy', 600, (s) => { s.buildings.annihilationFurnace.on = false; s.resources.qiEnergy = 5 })
+const noSupply = run('energy', 600, (s) => { s.buildings.annihilationFurnace.on = false; s.resources.qiEnergy = E.money(5) })
 assert('fuel-starved line continues normal work', noSupply.processingSeconds >= sustained[0].processingSeconds && noSupply.processingSeconds < sustained[2].processingSeconds)
 
 const { s, d } = fixture()
@@ -86,31 +86,31 @@ const longReport = E.simulateOffline(offline, fd, 120)
 // 长离线改走有界近似（段内供给与工位重分配按段估算），不再要求与逐秒参考逐位相同；
 // 但库存必须有限非负、加工不得积攒欠账，产量与逐秒参考保持同一量级。
 assert('long offline keeps powered stations finite and nonnegative',
-  Object.keys(s.resources).every(id => Number.isFinite(offline.resources[id]) && offline.resources[id] >= 0))
+  Object.keys(s.resources).every(id => E.moneyFinite(offline.resources[id]) && !offline.resources[id].isNegative()))
 assert('long offline reports bounded segments and industry rounds',
   longReport.approximate === true && longReport.segments <= longReport.baseSegments &&
   longReport.industryRounds <= longReport.segments * 2)
 assert('long offline does not accumulate processing backlog',
   Object.entries(offline.craftTimers).every(([id, timer]) => !CRAFT_MAP[id] || timer.t <= craftTime(CRAFT_MAP[id], fd) + 1e-9))
 assert('multiple powered stations approximate the per-second reference within the same order',
-  ['steel', 'qi', 'qiEnergy'].every(id => Math.abs(online.resources[id] - offline.resources[id])
-    <= Math.max(1, Math.abs(online.resources[id]) * 0.5)))
+  ['steel', 'qi', 'qiEnergy'].every(id => online.resources[id].minus(offline.resources[id]).abs()
+    .lte(E.moneyMax(E.money(1), online.resources[id].abs().times('0.5')))))
 
 const polar = fixture()
 polar.s.buildings.polarizeArray = { count: 2, on: true }
 polar.s.buildings.annihilationFurnace.count = 1
 E.recompute(polar.s, polar.d)
 polar.s.resources.yangParticle = polar.d.max.yangParticle
-polar.s.resources.yinParticle = 0
+polar.s.resources.yinParticle = E.money(0)
 const initialYang = polar.s.resources.yangParticle
 let lowestLoad = 1, highestLoad = 0
 for (let i = 0; i < 600; i++) {
   E.tick(polar.s, polar.d, 1, { events: false, offline: true })
   lowestLoad = Math.min(lowestLoad, polar.d.buildingSupply.polarizeArray)
   highestLoad = Math.max(highestLoad, polar.d.buildingSupply.polarizeArray)
-  assert('full side stays within storage', polar.s.resources.yangParticle <= initialYang + 1e-6)
+  assert('full side stays within storage', polar.s.resources.yangParticle.lte(initialYang.plus('1e-6')))
 }
-assert('imbalanced pair can still feed annihilation', polar.d.rates.qiEnergy > 0 && polar.s.resources.yinParticle >= 0)
+assert('imbalanced pair can still feed annihilation', polar.d.rates.qiEnergy.gt(0) && !polar.s.resources.yinParticle.isNegative())
 
 console.log(JSON.stringify({ checks, sustained, noSupply, shared: { powerCapacity: d.processingPowerCapacity, coolingCapacity: d.processingCoolingCapacity, coolingUsed, load, overloadCoolingUsed: coldUsed },
-  paired: { seconds: 600, lowestLoad, highestLoad, initialYang, finalYang: polar.s.resources.yangParticle, finalYin: polar.s.resources.yinParticle, energyRate: polar.d.rates.qiEnergy } }, null, 2))
+  paired: { seconds: 600, lowestLoad, highestLoad, initialYang: E.moneyToNumber(initialYang), finalYang: E.moneyToNumber(polar.s.resources.yangParticle), finalYin: E.moneyToNumber(polar.s.resources.yinParticle), energyRate: E.moneyToNumber(polar.d.rates.qiEnergy) } }, null, 2))

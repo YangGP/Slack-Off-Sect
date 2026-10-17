@@ -11,7 +11,7 @@ const { state } = clock
 const hours = Number(process.argv[2] || 24)
 const karma = Number(process.argv[3] || 0)
 if (!Number.isFinite(hours) || hours <= 0 || hours > 168 || !Number.isSafeInteger(karma) || karma < 0) throw new Error('时长需为正数，仙缘需为非负整数')
-state.karma = karma
+state.karma = E.money(karma)
 const derived = E.createDerived()
 E.recompute(state, derived)
 const bot = createBot(state, derived)
@@ -21,7 +21,7 @@ for (let t = 1; t <= hours * 3600; t++) {
   if (t % 300 === 0) {
     E.recompute(state, derived)
     for (const [res, amount] of Object.entries(state.resources)) {
-      if (!Number.isFinite(amount) || amount < -1e-9) throw new Error(`${res} 库存异常：${amount}`)
+      if (!E.moneyFinite(amount) || E.moneyLt(amount, -1e-9)) throw new Error(`${res} 库存异常：${amount}`)
     }
   }
   if (![8, 16, 24, 48, 72, hours].includes(t / 3600)) continue
@@ -29,9 +29,10 @@ for (let t = 1; t <= hours * 3600; t++) {
     recipe: c.name,
     tier: c.tier || 0,
     primary: c.primary || [],
-    yield: +E.craftYield(derived, c).toFixed(3),
-    capacityPerSecond: +E.eventResourceRate(state, derived, c.out).toFixed(3),
-    effectiveInputs: Object.fromEntries(Object.entries(c.cost).map(([r, n]) => [r, +(n / E.craftYield(derived, c)).toFixed(3)])),
+    yield: +E.moneyToNumber(E.craftYield(derived, c)).toFixed(3),
+    capacityPerSecond: +E.moneyToNumber(E.eventResourceRate(state, derived, c.out)).toFixed(3),
+    effectiveInputs: Object.fromEntries(Object.entries(c.cost)
+      .map(([r, n]) => [r, +E.moneyToNumber(E.money(n).div(E.craftYield(derived, c))).toFixed(3)])),
   }))
   const marginal = {}
   for (const id of ['arrayRefine', 'mahayanaArt', 'zhenyueSeal']) {
@@ -45,13 +46,19 @@ for (let t = 1; t <= hours * 3600; t++) {
     try {
       E.recompute(state, derived)
       marginal[id] = {
-        production: Object.fromEntries(Object.keys(technique.effects.ratio || {}).map(r => [r, derived.rates[r] > 0 ? +((beforeRates[r] / derived.rates[r] - 1) * 100).toFixed(3) : null])),
-        crafting: Object.fromEntries(CRAFTS.filter(c => technique.effects.craftBonusByResource?.[c.out]).map(c => [c.out, +((beforeYields[c.out] / E.craftYield(derived, c) - 1) * 100).toFixed(3)])),
+        production: Object.fromEntries(Object.keys(technique.effects.ratio || {}).map(r => [r,
+          E.moneyIsPositive(derived.rates[r])
+            ? +E.moneyToNumber(E.money(beforeRates[r]).div(derived.rates[r]).minus(1).times(100)).toFixed(3)
+            : null])),
+        crafting: Object.fromEntries(CRAFTS.filter(c => technique.effects.craftBonusByResource?.[c.out]).map(c => [c.out,
+          +E.moneyToNumber(E.money(beforeYields[c.out]).div(E.craftYield(derived, c)).minus(1).times(100)).toFixed(3)])),
       }
     } finally {
       state.upgrades[id] = level
       E.recompute(state, derived)
     }
   }
-  console.log(JSON.stringify({ hours: t / 3600, karma, realm: REALMS[state.realm].name, craftSpeed: derived.craftSpeed, ratioAll: derived.ratioAll, craftBonus: derived.craftBonus, rates: derived.rates, marginalPercent: marginal, recipes }))
+  // 报告边界：金额映射统一降到 Number 再输出，保持原有 JSON 形状。
+  const rates = Object.fromEntries(Object.entries(derived.rates).map(([id, value]) => [id, E.moneyToNumber(value)]))
+  console.log(JSON.stringify({ hours: t / 3600, karma, realm: REALMS[state.realm].name, craftSpeed: derived.craftSpeed, ratioAll: derived.ratioAll, craftBonus: derived.craftBonus, rates, marginalPercent: marginal, recipes }))
 }

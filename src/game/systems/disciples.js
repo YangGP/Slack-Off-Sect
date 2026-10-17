@@ -6,6 +6,7 @@ import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
+import { ONE, ZERO, ceilMoney, money, moneyEq, moneyMax, moneySum } from '../decimal'
 
 /** 自动分工属于动作结算，不能放在只读重算中；只改有岗位专长且未出征的弟子。 */
 export function autoAssignTalentJobs(state) {
@@ -68,15 +69,16 @@ export function discipleDismissalPreview(state, ids) {
   const selected = new Set(ids)
   // 出征中的弟子不能逐出。
   const members = state.disciples.members.filter(member => selected.has(member.id) && !member.onMission)
-  const qi = members.reduce((total, member) => total + discipleDismissalCost(member, state.realm), 0)
+  // 逐出费用是金额：逐人向上取整后精确求和，够不够由 canAfford 的 Decimal 比较判定。
+  const qi = moneySum(members.map(member => discipleDismissalCost(member, state.realm)))
   return { ids: members.map(member => member.id), count: members.length, cost: { qi },
-    affordable: Number.isSafeInteger(qi) && canAfford(state, { qi }) }
+    affordable: canAfford(state, { qi }) }
 }
 
 /** 逐出整批支付，费用或人口变化时要求重新确认，不部分执行。 */
 export function dismissDisciples(state, derived, ids, quote = null) {
   const preview = discipleDismissalPreview(state, ids)
-  if (quote && (preview.cost.qi !== quote.cost.qi || preview.count !== quote.count)) return { dismissed: 0, reason: 'changed' }
+  if (quote && (!moneyEq(preview.cost.qi, quote.cost.qi) || preview.count !== quote.count)) return { dismissed: 0, reason: 'changed' }
   if (!preview.count) return { dismissed: 0, reason: 'empty' }
   if (!preview.affordable) return { dismissed: 0, reason: 'insufficient' }
   payCost(state, preview.cost)
@@ -91,8 +93,9 @@ export function dismissDisciples(state, derived, ids, quote = null) {
 export function discipleBreakthroughPreview(state, member) {
   const target = member.realm + 1
   const required = cultivationRequired(member.realm)
+  // 破境费用是金额：按成长系数缩放后整枚资源向上取整，且每种材料至少 1。
   const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
-    [id, Math.max(1, Math.ceil(amount * DISCIPLE_GROWTH.costFactor))]))
+    [id, moneyMax(ONE, ceilMoney(money(amount).times(DISCIPLE_GROWTH.costFactor)))]))
   const chance = Math.min(BREAKTHROUGH.chanceCap, realmBaseChance(target) * DISCIPLE_GROWTH.successFactor +
     Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough') +
     rootBreakthroughBonus(member) / 100 + (member.aidBonus || 0))
@@ -111,7 +114,8 @@ export function breakthroughDisciples(state, derived, ids, random = () => gameRa
     if (!preview.ready) { result.skipped++; continue }
     if (!preview.affordable) { result.insufficient = true; break }
     payCost(state, preview.cost)
-    member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + (preview.cost.qi || 0))
+    // 累计灵气消耗是金额：逐次精确累加，不做安全整数截断。
+    member.totalQiConsumed = money(member.totalQiConsumed ?? ZERO).plus(preview.cost.qi ?? ZERO)
     // 本次尝试已结算，消耗待生效的个人护道（无论成败）。
     member.aidBonus = 0
     if (random() < preview.chance) {
@@ -185,7 +189,8 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
 export function recruitPreview(state, derived, tierId) {
   const tier = RECRUIT_TIER_MAP[tierId]
   if (!tier) return null
-  const cost = recruitCost(tier, state.realm)
+  // 报价是金额：数据表里的字面值是 Number，进金额域前统一构造为 Decimal。
+  const cost = Object.fromEntries(Object.entries(recruitCost(tier, state.realm)).map(([res, amount]) => [res, money(amount)]))
   const range = recruitRealmRange(tier, state.realm)
   const risk = derived.leaveChance > 0
   const full = !risk && state.disciples.total >= derived.maxDisciples
@@ -227,7 +232,10 @@ export function clearJobs(state, derived) {
 export function discipleAidPreview(state, member) {
   const target = member.realm + 1
   const meta = DISCIPLE_AIDS[target]
-  const cost = meta ? { ...meta.cost } : {}
+  // 材料是金额：数据表里是 Number，预览与实付共用同一份 Decimal 报价。
+  const cost = meta
+    ? Object.fromEntries(Object.entries(meta.cost).map(([res, amount]) => [res, money(amount)]))
+    : {}
   return { target, cost, bonus: meta?.bonus || 0, pending: (member.aidBonus || 0) > 0,
     available: !!meta, affordable: meta ? canAfford(state, cost) : false }
 }

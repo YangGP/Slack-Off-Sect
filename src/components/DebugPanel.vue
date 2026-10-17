@@ -2,6 +2,8 @@
 import { computed, reactive, ref } from 'vue'
 import { RESOURCES } from '@/data/resources'
 import { state, derived, actions, ui } from '@/game/store'
+import { fmtStock, fmtCost } from '@/game/format'
+import { MONEY_INFINITY } from '@/game/decimal'
 
 const search = ref('')
 const drafts = reactive({})
@@ -15,10 +17,13 @@ const resources = computed(() => {
   const query = search.value.trim().toLowerCase()
   return orderedResources.filter(r => `${r.name} ${r.id}`.toLowerCase().includes(query))
 })
+/** 永久货币以顶层字段为准（与资源栏镜像同值） */
 const quantity = id => id === 'karma' || id === 'dao' ? state[id] : state.resources[id]
+/** 仓容可能是 MONEY_INFINITY 哨兵：只有有限上限才写数字 */
+const maxOf = id => derived.max[id] ?? MONEY_INFINITY
 function apply(id) {
   const raw = drafts[id] ?? ''
-  if (!String(raw).trim() || !actions.setDebugResource(id, Number(raw))) {
+  if (!String(raw).trim() || !actions.setDebugResource(id, String(raw).trim())) {
     error.value = !String(raw).trim() ? '请输入资源数量' : ui.toast?.text || '修改失败'
     return
   }
@@ -39,8 +44,8 @@ function apply(id) {
           <tbody>
             <tr v-for="resource in resources" :key="resource.id" :data-resource="resource.id">
               <td>{{ resource.name }} <span class="small dim">{{ resource.id }}</span></td>
-              <td>{{ Math.floor(quantity(resource.id) || 0) }}</td>
-              <td>{{ Number.isFinite(derived.max[resource.id]) ? derived.max[resource.id] : '不限' }}</td>
+              <td>{{ fmtStock(quantity(resource.id)) }}</td>
+              <td>{{ maxOf(resource.id).isFinite() ? fmtCost(maxOf(resource.id)) : '不限' }}</td>
               <td><input type="number" min="0" :max="Number.MAX_SAFE_INTEGER" :step="resource.integer ? 1 : 'any'"
                 :aria-label="`${resource.name}调试数量`" :value="drafts[resource.id] ?? ''" placeholder="输入目标数量"
                 @input="drafts[resource.id] = $event.target.value" @keydown.enter="apply(resource.id)" /></td>

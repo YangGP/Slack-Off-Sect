@@ -107,8 +107,8 @@ export async function checkMount(context) {
     '历法写明季节与节气',
     ['春', '夏', '秋', '冬'].some((s) => text().includes(`· ${s} ·`)) && text().includes('季影响'),
   )
-  state.resources.qi = 500
-  state.resources.wood = 500
+  state.resources.qi = engine.money(500)
+  state.resources.wood = engine.money(500)
   state.buildings.hut = { count: 5, on: true }
   state.buildings.quarry = { count: 1, on: true }
   state.buildings.spiritField = { count: 10, on: true }

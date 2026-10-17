@@ -1,7 +1,9 @@
 /**
  * 成就。达成后永久生效（飞升也不清空），每条成就默认提供 +2% 全局产出。
  * check(state) 返回 true 即达成，engine 每帧检查一次。
+ * 累计产出、累计香火与仙缘都是 Decimal 金额，比较必须走金额助手（不能用原生 >=）。
  */
+import { ZERO, moneyGte } from '../game/decimal'
 /**
  * 每条成就的全局产出加成。
  *
@@ -52,42 +54,42 @@ export const ACHIEVEMENTS = [
     name: '灵气万缕',
     glyph: '缕',
     desc: '累计获得 1 万灵气。',
-    check: (s) => s.stats.totalQi >= 1e4,
+    check: (s) => moneyGte(s.stats.totalQi ?? ZERO, 1e4),
   },
   {
     id: 'qi1m',
     name: '灵潮涌动',
     glyph: '潮',
     desc: '累计获得 100 万灵气。',
-    check: (s) => s.stats.totalQi >= 1e6,
+    check: (s) => moneyGte(s.stats.totalQi ?? ZERO, 1e6),
   },
   {
     id: 'stone100',
     name: '囊中百石',
     glyph: '囊',
     desc: '累计凝成 100 枚灵石。',
-    check: (s) => (s.stats.crafted.stone ?? 0) >= 100,
+    check: (s) => moneyGte(s.stats.crafted.stone ?? ZERO, 100),
   },
   {
     id: 'pill100',
     name: '丹成一炉',
     glyph: '炉',
     desc: '累计炼出 100 枚丹药。',
-    check: (s) => (s.stats.crafted.pill ?? 0) >= 100,
+    check: (s) => moneyGte(s.stats.crafted.pill ?? ZERO, 100),
   },
   {
     id: 'artifact50',
     name: '法器百炼',
     glyph: '炼',
     desc: '累计炼出 50 件法器。',
-    check: (s) => (s.stats.crafted.artifact ?? 0) >= 50,
+    check: (s) => moneyGte(s.stats.crafted.artifact ?? ZERO, 50),
   },
   {
     id: 'talisman100',
     name: '符满山门',
     glyph: '满',
     desc: '累计画出 100 张符箓。',
-    check: (s) => (s.stats.crafted.talisman ?? 0) >= 100,
+    check: (s) => moneyGte(s.stats.crafted.talisman ?? ZERO, 100),
   },
   {
     id: 'library5',
@@ -143,7 +145,7 @@ export const ACHIEVEMENTS = [
     name: '香火鼎盛',
     glyph: '盛',
     desc: '累计获得 5000 香火。',
-    check: (s) => s.stats.totalFaith >= 5000,
+    check: (s) => moneyGte(s.stats.totalFaith ?? ZERO, 5000),
   },
   {
     id: 'disaster10',
@@ -185,7 +187,7 @@ export const ACHIEVEMENTS = [
     name: '仙缘深厚',
     glyph: '深',
     desc: '持有 50 点仙缘。',
-    check: (s) => s.karma >= 50,
+    check: (s) => moneyGte(s.karma ?? ZERO, 50),
   },
 ]
 

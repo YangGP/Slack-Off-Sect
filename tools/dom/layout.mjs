@@ -69,7 +69,7 @@ export async function checkLayout(context) {
   ok('有筛选行（全部 / 可建造 / 已建成 …）', doc.querySelectorAll('.panel .filters .filter').length >= 4)
   {
     const snapshot = { ...state.resources }
-    state.resources.stone = 4.5 // 旧档/历史遗留的小数
+    state.resources.stone = engine.money(4.5) // 旧档/历史遗留的小数
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 60))
     const stoneText =
@@ -79,7 +79,7 @@ export async function checkLayout(context) {
         .trim() || ''
     ok('左栏灵石不显示小数', !/灵石\s*4\.5/.test(stoneText) && /灵石\s*4[^.\d]/.test(stoneText), stoneText.slice(0, 40))
 
-    state.resources.qi = 12.34
+    state.resources.qi = engine.money(12.34)
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 60))
     const qiText =
@@ -91,8 +91,8 @@ export async function checkLayout(context) {
 
     // 左栏以外的地方只显示整数：悬停明细的存量、花费的「现有/需要」都不带小数点
     {
-      state.resources.qi = 1234.56
-      state.resources.stone = 7
+      state.resources.qi = engine.money(1234.56)
+      state.resources.stone = engine.money(7)
       state.buildings.hut = { count: 3, on: true } // 第 4 座茅屋：灵气 149.6、灵石 4.29 → 显示应为整数
       engine.recompute(state, derived)
       await new Promise((r) => setTimeout(r, 60))
@@ -171,7 +171,7 @@ export async function checkLayout(context) {
     ok('宗门页移除拾石和凝石按钮', ![...doc.querySelectorAll('.panel .build-btn')].some(b => /拾取石材|凝气成石|点石成灵/.test(b.textContent)))
   }
   const affordabilityQi = state.resources.qi
-  state.resources.qi = 0
+  state.resources.qi = engine.money(0)
   await new Promise(r => setTimeout(r, 60))
   ok(
     '买不起的建筑按钮置灰',
@@ -205,11 +205,11 @@ export async function checkLayout(context) {
     sellButton.blur()
     await new Promise(r => setTimeout(r, 30))
 
-    const qiExpenseBefore = -(derived.expense.qi || 0)
-    ok('聚灵大阵在吃灵气', qiExpenseBefore > 0, `${qiExpenseBefore}`)
+    const qiExpenseBefore = engine.money(derived.expense?.qi)
+    ok('聚灵大阵在吃灵气', engine.moneyLt(qiExpenseBefore, 0), `${qiExpenseBefore}`)
     btn('聚灵大阵', '停').dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await new Promise((r) => setTimeout(r, 60))
-    ok('点「停」后不再吃灵气', (derived.maintenance.qi || 0) === 0, `${derived.maintenance.qi}`)
+    ok('点「停」后不再吃灵气', engine.moneyIsZero(derived.maintenance.qi), `${derived.maintenance.qi}`)
     ok('点「停」后按钮变成「启」', !!btn('聚灵大阵', '启'))
     ok('停用也不会挤掉别的东西（售还在）', !!btn('聚灵大阵', '售'))
 
@@ -227,10 +227,10 @@ export async function checkLayout(context) {
     {
       state.buildings.lumberYard = { count: 3, on: true }
       state.buildings.warehouse = { count: 2, on: true } // 已建 2 座 → 提示里应出现「合计」
-      state.resources.wood = 9999
-      state.resources.stone = 9999
-      state.resources.ore = 9999
-      state.resources.herb = 9999
+      state.resources.wood = engine.money(9999)
+      state.resources.stone = engine.money(9999)
+      state.resources.ore = engine.money(9999)
+      state.resources.herb = engine.money(9999)
       engine.recompute(state, derived)
       await new Promise((r) => setTimeout(r, 80))
       const storeItem = item('库房')
@@ -261,7 +261,7 @@ export async function checkLayout(context) {
     }
     btn('聚灵大阵', '启')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await new Promise((r) => setTimeout(r, 60))
-    ok('重新启用后维护费回来', (derived.maintenance.qi || 0) > 0)
+    ok('重新启用后维护费回来', engine.moneyIsPositive(derived.maintenance.qi))
     state.buildings.gatheringArray = { count: 0, on: true }
     state.buildings.spiritField = { count: 1, on: true }
     engine.recompute(state, derived)
@@ -275,9 +275,9 @@ export async function checkLayout(context) {
         .filter((n) => !coreNames.includes(n))
     const before = names()
     const qtBefore = state.resources.qi
-    state.resources.qi = 9999999
-    state.resources.wood = 9999999
-    state.resources.stone = 9999999
+    state.resources.qi = engine.money(9999999)
+    state.resources.wood = engine.money(9999999)
+    state.resources.stone = engine.money(9999999)
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 60))
     const after = names()
@@ -289,8 +289,8 @@ export async function checkLayout(context) {
     ok('可见基础建筑按用途排列（聚灵阵、伐木场在茅屋之前）', after.indexOf('聚灵阵') === 0 && after.indexOf('伐木场') > 0 && after.indexOf('伐木场') < after.indexOf('茅屋'), after.slice(0, 4).join('/'))
     // 恢复成一个「部分买得起」的状态，后面的断言依赖这个
     state.resources.qi = qtBefore
-    state.resources.wood = 0
-    state.resources.stone = 0
+    state.resources.wood = engine.money(0)
+    state.resources.stone = engine.money(0)
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 60))
   }

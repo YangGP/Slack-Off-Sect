@@ -36,28 +36,28 @@ export function diplomacyTrade({ ok, section }) {
     {
       const { state: s, derived: d } = diplomacyReady()
       const sect = 'herbValley'
-      s.resources.herb = 100
-      s.resources.stone = 0
-      s.resources.warrant = DIPLOMACY.WARRANT_COST
+      s.resources.herb = E.money(100)
+      s.resources.stone = E.money(0)
+      s.resources.warrant = E.money(DIPLOMACY.WARRANT_COST)
       E.recompute(s, d)
 
       const denied = E.tradeWithSect(s, d, sect)
       ok('材料不足拒绝交易且不扣信符', denied.ok === false && s.diplomacy.statistics.trades === 0 &&
-        s.resources.warrant === DIPLOMACY.WARRANT_COST)
+        E.moneyEq(s.resources.warrant, DIPLOMACY.WARRANT_COST))
 
-      s.resources.herb = 300
-      s.resources.warrant = DIPLOMACY.WARRANT_COST - 1
+      s.resources.herb = E.money(300)
+      s.resources.warrant = E.money(DIPLOMACY.WARRANT_COST - 1)
       E.recompute(s, d)
       const noWarrant = E.tradeWithSect(s, d, sect)
-      ok('信符不足拒绝交易且不扣材料', noWarrant.ok === false && s.resources.herb === 300)
+      ok('信符不足拒绝交易且不扣材料', noWarrant.ok === false && E.moneyEq(s.resources.herb, 300))
 
-      s.resources.warrant = DIPLOMACY.WARRANT_COST
+      s.resources.warrant = E.money(DIPLOMACY.WARRANT_COST)
       E.recompute(s, d)
       const stoneBefore = s.resources.stone
       const result = E.tradeWithSect(s, d, sect)
-      ok('支付 300 灵草', result.ok && Math.abs(s.resources.herb) < 1e-9)
-      ok('固定回报灵石 25 入账', s.resources.stone === stoneBefore + 25)
-      ok(`扣信符 ${DIPLOMACY.WARRANT_COST} 枚`, Math.abs(s.resources.warrant) < 1e-9)
+      ok('支付 300 灵草', result.ok && E.money(s.resources.herb).abs().lt(1e-9))
+      ok('固定回报灵石 25 入账', E.moneyEq(s.resources.stone, stoneBefore.plus(25)))
+      ok(`扣信符 ${DIPLOMACY.WARRANT_COST} 枚`, E.money(s.resources.warrant).abs().lt(1e-9))
       ok('交易计入统计', s.diplomacy.statistics.trades === 1)
       ok('再交易被信符挡住', E.tradeWithSect(s, d, sect).ok === false)
 
@@ -95,28 +95,33 @@ export function diplomacyTrade({ ok, section }) {
     // 旧档迁移：猎备并入信符
     {
       const { state: s } = diplomacyReady()
-      s.resources.huntPreparation = 120
+      s.resources.huntPreparation = E.money(120)
       delete s.resources.warrant
       const reloaded = normalizeState(JSON.parse(JSON.stringify(s)))
-      ok('旧档猎备平移到信符', reloaded.resources.warrant === 120 && !('huntPreparation' in reloaded.resources))
+      ok('旧档猎备平移到信符', E.moneyEq(reloaded.resources.warrant, 120) && !('huntPreparation' in reloaded.resources))
     }
 
     // 旧档迁移：信符与猎备取大、seen/peak 转移、旧键清除、输入不变
     {
       const { state: s } = diplomacyReady()
-      s.resources.warrant = 60
-      s.resources.huntPreparation = 'oops'
+      s.resources.warrant = E.money(60)
+      s.resources.huntPreparation = 'oops' // 故意损坏的旧字段：迁移应把它当 0 处理
       s.seen.huntPreparation = true
-      s.peak.huntPreparation = 120
+      s.peak.huntPreparation = E.money(120)
       const inputResources = JSON.parse(JSON.stringify(s.resources))
       const inputSeen = JSON.parse(JSON.stringify(s.seen))
       const inputPeak = JSON.parse(JSON.stringify(s.peak))
       const reloaded = normalizeState(s)
+      // 「输入不变」：normalizeState 现在会按字段**就地**把金额解析成 Decimal（decodeMoneyFields 的既有语义），
+      // 所以唯一允许变化的就是那个刻意损坏的旧字段（'oops' → 0）。其余键与值必须原样保留。
+      const inputUntouched = Object.keys(s.resources).join() === Object.keys(inputResources).join() &&
+        Object.entries(inputResources).every(([id, before]) =>
+          id === 'huntPreparation' || JSON.stringify(s.resources[id]) === JSON.stringify(before))
       ok('信符迁移取大、seen/peak 转移、旧键清除且输入不变',
-        reloaded.resources.warrant === 60 && !Object.hasOwn(reloaded.resources, 'huntPreparation') &&
+        E.moneyEq(reloaded.resources.warrant, 60) && !Object.hasOwn(reloaded.resources, 'huntPreparation') &&
         reloaded.seen.warrant === true && !Object.hasOwn(reloaded.seen, 'huntPreparation') &&
-        reloaded.peak.warrant === 120 && !Object.hasOwn(reloaded.peak, 'huntPreparation') &&
-        JSON.stringify(s.resources) === JSON.stringify(inputResources) &&
+        E.moneyEq(reloaded.peak.warrant, 120) && !Object.hasOwn(reloaded.peak, 'huntPreparation') &&
+        inputUntouched &&
         JSON.stringify(s.seen) === JSON.stringify(inputSeen) &&
         JSON.stringify(s.peak) === JSON.stringify(inputPeak))
     }
@@ -124,12 +129,12 @@ export function diplomacyTrade({ ok, section }) {
     // 机缘保底：预览与结算一致，且预览不消耗随机数
     {
       const { state: s, derived: d } = diplomacyReady()
-      s.resources.herb = 300
-      s.resources.warrant = DIPLOMACY.WARRANT_COST
-      s.resources.insight = 0
+      s.resources.herb = E.money(300)
+      s.resources.warrant = E.money(DIPLOMACY.WARRANT_COST)
+      s.resources.insight = E.money(0)
       s.diplomacy.randomSeed = 1972
       E.recompute(s, d)
-      d.max.insight = 1000
+      d.max.insight = E.money(1000)
       const preview = E.tradePreview(s, d, 'herbValley')
       const seedBefore = s.diplomacy.randomSeed
       E.tradePreview(s, d, 'herbValley')
@@ -137,31 +142,31 @@ export function diplomacyTrade({ ok, section }) {
       const seedKept = s.diplomacy.randomSeed === seedBefore
       const result = E.tradeWithSect(s, d, 'herbValley')
       ok('机缘保底预览与结算一致且预览不消耗随机数',
-        previewInsight === 40 && seedKept && result.ok && result.fortune?.insight === 40)
+        E.moneyEq(previewInsight, 40) && seedKept && result.ok && E.moneyEq(result.fortune?.insight, 40))
     }
 
     // 满仓拒绝 / 部分溢出
     {
       const { state: s, derived: d } = diplomacyReady()
-      s.resources.herb = 300
-      s.resources.warrant = DIPLOMACY.WARRANT_COST
+      s.resources.herb = E.money(300)
+      s.resources.warrant = E.money(DIPLOMACY.WARRANT_COST)
       s.resources.stone = d.max.stone
       E.recompute(s, d)
       const seedBefore = s.diplomacy.randomSeed
       const tradesBefore = s.diplomacy.statistics.trades
       const denied = E.tradeWithSect(s, d, 'herbValley')
       ok('固定回报无仓容时拒绝交易且不动资源/随机数/统计',
-        denied.ok === false && denied.reason === '仓储已满' && s.resources.herb === 300 &&
-        s.resources.warrant === DIPLOMACY.WARRANT_COST && s.diplomacy.randomSeed === seedBefore &&
+        denied.ok === false && denied.reason === '仓储已满' && E.moneyEq(s.resources.herb, 300) &&
+        E.moneyEq(s.resources.warrant, DIPLOMACY.WARRANT_COST) && s.diplomacy.randomSeed === seedBefore &&
         s.diplomacy.statistics.trades === tradesBefore)
 
-      s.resources.stone = d.max.stone - 10
+      s.resources.stone = E.money(d.max.stone).minus(10)
       E.recompute(s, d)
       const preview = E.tradePreview(s, d, 'herbValley')
       const stoneBefore = s.resources.stone
       const partial = E.tradeWithSect(s, d, 'herbValley')
       ok('部分仓容可交易且固定回报按仓容截断并给出溢出提示',
-        preview.overflow === true && partial.ok === true && s.resources.stone === stoneBefore + 10)
+        preview.overflow === true && partial.ok === true && E.moneyEq(s.resources.stone, stoneBefore.plus(10)))
     }
 
     // 共享信符供给：只开外交也能靠执符使攒信符互市，读档保留执符使岗位
@@ -173,11 +178,11 @@ export function diplomacyTrade({ ok, section }) {
       s.upgrades.neighborContacts = true
       s.upgrades.herbStudy = true
       s.upgrades.waterSanitation = true
-      s.resources.qi = 5000
-      s.resources.wood = 5000
-      s.resources.rock = 5000
-      s.resources.stone = 5000
-      s.resources.insight = 100000
+      s.resources.qi = E.money(5000)
+      s.resources.wood = E.money(5000)
+      s.resources.rock = E.money(5000)
+      s.resources.stone = E.money(5000)
+      s.resources.insight = E.money(100000)
       s.buildings.hut = { count: 2, on: true }
       s.buildings.spiritField = { count: 1, on: true }
       s.disciples.total = 4
@@ -189,9 +194,9 @@ export function diplomacyTrade({ ok, section }) {
       E.recompute(s, d)
       const planner = s.disciples.members.find(m => m.roleId === 'huntPlanner')
       E.tick(s, d, 300, { events: false })
-      s.resources.stone = 0
-      s.resources.herb = 300
-      const warrantReady = (s.resources.warrant || 0) >= DIPLOMACY.WARRANT_COST
+      s.resources.stone = E.money(0)
+      s.resources.herb = E.money(300)
+      const warrantReady = E.moneyGte(s.resources.warrant, DIPLOMACY.WARRANT_COST)
       const traded = E.tradeWithSect(s, d, 'herbValley')
       const reloaded = normalizeState(JSON.parse(JSON.stringify(s)))
       const roleKept = reloaded.disciples.members.some(m => m.roleId === 'huntPlanner')

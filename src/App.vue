@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
 import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
+import { ZERO, moneyIsPositive, moneySubtract } from '@/game/decimal'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import { CURRENT_VERSION } from '@/data/changelog'
 import { isModuleEnabled } from '@/data/modules'
@@ -49,10 +50,20 @@ const panels = computed(() => {
 const activePanel = computed(() => ui.debug && ui.debugPage ? DebugPanel : panels.value[state.ui.tab] || SectPanel)
 const idle = computed(() => idleDisciples(state))
 const qiFlow = computed(() => resourceFlow(derived, 'qi'))
+/** 顶栏的灵气出项与阵眼维护按正数展示：金额取反只能在脚本里用 Decimal 助手算 */
+const qiExpense = computed(() => moneySubtract(ZERO, qiFlow.value.expense))
+const qiMaintenance = computed(() => moneySubtract(ZERO, derived.maintenance?.qi ?? ZERO))
+/** 维护费是金额（Decimal 恒为真）：只有真的非零才写「含阵眼维护」 */
+const hasQiMaintenance = computed(() => moneyIsPositive(derived.maintenance?.qi ?? ZERO))
+/** 净额正负：金额是对象，模板里不能直接和 0 比较 */
+const qiNetNegative = computed(() => qiFlow.value.net.isNegative())
+const karmaPositive = computed(() => moneyIsPositive(state.karma))
 /** 有空房时顶栏显示「下一位弟子还有多久」 */
 const waitNext = computed(() => nextArrivalIn(state, derived))
 // 最近一次操作提示，4 秒后自行消失（不弹气泡，只在状态行显示一行字）
 const status = computed(() => ui.toast?.text || '')
+/** 离线进度是有界比例（Number），取整只在脚本里做 */
+const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
 </script>
 
 <template>
@@ -61,9 +72,9 @@ const status = computed(() => ui.toast?.text || '')
       <div class="offline-loading-head">
         <span class="loading-spinner" aria-hidden="true"></span>
         <span>正在结算挂机收益…</span>
-        <span class="offline-loading-percent">{{ Math.floor(ui.offlineProgress.percent) }}%</span>
+        <span class="offline-loading-percent">{{ offlinePercent }}%</span>
       </div>
-      <progress class="offline-progress" aria-label="离线结算进度" :value="ui.offlineProgress.percent" max="100">{{ Math.floor(ui.offlineProgress.percent) }}%</progress>
+      <progress class="offline-progress" aria-label="离线结算进度" :value="ui.offlineProgress.percent" max="100">{{ offlinePercent }}%</progress>
       <div class="offline-loading-detail">
         <template v-if="ui.offlineProgress.totalSeconds">已结算 {{ fmtTime(ui.offlineProgress.completedSeconds) }} / {{ fmtTime(ui.offlineProgress.totalSeconds) }}</template>
         <template v-else>正在准备结算…</template>
@@ -100,13 +111,13 @@ const status = computed(() => ui.toast?.text || '')
       <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
       <span class="sep">·</span>灵气进项 <b class="good">{{ fmtRate(qiFlow.income) }}</b>
       <span class="sep">·</span>出项
-      <b class="bad">{{ fmtRate(-qiFlow.expense) }}</b>
-      <span class="dim" v-if="derived.maintenance?.qi">（含阵眼维护 {{ fmtRate(-derived.maintenance.qi) }}）</span>
+      <b class="bad">{{ fmtRate(qiExpense) }}</b>
+      <span class="dim" v-if="hasQiMaintenance">（含阵眼维护 {{ fmtRate(qiMaintenance) }}）</span>
       <span class="sep">·</span>净额
-      <b :class="qiFlow.net < 0 ? 'bad' : 'good'">{{ fmtRate(qiFlow.net) }}</b>
+      <b :class="qiNetNegative ? 'bad' : 'good'">{{ fmtRate(qiFlow.net) }}</b>
       <span class="sep">·</span>全局 <b>×{{ derived.globalMult.toFixed(2) }}</b>
       <span class="dim">（加成 +{{ fmtPercent(derived.ratioAll) }}）</span>
-      <template v-if="state.karma > 0">
+      <template v-if="karmaPositive">
         <span class="sep">·</span>仙缘 <b>{{ fmtInt(state.karma) }}</b>
       </template>
       <span class="sep">·</span>挂机 <b>{{ fmtTime(state.stats.playTime) }}</b>

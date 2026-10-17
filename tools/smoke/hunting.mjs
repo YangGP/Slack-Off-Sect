@@ -12,14 +12,14 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     hs.realm = 3
     hs.upgrades.wildHunting = true
     hs.buildings.huntingCamp = { count: 1, on: true }
-    hs.resources.warrant = 99
+    hs.resources.warrant = E.money(99)
     E.recompute(hs, hd)
     ok('信符不足 100 不能出征', E.canDepart(hs, hd, 'foothills', [1]).ok === false)
 
-    hs.resources.warrant = 250
+    hs.resources.warrant = E.money(250)
     E.recompute(hs, hd)
     const first = E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [1, 2] })
-    ok('250 信符出发后剩 150', first.ok && Math.abs(hs.resources.warrant - 150) < 1e-9)
+    ok('250 信符出发后剩 150', first.ok && E.moneySubtract(hs.resources.warrant, 150).abs().lt(1e-9))
     ok('出征成员让出岗位并被占用', hs.disciples.members.filter(m => m.onMission).length === 2 &&
       Object.values(hs.hunting.missions).length === 1)
     ok('同时只能有一支队伍', E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [3] }).ok === false)
@@ -29,19 +29,19 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     ok('归队后成员恢复未占用', hs.disciples.members.every(m => !m.onMission))
     ok('完成统计记录两名猎人', hs.hunting.statistics.successfulHunters + hs.hunting.statistics.failedHunters === 2)
     ok('归队获得整数兽材或留不足一件的小数余量',
-      (hs.resources.beastHide || 0) >= 1 || (hs.hunting.yieldRemainders.beastHide || 0) > 0)
+      E.moneyGte(hs.resources.beastHide, 1) || E.moneyIsPositive(hs.hunting.yieldRemainders.beastHide))
 
-    hs.resources.warrant = 100
+    hs.resources.warrant = E.money(100)
     E.recompute(hs, hd)
     E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [1] })
     const hideBefore = hs.resources.beastHide
     E.cancelHunt(hs, hd)
     ok('取消立即归队、不退信符、不发半程兽材',
-      Object.values(hs.hunting.missions).length === 0 && hs.resources.warrant === 0 &&
-      hs.resources.beastHide === hideBefore && hs.disciples.members.every(m => !m.onMission))
+      Object.values(hs.hunting.missions).length === 0 && E.moneyIsZero(hs.resources.warrant) &&
+      E.moneyEq(hs.resources.beastHide, hideBefore) && hs.disciples.members.every(m => !m.onMission))
 
     // 存档 → 读档：活动任务保留、成员占用重挂、信符仓容不受仙缘倍率影响
-    hs.resources.warrant = 100
+    hs.resources.warrant = E.money(100)
     E.recompute(hs, hd)
     E.departHunt(hs, hd, { fieldId: 'foothills', teamIds: [1, 2, 3] })
     const reloaded = normalizeState(JSON.parse(JSON.stringify(hs)))
@@ -76,7 +76,7 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     for (const value of [huntOnline, huntOffline]) {
       const mission = Object.values(value.hunting.missions)[0]
       mission.startedAt = clockStart
-      value.resources.warrant = 300
+      value.resources.warrant = E.money(300)
       value.hunting.settings.autoRepeat = true
     }
     const hod = E.createDerived(), hfd = E.createDerived()
@@ -99,22 +99,25 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     ok('长离线自动重复在 370 秒内正好完成 3 趟并留下 10 秒尾段',
       offlineReport.approximate === true && trips === 3 &&
       huntOffline.hunting.statistics.departures - baseStats.departures === 3 &&
-      Math.abs(huntOffline.resources.warrant) < 1e-9 && tail.length === 1 &&
+      E.money(huntOffline.resources.warrant).abs().lt(1e-9) && tail.length === 1 &&
       Math.abs(tail[0].progressSeconds - 10) < 0.05)
     ok('批量猎杀收益不超过可完成趟数的奖励上界', teamRows.length === 0 ||
       Object.entries(estimate.maximum).every(([res, maximum]) =>
-        (huntOffline.resources[res] || 0) + (huntOffline.hunting.yieldRemainders[res] || 0)
-        - (stockBefore[res] || 0) - (remaindersBefore[res] || 0) <= maximum + 1e-6))
-    ok('批量估算与逐秒参考同量级（不要求逐趟一致）', ['beastHide', 'beastBone'].every(res =>
-      Math.abs((huntOffline.resources[res] || 0) - (huntOnline.resources[res] || 0))
-      <= Math.max(2, Math.abs(huntOnline.resources[res] || 0) * 0.6)))
+        E.moneyGte(E.money(maximum).plus(1e-6), E.moneySubtract(
+          E.money(huntOffline.resources[res]).plus(E.money(huntOffline.hunting.yieldRemainders[res])),
+          E.money(stockBefore[res]).plus(E.money(remaindersBefore[res]))))))
+    ok('批量估算与逐秒参考同量级（不要求逐趟一致）', ['beastHide', 'beastBone'].every(res => {
+      const offline = E.moneyToNumber(E.money(huntOffline.resources[res]))
+      const online = E.moneyToNumber(E.money(huntOnline.resources[res]))
+      return Math.abs(offline - online) <= Math.max(2, Math.abs(online) * 0.6)
+    }))
     ok('末趟保留一次已扣费任务并保持成员占用',
       tail[0].startedAt >= clockStart && tail[0].startedAt <= clockStart + 370000 &&
       huntOffline.disciples.members.filter(m => m.onMission).length === tail[0].snapshots.length)
     const reloadedOffline = normalizeState(JSON.parse(JSON.stringify(huntOffline)))
     const tailReloaded = Object.values(reloadedOffline.hunting.missions)[0] || null
     ok('保存重载不重发批量猎杀奖励、不重复扣费',
-      reloadedOffline.resources.warrant === huntOffline.resources.warrant &&
+      E.moneyEq(reloadedOffline.resources.warrant, huntOffline.resources.warrant) &&
       reloadedOffline.hunting.statistics.completedMissions === huntOffline.hunting.statistics.completedMissions &&
       tailReloaded !== null && tailReloaded.id === tail[0].id && tailReloaded.startedAt === tail[0].startedAt &&
       tailReloaded.progressSeconds === tail[0].progressSeconds)
@@ -122,7 +125,7 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     // 单次快进 610 秒（跨越 5 趟）：走批量分支，必须一次算清多趟而不是每段只做一趟。
     {
       const bulk = normalizeState(JSON.parse(JSON.stringify(hs)))
-      bulk.resources.warrant = 10000
+      bulk.resources.warrant = E.money(10000)
       bulk.hunting.settings.autoRepeat = true
       const mission = Object.values(bulk.hunting.missions)[0]
       mission.progressSeconds = 0
@@ -135,12 +138,12 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
       const bulkTail = Object.values(bulk.hunting.missions)
       ok('已有首趟归队后由快进统一批量：610 秒完成 5 趟并留下 10 秒尾段',
         bulkChanged === true && bulk.hunting.statistics.completedMissions - beforeCompleted === 5 &&
-        stats.huntBatches === 1 && bulk.resources.warrant === 10000 - 500 && bulkTail.length === 1 &&
+        stats.huntBatches === 1 && E.moneyEq(bulk.resources.warrant, E.money(10000).minus(500)) && bulkTail.length === 1 &&
         Math.abs(bulkTail[0].progressSeconds - 10) < 1e-9 &&
         bulk.disciples.members.filter(m => m.onMission).length === bulkTail[0].snapshots.length)
       const bulkReloaded = normalizeState(JSON.parse(JSON.stringify(bulk)))
       ok('批量快进结果读档不重奖、不重扣',
-        bulkReloaded.resources.warrant === bulk.resources.warrant &&
+        E.moneyEq(bulkReloaded.resources.warrant, bulk.resources.warrant) &&
         bulkReloaded.hunting.statistics.completedMissions === bulk.hunting.statistics.completedMissions &&
         Object.values(bulkReloaded.hunting.missions)[0]?.progressSeconds === bulkTail[0].progressSeconds)
     }
@@ -150,10 +153,10 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
       const blocked = normalizeState(JSON.parse(JSON.stringify(hs)))
       E.cancelHunt(blocked, E.createDerived())
       blocked.buildings.huntingCamp.on = false
-      blocked.resources.warrant = 10000
+      blocked.resources.warrant = E.money(10000)
       blocked.hunting.settings.autoRepeat = true
       const campBefore = { ...blocked.hunting.statistics }
-      const hideBefore = blocked.resources.beastHide || 0
+      const hideBefore = E.money(blocked.resources.beastHide)
       const cd = E.createDerived()
       E.recompute(blocked, cd)
       const allowed = E.canDepart(blocked, cd, 'foothills', blocked.hunting.settings.teamIds)
@@ -161,22 +164,22 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
       ok('停用营地后离线不再出征、不扣费也不发奖励', !allowed.ok &&
         blocked.hunting.statistics.completedMissions === campBefore.completedMissions &&
         blocked.hunting.statistics.departures === campBefore.departures &&
-        blocked.resources.warrant === 10000 && (blocked.resources.beastHide || 0) === hideBefore)
+        E.moneyEq(blocked.resources.warrant, 10000) && E.moneyEq(blocked.resources.beastHide, hideBefore))
       const downgraded = normalizeState(JSON.parse(JSON.stringify(hs)))
       E.cancelHunt(downgraded, E.createDerived())
       downgraded.realm = 1
-      downgraded.resources.warrant = 10000
+      downgraded.resources.warrant = E.money(10000)
       downgraded.hunting.settings.autoRepeat = true
       const dd = E.createDerived()
       E.recompute(downgraded, dd)
       const realmBefore = { ...downgraded.hunting.statistics }
       E.advanceOfflineHunt(downgraded, dd, 600, { startAt: clockStart, stats: { huntBatches: 0 } })
       ok('宗门退境后离线不再出征', downgraded.hunting.statistics.completedMissions === realmBefore.completedMissions &&
-        downgraded.resources.warrant === 10000)
+        E.moneyEq(downgraded.resources.warrant, 10000))
     }
     const rd = E.createDerived()
-    reloaded.karma = 500
+    reloaded.karma = E.money(500)
     E.recompute(reloaded, rd)
-    ok('信符仓容独立于仙缘仓储倍率', rd.karmaStorageMult > 1 && rd.max.warrant === 400)
+    ok('信符仓容独立于仙缘仓储倍率', E.moneyGt(rd.karmaStorageMult, 1) && E.moneyEq(rd.max.warrant, 400))
   }
 }

@@ -9,6 +9,7 @@ import { CRAFTS } from '@/data/crafts'
 import { isCraftUnlocked, resourceFlow, REACTOR_EXCLUDED } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
+import { MONEY_INFINITY, ONE, ZERO, money, moneyToNumber, moneyToRatio } from '@/game/decimal'
 
 const props = defineProps({
   resId: { type: String, required: true },
@@ -22,14 +23,23 @@ const income = computed(() => flow.value.income)
 const expenseItems = computed(() => flow.value.expenseItems)
 const expense = computed(() => flow.value.expense)
 const net = computed(() => flow.value.net)
-const max = computed(() => derived.max[props.resId] ?? Infinity)
-const amount = computed(() => state.resources[props.resId] || 0)
-const karmaStorageText = computed(() => `${((derived.karmaStorageMult - 1) * 100).toFixed(1).replace(/\.0$/, '')}%`)
-const factor = computed(() => derived.sourceFactor[props.resId] || 1)
+const netNegative = computed(() => net.value.isNegative())
+const max = computed(() => derived.max[props.resId] ?? MONEY_INFINITY)
+const amount = computed(() => state.resources[props.resId] ?? ZERO)
+const karmaStorageText = computed(() => `${(moneyToNumber(derived.karmaStorageMult.minus(1)) * 100).toFixed(1).replace(/\.0$/, '')}%`)
+/** 仙缘仓储倍率是金额域的无界倍率：正负比较留在 Decimal 域 */
+const karmaStorageActive = computed(() => derived.karmaStorageMult.gt(1))
+const factor = computed(() => derived.sourceFactor?.[props.resId] ?? ONE)
 
+// 来源明细是金额：过滤微小项用 Decimal 绝对值比较，不先转 Number。
 const sources = computed(() =>
-  (derived.sources[props.resId] || []).filter((s) => Math.abs(s.value) >= 0.0005),
+  (derived.sources[props.resId] || []).filter((s) => money(s.value).abs().gte(0.0005)),
 )
+
+/** 出项条目的正负（减耗条目是正数，其余为负） */
+function itemNegative(value) {
+  return money(value).isNegative()
+}
 
 /** 灵石、丹药这类只能靠制作获得的资源，额外指出配方来源 */
 const recipes = computed(() =>
@@ -37,21 +47,22 @@ const recipes = computed(() =>
 )
 
 function etaText() {
-  if (!net.value) return ''
-  if (net.value > 0) {
-    if (!Number.isFinite(max.value)) return ''
-    const left = max.value - amount.value
-    if (left <= 1e-6) return '已满仓'
-    return '满仓还需 ' + fmtTime(left / net.value)
+  const rate = net.value
+  if (rate.isZero()) return ''
+  if (rate.isPositive()) {
+    if (!max.value.isFinite()) return ''
+    const left = max.value.minus(amount.value)
+    if (left.lte(1e-6)) return '已满仓'
+    return '满仓还需 ' + fmtTime(moneyToNumber(left.div(rate)))
   }
-  if (amount.value <= 0) return ''
-  return '按此速度 ' + fmtTime(amount.value / -net.value) + ' 后耗尽'
+  if (!amount.value.isPositive()) return ''
+  return '按此速度 ' + fmtTime(moneyToNumber(amount.value.div(rate.negated()))) + ' 后耗尽'
 }
 
 function pctText() {
-  if (!Number.isFinite(max.value) || max.value <= 0) return ''
-  // 存档如果带着超过上限的数值（例如旧档导入），这里夹一下，避免显示 430% 这种数
-  return Math.min(100, Math.round((amount.value / max.value) * 100)) + '%'
+  if (!max.value.isFinite() || !max.value.isPositive()) return ''
+  // 存档如果带着超过上限的数值（例如旧档导入），先在 Decimal 域夹到 [0,1]，避免显示 430% 这种数
+  return Math.round(moneyToRatio(amount.value.div(max.value)) * 100) + '%'
 }
 
 /**
@@ -118,8 +129,8 @@ const bonusRows = computed(() => {
       detail: detailOf(all),
     })
   }
-  // 全局倍率：境界 × 仙缘 × 宜居度 × 增益
-  if (Math.abs(b.globalMult - 1) > 0.0005) {
+  // 全局倍率：境界 × 仙缘 × 宜居度 × 增益（globalMult 是无界金额倍率，比较留在 Decimal 域）
+  if (b.globalMult.minus(1).abs().gt(0.0005)) {
     rows.push({
       key: 'global',
       label: '全局倍率',
@@ -145,7 +156,7 @@ const bonusRows = computed(() => {
       <span class="k">通用扩仓</span>
       <span class="v">基础容量的 {{ Math.round(meta.storageWeight * 1000) / 10 }}%；专属仓储全额计入</span>
     </div>
-    <div v-if="Number.isFinite(max) && derived.karmaStorageMult > 1" class="tip-row">
+    <div v-if="max.isFinite() && karmaStorageActive" class="tip-row">
       <span class="k">仙缘仓储</span><span class="v good">总容量 +{{ karmaStorageText }}</span>
     </div>
 
@@ -176,7 +187,7 @@ const bonusRows = computed(() => {
           <span class="k">
             {{ item.label }}<template v-if="item.count"> ×{{ item.count }}</template>
           </span>
-          <span class="v" :class="item.value < 0 ? 'bad' : 'good'">
+          <span class="v" :class="itemNegative(item.value) ? 'bad' : 'good'">
             {{ fmtRate(item.value) }}
           </span>
         </div>
@@ -185,7 +196,7 @@ const bonusRows = computed(() => {
 
     <div class="tip-row tip-total">
       <span class="k">净额</span>
-      <span class="v" :class="net >= 0 ? 'good' : 'bad'">{{ fmtRate(net) }}</span>
+      <span class="v" :class="netNegative ? 'bad' : 'good'">{{ fmtRate(net) }}</span>
     </div>
 
     <div v-if="bonusRows.length" class="tip-section tip-row">

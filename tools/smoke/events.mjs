@@ -9,27 +9,27 @@ export function randomEvents({ ok, section }) {
   section('随机事件')
   {
     const { state, derived } = newGame()
-    state.resources.qi = 1000
-    state.resources.wood = 1000
-    state.resources.ore = 1000
+    state.resources.qi = E.money(1000)
+    state.resources.wood = E.money(1000)
+    state.resources.ore = E.money(1000)
 
     const rain = EVENTS.find((e) => e.id === 'spiritRain')
     E.fireEvent(state, derived, rain)
     ok('增益类事件写入 buff', state.buffs.length === 1)
     const beforeMult = derived.globalMult
     E.recompute(state, derived)
-    ok('增益提升全局倍率', derived.globalMult > beforeMult, `${derived.globalMult} vs ${beforeMult}`)
+    ok('增益提升全局倍率', E.moneyGt(derived.globalMult, beforeMult), `${derived.globalMult} vs ${beforeMult}`)
 
     const beast = EVENTS.find((e) => e.id === 'beastRaid')
     const woodBefore = state.resources.wood
     E.fireEvent(state, derived, beast)
-    ok('天灾掠夺资源', state.resources.wood < woodBefore)
+    ok('天灾掠夺资源', E.moneyLt(state.resources.wood, woodBefore))
     ok('天灾计数 +1', state.stats.disasters === 1)
 
     const pilgrim = EVENTS.find((e) => e.id === 'pilgrims')
     const faithBefore = state.resources.faith
     E.fireEvent(state, derived, pilgrim)
-    ok('奇遇发放资源', state.resources.faith > faithBefore)
+    ok('奇遇发放资源', E.moneyGt(state.resources.faith, faithBefore))
     ok('事件会重排下次时间', state.nextEventAt > Date.now())
   }
 }
@@ -144,15 +144,16 @@ export function eventCategories({ ok, section }) {
       // 行为验证：同一事件在不同产出下给的东西不同
       const gainAt = (rate) => {
         const { state: s, derived: d } = newGame()
-        d.rates = { ...d.rates, artifact: rate }
+        // 速率是金额：夹具注入也必须构造成 Decimal。
+        d.rates = { ...d.rates, artifact: E.money(rate) }
         s.pendingChoice = { id: 'ancientCave', at: 0 }
-        const before = s.resources.artifact || 0
+        const before = E.money(s.resources.artifact)
         E.resolveChoice(s, d, 0)
-        return (s.resources.artifact || 0) - before
+        return E.moneySubtract(E.money(s.resources.artifact), before)
       }
       const low = gainAt(0.01)
       const high = gainAt(1)
-      ok('同一事件在高产出的存档里给得更多（与资源挂钩）', high > low, low + ' → ' + high)
+      ok('同一事件在高产出的存档里给得更多（与资源挂钩）', E.moneyGt(high, low), low + ' → ' + high)
     }
   }
 }

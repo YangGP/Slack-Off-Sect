@@ -9,6 +9,7 @@ import { state, derived, view, actions, highlightCost, clearHighlight } from '@/
 import { buildingCost, canAfford } from '@/game/engine'
 import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects, describeProcessingEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
+import { money } from '@/game/decimal'
 import { resourceName } from '@/data/resources'
 import { BUILDING_FLAVOR } from '@/data/flavor'
 import HoverTip from './HoverTip.vue'
@@ -34,6 +35,8 @@ const powerMode = computed(() => (
 ))
 const powerMult = computed(() => hasPower.value && powerMode.value === 'energy' ? props.meta.powerMult ?? 1 : 1)
 const runningCost = computed(() => !!props.meta.upkeep || hasPower.value)
+/** 运行比例是有界 Number，取整显示只在脚本里做 */
+const supplyPercent = computed(() => Math.round(supply.value * 100))
 const throughputMult = computed(() => props.meta.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
 const price = computed(() => buildingCost(state, props.meta.id, 1))
@@ -68,13 +71,19 @@ const effectRows = computed(() => {
 const conditions = computed(() => describeNeeds(props.meta.needs))
 const flavor = computed(() => BUILDING_FLAVOR[props.meta.id] || '')
 
-/** 维护费逐条成行：这些建筑才有「停用」按钮，停用即停费 */
+/**
+ * 维护费逐条成行：这些建筑才有「停用」按钮，停用即停费。
+ * 单价与合计都在金额域取反后交给 fmtRate，不在模板里做原生乘法。
+ */
+function upkeepRate(unit, activeCount = 1, mult = 1) {
+  return fmtRate(money(unit).times(activeCount).times(mult).negated())
+}
 const upkeepRows = computed(() =>
   Object.entries(props.meta.upkeep || {}).map(([res, v]) => ({
     key: res,
     label: resourceName(res),
-    unit: fmtRate(-v),
-    total: enabled.value > 0 ? fmtRate(-v * active.value * throughputMult.value) : '',
+    unit: upkeepRate(v),
+    total: enabled.value > 0 ? upkeepRate(v, active.value, throughputMult.value) : '',
   })),
 )
 
@@ -83,12 +92,12 @@ const powerRow = computed(() => {
   if (!hasPower.value) return null
   const energy = powerMode.value === 'energy'
   const res = energy ? 'qiEnergy' : 'qi'
-  const unit = energy ? (props.meta.upkeepEnergy || 0) : (props.meta.upkeepQi || 0)
+  const unit = energy ? (props.meta.upkeepEnergy ?? 0) : (props.meta.upkeepQi ?? 0)
   return {
     res,
     label: resourceName(res),
-    unit: fmtRate(-unit),
-    total: enabled.value > 0 ? fmtRate(-unit * active.value * throughputMult.value) : '',
+    unit: upkeepRate(unit),
+    total: enabled.value > 0 ? upkeepRate(unit, active.value, throughputMult.value) : '',
   }
 })
 
@@ -145,7 +154,7 @@ onBeforeUnmount(clearHighlight)
           <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
           <div v-if="enabled > 0" class="tip-row">
             <span class="k">供应</span>
-            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ Math.round(supply * 100) }}% · 按供应比例发挥效果</span>
+            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ supplyPercent }}% · 按供应比例发挥效果</span>
           </div>
           <!-- 动力与物料维护分开记账，一种资源一行 -->
           <div v-if="powerRow" class="tip-row">

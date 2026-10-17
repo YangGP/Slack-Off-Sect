@@ -33,8 +33,8 @@ if (eventSeed) {
 }
 const state = createInitialState(simulatedNow)
 setGameContext(state, { now: () => simulatedNow, random })
-state.karma = karma
-state.dao = dao
+state.karma = E.money(karma)
+state.dao = E.money(dao)
 const derived = E.createDerived()
 E.recompute(state, derived)
 const bot = createBot(state, derived)
@@ -48,21 +48,22 @@ const comfortTime = { total: 0, below: 0, target: 0, above: 0, crowded: 0 }
 
 function snapshot() {
   const cost = E.realmCost(state, derived, state.realm + 1)
+  const money = E.moneyToNumber
   return {
     hours: +(elapsed / 3600).toFixed(2), realm: E.REALMS[state.realm].name,
-    disciples: state.disciples.total, globalMult: +derived.globalMult.toFixed(2),
+    disciples: state.disciples.total, globalMult: +money(derived.globalMult).toFixed(2),
     discount: derived.breakthroughDiscount,
     jobs: { ...state.disciples.jobs }, idle: E.idleDisciples(state),
     habitability: +derived.habitability.toFixed(1), habitabilityMult: derived.habitabilityMult,
-    discipleMult: derived.discipleMult, leaveChance: derived.leaveChance, netQi: +derived.netQi.toFixed(2),
+    discipleMult: derived.discipleMult, leaveChance: derived.leaveChance, netQi: +money(derived.netQi).toFixed(2),
     materials: Object.fromEntries(['wood', 'rock', 'ore', 'herb', 'insight', 'faith'].map(id => [id, {
-      stock: +(state.resources[id] || 0).toFixed(2), cap: derived.max[id],
-      production: +(derived.rates[id] || 0).toFixed(3), net: +(derived.net[id] || 0).toFixed(3),
+      stock: +money(state.resources[id]).toFixed(2), cap: money(derived.max[id]),
+      production: +money(derived.rates[id]).toFixed(3), net: +money(derived.net[id]).toFixed(3),
     }])),
     buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, entry]) => [id, entry.count])),
     nextRealm: cost ? Object.entries(cost).map(([id, amount]) => ({
-      resource: id, cost: amount, stock: Math.floor(state.resources[id] || 0),
-      cap: Math.floor(derived.max[id]), rate: +(derived.rates[id] || 0).toFixed(2),
+      resource: id, cost: money(amount), stock: E.moneyToCount(state.resources[id]),
+      cap: E.moneyToCount(derived.max[id]), rate: +money(derived.rates[id]).toFixed(2),
     })) : null,
     wonders: Object.fromEntries(E.BUILDINGS.filter(b => b.group === 'wonder')
       .map(b => [b.id, state.buildings[b.id]?.count || 0])),
@@ -74,12 +75,13 @@ function snapshot() {
 // Use only unlocked recipes, available inputs and actual engine actions; no free resources.
 function prepareRealm() {
   const fill = (id, need, path = new Set()) => {
-    if ((state.resources[id] || 0) >= need || path.has(id) || need > derived.max[id]) return
+    const have = E.money(state.resources[id])
+    if (E.moneyGte(have, need) || path.has(id) || E.moneyLt(derived.max[id], need)) return
     const recipe = E.CRAFTS.find(c => c.out === id && E.isCraftUnlocked(state, c))
     if (!recipe) return
-    const copies = Math.ceil((need - (state.resources[id] || 0)) / E.craftYield(derived, recipe))
+    const copies = E.moneyToCount(E.moneySubtract(need, have).div(E.craftYield(derived, recipe)).ceil())
     const next = new Set(path).add(id)
-    for (const [input, amount] of Object.entries(recipe.cost)) fill(input, amount * copies, next)
+    for (const [input, amount] of Object.entries(recipe.cost)) fill(input, E.money(amount).times(copies), next)
     E.craft(state, derived, recipe.id, { times: copies })
   }
   const cost = E.realmCost(state, derived, state.realm + 1)
@@ -94,8 +96,10 @@ function allocateLabor() {
   const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
   for (const job of E.JOBS) E.setJob(state, derived, job.id, 0)
   const farmer = E.JOBS.find(job => job.id === 'farmer')
-  const perFarmer = farmer.base * (1 + (derived.jobRatio.farmer || 0)) * derived.discipleMult * derived.sourceFactor.qi
-  const farmers = Math.min(state.disciples.total, Math.ceil(Math.max(0, -derived.netQi + derived.upkeep * 0.1) / perFarmer))
+  const perFarmer = farmer.base * (1 + (derived.jobRatio.farmer || 0)) * derived.discipleMult * E.moneyToNumber(derived.sourceFactor.qi)
+  // 缺口与口粮都是金额：先在 Decimal 域算好缺口，再取整得到人数。
+  const deficit = E.moneyMax(E.ZERO, E.money(derived.upkeep).times(0.1).minus(derived.netQi))
+  const farmers = Math.min(state.disciples.total, Math.ceil(E.moneyToNumber(deficit) / perFarmer))
   E.setJob(state, derived, 'farmer', farmers)
   const jobs = Object.entries(weights).filter(([id]) => derived.unlockedJobs.includes(id))
   const totalWeight = jobs.reduce((sum, [, weight]) => sum + weight, 0)
@@ -117,7 +121,7 @@ for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
         const spec = E.eventEffect(state, derived, option.effect || {})
         const outcome = E.eventOutcome(state, derived, spec)
         const score = outcome.rows.reduce((sum, row) => sum +
-          (row.gained - row.lost) / Math.max(0.001, E.eventResourceRate(state, derived, row.res)), 0)
+          E.moneyToNumber(E.moneySubtract(row.gained, row.lost)) / Math.max(0.001, E.moneyToNumber(E.eventResourceRate(state, derived, row.res))), 0)
         return { index, score, affordable: outcome.affordable }
       }).filter(option => option.affordable).sort((a, b) => b.score - a.score)
       if (choices.length) E.resolveChoice(state, derived, choices[0].index)
@@ -133,7 +137,7 @@ for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
         E.treasureLevel(state, u.id) < refineLevel)
         .map(u => ({ id: u.id, cost: E.refineCost(state, u.id) }))
         .filter(u => E.canAfford(state, u.cost))
-        .sort((a, b) => (a.cost.insight || 0) - (b.cost.insight || 0) || a.id.localeCompare(b.id))
+        .sort((a, b) => E.moneyToNumber(a.cost.insight) - E.moneyToNumber(b.cost.insight) || a.id.localeCompare(b.id))
       if (candidates.length) E.refineTreasure(state, derived, candidates[0].id)
     }
   }
@@ -146,7 +150,7 @@ for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
     if (entry.count > 0 && firstBuildings[id] == null) firstBuildings[id] = +(elapsed / 60).toFixed(1)
   }
   for (const [id, rate] of Object.entries(derived.rates)) {
-    if (rate > 0 && firstProduction[id] == null) firstProduction[id] = +(elapsed / 60).toFixed(1)
+    if (E.moneyIsPositive(rate) && firstProduction[id] == null) firstProduction[id] = +(elapsed / 60).toFixed(1)
   }
   for (const [id, learned] of Object.entries(state.upgrades)) {
     if (learned && firstResearch[id] == null) firstResearch[id] = +(elapsed / 60).toFixed(1)

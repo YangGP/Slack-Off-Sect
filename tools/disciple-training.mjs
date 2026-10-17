@@ -9,9 +9,10 @@ export function trainDisciples(state, derived, { mode = 'protected', random = Ma
   const candidates = state.disciples.members.filter(m => E.discipleBreakthroughPreview(state, m).ready)
   for (const member of candidates.slice(0, limit)) {
     const preview = E.discipleBreakthroughPreview(state, member)
-    const floorQi = mode === 'protected' ? Math.min(derived.max.qi, derived.upkeep * 30) : 0
+    const floorQi = mode === 'protected' ? E.moneyMin(derived.max.qi, E.money(derived.upkeep).times(30)) : E.ZERO
+    // 余量与保留量都是金额：扣完这次之后必须仍留有「下一境材料」和「30 秒口粮」。
     if (Object.entries(preview.cost).some(([id, cost]) =>
-      state.resources[id] - cost < Math.max(reserve[id] || 0, id === 'qi' ? floorQi : 0))) {
+      E.moneyLt(E.moneySubtract(state.resources[id], cost), E.moneyMax(reserve[id], id === 'qi' ? floorQi : E.ZERO)))) {
       report.reserved++
       continue
     }
@@ -23,7 +24,7 @@ export function trainDisciples(state, derived, { mode = 'protected', random = Ma
         if (applied.applied) {
           report.aidApplied++
           report.aidBonusInjected += aidPreview.bonus
-          for (const [id, amount] of Object.entries(aidPreview.cost)) report.aidSpent[id] = (report.aidSpent[id] || 0) + amount
+          for (const [id, amount] of Object.entries(aidPreview.cost)) report.aidSpent[id] = E.money(report.aidSpent[id]).plus(amount)
         }
       }
     }
@@ -33,7 +34,7 @@ export function trainDisciples(state, derived, { mode = 'protected', random = Ma
     report.success += result.success
     report.failed += result.failed
     if (result.success || result.failed) {
-      for (const [id, cost] of Object.entries(preview.cost)) report.spent[id] = (report.spent[id] || 0) + cost
+      for (const [id, cost] of Object.entries(preview.cost)) report.spent[id] = E.money(report.spent[id]).plus(cost)
       onAttempt?.(member, { result, armed: bonus > 0, bonus })
     }
   }

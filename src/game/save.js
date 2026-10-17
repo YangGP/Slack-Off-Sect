@@ -1,5 +1,8 @@
 import { normalizeState, createInitialState } from './state'
-import { SAVE_VERSION, SAVE_FIELDS, isRecord, safeNumber } from './saveSchema'
+import { SAVE_VERSION, SAVE_FIELDS, isRecord } from './saveSchema'
+import { ZERO, floorMoney, moneyNonNegative } from './decimal'
+import { cloneRuntime } from './clone'
+import { encodeMoneyFields } from './moneyFields'
 
 export { SAVE_VERSION }
 
@@ -7,14 +10,18 @@ export const SAVE_KEY = 'slack-off-sect.save.v1'
 const emptyStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 const browserStorage = () => typeof localStorage !== 'undefined' ? localStorage : emptyStorage
 
-/** 存档白名单只包含持久状态，运行时上下文不会进入序列化。 */
+/**
+ * 存档白名单只包含持久状态，运行时上下文不会进入序列化。
+ * 返回的是**独立的普通数据**（深拷贝，不暴露状态的嵌套引用）；
+ * 金额字段按白名单转十进制字符串，控制域继续是 JSON number。
+ */
 export function serialize(state, now = Date.now()) {
   const copy = Object.fromEntries(SAVE_FIELDS.filter(key => key in state).map(key => [key,
-    key === 'log' ? state.log.slice(0, 60) : state[key],
+    key === 'log' ? cloneRuntime(state.log.slice(0, 60)) : cloneRuntime(state[key]),
   ]))
   copy.lastSaveAt = now
   copy.version = SAVE_VERSION
-  return copy
+  return encodeMoneyFields(copy)
 }
 
 /** 存储适配器可由浏览器、内存或测试夹具提供；错误保护按实例隔离。 */
@@ -88,14 +95,19 @@ export function restoreSave(data, { now = Date.now() } = {}) {
     if (data.version != null && (!Number.isInteger(data.version) || data.version < 1 || data.version > SAVE_VERSION)) {
       throw new Error('存档版本无法兼容')
     }
-    return normalizeState(data, { now, preferMembers: data.version === SAVE_VERSION && Array.isArray(data.disciples?.members) })
+    const version = Number.isInteger(data.version) ? data.version : 0
+    // v2 起个体成员就是权威数据：升到 v3 不能因为版本号判断变化而重建弟子。
+    const preferMembers = version >= 2 && Array.isArray(data.disciples?.members)
+    return normalizeState(data, { now, preferMembers })
   } catch (error) {
     const state = createInitialState(now)
-    state.karma = safeNumber(data.karma ?? data.resources?.karma)
-    state.dao = Math.floor(safeNumber(data.dao ?? data.resources?.dao))
+    // 结构冲突时只继承永久货币：按金额域安全解码，不经 Number 或 MAX_SAFE_INTEGER 夹取。
+    // 恢复分支绕过 validateState，必须在这里做非负清洗，否则 '-5' 会让仙缘变负（旧 safeNumber 会夹到 0）。
+    state.karma = moneyNonNegative(data.karma ?? data.resources?.karma, ZERO)
+    state.dao = floorMoney(moneyNonNegative(data.dao ?? data.resources?.dao, ZERO))
     state.resources.karma = state.karma
     state.resources.dao = state.dao
-    state.__recoveryNotice = `旧存档无法完整兼容，已保留仙缘 ${state.karma} 与道果 ${state.dao}，其余进度重新开始。`
+    state.__recoveryNotice = `旧存档无法完整兼容，已保留仙缘 ${state.karma.toString()} 与道果 ${state.dao.toString()}，其余进度重新开始。`
     return state
   }
 }

@@ -16,7 +16,7 @@ for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [8
   let now = 1800000000000
   const s = createInitialState(now)
   setGameContext(s, { now: () => now, random })
-  s.karma = karma
+  s.karma = E.money(karma)
   const d = E.createDerived()
   E.recompute(s, d)
   const bot = createBot(s, d)
@@ -41,15 +41,17 @@ for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [8
         if (!event.threat) event.options.forEach((o, i) => {
           const result = E.eventOutcome(s, d, o.effect)
           if (!result.affordable) return
-          const score = result.rows.reduce((sum, row) => sum + (row.gained - row.lost) / Math.max(1, d.max[row.res]), 0)
+          // 收益与仓容都是金额：先在 Decimal 域求净收益，再按仓容占比降到 Number 估价。
+          const score = result.rows.reduce((sum, row) => sum +
+            E.moneyToNumber(E.moneySubtract(row.gained, row.lost)) / Math.max(1, E.moneyToNumber(d.max[row.res])), 0)
           if (score > best) { best = score; index = i }
         })
         if (event.threat) {
           const effect = event.options[index].effect
           const result = E.eventOutcome(s, d, effect)
           threats.choices[effect.beastResponse] = (threats.choices[effect.beastResponse] || 0) + 1
-          for (const [res, amount] of Object.entries(result.required)) threats.spent[res] = (threats.spent[res] || 0) + amount
-          threats.herbLost += result.rows.find(row => row.res === 'herb')?.lost || 0
+          for (const [res, amount] of Object.entries(result.required)) threats.spent[res] = E.money(threats.spent[res]).plus(amount)
+          threats.herbLost = E.money(threats.herbLost).plus(result.rows.find(row => row.res === 'herb')?.lost ?? E.ZERO)
         }
         if (event.options[index].effect.decline) declined++
         E.resolveChoice(s, d, index)
@@ -58,8 +60,14 @@ for (const [seed, response] of [[0, 'none'], [17, 'active'], [17, 'default'], [8
       bot.act()
     }
     if (s.realm >= 4 && !milestones[REALMS[s.realm].name]) milestones[REALMS[s.realm].name] = (t / 3600).toFixed(2)
-    if (Object.values(s.resources).some(v => !Number.isFinite(v) || v < 0)) invalid = true
+    if (Object.values(s.resources).some(v => !E.moneyFinite(v) || E.moneyLt(v, 0))) invalid = true
   }
-  console.log(JSON.stringify({ seed, karma, response, events: s.stats.eventsSeen, choices: s.stats.choicesMade, declined, realm: REALMS[s.realm].name, milestones, threats, invalid }))
+  // 报告边界：金额统一降到 Number 再输出。
+  const report = {
+    ...threats,
+    spent: Object.fromEntries(Object.entries(threats.spent).map(([res, amount]) => [res, E.moneyToNumber(amount)])),
+    herbLost: E.moneyToNumber(threats.herbLost),
+  }
+  console.log(JSON.stringify({ seed, karma, response, events: s.stats.eventsSeen, choices: s.stats.choicesMade, declined, realm: REALMS[s.realm].name, milestones, threats: report, invalid }))
   if (invalid) process.exitCode = 1
 }

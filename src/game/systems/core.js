@@ -1,7 +1,8 @@
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { BUILDING_MAP } from '@/data/buildings'
-import { atLeast, subtractResource, nearlyEqual, floorNumber, ceilNumber } from '../numbers'
+import { atLeast } from '../numbers'
+import { Dec, MONEY_INFINITY, ONE, ZERO, ceilMoney, money, moneyAvailable, moneyMax } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
 import { DAYS_PER_YEAR, CALENDAR, TERMS, DAYS_PER_SEASON, SEASONS } from '@/data/calendar'
 import { REALMS } from '@/data/realms'
@@ -34,14 +35,22 @@ export function habitabilityEffects(habitability, population) {
  *   softCap(x, L)：x ≤ 0.75L 时返回 x；否则 0.75L + 0.25L·(1 − 0.25L/(x − 0.5L))
  * 例：L = 2 时，x = 2 → 1.60，x = 10 → 1.94，x = ∞ → 2.00。
  */
+/**
+ * 软上限（通用 idler 形状）：前 75% 原样给，剩下的渐近到 limit 但永远不到。
+ *   softCap(x, L)：x ≤ 0.75L 时返回 x；否则 0.75L + 0.25L·(1 − 0.25L/(x − 0.5L))
+ * 例：L = 2 时，x = 2 → 1.60，x = 10 → 1.94，x = ∞ → 2.00。
+ * 入参可能是随永久货币增长的无界金额，全程在 Decimal 域计算，不先转 Number。
+ */
 export function softCap(x, limit) {
-  const free = 0.75 * limit
-  const abs = Math.abs(x)
-  if (abs <= free) return x
-  const over = abs - free
-  const delta = 0.25 * limit
-  const capped = free + (1 - delta / (over + delta)) * delta
-  return x < 0 ? -capped : capped
+  const value = money(x)
+  const cap = money(limit)
+  const free = cap.times('0.75')
+  const abs = value.abs()
+  if (abs.lte(free)) return value
+  const delta = cap.times('0.25')
+  const over = abs.minus(free)
+  const capped = free.plus(delta).minus(delta.times(delta).div(over.plus(delta)))
+  return value.isNegative() ? capped.negated() : capped
 }
 
 export function createDerived() {
@@ -57,14 +66,14 @@ export function createDerived() {
     autoCraftDrain: {},
     upgradeSupply: {},
     prodRaw: {},
-    upkeep: 0,
-    rawUpkeep: 0,
-    /** 每名弟子每秒的口粮（已含境界倍率，未含减耗） */
-    discipleUpkeep: 0,
+    upkeep: ZERO,
+    rawUpkeep: ZERO,
+    /** 每名弟子每秒的口粮（已含境界倍率，未含减耗）——金额 */
+    discipleUpkeep: ZERO,
     populationUpkeepMult: 1,
     discipleWeight: 0,
     discipleJobWeights: {},
-    netQi: 0,
+    netQi: ZERO,
     habitability: CONFIG.HABITABILITY_BASE,
     habitabilityBonus: 0,
     housingHabitability: 0,
@@ -72,13 +81,14 @@ export function createDerived() {
     discipleMult: 1,
     leaveChance: 0,
     maxDisciples: 0,
-    globalMult: 1,
+    /** 综合产出倍率：含无界的仙缘/道果层，金额运算全程 Decimal */
+    globalMult: ONE,
     realmMult: 1,
-    karmaMult: 1,
+    karmaMult: ONE,
     /** 仙缘对有限资源容量的独立倍率 */
-    karmaStorageMult: 1,
-    /** 道果带来的全局产出倍率（飞升层） */
-    daoMult: 1,
+    karmaStorageMult: ONE,
+    /** 道果带来的全局产出倍率（飞升层）：随道果数量增长，无上界 */
+    daoMult: ONE,
     craftBonus: 0,
     craftSpeed: 1,
     autoCraftSpeeds: {},
@@ -107,7 +117,7 @@ export function createDerived() {
     autoTalentJobsUnlocked: false,
     recruitModeUnlocked: false,
     trainingActive: false,
-    trainingCost: 0,
+    trainingCost: ZERO,
     daoAutomation: false,
     craftTargetsUnlocked: false,
     buildingSupply: {},
@@ -207,8 +217,8 @@ export function isBuildingUnlocked(state, id) {
   if (ratio <= 0) return true
   const revealCost = id === 'hut' && !state.starterHutBuilt ? { qi: meta.cost.qi } : meta.cost
   for (const res in revealCost || {}) {
-    const seen = Math.max(state.peak?.[res] || 0, state.resources[res] || 0)
-    if (!atLeast(seen, revealCost[res] * ratio)) return false
+    const seen = moneyMax(state.peak?.[res] ?? ZERO, state.resources[res] ?? ZERO)
+    if (!atLeast(seen, money(revealCost[res]).times(ratio))) return false
   }
   return true
 }
@@ -217,8 +227,9 @@ export function isBuildingUnlocked(state, id) {
 export function trackPeak(state) {
   if (!state.peak) state.peak = {}
   for (const res in state.resources) {
-    const v = state.resources[res] || 0
-    if (v > (state.peak[res] || 0)) state.peak[res] = v
+    const value = state.resources[res] ?? ZERO
+    const peak = state.peak[res]
+    if (peak === undefined || value.gt(peak)) state.peak[res] = value
   }
 }
 
@@ -259,7 +270,7 @@ export function isCraftUnlocked(state, craft) {
 
 export function canAfford(state, cost, times = 1) {
   for (const k in cost) {
-    if (!atLeast(state.resources[k] || 0, cost[k] * times)) return false
+    if (!atLeast(state.resources[k] ?? ZERO, money(cost[k]).times(times))) return false
   }
   return true
 }
@@ -267,27 +278,31 @@ export function canAfford(state, cost, times = 1) {
 export function payCost(state, cost, times = 1) {
   trackPeak(state)
   for (const k in cost) {
-    state.resources[k] = subtractResource(state.resources[k] || 0, cost[k] * times)
+    state.resources[k] = moneyAvailable(state.resources[k] ?? ZERO, money(cost[k]).times(times))
   }
 }
 
-export function addResource(state, id, amount, capacity = Infinity) {
-  if (!amount) return 0
-  if (nearlyEqual(capacity, Math.round(capacity))) capacity = Math.round(capacity)
+/**
+ * 入库：返回实际增加量（Decimal）。容量为 `MONEY_INFINITY` 时不设上限。
+ * 降低仓储后保留旧库存（超过新上限时停止收入，消费仍正常）；整枚资源不留小数。
+ */
+export function addResource(state, id, amount, capacity = MONEY_INFINITY) {
+  const gain = money(amount)
+  if (gain.isZero()) return ZERO
+  const cap = money(capacity)
   const meta = RESOURCE_MAP[id]
-  const before = state.resources[id] || 0
-  let next = before + amount
-  if (id !== 'karma' && Number.isFinite(capacity)) {
-    // 降低仓储后保留旧库存；超过新上限时停止收入，消费仍正常。
-    next = Math.min(next, Math.max(before, capacity))
+  const before = state.resources[id] ?? ZERO
+  let next = before.plus(gain)
+  if (id !== 'karma' && cap.isFinite()) {
+    next = Dec.min(next, Dec.max(before, cap))
   }
-  next = Math.max(0, next)
+  if (next.isNegative()) next = ZERO
   // 整枚计数的资源（灵石/丹药/符箓/法器）不留小数：事件按百分比增减、旧存档都可能带小数
-  if (meta?.integer) next = floorNumber(next)
+  if (meta?.integer) next = next.floor()
   state.resources[id] = next
-  if (next > 0) state.seen[id] = true
+  if (next.gt(0)) state.seen[id] = true
   trackPeak(state)
-  return next - before
+  return next.minus(before)
 }
 
 /**
@@ -296,37 +311,37 @@ export function addResource(state, id, amount, capacity = Infinity) {
  * 涨价（×1.55^n）、破境折扣（×0.85）、法宝祭炼（×1.7^n）都会算出小数，
  * 而「半枚灵石」既没法付、也会让界面出现「现有 4 / 需要 4.0000001」这种
  * 看着够其实不够的死角。所以这类资源的价格一律向上取整：
- * 玩家看到的需求就是真正要凑齐的数目（§5.2）。
+ * 玩家看到的需求就是真正要凑齐的数目（§5.2）。金额一律返回 Decimal。
  */
 export function roundCost(cost) {
   const out = {}
   for (const k in cost) {
-    const v = cost[k]
-    out[k] = RESOURCE_MAP[k]?.integer ? ceilNumber(v) : v
+    const value = money(cost[k])
+    out[k] = RESOURCE_MAP[k]?.integer ? ceilMoney(value) : value
   }
   return out
 }
 
 export function scaleCost(cost, factor) {
   const out = {}
-  for (const k in cost) out[k] = cost[k] * factor
+  for (const k in cost) out[k] = money(cost[k]).times(factor)
   return roundCost(out)
 }
 
-/** 购买第 n 座（从 0 开始计数）建筑的价格。 */
+/** 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。 */
 export function buildingPriceAt(meta, index, starterHut = false) {
-  const factor = Math.pow(meta.priceRatio || 1.15, index)
+  const factor = money(meta.priceRatio || 1.15).pow(index)
   const cost = scaleCost(meta.cost, factor)
   if (meta.id === 'hut' && index === 0 && starterHut) delete cost.wood
   return cost
 }
 
-/** 购买 count 座建筑从 from 开始的总价 */
+/** 购买 count 座建筑从 from 开始的总价：逐座取整后再求和，不用几何总和代替。 */
 export function buildingCostFrom(meta, from, count, starterHut = false) {
   const total = {}
   for (let i = 0; i < count; i++) {
     const price = buildingPriceAt(meta, from + i, starterHut)
-    for (const k in price) total[k] = (total[k] || 0) + price[k]
+    for (const k in price) total[k] = (total[k] ?? ZERO).plus(price[k])
   }
   return total
 }
@@ -348,13 +363,13 @@ export function maxAffordable(state, id, cap = 500) {
     const price = buildingPriceAt(meta, from + n, !state.starterHutBuilt)
     let ok = true
     for (const k in price) {
-      const have = state.resources[k] || 0
-      const used = running[k] || 0
-      if (!atLeast(have, used + price[k])) {
+      const have = state.resources[k] ?? ZERO
+      const used = running[k] ?? ZERO
+      if (!atLeast(have, used.plus(price[k]))) {
         ok = false
         break
       }
-      running[k] = used + price[k]
+      running[k] = used.plus(price[k])
     }
     if (!ok) break
   }
@@ -459,20 +474,20 @@ export function treasureMult(state, entry) {
 export function refineCost(state, id) {
   const meta = UPGRADE_MAP[id]
   if (!meta || meta.kind !== 'treasure') return null
-  const k = Math.pow(CONFIG.TREASURE_REFINE_RATIO, treasureLevel(state, id))
+  const level = treasureLevel(state, id)
+  const k = money(CONFIG.TREASURE_REFINE_RATIO).pow(level)
   const out = {}
   for (const res in meta.cost) {
     if (res === 'insight') continue // 炼成价里的灵机不参与祭炼，改用下面的 refine.insight
-    out[res] = meta.cost[res] * k
+    out[res] = money(meta.cost[res]).times(k)
   }
   const insight = meta.refine?.insight || 0
-  if (insight) out.insight = insight * k
-  const level = treasureLevel(state, id)
+  if (insight) out.insight = money(insight).times(k)
   const from = meta.refine?.materialFromLevel || 0
   if (level >= from) {
-    const materialRatio = Math.pow(CONFIG.TREASURE_REFINE_RATIO, level - from)
+    const materialRatio = money(CONFIG.TREASURE_REFINE_RATIO).pow(level - from)
     for (const [res, amount] of Object.entries(meta.refine?.materials || {})) {
-      out[res] = (out[res] || 0) + amount * materialRatio
+      out[res] = (out[res] ?? ZERO).plus(money(amount).times(materialRatio))
     }
   }
   return roundCost(out)

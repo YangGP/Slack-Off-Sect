@@ -16,11 +16,11 @@ export function playerBot({ ok, section }) {
     s.upgrades.alchemyArt = true
     s.buildings.hut = { count: 1, on: true }
     s.buildings.alchemyRoom = { count: 1, on: true }
-    Object.assign(s.resources, { qi: 20000, herb: 20000 })
+    Object.assign(s.resources, { qi: E.money(20000), herb: E.money(20000) })
     E.recompute(s, d)
     const bot = createBot(s, d, { realmCost: () => ({ pill: 26 }), breakthrough: () => false })
     for (let i = 0; i < 5; i++) bot.act()
-    ok('手动炼丹按近期需求停产，不持续囤到满仓', s.resources.pill > 0 && s.resources.pill <= 35)
+    ok('手动炼丹按近期需求停产，不持续囤到满仓', E.moneyIsPositive(s.resources.pill) && E.moneyGte(35, s.resources.pill))
     ok('手动备料策略不提前开放自动目标能力', !d.craftTargetsUnlocked && !s.upgrades.intuition && Object.keys(s.craftTargets).length === 0)
   }
   section('突破优先的多层扩仓')
@@ -33,7 +33,7 @@ export function playerBot({ ok, section }) {
     for (const res of RESOURCES) s.resources[res.id] = d.max[res.id]
     const bot = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayBase: 4 }), breakthrough: () => false })
     const archiveCost = E.buildingCost(s, 'scriptureArchive', 1)
-    ok('回归夹具确实受灵机及典籍库建材仓容限制', d.max.insight < UPGRADE_MAP.arrayAssembly.cost.insight && archiveCost.rock > d.max.rock)
+    ok('回归夹具确实受灵机及典籍库建材仓容限制', E.moneyLt(d.max.insight, UPGRADE_MAP.arrayAssembly.cost.insight) && E.moneyGt(archiveCost.rock, d.max.rock))
     ok('扩仓计划保留超出当前建材仓容的典籍库目标', bot.prerequisites().buildings.get('scriptureArchive') === 25)
     bot.act()
     ok('先扩原料仓解决科研扩仓的建材上限', E.countOf(s, 'warehouse') > 2)
@@ -52,7 +52,7 @@ export function playerBot({ ok, section }) {
     for (const id of ['intuition', 'preachArt', 'crystalTheory', 'compositeRune', 'astrologyArt']) s.upgrades[id] = true
     E.recompute(s, d)
     createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayDiagram: 3 }), breakthrough: () => false }).act()
-    ok('知识加工按近期需求设目标而非无上限抢占灵机', s.craftTargets.drawArrayDiagram === 3 && s.craftTargets.recordDaoNote > 0 && s.craftTargets.compileDaoTreatise > 0)
+    ok('知识加工按近期需求设目标而非无上限抢占灵机', E.moneyEq(s.craftTargets.drawArrayDiagram, 3) && E.moneyIsPositive(s.craftTargets.recordDaoNote) && E.moneyIsPositive(s.craftTargets.compileDaoTreatise))
   }
   section('模拟玩家（机器人）短跑')
   {
@@ -72,9 +72,9 @@ export function playerBot({ ok, section }) {
         if (t % 5 === 0) bot.act()
         if (t % 60 === 0) E.recompute(state, derived)
         for (const r of ['ore', 'herb']) {
-          const now = state.resources[r] || 0
-          if (!producedAt[r] && (derived.rates[r] || 0) > 0) producedAt[r] = t
-          if (!firstSpend[r] && now < prevRes[r] - 1e-9) firstSpend[r] = t
+          const now = E.money(state.resources[r])
+          if (!producedAt[r] && E.moneyIsPositive(derived.rates[r])) producedAt[r] = t
+          if (!firstSpend[r] && E.moneyLt(now, E.money(prevRes[r]).minus(1e-9))) firstSpend[r] = t
           prevRes[r] = now
         }
       }
@@ -118,14 +118,14 @@ export function playerBot({ ok, section }) {
         E.tick(s5.state, s5.derived, 1, { events: false })
         if (t % 5 === 0) bot5.act()
         if (t % 60 === 0) E.recompute(s5.state, s5.derived)
-        const rate = s5.derived.rates.wood || 0
-        if (rate > 0.02 && (s5.state.resources.wood || 0) >= (s5.derived.max.wood || 0) - 1e-6) pinned++
+        const rate = E.money(s5.derived.rates.wood)
+        if (E.moneyGt(rate, 0.02) && E.moneyGte(E.money(s5.state.resources.wood), E.money(s5.derived.max.wood).minus(1e-6))) pinned++
         samples++
       }
       ok(
         '前 30 分钟灵木贴顶时间 < 5%',
         pinned / samples < 0.05,
-        `${((pinned / samples) * 100).toFixed(1)}%（上限长到 ${Math.round(s5.derived.max.wood)}，产量 ${(s5.derived.rates.wood || 0).toFixed(2)}/秒）`,
+        `${((pinned / samples) * 100).toFixed(1)}%（上限长到 ${Math.round(E.moneyToNumber(s5.derived.max.wood))}，产量 ${E.moneyToNumber(s5.derived.rates.wood).toFixed(2)}/秒）`,
       )
     }
 
@@ -146,14 +146,14 @@ export function longRunningStability({ ok, section }) {
   {
     const { state, derived } = newGame()
     // 给一套中等规模的家底，再模拟 2 小时
-    state.resources.qi = 5000
-    state.resources.wood = 5000
-    state.resources.stone = 5000
-    state.resources.insight = 5000
-    state.resources.herb = 5000
-    state.resources.ore = 5000
-    state.resources.pill = 500
-    state.resources.artifact = 500
+    state.resources.qi = E.money(5000)
+    state.resources.wood = E.money(5000)
+    state.resources.stone = E.money(5000)
+    state.resources.insight = E.money(5000)
+    state.resources.herb = E.money(5000)
+    state.resources.ore = E.money(5000)
+    state.resources.pill = E.money(500)
+    state.resources.artifact = E.money(500)
     E.buyBuilding(state, derived, 'spiritField', 5) // 先有聚灵阵，茅屋与藏经阁才立得住
     E.buyBuilding(state, derived, 'hut', 5)
     E.buyBuilding(state, derived, 'library', 2)
@@ -162,18 +162,19 @@ export function longRunningStability({ ok, section }) {
     E.setJob(state, derived, 'scholar', 4)
 
     // 这份稳定性夹具从有效容量内开始；超额旧档另有专门回归。
-    for (const r of RESOURCES) state.resources[r.id] = Math.min(state.resources[r.id] || 0, derived.max[r.id])
+    for (const r of RESOURCES) state.resources[r.id] = E.moneyMin(state.resources[r.id] ?? E.ZERO, derived.max[r.id])
     let nan = false
     for (let i = 0; i < 7200; i++) {
       E.tick(state, derived, 1, { events: false })
       if (i % 600 === 0) E.recompute(state, derived)
       for (const r of RESOURCES) {
-        if (Number.isNaN(state.resources[r.id])) nan = true
+        // 金额域的「不是数字」= 非有限 Decimal（NaN/±Infinity 都不该出现在库存里）。
+        if (!E.moneyFinite(state.resources[r.id])) nan = true
       }
     }
     ok('2 小时模拟没有 NaN', !nan)
-    ok('灵气未越界', state.resources.qi >= 0 && state.resources.qi <= derived.max.qi + 1e-6)
-    ok('灵机有积累', state.resources.insight > 0, `实际 ${state.resources.insight}`)
+    ok('灵气未越界', E.moneyGte(state.resources.qi, 0) && E.moneyGte(E.money(derived.max.qi).plus(1e-6), state.resources.qi))
+    ok('灵机有积累', E.moneyIsPositive(state.resources.insight), `实际 ${state.resources.insight}`)
     ok('稳定供粮未产生宜居度断供惩罚', state.habitabilityPenalty === 0, `实际 ${state.habitabilityPenalty}`)
     ok('弟子未流失', state.disciples.total > 0)
   }

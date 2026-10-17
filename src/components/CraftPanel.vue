@@ -4,9 +4,11 @@ import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
 import { PROCESSING_STATIONS } from '@/data/industry'
-import { isCraftUnlocked, autoCraftStatus, maxCraftable, craftYield, isProgressionVisible, processingPlan, processingBottleneck } from '@/game/engine'
+import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, isProgressionVisible, processingPlan, processingBottleneck } from '@/game/engine'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
+import { ZERO, MONEY_INFINITY, money, moneyGte, moneyGt, moneyLt, moneySum, moneyToCount, moneyToRatio } from '@/game/decimal'
+import { enough as enoughOf } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { CALENDAR } from '@/data/calendar'
@@ -32,9 +34,46 @@ const stationRows = computed(() => PROCESSING_STATIONS.map(station => {
     boost: first?.boost || 0,
     mode: first?.mode || 'normal',
     powerReason: first?.powerReason || '',
-    drain: lines.reduce((sum, line) => sum + Object.values(line.powerDrain).reduce((a, b) => a + b, 0), 0),
+    // 动力消耗是金额：逐条求和走 moneySum，不能用原生加法。
+    drain: moneySum(lines.flatMap(line => Object.values(line.powerDrain))),
   }
 }).filter(station => station.capacity > 0 || allRows.value.some(row => row.autoStatus.line?.station === station.id)))
+
+/** 每秒金额 → 每分钟文本；出项（负数）取正后另走 expensePerMinute。 */
+function perMinute(value) {
+  return fmt(money(value ?? ZERO).times(60))
+}
+function expensePerMinute(value) {
+  return fmt(money(value ?? ZERO).negated().times(60))
+}
+/** 金额 × 每分钟次数（自动产线的投入展示） */
+function perMinuteCost(value, perMinuteCount) {
+  return fmt(money(value).times(perMinuteCount))
+}
+/** 制作进度是金额域的小数余量，转百分比前先夹到 [0,1] */
+function progressPercent(value) {
+  return fmtPercent(moneyToRatio(value ?? ZERO))
+}
+/** 成品是否已满仓（上限可能是 MONEY_INFINITY 哨兵） */
+function outputFull(row) {
+  return moneyGte(row.have, row.max)
+}
+/** 这一份产出是否因加成而超过配方标称值 */
+function yieldBonus(row) {
+  return moneyGt(row.yield, row.meta.amount)
+}
+/** 库存目标是金额（整数，不封顶安全整数）：输入框里写普通整数串或科学计数法，不能写 k/m 缩写 */
+function targetText(id) {
+  return autoCraftStatus(state, derived, id).target.toString()
+}
+function targetLabel(id) {
+  const target = autoCraftStatus(state, derived, id).target
+  return target.isZero() ? '不限' : fmtStock(target)
+}
+/** 逐项材料保留量（金额）在输入框里的字符串形态 */
+function reserveText(id) {
+  return (state.settings.craftReserves?.[id] ?? ZERO).toString()
+}
 
 function updateWeight(id, event) {
   actions.setCraftWeight(id, event.target.value)
@@ -51,20 +90,22 @@ const BATCHES = [
 
 const allRows = computed(() =>
   CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => {
-    const canMake = maxCraftable(state, derived, c.id)
+    // 份数是金额：按钮可用性与「¼料 / ½料 / 全部」都用完整份数，不截成安全整数。
+    const canMakeMoney = maxCraftableMoney(state, derived, c.id)
+    const canMake = moneyToCount(canMakeMoney)
     const autoStatus = autoCraftStatus(state, derived, c.id, plan.value)
     return {
       meta: c,
       cost: craftCost(derived, c),
       yield: craftYield(derived, c),
       affordable: canMake >= 1,
-      progress: state.craftProgress[c.id] || 0,
+      progress: state.craftProgress[c.id] ?? ZERO,
       auto: !!state.autoCraft[c.id],
-      have: state.resources[c.out] || 0,
-      max: derived.max[c.out],
+      have: state.resources[c.out] ?? ZERO,
+      max: derived.max[c.out] ?? MONEY_INFINITY,
       autoStatus,
       bottleneck: processingBottleneck(state, derived, c.id, plan.value, autoStatus),
-      batches: BATCHES.map((b) => ({ ...b, count: Math.floor(canMake * b.frac) })),
+      batches: BATCHES.map((b) => ({ ...b, count: canMakeMoney.times(b.frac).floor() })),
     }
   }),
 )
@@ -74,12 +115,10 @@ const reserveResources = computed(() => [...new Set(allRows.value.flatMap(row =>
   .filter(id => state.seen[id]))
 
 function updateReserve(id, event) {
-  const value = Number(event.target.value)
-  if (Number.isFinite(value) && value >= 0) {
-    actions.setSetting('craftReserves', { ...state.settings.craftReserves, [id]: value })
-  }
+  // 保留量是金额：输入框只把原始字符串交出去，由 store 按金额域解码校验。
+  actions.setSetting('craftReserves', { ...state.settings.craftReserves, [id]: event.target.value })
   delete reserveDrafts[id]
-  event.target.value = String(state.settings.craftReserves[id] || 0)
+  event.target.value = reserveText(id)
 }
 const someAuto = computed(() => allRows.value.some(row => row.auto))
 
@@ -96,9 +135,10 @@ const locked = computed(() =>
 )
 
 function updateTarget(id, event) {
+  // 库存目标是金额：输入框交出字符串，setCraftTarget 自己按金额域校验并转整数。
   actions.setCraftTarget(id, event.target.value)
   delete targetDrafts[id]
-  event.target.value = String(autoCraftStatus(state, derived, id).target)
+  event.target.value = targetText(id)
 }
 function updateQuick(id, event) {
   actions.toggleQuickCraft(id)
@@ -107,10 +147,12 @@ function updateQuick(id, event) {
 const condenseStatus = computed(() => {
   if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
   if (!state.upgrades.qiLiquid) return '凝灵诀 · 需凝气化液'
+  const liquid = state.resources.spiritLiquid ?? ZERO
   const target = autoCraftStatus(state, derived, 'condenseLiquid').target
-  if (target > 0 && state.resources.spiritLiquid >= target) return '凝灵诀 · 目标已达'
-  if (state.resources.spiritLiquid >= derived.max.spiritLiquid) return '凝灵诀 · 灵液满仓'
-  if ((state.resources.qi || 0) < craftCost(derived, CRAFTS.find(c => c.id === 'condenseLiquid')).qi) return '凝灵诀 · 缺灵气暂停'
+  if (target.gt(0) && moneyGte(liquid, target)) return '凝灵诀 · 目标已达'
+  if (moneyGte(liquid, derived.max.spiritLiquid ?? MONEY_INFINITY)) return '凝灵诀 · 灵液满仓'
+  const qiCost = craftCost(derived, CRAFTS.find(c => c.id === 'condenseLiquid')).qi
+  if (moneyLt(state.resources.qi ?? ZERO, qiCost ?? ZERO)) return '凝灵诀 · 缺灵气暂停'
   return '凝灵诀 · 节气满仓自凝灵液'
 })
 </script>
@@ -149,7 +191,7 @@ const condenseStatus = computed(() => {
               <option v-if="derived.energyCraftUnlocked" value="energy">灵能驱动</option>
             </select>
           </label>
-          <span v-if="station.drain" class="dim">动力消耗 {{ fmt(station.drain * 60) }} {{ state.settings.processingModes[station.id] === 'energy' ? '灵能' : '灵气' }}/分</span>
+          <span v-if="!station.drain.isZero()" class="dim">动力消耗 {{ perMinute(station.drain) }} {{ state.settings.processingModes[station.id] === 'energy' ? '灵能' : '灵气' }}/分</span>
           <span v-if="station.mode !== 'normal'" class="dim">{{ station.powerReason }}<template v-if="!station.boost"> · 普通加工</template></span>
         </div>
         <div>
@@ -163,7 +205,7 @@ const condenseStatus = computed(() => {
       </div>
       <div v-if="!compact && state.buildings.polarizeArray?.count" class="processing-overview small" aria-label="双极供料状态">
         <div><HoverTip label="双极分流"><template #tip><p>正负灵子同时分流，任一侧满仓时只补下游实际用量；断供则降载。</p></template></HoverTip> · 负荷 {{ fmtPercent(derived.buildingSupply.polarizeArray || 0) }}</div>
-        <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resourceName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ fmt((derived.rates[id] || 0) * 60) }}/分 · 设施消耗 {{ fmt(-(derived.expense[id] || 0) * 60) }}/分</span></div>
+        <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resourceName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ perMinute(derived.rates[id]) }}/分 · 设施消耗 {{ expensePerMinute(derived.expense[id]) }}/分</span></div>
       </div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.qiLiquid" class="small dim">凝灵诀 · 需凝气化液</div>
       <div v-if="!compact && derived.autoCraftUnlocked" class="small craft-settings">
@@ -188,7 +230,7 @@ const condenseStatus = computed(() => {
           <summary>逐项保留材料</summary>
           <label v-for="id in reserveResources" :key="id">{{ resourceName(id) }}
             <input type="number" min="0" step="any" :aria-label="`${resourceName(id)}保留数量`"
-              :value="reserveDrafts[id] ?? (state.settings.craftReserves[id] || 0)"
+              :value="reserveDrafts[id] ?? reserveText(id)"
               @input="reserveDrafts[id] = $event.target.value" @change="updateReserve(id, $event)" />
           </label>
         </details>
@@ -214,7 +256,7 @@ const condenseStatus = computed(() => {
           <label v-if="!compact" class="craft-pin small"><input type="checkbox" :checked="state.settings.quickCrafts.includes(row.meta.id)" :aria-label="`${row.meta.name}快捷炼制`" @change="updateQuick(row.meta.id, $event)" />快捷</label>
         </div>
         <div v-if="!compact" class="craft-cost small">
-          <template v-for="(amount, res, index) in row.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: (state.resources[res] || 0) < amount }">{{ resourceName(res) }} {{ fmtCost(amount) }}</span></template>
+          <template v-for="(amount, res, index) in row.cost" :key="res"><span v-if="index" class="dim"> + </span><span :class="{ bad: !enoughOf(state, res, amount) }">{{ resourceName(res) }} {{ fmtCost(amount) }}</span></template>
           <span class="dim"> → </span><span class="good">{{ resourceName(row.meta.out) }} {{ fmt(row.yield) }}</span>
           <span v-if="derived.craftBonusByResource[row.meta.out]" class="dim"> · 专业加成 +{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
         </div>
@@ -222,9 +264,9 @@ const condenseStatus = computed(() => {
           <span>{{ row.autoStatus.line.name }} · 容量分配 {{ fmtPercent(row.autoStatus.line.share) }}</span>
           <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
           <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
-          <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resourceName(res) }} {{ fmt(amount * row.autoStatus.perMinute) }}/分</template></span>
+          <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resourceName(res) }} {{ perMinuteCost(amount, row.autoStatus.perMinute) }}/分</template></span>
           <span class="dim">瓶颈：{{ row.bottleneck.reason }}</span>
-          <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ fmt(input.deficit * 60) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
+          <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ perMinute(input.deficit) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
         </div>
         <div v-if="!compact" class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
@@ -237,8 +279,8 @@ const condenseStatus = computed(() => {
           >
             {{ condenseStatus }}
           </span>
-          <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked)" class="dim">{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
-          <span v-if="!compact && row.yield > row.meta.amount" class="dim"> · 小数累积 {{ fmtPercent(row.progress) }}</span>
+          <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked)" class="dim">{{ outputFull(row) ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
+          <span v-if="!compact && yieldBonus(row)" class="dim"> · 小数累积 {{ progressPercent(row.progress) }}</span>
           <span v-if="row.autoStatus.orderRemaining" :class="row.autoStatus.orderPaused ? 'warn' : 'dim'">订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</span>
         </div>
         <div class="craft-line">
@@ -255,7 +297,7 @@ const condenseStatus = computed(() => {
             v-for="b in row.batches.filter(batch => !compact || batch.frac !== 0.25)"
             :key="b.label"
             class="btn"
-            :disabled="b.count < 1"
+            :disabled="!b.count.gt(0)"
             @click="actions.craftBatch(row.meta.id, b.frac)"
           >
             {{ b.label }}
@@ -282,7 +324,7 @@ const condenseStatus = computed(() => {
               @input="weightDrafts[row.meta.id] = $event.target.value" @change="updateWeight(row.meta.id, $event)" />
           </label>
           <label v-if="!compact && derived.craftTargetsUnlocked" class="small">目标
-            <input class="qty" type="number" min="0" step="1" :value="targetDrafts[row.meta.id] ?? row.autoStatus.target"
+            <input class="qty" type="number" min="0" step="1" :value="targetDrafts[row.meta.id] ?? targetText(row.meta.id)"
               :aria-label="`${row.meta.name}库存目标`"
               @input="targetDrafts[row.meta.id] = $event.target.value"
               @change="updateTarget(row.meta.id, $event)" />
@@ -311,7 +353,7 @@ const condenseStatus = computed(() => {
             <span class="k">这批能做</span>
             <span class="v">
               <template v-for="(b, i) in row.batches.filter(batch => !compact || batch.frac !== 0.25)" :key="b.label">
-                <template v-if="i"> · </template>{{ b.label }} {{ b.count }} 份
+                <template v-if="i"> · </template>{{ b.label }} {{ fmtStock(b.count) }} 份
               </template>
             </span>
           </div>
@@ -319,9 +361,9 @@ const condenseStatus = computed(() => {
             <span class="k">专业制作加成</span>
             <span class="v good">+{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
           </div>
-          <div v-if="row.yield > row.meta.amount" class="tip-row">
+          <div v-if="yieldBonus(row)" class="tip-row">
             <span class="k">小数累积</span>
-            <span class="v">{{ fmtPercent(row.progress) }}</span>
+            <span class="v">{{ progressPercent(row.progress) }}</span>
           </div>
 
           <div class="tip-section">自动制作</div>
@@ -331,7 +373,7 @@ const condenseStatus = computed(() => {
               <span class="v" :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">
                 <template v-if="row.autoStatus.on">{{ row.autoStatus.ready ? '自动中 · 下一份 ' + row.autoStatus.wait.toFixed(1) + '秒' : row.autoStatus.reason }}</template>
                 <template v-else-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked">{{ condenseStatus }}</template>
-                <template v-else>{{ row.have >= row.max ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</template>
+                <template v-else>{{ outputFull(row) ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</template>
                 <template v-if="row.autoStatus.orderRemaining"> · 订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</template>
               </span>
             </div>
@@ -341,7 +383,7 @@ const condenseStatus = computed(() => {
             </div>
             <div v-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked" class="craft-auto-note">最多转化 {{ fmtPercent(CONFIG.AUTO_CONDENSE_RATIO) }} 灵气；受总开关、库存目标、仓储与道果保留量约束，无需勾选常驻自动。</div>
             <div v-if="derived.craftTargetsUnlocked" class="tip-row">
-              <span class="k">库存目标</span><span class="v">{{ row.autoStatus.target || '不限' }}</span>
+              <span class="k">库存目标</span><span class="v">{{ targetLabel(row.meta.id) }}</span>
             </div>
             <div v-if="derived.craftTargetsUnlocked" class="craft-auto-note">达到目标后暂停，用掉后补回；0 表示不限。手动制作不受限制，一份制作的加成可能超过目标。</div>
             <div class="tip-row">

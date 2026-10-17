@@ -4,6 +4,7 @@ import { build } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { JSDOM } from 'jsdom'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { money, moneyEq, moneyGt } from '../src/game/decimal.js'
 
 // 执行真正的 main 入口，并模拟 Vite 的 dispose / accept / 页面重载。
 const root = fileURLToPath(new URL('../', import.meta.url))
@@ -56,13 +57,14 @@ try {
   const first = await import(url + '?first')
   assert.equal(intervals.size, 1, 'main 自动启动且只有一个主循环')
   first.state.buildings.spiritField = { count: 1, on: true }
-  first.state.resources.qi = 100
-  first.state.karma = 44
-  first.state.dao = 11
+  // 资源、仙缘与道果都是金额：入口夹具也必须构造成 Decimal。
+  first.state.resources.qi = money(100)
+  first.state.karma = money(44)
+  first.state.dao = money(11)
   now += 1000
   for (const step of intervals.values()) await step()
   assert.ok(first.state.totalDays > 0, '真实入口推进历法')
-  assert.ok(first.state.resources.qi > 100, '真实入口结算聚灵阵产出')
+  assert.ok(moneyGt(first.state.resources.qi, 100), '真实入口结算聚灵阵产出')
   const days = first.state.totalDays
   const qi = first.state.resources.qi
 
@@ -70,7 +72,8 @@ try {
   oldHot.disposed()
   assert.equal(intervals.size, 0, '热更新清理旧循环，包括句柄 0')
   const raw = browser.localStorage.getItem('slack-off-sect.save.v1')
-  assert.equal(JSON.parse(raw).resources.qi, qi, '热更新保存完整当前进度')
+  // 存档里的金额是十进制字符串，与运行时 Decimal 用 toString 对齐。
+  assert.equal(JSON.parse(raw).resources.qi, qi.toString(), '热更新保存完整当前进度')
   oldHot.accepted()
   assert.ok(oldHot.reloadReason, '热更新请求完整重载，重新经过启动入口')
 
@@ -78,14 +81,14 @@ try {
   globalThis.__gameHot = hotContext()
   const reloaded = await import(url + '?reloaded')
   assert.equal(intervals.size, 1, '重载后重新启动一个主循环')
-  assert.equal(reloaded.state.karma, 44)
-  assert.equal(reloaded.state.dao, 11)
-  assert.equal(reloaded.state.resources.qi, qi)
+  assert.ok(moneyEq(reloaded.state.karma, 44), '重载后仙缘保持不变')
+  assert.ok(moneyEq(reloaded.state.dao, 11), '重载后道果保持不变')
+  assert.ok(moneyEq(reloaded.state.resources.qi, qi), '重载后灵气保持不变')
   assert.equal(reloaded.state.totalDays, days)
   now += 1000
   for (const step of intervals.values()) await step()
   assert.ok(reloaded.state.totalDays > days, '热更新后历法继续推进')
-  assert.ok(reloaded.state.resources.qi > qi, '热更新后资源继续结算')
+  assert.ok(moneyGt(reloaded.state.resources.qi, qi), '热更新后资源继续结算')
   const beforeCatchup = reloaded.state.stats.playTime
   now += 600000
   for (const step of intervals.values()) {

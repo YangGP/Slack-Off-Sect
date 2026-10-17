@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
 import { fmt, fmtCost, fmtResource, fmtStock } from '@/game/format'
+import { MONEY_INFINITY, ZERO } from '@/game/decimal'
 import { RESOURCE_MAP, RESOURCE_GROUPS } from '@/data/resources'
 import { resourceFlow } from '@/game/engine'
 import HoverTip from './HoverTip.vue'
@@ -27,12 +28,13 @@ function isLacking(id) {
   return ui.highlight.lack.includes(id)
 }
 
+/** 存量与仓容都是金额：缺省分别是 0 与「无上限」哨兵，不能退回 Number */
 function amountOf(id) {
-  return state.resources[id] || 0
+  return state.resources[id] ?? ZERO
 }
 
 function maxOf(id) {
-  return derived.max[id] ?? Infinity
+  return derived.max[id] ?? MONEY_INFINITY
 }
 
 /** 第三列是净额（进项 − 出项），带正负号 */
@@ -40,17 +42,34 @@ function netOf(id) {
   return resourceFlow(derived, id).net
 }
 
+function netNegative(id) {
+  return netOf(id).isNegative()
+}
+
+function netZero(id) {
+  return netOf(id).isZero()
+}
+
+/** 零净额留空（左栏不写 0/秒），非零才带正负号 */
+function netText(id) {
+  const net = netOf(id)
+  if (net.isZero()) return ''
+  return (net.isPositive() ? '+' : '') + fmt(net) + '/秒'
+}
+
 /** 整枚计数的资源（灵石/丹药/符箓/法器）不显示小数，连续资源保留两位 */
 function amountText(id) {
-  const v = amountOf(id)
-  return fmtResource(id, v)
+  return fmtResource(id, amountOf(id))
 }
 
 function maxLabel(id) {
   const max = maxOf(id)
-  return Number.isFinite(max) ? '/' + fmtCost(max) : ''
+  return max.isFinite() ? '/' + fmtCost(max) : ''
 }
 
+function hasMax(id) {
+  return maxOf(id).isFinite()
+}
 </script>
 
 <template>
@@ -83,11 +102,11 @@ function maxLabel(id) {
               <td class="res-name">{{ r.name }}</td>
               <td class="num res-amount">{{ amountText(r.id) }}</td>
               <td class="num res-max">{{ maxLabel(r.id) }}</td>
-              <td class="num res-rate" :class="{ neg: netOf(r.id) < 0, zero: !netOf(r.id) }">
-                {{ netOf(r.id) ? (netOf(r.id) > 0 ? '+' : '') + fmt(netOf(r.id)) + '/秒' : '' }}
+              <td class="num res-rate" :class="{ neg: netNegative(r.id), zero: netZero(r.id) }">
+                {{ netText(r.id) }}
               </td>
               <template #heading>
-                {{ r.name }}<span class="tip-right">{{ fmtStock(amountOf(r.id)) }}<template v-if="Number.isFinite(maxOf(r.id))"> / {{ fmtCost(maxOf(r.id)) }}</template></span>
+                {{ r.name }}<span class="tip-right">{{ fmtStock(amountOf(r.id)) }}<template v-if="hasMax(r.id)"> / {{ fmtCost(maxOf(r.id)) }}</template></span>
               </template>
               <template #tip>
                 <SourceBreakdown :res-id="r.id" />

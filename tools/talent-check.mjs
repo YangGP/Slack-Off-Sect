@@ -74,7 +74,7 @@ export function runTalentChecks(E, ok, close) {
   const rates = Object.fromEntries(['rock', 'ore', 'stone'].map(id => [id, derived.sources[id]?.find(row => row.kind === 'job')?.value]))
   specialist.talents = []
   E.recompute(state, derived)
-  ok('矿工专长同时作用于已开放副产出，建筑和口粮不变', Object.entries(rates).every(([id, rate]) => rate > 0 && close(rate / derived.sources[id].find(row => row.kind === 'job').value, 1.1)) && close(derived.upkeep, upkeep))
+  ok('矿工专长同时作用于已开放副产出，建筑和口粮不变', Object.entries(rates).every(([id, rate]) => E.moneyIsPositive(rate) && close(rate.div(derived.sources[id].find(row => row.kind === 'job').value), 1.1)) && close(derived.upkeep, upkeep))
   specialist.talents = [{ id: 'job_miner_xuan', level: 1 }]
   E.assignDisciples(state, derived, [specialist.id], 'woodcutter')
   ok('调到其他岗位后专长保留但不生效', close(derived.discipleJobWeights.woodcutter, 1) && talentBonus(specialist, 'job') === 0 && specialist.talents.length === 1)

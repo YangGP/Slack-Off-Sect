@@ -19,32 +19,32 @@ export function buildingActions({ ok, close, section }) {
     ok('已学营造技艺仍按原价计算单座与批量建筑费用',
       JSON.stringify(E.buildingCost(state, 'hut', 2)) === JSON.stringify(cost) && E.maxAffordable(state, 'hut') === affordable)
     ok('营造技艺保留两种混灵土的制作产出增益',
-      recipes.every((recipe, i) => close(E.craftYield(derived, recipe), yields[i] + 0.1)))
+      recipes.every((recipe, i) => close(E.craftYield(derived, recipe), yields[i].plus(0.1))))
     state.resources.qi = cost.qi
     state.resources.wood = cost.wood
     ok('营造技艺不改变实际批量建造扣料',
       E.buyBuilding(state, derived, 'hut', 2) === 2 && close(state.resources.qi, 0) && close(state.resources.wood, 0))
     ok('拆除仍按原价返还一半材料',
-      E.sellBuilding(state, derived, 'hut', 2) === 2 && close(state.resources.qi, cost.qi / 2) && close(state.resources.wood, cost.wood / 2))
+      E.sellBuilding(state, derived, 'hut', 2) === 2 && close(state.resources.qi, cost.qi.div(2)) && close(state.resources.wood, cost.wood.div(2)))
   }
   {
     const { state, derived } = newGame()
     state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
-    state.resources.qi = 1000
-    state.resources.stone = 100
+    state.resources.qi = E.money(1000)
+    state.resources.stone = E.money(100)
     E.trackPeak(state)
 
     const before = { qi: state.resources.qi, stone: state.resources.stone }
     const built = E.buyBuilding(state, derived, 'hut', 1)
     ok('建成 1 座茅屋', built === 1 && E.countOf(state, 'hut') === 1)
-    ok('扣除灵气 80', close(before.qi - state.resources.qi, 80, 1e-6))
-    ok('首屋不消耗灵石', state.resources.stone === before.stone)
+    ok('扣除灵气 80', close(before.qi.minus(state.resources.qi), 80, 1e-6))
+    ok('首屋不消耗灵石', E.moneyEq(state.resources.stone, before.stone))
     ok('弟子上限 0 → 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
-    ok('仓储上限提升（灵气 +60）', derived.max.qi === 560, `实际 ${derived.max.qi}`)
+    ok('仓储上限提升（灵气 +60）', E.moneyEq(derived.max.qi, 560), `实际 ${derived.max.qi}`)
     ok('建造计数已记录', state.stats.buildingsBuilt === 1)
 
     const second = E.buildingCost(state, 'hut', 1)
-    ok('第二座更贵（价格递增）', second.qi > 80, `实际 ${second.qi}`)
+    ok('第二座更贵（价格递增）', E.moneyGt(second.qi, 80), `实际 ${second.qi}`)
 
     const affordable = E.maxAffordable(state, 'hut')
     ok('剩余资源不足时 maxAffordable 返回零', affordable === 0, `实际 ${affordable}`)
@@ -57,17 +57,17 @@ export function buildingActions({ ok, close, section }) {
     state.buildings.gatheringArray = { count: 2, on: true }
     E.recompute(state, derived)
     const qiRateBefore = derived.rates.qi
-    ok('聚灵大阵在吃灵气', (derived.maintenance.qi || 0) > 0, `${derived.maintenance.qi}`)
+    ok('聚灵大阵在吃灵气', E.moneyIsPositive(derived.maintenance.qi), `${derived.maintenance.qi}`)
     ok('停用带维护费的建筑', E.toggleBuilding(state, derived, 'gatheringArray') === false)
     ok('停用后启用数为 0', E.activeOf(state, 'gatheringArray') === 0)
-    ok('停用后维护费归零', !derived.maintenance.qi, `${derived.maintenance.qi}`)
-    ok('停用后不再产灵气', derived.rates.qi < qiRateBefore, `${qiRateBefore} → ${derived.rates.qi}`)
+    ok('停用后维护费归零', E.moneyIsZero(derived.maintenance.qi), `${derived.maintenance.qi}`)
+    ok('停用后不再产灵气', E.moneyLt(derived.rates.qi, qiRateBefore), `${qiRateBefore} → ${derived.rates.qi}`)
     E.toggleBuilding(state, derived, 'gatheringArray')
-    ok('重新启用后维护费回来', (derived.maintenance.qi || 0) > 0, `${derived.maintenance.qi}`)
+    ok('重新启用后维护费回来', E.moneyIsPositive(derived.maintenance.qi), `${derived.maintenance.qi}`)
 
     const resBefore = state.resources.qi
     E.sellBuilding(state, derived, 'hut', 1)
     ok('拆除后数量归零', E.countOf(state, 'hut') === 0)
-    ok('拆除返还了材料', state.resources.qi > resBefore - 1000)
+    ok('拆除返还了材料', E.moneyGt(state.resources.qi, resBefore.minus(1000)))
   }
 }

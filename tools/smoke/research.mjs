@@ -28,7 +28,7 @@ export function researchVisibility({ ok, section }) {
       s.realm = ASCEND_REALM_INDEX
       for (const u of ALL_UPGRADES) s.upgrades[u.id] = true
       for (const b of BUILDINGS) s.buildings[b.id] = { count: 200, on: true }
-      for (const res of RESOURCES) s.resources[res.id] = 1e9
+      for (const res of RESOURCES) s.resources[res.id] = E.money(1e9)
       delete s.upgrades[previous]
       delete s.upgrades[next]
       const meta = UPGRADE_MAP[next]

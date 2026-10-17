@@ -2,7 +2,7 @@ import { BUILDING_MAP } from '@/data/buildings'
 import { checkNeeds, buildingCost, canAfford, payCost, countOf, entryOf, pushLog, buildingCostFrom } from './core'
 import { recompute } from './economy'
 import { RESOURCE_MAP } from '@/data/resources'
-import { floorNumber } from '../numbers'
+import { MONEY_INFINITY, ZERO, floorMoney, money, moneyMin } from '../decimal'
 
 export function buyBuilding(state, derived, id, count = 1) {
   const meta = BUILDING_MAP[id]
@@ -35,15 +35,16 @@ export function sellBuilding(state, derived, id, count = 1) {
   const refund = buildingCostFrom(meta, e.count - n, n, !!state.starterHutStanding)
   if (id === 'hut' && e.count === n) state.starterHutStanding = false
   for (const k in refund) {
-    // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」
-    refund[k] = RESOURCE_MAP[k]?.integer ? floorNumber(refund[k] * 0.5) : refund[k] * 0.5
+    // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」。
+    const half = refund[k].times('0.5')
+    refund[k] = RESOURCE_MAP[k]?.integer ? floorMoney(half) : half
   }
   e.count -= n
   state.stats.buildingsBuilt = Math.max(0, state.stats.buildingsBuilt - n)
   for (const k in refund) {
-    const before = state.resources[k] || 0
-    const cap = derived.max[k] ?? Infinity
-    state.resources[k] = Math.min(before + refund[k], cap)
+    const before = state.resources[k] ?? ZERO
+    const cap = money(derived.max[k] ?? MONEY_INFINITY)
+    state.resources[k] = moneyMin(before.plus(refund[k]), cap)
   }
   pushLog(state, `拆除 ${meta.name} ×${n}，返还部分材料`, 'info')
   recompute(state, derived)

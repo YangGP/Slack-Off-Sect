@@ -23,31 +23,32 @@ export function incomeBreakdown({ ok, close, section }) {
       ok(`人口${population}人的规模倍率为${multiplier}`, close(derived.populationUpkeepMult, multiplier, 1e-9))
       const base = derived.discipleWeight * CONFIG.DISCIPLE_UPKEEP * derived.realmMult ** CONFIG.DISCIPLE_UPKEEP_REALM_EXP
       ok('规模口粮计入实际扣费及来源总额', close(derived.upkeep, base * multiplier, 1e-9) &&
-        close(derived.expenseSources.qi.reduce((sum, item) => sum + item.value, 0), -derived.upkeep, 1e-9))
+        close(E.moneySum(derived.expenseSources.qi.map((item) => item.value)), derived.upkeep.neg(), 1e-9))
       const fee = discipleDismissalCost(state.disciples.members[0], state.realm)
       if (dismissal === null) dismissal = fee
-      ok('人口规模不改变逐出定价', fee === dismissal)
+      ok('人口规模不改变逐出定价', E.moneyEq(fee, dismissal))
     }
     state.disciples.members[0].realm = 2
-    state.resources.qi = 100000
+    state.resources.qi = E.money(100000)
     E.recompute(state, derived)
     const upkeep = derived.upkeep
-    const consumed = state.disciples.members.reduce((sum, member) => sum + member.totalQiConsumed, 0)
+    const consumed = E.moneySum(state.disciples.members.map((member) => member.totalQiConsumed))
     E.tick(state, derived, 1, { events: false })
-    const consumedAfter = state.disciples.members.reduce((sum, member) => sum + member.totalQiConsumed, 0)
+    const consumedAfter = E.moneySum(state.disciples.members.map((member) => member.totalQiConsumed))
     ok('不同个体境界的口粮分摊包含规模成本且只扣一次',
-      close(consumedAfter - consumed, upkeep, 1e-6) && close(100000 - state.resources.qi, upkeep, 1e-6))
+      close(E.moneySubtract(consumedAfter, consumed), upkeep, 1e-6) &&
+      close(E.money(100000).minus(state.resources.qi), upkeep, 1e-6))
   }
   {
     const { state, derived } = newGameRunning()
-    state.resources.qi = 5000
-    state.resources.wood = 5000
+    state.resources.qi = E.money(5000)
+    state.resources.wood = E.money(5000)
     E.buyBuilding(state, derived, 'spiritField', 2)
     E.buyBuilding(state, derived, 'lumberYard', 2)
     E.setJob(state, derived, 'farmer', 2)
 
     const sources = derived.sources.qi || []
-    const sum = sources.reduce((s, x) => s + x.value, 0)
+    const sum = E.moneySum(sources.map((x) => x.value))
     ok('进项来源之和等于进项总额', close(sum, derived.rates.qi, 1e-6), `${sum} vs ${derived.rates.qi}`)
     ok(
       '阵徒出现在来源里且带人数',
@@ -57,17 +58,17 @@ export function incomeBreakdown({ ok, close, section }) {
       '聚灵阵出现在来源里且带座数',
       sources.some((s) => s.kind === 'building' && s.id === 'spiritField' && s.count === 3),
     )
-    ok('来源按数值从大到小排列', sources.every((s, i) => i === 0 || sources[i - 1].value >= s.value))
+    ok('来源按数值从大到小排列', sources.every((s, i) => i === 0 || E.moneyGte(sources[i - 1].value, s.value)))
 
     const factor = derived.sourceFactor.qi
-    ok('加成倍率把原始值折算成最终值', close(sources[0].raw * factor, sources[0].value, 1e-9))
+    ok('加成倍率把原始值折算成最终值', close(sources[0].raw.times(factor), sources[0].value, 1e-9))
 
     const expenses = derived.expenseSources.qi || []
-    const expenseSum = expenses.reduce((s, x) => s + x.value, 0)
+    const expenseSum = E.moneySum(expenses.map((x) => x.value))
     ok(
       '出项明细之和等于 −upkeep',
-      close(expenseSum, -derived.upkeep, 1e-6),
-      `${expenseSum} vs ${-derived.upkeep}`,
+      close(expenseSum, derived.upkeep.neg(), 1e-6),
+      `${expenseSum} vs ${derived.upkeep.neg()}`,
     )
     ok('出项里写明弟子人数', expenses.some((x) => x.label === '弟子' && x.count === state.disciples.total))
 
@@ -117,14 +118,14 @@ export function incomeBreakdown({ ok, close, section }) {
       s4.upgrades.earthArt = true // 库房现在挂在「土木术」后面
       E.recompute(s4, d4)
       const before = { ...d4.max }
-      s4.resources.wood = 5000
-      s4.resources.stone = 5000
-      s4.resources.rock = 5000
-      s4.resources.ore = 5000
-      s4.resources.qi = 5000
+      s4.resources.wood = E.money(5000)
+      s4.resources.stone = E.money(5000)
+      s4.resources.rock = E.money(5000)
+      s4.resources.ore = E.money(5000)
+      s4.resources.qi = E.money(5000)
       E.trackPeak(s4)
       ok('库房真的建起来了（前置检查）', E.buyBuilding(s4, d4, 'warehouse', 1) === 1)
-      const delta = (r) => (d4.max[r] || 0) - (before[r] || 0)
+      const delta = (r) => E.moneySubtract(d4.max[r] ?? E.ZERO, before[r] ?? E.ZERO)
       ok(
         '基础物资的上限按表逐项抬高',
         Object.keys(st).every((r) => close(delta(r), st[r], 1e-6)),
@@ -177,13 +178,13 @@ export function incomeBreakdown({ ok, close, section }) {
     // 停用带维护费的建筑后，它的产出与维护费一起从账上消失
     state.buildings.gatheringArray = { count: 2, on: true }
     E.recompute(state, derived)
-    ok('启用时它在吃灵气', (derived.maintenance.qi || 0) > 0, `${derived.maintenance.qi}`)
+    ok('启用时它在吃灵气', E.moneyIsPositive(derived.maintenance.qi), `${derived.maintenance.qi}`)
     E.toggleBuilding(state, derived, 'gatheringArray')
     ok('停用后该建筑不再计入来源', !(derived.sources.qi || []).some((s) => s.id === 'gatheringArray'))
     ok('停用后这一项不再出现在出项里', !(derived.expenseSources.qi || []).some((s) => s.id === 'gatheringArray'))
-    const sum2 = (derived.sources.qi || []).reduce((s, x) => s + x.value, 0)
+    const sum2 = E.moneySum((derived.sources.qi || []).map((x) => x.value))
     ok('停用后来源之和仍等于进项总额', close(sum2, derived.rates.qi, 1e-6))
-    const exp2 = (derived.expenseSources.qi || []).reduce((s, x) => s + x.value, 0)
-    ok('停用后出项明细之和 = −弟子口粮', close(exp2, -derived.upkeep, 1e-6), `${exp2} vs ${-derived.upkeep}`)
+    const exp2 = E.moneySum((derived.expenseSources.qi || []).map((x) => x.value))
+    ok('停用后出项明细之和 = −弟子口粮', close(exp2, derived.upkeep.neg(), 1e-6), `${exp2} vs ${derived.upkeep.neg()}`)
   }
 }

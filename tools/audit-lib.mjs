@@ -105,9 +105,13 @@ export function auditResource({ resId = 'stone', hours = 8, patches = {}, thresh
       })
     }
 
+    // 静态金额缓存按对象身份保存，改表后必须重建，否则会继续用旧报价/旧产出。
+    E.invalidateStaticMoneyCaches()
     return run({ resId, hours, thresholds, forceAutoCraft: !!patches.autoCraft })
   } finally {
     for (const undo of restores.reverse()) undo()
+    // 回滚同样要使缓存失效：同进程下一次基线不能读到补丁值。
+    E.invalidateStaticMoneyCaches()
   }
 }
 
@@ -133,28 +137,29 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
 
   for (let t = 1; t <= TOTAL; t++) {
     E.tick(state, derived, 1, { events: false, startAt: clock.advance(1) })
-    income += Math.max(0, derived.rates[resId] || 0)
+    // 报表口径用 Number：金额先在 Decimal 域夹到非负，再转成展示值。
+    income += E.moneyToNumber(E.moneyMax(E.ZERO, derived.rates[resId] ?? E.ZERO))
     if (t % DECISION_EVERY === 0) bot.act()
     if (t % 300 === 0) E.recompute(state, derived)
-    const after = state.stats.crafted[resId] || 0
+    const after = E.moneyToNumber(state.stats.crafted[resId] ?? E.ZERO)
 
-    const cap = derived.max[resId]
-    if (Number.isFinite(cap)) {
+    const cap = derived.max[resId] ?? E.MONEY_INFINITY
+    if (cap.isFinite()) {
       ticked++
-      if ((state.resources[resId] || 0) >= cap - 1e-6) blocked++
+      if (state.resources[resId].gte(cap.minus('1e-6'))) blocked++
     }
     for (const th of thresholds) {
-      if (!reached.has(th) && (state.resources[resId] || 0) >= th) reached.set(th, t)
+      if (!reached.has(th) && E.moneyGte(state.resources[resId], th)) reached.set(th, t)
     }
     if (t % sampleEvery === 0 || t === TOTAL) {
       samples.push({
         t,
-        amount: state.resources[resId] || 0,
-        cap: derived.max[resId],
+        amount: E.moneyToNumber(state.resources[resId]),
+        cap: cap.isFinite() ? E.moneyToNumber(cap) : Infinity,
         crafted: after,
         income,
-        netQi: derived.netQi,
-        qiRate: derived.rates.qi,
+        netQi: E.moneyToNumber(derived.netQi ?? E.ZERO),
+        qiRate: E.moneyToNumber(derived.rates.qi ?? E.ZERO),
         realm: REALMS[state.realm].name,
         disciples: state.disciples.total,
         built: state.stats.buildingsBuilt,
@@ -166,7 +171,7 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
   const prodSources = (derived.sources[resId] || []).map((s) => ({
     label: s.label,
     count: s.count,
-    value: s.value,
+    value: E.moneyToNumber(s.value),
   }))
 
   return {
@@ -178,8 +183,8 @@ function run({ resId, hours, thresholds, forceAutoCraft }) {
     blockedRatio: ticked ? blocked / ticked : 0,
     income,
     craftCount: state.stats.craftCount,
-    craftedTotal: state.stats.crafted[resId] || 0,
-    totalQi: state.stats.totalQi,
+    craftedTotal: E.moneyToNumber(state.stats.crafted[resId] ?? E.ZERO),
+    totalQi: E.moneyToNumber(state.stats.totalQi ?? E.ZERO),
     prodSources,
     final: samples[samples.length - 1],
     state,

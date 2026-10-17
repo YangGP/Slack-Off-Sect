@@ -19,6 +19,7 @@ import {
 import { CRAFT_MAP } from '@/data/crafts'
 import { CONFIG } from '@/data/config'
 import { fmt } from '@/game/format'
+import { MONEY_INFINITY, ZERO } from '@/game/decimal'
 import BuildingButton from './BuildingButton.vue'
 import HoverTip from './HoverTip.vue'
 
@@ -34,8 +35,8 @@ const grow = computed(() => {
     canMake,
     affordable: canMake >= 1,
     yield: craftYield(derived, meta),
-    have: state.resources.wood || 0,
-    max: derived.max.wood || 0,
+    have: state.resources.wood ?? ZERO,
+    max: derived.max.wood ?? MONEY_INFINITY,
   }
 })
 

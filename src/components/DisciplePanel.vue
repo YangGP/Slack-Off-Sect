@@ -10,6 +10,7 @@ import { costLabel } from '@/game/pricing'
 import { RESOURCE_MAP } from '@/data/resources'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtCost, fmtRate, fmtTime } from '@/game/format'
+import { ZERO, money, moneyFinite, moneyIsPositive } from '@/game/decimal'
 import HabitabilityTip from './HabitabilityTip.vue'
 import HoverTip from './HoverTip.vue'
 import StableSelect from './StableSelect.vue'
@@ -65,25 +66,45 @@ const roleOptions = computed(previous => {
 })
 watch([realmFilter, rootFilter, talentFilter, trainFilter], () => { page.value = 0; selected.value = [] })
 watch(sortOrder, () => { page.value = 0 })
-const managementRows = computed(() => visible.value.map(member => ({
-  ...member, factor: discipleFactor(member, state.realm),
-  jobFactor: discipleFactor(member, state.realm) * (1 + talentBonus(member, 'job')),
-  talentRows: (member.talents || []).map(entry => {
-    const meta = TALENT_MAP[entry.id]
-    return meta ? { ...meta, level: entry.level, description: talentDescription(meta, entry.level) } : null
-  }).filter(Boolean),
-  talentTier: [...TALENT_TIERS].reverse().find(tier => member.talents?.some(entry => TALENT_MAP[entry.id]?.tier === tier.id))?.name,
-  mentored: member.mentored === true,
-  trainingCost: discipleTrainingCost(member, state.realm),
-  aid: discipleAidPreview(state, member),
-  rate: cultivationRate(member, derived.trainingActive), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
-  upkeep: derived.discipleWeight > 0 ? derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight : 0,
-  preview: discipleBreakthroughPreview(state, member),
-  annualBaseUpkeep: discipleAnnualBaseUpkeep(member, state.realm),
-  dismissalCost: discipleDismissalCost(member, state.realm),
-  dismissalAffordable: Number.isSafeInteger(discipleDismissalCost(member, state.realm)) && canAfford(state, { qi: discipleDismissalCost(member, state.realm) }),
-  residenceYears: discipleResidenceYears(member),
-})))
+
+/** 每名弟子的平均口粮：金额 ÷ 人数（人数是有界控制量） */
+const upkeepPerDisciple = computed(() => money(derived.upkeep).div(Math.max(1, state.disciples.total)))
+/** 口粮按出项展示（负速率），取反在金额域做 */
+function upkeepRate(value) {
+  return fmtRate(money(value).negated())
+}
+/** 传功状态：只有真的在扣灵气时才是「灵气 -x/秒」 */
+function mentorText(member) {
+  if (!member.mentored) return '未开启'
+  return moneyIsPositive(member.trainingCost) ? `灵气 -${fmt(member.trainingCost)}/秒` : '已开启 · 本境已满'
+}
+
+const managementRows = computed(() => visible.value.map(member => {
+  const dismissalCost = discipleDismissalCost(member, state.realm)
+  return {
+    ...member, factor: discipleFactor(member, state.realm),
+    jobFactor: discipleFactor(member, state.realm) * (1 + talentBonus(member, 'job')),
+    talentRows: (member.talents || []).map(entry => {
+      const meta = TALENT_MAP[entry.id]
+      return meta ? { ...meta, level: entry.level, description: talentDescription(meta, entry.level) } : null
+    }).filter(Boolean),
+    talentTier: [...TALENT_TIERS].reverse().find(tier => member.talents?.some(entry => TALENT_MAP[entry.id]?.tier === tier.id))?.name,
+    mentored: member.mentored === true,
+    trainingCost: discipleTrainingCost(member, state.realm),
+    aid: discipleAidPreview(state, member),
+    rate: cultivationRate(member, derived.trainingActive), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
+    // 口粮与逐出费用都是金额：先在 Decimal 域分摊，界面只负责格式化。
+    upkeep: derived.discipleWeight > 0
+      ? money(derived.upkeep).times(discipleFactor(member, state.realm)).div(derived.discipleWeight)
+      : ZERO,
+    preview: discipleBreakthroughPreview(state, member),
+    annualBaseUpkeep: discipleAnnualBaseUpkeep(member, state.realm),
+    dismissalCost,
+    // 逐出费用是 Decimal：可付性只看 Decimal 有限性与实际库存，不再经过安全整数判断。
+    dismissalAffordable: moneyFinite(dismissalCost) && canAfford(state, { qi: dismissalCost }),
+    residenceYears: discipleResidenceYears(member),
+  }
+}))
 function costText(cost) {
   return Object.entries(cost).map(([id, amount]) => `${RESOURCE_MAP[id].name} ${costLabel(state, derived, id, amount)}`).join('；')
 }
@@ -108,8 +129,14 @@ const rows = computed(() =>
     const count = state.disciples.jobs[job.id] || 0
     const outputs = jobOutputs(state, job).map(({ resource, base }) => {
       const average = count > 0 ? (derived.discipleJobWeights?.[job.id] || count) / count : 1
-      const perDisciple = base * average * (1 + (derived.jobRatio?.[job.id] || 0)) * derived.discipleMult * (derived.sourceFactor[resource] ?? 1)
-      return { resource, name: RESOURCE_MAP[resource].name, perDisciple, total: perDisciple * count }
+      // 基础产出是数据层 Number，专业/弟子/来源因子逐层相乘；来源因子是 Decimal（随全局倍率增长），
+      // 整条链都在金额域算，最后才交给 fmtRate 显示。
+      const perDisciple = money(base)
+        .times(average)
+        .times(1 + (derived.jobRatio?.[job.id] || 0))
+        .times(derived.discipleMult)
+        .times(derived.sourceFactor[resource] ?? 1)
+      return { resource, name: RESOURCE_MAP[resource].name, perDisciple, total: perDisciple.times(count) }
     })
     return {
       ...job,
@@ -230,7 +257,7 @@ function commitJob(jobId, event) {
 
       <div class="small dim">
         弟子总数 {{ state.disciples.total }} / {{ derived.maxDisciples }}，闲散 {{ idle }}；
-        平均每人 灵气 -{{ fmt(derived.upkeep / Math.max(1, state.disciples.total)) }}/秒，
+        平均每人 灵气 -{{ fmt(upkeepPerDisciple) }}/秒，
         <HabitabilityTip />。
       </div>
       <div class="small dim">
@@ -349,7 +376,7 @@ function commitJob(jobId, event) {
                     <div class="tip-section">岗位</div>
                     <div class="tip-row"><span class="k">当前岗位</span><span class="v">{{ JOBS.find(job => job.id === member.roleId)?.name || '闲散' }}</span></div>
                     <div class="tip-row"><span class="k">个人岗位系数</span><span class="v">×{{ member.jobFactor.toFixed(2) }}</span></div>
-                    <div class="tip-row"><span class="k">口粮</span><span class="v">灵气 {{ fmtRate(-member.upkeep) }}</span></div>
+                    <div class="tip-row"><span class="k">口粮</span><span class="v">灵气 {{ upkeepRate(member.upkeep) }}</span></div>
                     <div v-if="member.realm > state.realm" class="tip-desc">宗门退境，个人境界保留；岗位系数与口粮暂按宗门境界计算。</div>
                     <div class="tip-section">天赋</div>
                     <div v-if="!member.talentRows.length" class="tip-desc">无天赋</div>
@@ -359,7 +386,7 @@ function commitJob(jobId, event) {
                     </template>
                     <template v-if="derived.discipleTrainingUnlocked">
                       <div class="tip-section">培养</div>
-                      <div class="tip-row"><span class="k">传功</span><span class="v">{{ member.mentored ? (member.trainingCost > 0 ? `灵气 -${fmt(member.trainingCost)}/秒` : '已开启 · 本境已满') : '未开启' }}</span></div>
+                      <div class="tip-row"><span class="k">传功</span><span class="v">{{ mentorText(member) }}</span></div>
                       <div v-if="member.aid.pending" class="tip-row"><span class="k">个人护道</span><span class="v">下次突破 +{{ fmt(member.aid.bonus * 100) }} 个百分点</span></div>
                     </template>
                     <template v-if="member.realm < REALMS.length - 1">

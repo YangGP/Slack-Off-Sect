@@ -4,6 +4,8 @@ import { RESOURCE_MAP } from '@/data/resources'
 import { REALMS } from '@/data/realms'
 import { isModuleEnabled } from '@/data/modules'
 import { clamp, pushLog, addResource, activeOf } from '@/game/systems/core'
+import { MONEY_INFINITY, ZERO, floorMoney, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
+import { atLeast } from '@/game/numbers'
 import { gameNow, withGameContext } from '@/game/context'
 
 /**
@@ -17,6 +19,17 @@ import { gameNow, withGameContext } from '@/game/context'
  */
 
 export const HUNT_SCHEMA_VERSION = 1
+
+/** 出征信符单价（金额域）：静态表里的字面值是 Number，进入金额运算前构造为 Decimal。 */
+const WARRANT_COST = money(HUNT.WARRANT_COST)
+
+/** 兽材小数余量的存档上限：不足一件的部分只保留 [0, 1)。 */
+const REMAINDER_CAP = money(0.999999)
+
+/** 静态秒产表（Number 字面值）→ 金额映射。 */
+function moneyYieldMap(values) {
+  return Object.fromEntries(Object.entries(values || {}).map(([res, amount]) => [res, money(amount)]))
+}
 
 /** 初始猎杀状态（进存档） */
 export function createHuntingState() {
@@ -65,7 +78,9 @@ function sanitizeRemainders(value) {
   const out = {}
   for (const [res, amount] of Object.entries(value || {})) {
     if (!Object.hasOwn(RESOURCE_MAP, res)) continue
-    if (Number.isFinite(amount) && amount > 0) out[res] = Math.min(amount, 0.999999)
+    // 余量是金额：零值判断与夹取都走 Decimal（Decimal 对象恒为真，不能用真假判断）。
+    const remainder = moneyNonNegative(amount)
+    if (remainder.gt(0)) out[res] = moneyMin(remainder, REMAINDER_CAP)
   }
   return out
 }
@@ -116,8 +131,8 @@ function sanitizeMissions(value) {
       baseDuration: field.baseDuration, actualDuration: mission.actualDuration,
       formulaVersion: HUNT_SCHEMA_VERSION, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
       support: mission.support, successBonus: Number.isFinite(mission.successBonus) ? Math.max(0, mission.successBonus) : 0,
-      yieldBonus: mission.yieldBonus, baseYield: { ...field.baseYield }, advancedYield: field.advancedYield ? { ...field.advancedYield } : null,
-      preparationPaid: HUNT.WARRANT_COST,
+      yieldBonus: mission.yieldBonus, baseYield: moneyYieldMap(field.baseYield), advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
+      preparationPaid: WARRANT_COST,
       snapshots: mission.snapshots.map(snap => ({ id: snap.id, name: typeof snap.name === 'string' ? snap.name.slice(0, 40) : `弟子${snap.id}`,
         realm: snap.realm, e: snap.e, A: snap.A, p: snap.p, roleId: JOBS.some(j => j.id === snap.roleId) ? snap.roleId : null })),
     }
@@ -128,15 +143,28 @@ function sanitizeMissions(value) {
 
 function sanitizeOutcome(value) {
   if (!value || !Object.hasOwn(HUNT_FIELD_MAP, value.fieldId) || !Number.isFinite(value.at) || value.at < 0) return null
-  const amounts = values => Object.fromEntries(Object.entries(values || {}).filter(([res, amount]) =>
-    Object.hasOwn(HUNT_FIELD_MAP[value.fieldId].baseYield, res) && Number.isFinite(amount) && amount >= 0))
   return { fieldId: value.fieldId, at: value.at, cancelled: value.cancelled === true,
     teamSize: finiteCount(value.teamSize, HUNT.TEAM_MAX),
     successCount: finiteCount(value.successCount, HUNT.TEAM_MAX),
-    gains: amounts(value.gains), remainders: amounts(value.remainders),
+    gains: sanitizeOutcomeAmounts(value.fieldId, value.gains),
+    remainders: sanitizeOutcomeAmounts(value.fieldId, value.remainders),
     rows: (Array.isArray(value.rows) ? value.rows : []).filter(row => row && Number.isSafeInteger(row.id))
       .slice(0, HUNT.TEAM_MAX).map(row => ({ id: row.id, name: typeof row.name === 'string' ? row.name.slice(0, 40) : '', success: row.success === true })),
   }
+}
+
+/**
+ * 战报里的兽材金额：只保留本猎场确实产出的资源，损坏值、负数与空串一律丢弃。
+ * 该字段不在 moneyFields 白名单内，写档时按 Decimal 的十进制字符串落地，读档在此还原。
+ */
+function sanitizeOutcomeAmounts(fieldId, values) {
+  const out = {}
+  for (const [res, amount] of Object.entries(values || {})) {
+    if (!Object.hasOwn(HUNT_FIELD_MAP[fieldId].baseYield, res)) continue
+    const gained = moneyFromSave(amount, null)
+    if (gained !== null && !gained.isNegative()) out[res] = gained
+  }
+  return out
 }
 
 function finiteCount(value, cap = Number.MAX_SAFE_INTEGER) {
@@ -200,8 +228,9 @@ export function isHuntUnlocked(state, fieldId) {
   return state.realm >= field.entryRealm
 }
 
+/** 信符余额（金额）：库存按金额域读取，返回 Decimal 供后续比较与运算。 */
 export function warrantBalance(state) {
-  return state.resources.warrant || 0
+  return money(state.resources.warrant ?? ZERO)
 }
 
 export function huntTeamMax(state) {
@@ -251,9 +280,10 @@ export function huntPreview(state, derived, fieldId, teamIds) {
   const expectedSuccess = rows.reduce((sum, row) => sum + row.p, 0)
   const expectedGains = {}
   for (const [res, base] of Object.entries(field.baseYield || {})) {
-    expectedGains[res] = base * field.baseDuration * support * expectedZ * gain
+    // base 是金额，duration / support / expectedZ / gain 是 Number：乘法在 Decimal 域完成。
+    expectedGains[res] = money(base).times(field.baseDuration).times(support).times(expectedZ).times(gain)
   }
-  return { field, rows, duration, expectedSuccess, expectedGains, prepEnough: warrantBalance(state) >= HUNT.WARRANT_COST }
+  return { field, rows, duration, expectedSuccess, expectedGains, prepEnough: atLeast(warrantBalance(state), WARRANT_COST) }
 }
 
 export function huntDuration(field, durationReduction = 0) {
@@ -273,7 +303,7 @@ export function canDepart(state, derived, fieldId, teamIds) {
   const rows = evaluateTeam(state, derived, fieldId, teamIds)
   if (rows.length < HUNT.TEAM_MIN) return { ok: false, reason: '请选择至少 1 名弟子' }
   if (rows.length > HUNT.TEAM_MAX) return { ok: false, reason: `每队最多 ${HUNT.TEAM_MAX} 人` }
-  if (warrantBalance(state) < HUNT.WARRANT_COST) return { ok: false, reason: `信符不足 ${HUNT.WARRANT_COST}` }
+  if (!atLeast(warrantBalance(state), WARRANT_COST)) return { ok: false, reason: `信符不足 ${HUNT.WARRANT_COST}` }
   return { ok: true }
 }
 
@@ -316,13 +346,13 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
     support: 1 + 0.1 * clamp(state.realm - field.entryRealm, 0, 4),
     successBonus: derived?.huntSuccessBonus || 0,
     yieldBonus: 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0),
-    baseYield: { ...field.baseYield },
-    advancedYield: field.advancedYield ? { ...field.advancedYield } : null,
+    baseYield: moneyYieldMap(field.baseYield),
+    advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
     snapshots,
-    preparationPaid: HUNT.WARRANT_COST,
+    preparationPaid: WARRANT_COST,
   }
 
-  state.resources.warrant = Math.max(0, (state.resources.warrant || 0) - HUNT.WARRANT_COST)
+  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, WARRANT_COST)
   for (const snap of snapshots) {
     const member = byId.get(snap.id)
     if (!member) continue
@@ -407,16 +437,20 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
   const gains = {}
   const remainders = {}
   for (const [res, base] of Object.entries(mission.baseYield || {})) {
-    const y = base * mission.baseDuration * mission.support * effectiveContribution * mission.yieldBonus
-    const total = (hunting.yieldRemainders[res] || 0) + y
-    const whole = Math.floor(total + 1e-9)
-    hunting.yieldRemainders[res] = total - whole
+    // base 与余量是金额，baseDuration / support / contribution / yieldBonus 是 Number。
+    const y = money(base)
+      .times(mission.baseDuration)
+      .times(mission.support)
+      .times(effectiveContribution)
+      .times(mission.yieldBonus)
+    const total = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
+    const whole = floorMoney(total)
+    hunting.yieldRemainders[res] = total.minus(whole)
     remainders[res] = hunting.yieldRemainders[res]
-    if (whole > 0) {
-      const added = addResource(state, res, whole, derived?.max?.[res] ?? Infinity)
-      gains[res] = added
+    if (whole.gt(0)) {
+      gains[res] = addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
     } else {
-      gains[res] = 0
+      gains[res] = ZERO
     }
   }
 
@@ -447,7 +481,7 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
   recount(state)
 
   const gainText = Object.entries(gains)
-    .filter(([, amount]) => amount > 0)
+    .filter(([, amount]) => amount.gt(0))
     .map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`)
     .join('、')
   pushLog(
@@ -482,8 +516,9 @@ export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
   const expectedZ = rows.reduce((sum, row) => sum + row.A * (row.p + 0.2 * (1 - row.p)), 0)
   const maximumZ = rows.reduce((sum, row) => sum + row.A, 0)
   const scale = trips * support * yieldBonus * field.baseDuration
+  // base 是金额；scale 与 factor（期望/上限贡献）是 Number，逐项在 Decimal 域相乘。
   const scaleBy = factor => Object.fromEntries(Object.entries(field.baseYield || {})
-    .map(([res, base]) => [res, base * scale * factor]))
+    .map(([res, base]) => [res, money(base).times(scale).times(factor)]))
   return {
     trips,
     support,
@@ -541,17 +576,18 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
   const rows = evaluateTeam(state, derived, fieldId, ids)
 
   const duration = huntDuration(field, derived?.huntDurationReduction || 0)
-  const affordable = Math.floor(warrantBalance(state) / HUNT.WARRANT_COST)
+  // 趟数同时受剩余时长与信符存量封顶：存量换算成整枚趟数是循环/批量数量，走 moneyToCount。
+  const affordable = moneyToCount(warrantBalance(state).div(WARRANT_COST))
   const trips = Math.max(0, Math.min(Math.floor((remaining + 1e-9) / duration), affordable))
   if (trips > 0) {
     const estimate = huntBatchGainEstimate(field, rows, derived, trips)
     for (const [res, y] of Object.entries(estimate.expected)) {
-      const total = (hunting.yieldRemainders[res] || 0) + y
-      const whole = Math.floor(total + 1e-9)
-      hunting.yieldRemainders[res] = total - whole
-      if (whole > 0) addResource(state, res, whole, derived?.max?.[res] ?? Infinity)
+      const total = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
+      const whole = floorMoney(total)
+      hunting.yieldRemainders[res] = total.minus(whole)
+      if (whole.gt(0)) addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
     }
-    state.resources.warrant = Math.max(0, (state.resources.warrant || 0) - trips * HUNT.WARRANT_COST)
+    state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, WARRANT_COST.times(trips))
     const hunters = rows.length * trips
     const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
     hunting.statistics.departures += trips
@@ -572,7 +608,7 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
 
   // 尾段：不足一趟的时长落成**一次已扣费的活动任务**（恰好用完时按 0 进度出发），
   // 与在线的即时再出发一致，不把批量趟数变成下次在线的待补算队列。
-  if (warrantBalance(state) >= HUNT.WARRANT_COST) {
+  if (atLeast(warrantBalance(state), WARRANT_COST)) {
     const departed = withGameContext(state, { now: () => now }, () => departHunt(state, derived, { fieldId: field.id, teamIds: ids }))
     if (departed.ok) {
       if (remaining > 1e-9) departed.mission.progressSeconds = remaining

@@ -15,6 +15,7 @@
  * 玩家策略与 tools/balance.mjs 共用（tools/player-bot.mjs），保证两边结论一致。
  */
 import { auditResource, fmtDur } from './audit-lib.mjs'
+import * as E from './engine-fixture.mjs'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
 import { BUILDINGS } from '../src/data/buildings.js'
@@ -76,7 +77,7 @@ console.log('【进项来源】')
 console.log(
   '  持续产出：' +
     (r.prodSources.length
-      ? r.prodSources.map((s) => `${s.label}${s.count ? '×' + s.count : ''} +${s.value.toFixed(3)}/秒`).join('，')
+      ? r.prodSources.map((s) => `${s.label}${s.count ? '×' + s.count : ''} +${E.moneyToNumber(s.value).toFixed(3)}/秒`).join('，')
       : '（没有任何职位 / 建筑 / 修真 / 技艺持续产出它）'),
 )
 const crafts = CRAFTS.filter((c) => c.out === RES_ID)
@@ -97,12 +98,15 @@ console.log(
 console.log('\n【时间线】')
 console.log('  持续产能按速率积分，含满仓截断部分，不含制作、点击与事件入库。')
 console.log(`  ${pad('时间', 10)}${pad('存量', 9)}${pad('上限', 9)}${pad('累计持续产能', 11)}${pad('区间速率/时', 12)}${pad('贴顶', 6)}${pad('灵气净额', 10)}${pad('境界', 9)}`)
-let prev = { t: 0, income: 0 }
+let prev = { t: 0, income: E.ZERO }
 for (const s of r.samples) {
   const dt = s.t - prev.t
-  const rate = dt > 0 ? ((s.income - (prev.income || 0)) / dt) * 3600 : 0
+  // 「累计持续产能」是金额：区间增量与速率都在 Decimal 域求，再降到 Number 显示。
+  const rate = dt > 0 ? (E.moneyToNumber(E.money(s.income).minus(prev.income)) / dt) * 3600 : 0
+  const amount = E.moneyToNumber(s.amount)
+  const capped = E.moneyFinite(s.cap) ? E.moneyGte(s.amount, E.money(s.cap).minus(1e-6)) : false
   console.log(
-    `  ${pad(fmtDur(s.t), 10)}${pad(Math.round(s.amount), 9)}${pad(Number.isFinite(s.cap) ? Math.round(s.cap) : '∞', 9)}${pad(Math.round(s.income || 0), 11)}${pad(Math.round(rate), 12)}${pad(s.amount >= s.cap - 1e-6 ? '贴顶' : '', 6)}${pad(s.netQi.toFixed(2), 10)}${pad(s.realm, 9)}`,
+    `  ${pad(fmtDur(s.t), 10)}${pad(Math.round(amount), 9)}${pad(E.moneyFinite(s.cap) ? Math.round(E.moneyToNumber(s.cap)) : '∞', 9)}${pad(Math.round(E.moneyToNumber(s.income)), 11)}${pad(Math.round(rate), 12)}${pad(capped ? '贴顶' : '', 6)}${pad(E.moneyToNumber(s.netQi).toFixed(2), 10)}${pad(s.realm, 9)}`,
   )
   prev = s
 }
@@ -115,7 +119,7 @@ for (const th of r.thresholds) {
 console.log('\n【瓶颈指标】')
 console.log(`  顶到仓储上限的时间占比：${(r.blockedRatio * 100).toFixed(0)}%`)
 console.log(`  参悟进度：${Object.keys(r.state.upgrades).length} / ${ALL_UPGRADES.length} 条`)
-console.log(`  全宗累计制作 ${r.craftCount} 次；目标资源实际制作入库 ${Math.round(r.craftedTotal)} ${RES.name}`)
+console.log(`  全宗累计制作 ${r.craftCount} 次；目标资源实际制作入库 ${Math.round(E.moneyToNumber(r.craftedTotal))} ${RES.name}`)
 
 console.log('\n【出项清单】')
 const demand = []

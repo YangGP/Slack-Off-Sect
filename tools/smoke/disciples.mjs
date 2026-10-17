@@ -11,9 +11,9 @@ export function discipleArrivals({ ok, close, section }) {
     E.recruitArrivals(state, derived, 600, { silent: true })
     ok('没有居所时不会来人', state.disciples.total === 0)
 
-    state.resources.qi = 2000
-    state.resources.stone = 100
-    state.resources.qi = 2000
+    state.resources.qi = E.money(2000)
+    state.resources.stone = E.money(100)
+    state.resources.qi = E.money(2000)
     state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
     state.buildings.granary = { count: 20, on: true } // 抬灵气上限，才买得起一次九座
     E.buyBuilding(state, derived, 'hut', 1) // 上限 2
@@ -30,16 +30,16 @@ export function discipleArrivals({ ok, close, section }) {
     ok('住满后计时清零', state.arrivalTimer === 0)
 
     ok('nextArrivalIn 在满员时为 null', E.nextArrivalIn(state, derived) === null)
-    state.resources.wood = 100
+    state.resources.wood = E.money(100)
     E.buyBuilding(state, derived, 'hut', 1)
     const wait = E.nextArrivalIn(state, derived)
     ok('扩建后给出下一位的时间', wait !== null && wait > 0 && wait <= E.arrivalInterval(derived), `${wait}`)
 
     // 《广开山门》缩短间隔
     state.upgrades.recruitDrive = true
-    state.resources.insight = 9999
-    state.resources.stone = 9999
-    state.resources.faith = 9999
+    state.resources.insight = E.money(9999)
+    state.resources.stone = E.money(9999)
+    state.resources.faith = E.money(9999)
     E.recompute(state, derived)
     ok('《广开山门》缩短前来间隔', close(E.arrivalInterval(derived), 15 * 0.7, 1e-9))
 

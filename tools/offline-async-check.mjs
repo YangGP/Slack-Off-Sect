@@ -3,14 +3,17 @@ import { reactive, toRaw, watch } from 'vue'
 import { createGame, createRuntime } from '../src/game/runtime.js'
 import { createInitialState, normalizeState } from '../src/game/state.js'
 import { runtimeCounters, economyDetailsEnabled } from '../src/game/context.js'
+import { cloneRuntime } from '../src/game/clone.js'
+import { money } from '../src/game/decimal.js'
 import { powerFixture } from './power-scenarios.mjs'
 
 const startAt = Date.UTC(2026, 9, 15)
-const snapshot = value => JSON.parse(JSON.stringify(toRaw(value)))
+// 运行时快照必须保留 Decimal：JSON 往返会把金额变成字符串，副本无法继续运算。
+const snapshot = value => cloneRuntime(toRaw(value))
 
 function makeGame(seed, reactiveState = false) {
   let randomSeed = 1234
-  const base = structuredClone(seed)
+  const base = cloneRuntime(seed)
   const state = reactiveState ? reactive(base) : base
   const game = createGame({ state, snapshotState: snapshot, now: () => startAt + 600000,
     random: () => {
@@ -25,7 +28,7 @@ function makeGame(seed, reactiveState = false) {
 export async function runOfflineAsyncChecks(ok) {
   const initial = createInitialState(startAt)
   initial.realm = 4
-  initial.dao = 1
+  initial.dao = money(1)
   initial.buildings = { hut: { count: 40, on: true }, spiritField: { count: 100, on: true },
     talismanHall: { count: 1, on: true }, incenseCauldron: { count: 1, on: true } }
   initial.disciples.total = 72
@@ -33,8 +36,8 @@ export async function runOfflineAsyncChecks(ok) {
   initial.upgrades = { intuition: true, talismanArt: true, qiLiquid: true, liquidArt: true, condenseArt: true }
   initial.settings.craftReservePercent = 0
   initial.autoCraft.drawTalisman = true
-  initial.resources.wood = 125.5
-  initial.resources.qi = 1000
+  initial.resources.wood = money('125.5')
+  initial.resources.qi = money(1000)
   initial.totalDays = 89.8
   initial.buffs = [{ id: 'short', mult: 0.5, until: startAt + 1500 }]
   const seeds = [normalizeState(initial, { now: startAt }), powerFixture({ chains: 2, core: true }).state]
@@ -94,7 +97,7 @@ export async function runOfflineAsyncChecks(ok) {
 
   for (const operation of ['resetClock', 'stop']) {
     let now = startAt, runtime, reports = 0, saves = 0, cancelled = false
-    const game = createGame({ state: structuredClone(seeds[0]), now: () => now })
+    const game = createGame({ state: cloneRuntime(seeds[0]), now: () => now })
     const before = snapshot(game.state)
     runtime = createRuntime({ game, repository: { loadError: '', save: () => { saves++; return true } },
       schedule: { setInterval: () => 1, clearInterval: () => {} },

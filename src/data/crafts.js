@@ -8,6 +8,8 @@
  */
 import { RESOURCE_MAP } from './resources.js'
 import { insertAfter } from './modules.js'
+import { ONE, ceilMoney, money } from '../game/decimal.js'
+import { registerStaticMoneyCache } from '../game/staticMoneyCache.js'
 import { HUNT_CRAFTS, HUNT_CRAFT_ANCHOR } from '../modules/hunting/data.js'
 
 const CORE_CRAFTS = [
@@ -329,12 +331,31 @@ export function autoCraftTime(recipe, derived) {
   return craftTime(recipe, derived) / Math.max(1, derived?.autoCraftSpeeds?.[recipe.id] || 1)
 }
 
+/**
+ * 配方基础用料（金额）：静态表里的字面值是 Number，进入经济运算时统一构造为 Decimal，
+ * 并按配方缓存一次，避免热循环里反复构造。返回的对象只读共享。
+ * 工具原地改表后必须调用 `invalidateStaticMoneyCaches()`，否则同一配方会继续用旧报价。
+ */
+let BASE_COST_CACHE = new WeakMap()
+registerStaticMoneyCache(() => { BASE_COST_CACHE = new WeakMap() })
+function baseCost(recipe) {
+  let cached = BASE_COST_CACHE.get(recipe)
+  if (!cached) {
+    cached = Object.fromEntries(Object.entries(recipe.cost || {}).map(([res, amount]) => [res, money(amount)]))
+    BASE_COST_CACHE.set(recipe, cached)
+  }
+  return cached
+}
+
 /** 节料改变每份投入，手动、自动、事件估价与界面共用。固定阵印不参与节料。 */
 export function craftCost(derived, recipe) {
+  const base = baseCost(recipe)
   const saving = recipe.fixedYield ? 0 : Math.min(0.5, Math.max(0, derived?.craftCostReduction?.[recipe.id] || 0))
-  if (!saving) return recipe.cost
-  return Object.fromEntries(Object.entries(recipe.cost).map(([res, amount]) => {
-    const reduced = amount * (1 - saving)
-    return [res, RESOURCE_MAP[res]?.integer ? Math.ceil(reduced - 1e-9) : reduced]
+  if (!saving) return base
+  const factor = ONE.minus(saving)
+  return Object.fromEntries(Object.entries(base).map(([res, amount]) => {
+    const reduced = amount.times(factor)
+    // 整枚资源按份向上取整：Decimal 精确运算下不需要再垫 1e-9。
+    return [res, RESOURCE_MAP[res]?.integer ? ceilMoney(reduced) : reduced]
   }))
 }

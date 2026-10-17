@@ -35,7 +35,7 @@ setGameContext(state, { now: () => simulatedNow, random })
 // 可选第三参数：带指定仙缘重修，用同一策略检查后续周目的仓储链。
 const karma = Number(process.argv[3] || 0)
 if (!Number.isFinite(karma) || karma < 0 || !Number.isInteger(karma)) throw new Error('仙缘需为非负整数')
-state.karma = karma
+state.karma = E.money(karma)
 const derived = E.createDerived()
 E.recompute(state, derived)
 const bot = createBot(state, derived, { breakthrough(s, d) {
@@ -58,11 +58,11 @@ const checkpoints = new Set([
 
 function snapshot(t) {
   const res = RESOURCES.filter((r) => !r.noProduction)
-    .map((r) => `${r.name} ${Math.round(state.resources[r.id] || 0)}`)
+    .map((r) => `${r.name} ${Math.round(E.moneyToNumber(state.resources[r.id]))}`)
     .join('  ')
   // 灵气出项占比：§5.4 用它衡量「维护费 / 弟子口粮」是不是还在产生决策压力
-  const qiIn = derived.rates.qi || 0
-  const qiOut = -(derived.expense?.qi || 0)
+  const qiIn = E.moneyToNumber(derived.rates.qi)
+  const qiOut = E.moneyToNumber(E.money(derived.expense?.qi).neg())
   const outPct = qiIn > 0 ? (qiOut / qiIn) * 100 : 0
   console.log(
     `t=${String(Math.round(t / 60)).padStart(4)}分 | ${REALMS[state.realm].name.padEnd(4)} | 弟子 ${String(
@@ -90,7 +90,7 @@ for (let t = 1; t <= TOTAL; t++) {
     console.log(`里程碑 ${(t / 3600).toFixed(2)}h：${REALMS[state.realm].name}`)
     previousRealm = state.realm
   }
-  if (!sawEnergy && state.resources.qiEnergy > 0) {
+  if (!sawEnergy && E.moneyIsPositive(state.resources.qiEnergy)) {
     console.log(`里程碑 ${(t / 3600).toFixed(2)}h：首次灵能（${REALMS[state.realm].name}）`)
     sawEnergy = true
   }
@@ -98,7 +98,7 @@ for (let t = 1; t <= TOTAL; t++) {
 console.log('\n最终状态：')
 snapshot(TOTAL)
 console.log(`成就：${Object.keys(state.achievements).length} 条`)
-console.log(`累计灵气：${Math.round(state.stats.totalQi)}，累计灵机：${Math.round(state.stats.totalInsight)}`)
+console.log(`累计灵气：${Math.round(E.moneyToNumber(state.stats.totalQi))}，累计灵机：${Math.round(E.moneyToNumber(state.stats.totalInsight))}`)
 console.log(`遭遇天灾：${state.stats.disasters} 次，奇遇：${state.stats.eventsSeen} 次`)
 console.log(`飞升可得仙缘：${E.ascensionGain(state, derived)}`)
 console.log(`破境统计：${JSON.stringify(attempts)}`)

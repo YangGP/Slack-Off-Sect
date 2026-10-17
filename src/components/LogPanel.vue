@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { fmtClock, fmtAmount, fmtTime } from '@/game/format'
+import { ZERO, moneyIsPositive, moneyLt } from '@/game/decimal'
 import { EVENT_MAP, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
 import { resourceName } from '@/data/resources'
 import { eventOutcome, eventEffect } from '@/game/engine'
@@ -41,14 +42,15 @@ function preview(effect) {
   if (effect?.decline) return '不消耗物资，不领取奖励'
   const { rows, recruits, required, affordable } = eventOutcome(state, derived, effect || {})
   if (!affordable) return '材料不足：' + Object.entries(required)
-    .filter(([res, amount]) => (state.resources[res] || 0) < amount)
+    .filter(([res, amount]) => moneyLt(state.resources[res] ?? ZERO, amount))
     .map(([res, amount]) => `${resourceName(res)} 需${fmtAmount(amount)}`).join('，')
   const parts = []
   for (const row of rows) {
     const name = resourceName(row.res)
-    if (row.lost > 0) parts.push(`${name} −${fmtAmount(row.lost)}`)
-    if (row.gained > 0) parts.push(`${name} +${fmtAmount(row.gained)}`)
-    if (row.overflow > 0) parts.push(`${name} ${fmtAmount(row.overflow)} 装不下`)
+    // 事件增减是金额：正负判断走 Decimal，不能用对象真假或与 0 比较。
+    if (moneyIsPositive(row.lost)) parts.push(`${name} −${fmtAmount(row.lost)}`)
+    if (moneyIsPositive(row.gained)) parts.push(`${name} +${fmtAmount(row.gained)}`)
+    if (moneyIsPositive(row.overflow)) parts.push(`${name} ${fmtAmount(row.overflow)} 装不下`)
   }
   if (effect?.recruit) parts.push(recruits ? `弟子 +${recruits}` : '居所已满，无法收徒')
   const resolved = eventEffect(state, derived, effect || {})

@@ -12,7 +12,8 @@ import { DIPLOMACY } from '@/modules/diplomacy/data.js'
 import { REALMS } from '@/data/realms'
 import { resourceName } from '@/data/resources'
 import { canDepart, huntableMembers, huntPreview } from '@/game/engine'
-import { fmtPercent, fmtTime } from '@/game/format'
+import { ZERO, moneyGt } from '@/game/decimal'
+import { fmtAmount, fmtFixed, fmtPercent, fmtTime } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
 
 const fieldId = computed(() => state.hunting.settings.selectedFieldId)
@@ -47,6 +48,16 @@ const missionRemain = computed(() => {
   return m ? Math.max(0, m.actualDuration - m.progressSeconds) : 0
 })
 const lastOutcome = computed(() => state.hunting.lastOutcome)
+
+/**
+ * 期望兽材与战报猎获都是金额（Decimal），模板里不能直接做算术/比较：
+ * 在这里算好展示文案与「是否有整数入库」再暴露给模板。
+ */
+const expectedGainRows = computed(() => Object.entries(preview.value?.expectedGains || {})
+  .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtFixed(amount) })))
+const lastGainRows = computed(() => Object.entries(lastOutcome.value?.gains || {})
+  .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtAmount(amount), positive: moneyGt(amount, ZERO) })))
+const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
 </script>
 
 <template>
@@ -109,10 +120,10 @@ const lastOutcome = computed(() => state.hunting.lastOutcome)
             <tr>
               <td class="dim nowrap">期望收获</td>
               <td class="num" colspan="3">
-                <span v-for="(amount, res) in preview.expectedGains" :key="res" style="margin-right: 12px">
-                  {{ resourceName(res) }} ≈ {{ amount.toFixed(2) }}
+                <span v-for="row in expectedGainRows" :key="row.res" style="margin-right: 12px">
+                  {{ row.name }} ≈ {{ row.text }}
                 </span>
-                <span v-if="!Object.keys(preview.expectedGains).length" class="dim">—</span>
+                <span v-if="!expectedGainRows.length" class="dim">—</span>
               </td>
             </tr>
           </tbody>
@@ -161,10 +172,10 @@ const lastOutcome = computed(() => state.hunting.lastOutcome)
             <tr>
               <td class="dim nowrap">入库</td>
               <td class="num">
-                <span v-for="(amount, res) in lastOutcome.gains" :key="res" style="margin-right: 12px">
-                  {{ resourceName(res) }} ×{{ amount }}
+                <span v-for="row in lastGainRows" :key="row.res" style="margin-right: 12px">
+                  {{ row.name }} ×{{ row.text }}
                 </span>
-                <span v-if="!Object.values(lastOutcome.gains || {}).some(v => v > 0)" class="dim">本轮无整数入库</span>
+                <span v-if="!lastGainAny" class="dim">本轮无整数入库</span>
               </td>
             </tr>
           </tbody>

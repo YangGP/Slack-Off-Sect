@@ -20,6 +20,9 @@ import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
 
 const mode = process.argv[2] || 'baseline'
+/** 报告边界：金额统一降到 Number 再输出，保持原有 JSON 形状（数字，而不是 Decimal 字符串）。 */
+const moneyNum = E.moneyToNumber
+const toNumbers = map => Object.fromEntries(Object.entries(map || {}).map(([id, value]) => [id, E.moneyToNumber(value)]))
 const seed = Number(process.argv[3] || 1)
 const hours = Number(process.argv[4] || 72)
 const selection = process.argv[5] || 'full'
@@ -51,17 +54,17 @@ const observePower = () => {
     if (s.buildings[id]?.count && !firstFacilities[id]) firstFacilities[id] = { hours: +(elapsed / 3600).toFixed(3), realm: s.realm }
   }
   for (const id of ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'ascensionSeal']) {
-    if (s.resources[id] > 0 && !firstOutput[id]) firstOutput[id] = { hours: +(elapsed / 3600).toFixed(3), realm: s.realm }
+    if (E.moneyIsPositive(s.resources[id]) && !firstOutput[id]) firstOutput[id] = { hours: +(elapsed / 3600).toFixed(3), realm: s.realm }
   }
 }
 let elapsed = 0
 let lastAttemptAt = -1
 const focus = { selection, outcome, start: null, readinessMinutes: {}, shortagesSeconds: {}, capacitySeconds: {}, attempts: [], finished: false }
-const snapshot = () => ({ seconds: elapsed, resources: { ...s.resources }, max: { ...d.max },
-  production: { ...d.rates }, netQi: d.netQi,
+const snapshot = () => ({ seconds: elapsed, resources: toNumbers(s.resources), max: toNumbers(d.max),
+  production: toNumbers(d.rates), netQi: moneyNum(d.netQi),
   craftBonus: d.craftBonus, craftBonusByResource: { ...d.craftBonusByResource }, jobRatio: { ...d.jobRatio },
   population: s.disciples.total, jobs: { ...s.disciples.jobs }, realmMult: d.realmMult,
-  buildings: Object.fromEntries(Object.entries(s.buildings).map(([id, entry]) => [id, { ...entry }])), upgrades: { ...s.upgrades }, karma: s.karma })
+  buildings: Object.fromEntries(Object.entries(s.buildings).map(([id, entry]) => [id, { ...entry }])), upgrades: { ...s.upgrades }, karma: moneyNum(s.karma) })
 let lastFocusObservation = -1
 const observeFocus = () => {
   if (mode !== 'focus' || s.realm !== 7) return
@@ -72,8 +75,8 @@ const observeFocus = () => {
   const preview = E.breakthroughPreview(s, d)
   const cost = need()
   for (const [id, amount] of Object.entries(cost)) {
-    if (s.resources[id] < amount) focus.shortagesSeconds[id] = (focus.shortagesSeconds[id] || 0) + dt
-    if (d.max[id] < amount) focus.capacitySeconds[id] = (focus.capacitySeconds[id] || 0) + dt
+    if (E.moneyLt(s.resources[id], amount)) focus.shortagesSeconds[id] = (focus.shortagesSeconds[id] || 0) + dt
+    if (E.moneyLt(d.max[id], amount)) focus.capacitySeconds[id] = (focus.capacitySeconds[id] || 0) + dt
   }
   for (const [label, cost] of [['base', preview.cost], ...preview.availableAids.map(a => [a.name, a.cost]), ['selected', need()],
     ...Object.entries(need()).map(([id, amount]) => [`resource:${id}`, { [id]: amount }])]) {
@@ -89,7 +92,7 @@ const attempt = () => {
   lastAttemptAt = elapsed
   const record = attempts[target]
   record.tries++
-  for (const [res, amount] of Object.entries(cost)) record.paid[res] = (record.paid[res] || 0) + amount
+  for (const [res, amount] of Object.entries(cost)) record.paid[res] = E.money(record.paid[res]).plus(amount)
   const deaths = s.stats.breakthroughDeaths
   const beforeSnapshot = (mode === 'focus' && target === 8) || firstReach[target] == null ? snapshot() : null
   let forced = []
@@ -98,14 +101,14 @@ const attempt = () => {
   const ok = E.breakthrough(s, d, options(), ['baseline', 'power', 'rush'].includes(mode) ? () => 0 : forced.length ? () => forced.shift() ?? 0 : random)
   if (mode === 'focus' && target === 8 && beforeSnapshot) {
     focus.attempts.push({ minutesFromStart: +((elapsed - focus.start.seconds) / 60).toFixed(2), before: beforeSnapshot,
-      afterRealm: s.realm, karma: s.karma, cost, success: ok })
+      afterRealm: s.realm, karma: moneyNum(s.karma), cost: toNumbers(cost), success: ok })
     if (ok) focus.finished = true
   }
   if (ok) record.success++
   else if (s.stats.breakthroughDeaths > deaths) record.death++
   else if (s.realm < before) record.regression++
   if (s.realm !== before) {
-    transitions.push({ hours: +(elapsed / 3600).toFixed(3), from: before, to: s.realm, karma: s.karma })
+    transitions.push({ hours: +(elapsed / 3600).toFixed(3), from: before, to: s.realm, karma: moneyNum(s.karma) })
     if (ok && firstReach[s.realm] == null) {
       firstReach[s.realm] = +(elapsed / 3600).toFixed(3)
       stageSnapshots[s.realm] = { hours: firstReach[s.realm], before: beforeSnapshot, after: snapshot() }
@@ -122,12 +125,13 @@ const bot = createBot(s, d, { realmCost: need, breakthrough: attempt,
       ? ['splitArray', 'polarizeArray', 'annihilationFurnace'].map(id => ({ id, count: 2 })) : [] })
 const prepare = () => {
   const fill = (id, amount, path = new Set()) => {
-    if ((s.resources[id] || 0) >= amount || amount > d.max[id] || path.has(id)) return
+    const have = E.money(s.resources[id])
+    if (E.moneyGte(have, amount) || E.moneyLt(d.max[id], amount) || path.has(id)) return
     const recipe = E.CRAFTS.find(c => c.out === id && E.isCraftUnlocked(s, c))
     if (!recipe) return
-    const copies = Math.ceil((amount - (s.resources[id] || 0)) / E.craftYield(d, recipe))
+    const copies = E.moneyToCount(E.moneySubtract(amount, have).div(E.craftYield(d, recipe)).ceil())
     const next = new Set(path).add(id)
-    for (const [input, count] of Object.entries(recipe.cost)) fill(input, count * copies, next)
+    for (const [input, count] of Object.entries(recipe.cost)) fill(input, E.money(count).times(copies), next)
     E.craft(s, d, recipe.id, { times: copies })
   }
   for (const [id, amount] of Object.entries(need())) fill(id, amount)
@@ -138,8 +142,9 @@ const allocateLabor = () => {
   const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
   for (const job of E.JOBS) E.setJob(s, d, job.id, 0)
   const farmer = E.JOBS.find(job => job.id === 'farmer')
-  const perFarmer = farmer.base * (1 + (d.jobRatio.farmer || 0)) * d.discipleMult * d.sourceFactor.qi
-  const farmers = Math.min(s.disciples.total, Math.ceil(Math.max(0, -d.netQi + d.upkeep * 0.1) / perFarmer))
+  const perFarmer = farmer.base * (1 + (d.jobRatio.farmer || 0)) * d.discipleMult * moneyNum(d.sourceFactor.qi)
+  const deficit = E.moneyMax(E.ZERO, E.money(d.upkeep).times(0.1).minus(d.netQi))
+  const farmers = Math.min(s.disciples.total, Math.ceil(moneyNum(deficit) / perFarmer))
   E.setJob(s, d, 'farmer', farmers)
   const jobs = Object.entries(weights).filter(([id]) => d.unlockedJobs.includes(id))
   const totalWeight = jobs.reduce((sum, [, weight]) => sum + weight, 0)
@@ -169,20 +174,21 @@ for (elapsed = 5; elapsed <= hours * 3600; elapsed += 5) {
   if (elapsed % 21600 === 0) {
     console.log(`${mode} seed=${seed} t=${elapsed / 3600}h realm=${s.realm} deaths=${s.stats.breakthroughDeaths}`)
     if (mode === 'power') console.log(JSON.stringify({ pending: [...bot.prerequisites().upgrades].filter(id => d.availableUpgrades.includes(id))
-      .map(id => ({ id, cost: E.UPGRADE_MAP[id].cost, stock: Object.fromEntries(Object.keys(E.UPGRADE_MAP[id].cost).map(r => [r, s.resources[r]])) })),
+      .map(id => ({ id, cost: E.UPGRADE_MAP[id].cost, stock: toNumbers(Object.fromEntries(Object.keys(E.UPGRADE_MAP[id].cost).map(r => [r, s.resources[r]]))) })),
       facilities: firstFacilities, output: firstOutput }))
   }
 }
 const result = { mode, seed, strategy: mode === 'power' ? 'stage investment + active labor + guaranteed breakthroughs'
   : mode.startsWith('rush') ? 'breakthrough prerequisites only + active labor' : 'rush + active labor', limitHours: hours, ascensionHours: E.canAscend(s) ? +(elapsed / 3600).toFixed(3) : null,
-  finalRealm: s.realm, bestRealm: s.stats.bestRealm, karma: s.karma, deaths: s.stats.breakthroughDeaths,
-  stopRealm, firstReach, stageSnapshots, firstFacilities, firstOutput, attempts: attempts.slice(1), transitions,
+  finalRealm: s.realm, bestRealm: s.stats.bestRealm, karma: moneyNum(s.karma), deaths: s.stats.breakthroughDeaths,
+  stopRealm, firstReach, stageSnapshots, firstFacilities, firstOutput,
+  attempts: attempts.slice(1).map(record => ({ ...record, paid: toNumbers(record.paid) })), transitions,
   buildings: s.buildings, upgrades: s.upgrades,
   population: s.disciples.total, jobs: s.disciples.jobs,
-  resources: s.resources, capacity: d.max, production: d.rates, net: d.net,
+  resources: toNumbers(s.resources), capacity: toNumbers(d.max), production: toNumbers(d.rates), net: toNumbers(d.net),
   pendingResearch: [...bot.prerequisites().upgrades].filter(id => d.availableUpgrades.includes(id)).map(id => ({ id,
-    cost: E.UPGRADE_MAP[id].cost, stock: Object.fromEntries(Object.keys(E.UPGRADE_MAP[id].cost).map(r => [r, s.resources[r]])) })),
-  next: Object.fromEntries(Object.entries(need()).map(([id, amount]) => [id, { need: amount, stock: s.resources[id], max: d.max[id] }])),
+    cost: E.UPGRADE_MAP[id].cost, stock: toNumbers(Object.fromEntries(Object.keys(E.UPGRADE_MAP[id].cost).map(r => [r, s.resources[r]]))) })),
+  next: Object.fromEntries(Object.entries(need()).map(([id, amount]) => [id, { need: moneyNum(amount), stock: moneyNum(s.resources[id]), max: moneyNum(d.max[id]) }])),
   ...(mode === 'focus' ? { focus } : {}) }
 fs.mkdirSync('.smoke-breakthrough-time', { recursive: true })
 fs.writeFileSync(`.smoke-breakthrough-time/result-${mode}-${seed}${mode === 'focus' ? `-${selection}-${outcome}` : ''}${stopRealm < 10 ? `-realm${stopRealm}` : ''}.json`, JSON.stringify(result, null, 2))

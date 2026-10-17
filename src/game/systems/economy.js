@@ -7,13 +7,14 @@ import { ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { JOBS } from '@/data/jobs'
 import { gameNow, economyDetailsEnabled, seasonRatioOverride } from '../context'
 import { REALMS } from '@/data/realms'
-import { floorNumber } from '../numbers'
+import { MONEY_INFINITY, ONE, ZERO, money, moneyMax, moneyMin, moneySum, moneyToRatio } from '../decimal'
 import { PROCESSING_STATIONS } from '@/data/industry'
 import { CRAFTS } from '@/data/crafts'
 import { computeAutoCraftDrain } from './craftingRules'
 import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
 import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
+import { registerStaticMoneyCache } from '../staticMoneyCache'
 
 /**
  * 湮灭炉增产（变更 6）不作用的资源：粒子链（灵气分子／正负灵子／灵能）。
@@ -29,6 +30,44 @@ const CONTINUOUS_OUTPUTS = new Set([
   ...JOBS.flatMap(job => [job.resource, job.secondary?.resource,
     ...(job.additionalOutputs || []).map(output => output.resource)]),
 ].filter(Boolean))
+
+/**
+ * 静态数据里的金额字面值仍是 Number：进入热路径前预构造 Decimal 常量。
+ * 缓存按「效果对象」身份挂在 WeakMap 上，正常情况下数据表是只读常量，可以长期复用；
+ * 这样每次重算就不会重复构造上千个 Decimal（这是离线分段的主要开销之一）。
+ *
+ * 但工具会原地改表（`audit-lib` 的 craftQi / prods 补丁），同一对象身份下数值已经变化，
+ * 所以这里登记了失效入口：改表与回滚后都要调用 `invalidateStaticMoneyCaches()`。
+ */
+let moneyMapCache = new WeakMap()
+function cachedMoneyMap(values) {
+  if (!values) return null
+  let cached = moneyMapCache.get(values)
+  if (!cached) {
+    cached = {}
+    for (const key in values) cached[key] = money(values[key])
+    moneyMapCache.set(values, cached)
+  }
+  return cached
+}
+
+let effectMoneyCache = new WeakMap()
+registerStaticMoneyCache(() => {
+  moneyMapCache = new WeakMap()
+  effectMoneyCache = new WeakMap()
+})
+function effectMoney(ef) {
+  let cached = effectMoneyCache.get(ef)
+  if (!cached) {
+    cached = {
+      storage: cachedMoneyMap(ef.storage),
+      storageAll: ef.storageAll == null ? null : money(ef.storageAll),
+      prod: cachedMoneyMap(ef.prod),
+    }
+    effectMoneyCache.set(ef, cached)
+  }
+  return cached
+}
 
 export function applyEffects(ef, mult, targets, src) {
   if (!ef) return
@@ -52,7 +91,8 @@ export function applyEffects(ef, mult, targets, src) {
     })
   }
   if (ef.storage) {
-    for (const k in ef.storage) max[k] = (max[k] || 0) + ef.storage[k] * mult
+    const storage = effectMoney(ef).storage
+    for (const k in storage) max[k] = (max[k] ?? ZERO).plus(storage[k].times(mult))
   }
   // 比例加仓：这里只累计百分比，等所有定额加仓都算完、在 recompute 收尾处统一放大。
   // 若不这样分两步，上限会随"效果遍历顺序"变化（先加的定额被放大、后加的不被放大）。
@@ -67,7 +107,10 @@ export function applyEffects(ef, mult, targets, src) {
     }
   }
   if (ef.storageAll) {
-    for (const r of RESOURCES) max[r.id] = (max[r.id] || 0) + ef.storageAll * mult * (r.storageWeight ?? 1)
+    const storageAll = effectMoney(ef).storageAll
+    for (const r of RESOURCES) {
+      max[r.id] = (max[r.id] ?? ZERO).plus(storageAll.times(mult).times(r.storageWeight ?? 1))
+    }
   }
   if (ef.maxDisciples) acc.maxDisciples += ef.maxDisciples * mult
   if (ef.habitability) acc.habitabilityBonus += ef.habitability * mult
@@ -108,7 +151,8 @@ export function applyEffects(ef, mult, targets, src) {
     if (ef[field]) acc[field] = (acc[field] || 0) + ef[field] * mult
   }
   if (ef.prod) {
-    for (const k in ef.prod) prod[k] = (prod[k] || 0) + ef.prod[k] * mult
+    const prodMap = effectMoney(ef).prod
+    for (const k in prodMap) prod[k] = (prod[k] ?? ZERO).plus(prodMap[k].times(mult))
   }
   if (ef.ratio) {
     for (const k in ef.ratio) {
@@ -167,7 +211,8 @@ function buildingPowerDraw(state, meta) {
 export function recomputeRaw(state, derived, supply, seconds = 1) {
   const details = economyDetailsEnabled(state)
   const max = {}
-  for (const r of RESOURCES) max[r.id] = r.baseMax
+  // 无仓容上限（仙缘 / 道果）用金额域的正无穷哨兵，时间域的 Number Infinity 不跨域套用。
+  for (const r of RESOURCES) max[r.id] = Number.isFinite(r.baseMax) ? money(r.baseMax) : MONEY_INFINITY
   const prod = {}
   const ratio = {}
   const jobRatio = {}
@@ -178,7 +223,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const maint = {}
   const expenseRaw = {}
   const addSource = (res, entry) => {
-    if (!details || !entry.raw) return
+    // 来源明细是金额：零值判断走 Decimal，不能用对象真假判断（Decimal 恒为真）。
+    if (!details || !entry.raw || money(entry.raw).isZero()) return
     if (!sources[res]) sources[res] = []
     sources[res].push(entry)
   }
@@ -252,39 +298,45 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     }
     applyEffects(activeOnly, on * powMult, targets, details ? { kind: 'building', id: meta.id, label: meta.name, count: on } : null)
     if (ef.prod) {
-      for (const k in ef.prod) {
+      const prodMap = cachedMoneyMap(ef.prod)
+      const selfUseMap = cachedMoneyMap(meta.selfUse)
+      for (const k in prodMap) {
         // 炉内自用能（变更 4）：从毛输出扣减，得出净供能；不参与供能门禁，故零库存也能首启。
-        const gross = ef.prod[k] * on * powMult
-        const net = Math.max(0, gross - (meta.selfUse?.[k] || 0) * on)
+        const gross = prodMap[k].times(on).times(powMult)
+        const net = moneyMax(ZERO, gross.minus((selfUseMap?.[k] ?? ZERO).times(on)))
         if (meta.id === 'polarizeArray') polarizeRaw[k] = net
         addSource(k, { kind: 'building', id: meta.id, label: meta.name, count: on, raw: net })
       }
     }
     // 自用能同样要从实际产出里扣掉（applyEffects 已把毛产出写进 prod）
     if (meta.selfUse) {
-      for (const k in meta.selfUse) prod[k] = Math.max(0, (prod[k] || 0) - meta.selfUse[k] * on)
+      const selfUseMap = cachedMoneyMap(meta.selfUse)
+      for (const k in selfUseMap) {
+        prod[k] = moneyMax(ZERO, (prod[k] ?? ZERO).minus(selfUseMap[k].times(on)))
+      }
     }
     // 维护费：按“启用中的数量”消耗资源（停用即停费 —— 这是「停用」按钮唯一的存在理由）
     if (meta.upkeep && on > 0) {
-      for (const k in meta.upkeep) {
-        const amount = meta.upkeep[k] * on
-        maint[k] = (maint[k] || 0) + amount
+      const upkeepMap = cachedMoneyMap(meta.upkeep)
+      for (const k in upkeepMap) {
+        const amount = upkeepMap[k].times(on)
+        maint[k] = (maint[k] ?? ZERO).plus(amount)
         if (!expenseRaw[k]) expenseRaw[k] = []
         expenseRaw[k].push({
           kind: 'upkeep',
           id: meta.id,
           label: meta.name,
           count: on,
-          value: -amount,
+          value: amount.negated(),
         })
       }
     }
     // 持续供能：动力与物料维护分开记账，同一资源不重复结算。
     if (power && on > 0) {
-      const amount = power.amount * on
-      maint[power.res] = (maint[power.res] || 0) + amount
+      const amount = money(power.amount).times(on)
+      maint[power.res] = (maint[power.res] ?? ZERO).plus(amount)
       if (!expenseRaw[power.res]) expenseRaw[power.res] = []
-      expenseRaw[power.res].push({ kind: 'upkeep', id: meta.id, label: meta.name, count: on, value: -amount })
+      expenseRaw[power.res].push({ kind: 'upkeep', id: meta.id, label: meta.name, count: on, value: amount.negated() })
     }
   }
 
@@ -296,22 +348,24 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const mult = treasureMult(state, up) * (supply[up.id] ?? 1) * Number(enabled)
     applyEffects(up.effects, mult, targets, details ? { kind: 'upgrade', id: up.id, label: up.name, count: 1 } : null)
     if (up.effects?.prod) {
-      for (const k in up.effects.prod) {
+      const prodMap = cachedMoneyMap(up.effects.prod)
+      for (const k in prodMap) {
         addSource(k, {
           kind: 'upgrade',
           id: up.id,
           label: up.name,
           count: 1,
-          raw: up.effects.prod[k] * mult,
+          raw: prodMap[k].times(mult),
         })
       }
     }
     if (up.upkeep && mult > 0) {
-      for (const [res, unit] of Object.entries(up.upkeep)) {
-        const amount = unit * mult
-        maint[res] = (maint[res] || 0) + amount
+      const upkeepMap = cachedMoneyMap(up.upkeep)
+      for (const [res, unit] of Object.entries(upkeepMap)) {
+        const amount = unit.times(mult)
+        maint[res] = (maint[res] ?? ZERO).plus(amount)
         if (!expenseRaw[res]) expenseRaw[res] = []
-        expenseRaw[res].push({ kind: 'upkeep', id: up.id, label: up.name, count: 1, value: -amount })
+        expenseRaw[res].push({ kind: 'upkeep', id: up.id, label: up.name, count: 1, value: amount.negated() })
       }
     }
   }
@@ -340,8 +394,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const n = state.disciples.jobs[job.id] || 0
     if (n > 0) {
       for (const output of jobOutputs(state, job)) {
-        const raw = output.base * derived.discipleJobWeights[job.id] * (1 + (jobRatio[job.id] || 0)) * discipleMult
-        prod[output.resource] = (prod[output.resource] || 0) + raw
+        const raw = money(output.base).times(derived.discipleJobWeights[job.id])
+          .times(ONE.plus(jobRatio[job.id] || 0)).times(discipleMult)
+        prod[output.resource] = (prod[output.resource] ?? ZERO).plus(raw)
         addSource(output.resource, { kind: 'job', id: job.id, label: job.name, count: n, raw })
       }
     }
@@ -370,22 +425,24 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   /**
    * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
    * 这是通用 idler 的 soft cap 形状：early 不打折、late 不膨胀。
+   * 仙缘本身是随进度无界的金额，全程在 Decimal 域计算，不先转 Number。
    */
-  const karmaRaw = Math.max(0, state.karma || 0) * CONFIG.KARMA_BONUS_PER_POINT
+  const karma = moneyMax(ZERO, state.karma ?? ZERO)
+  const karmaRaw = karma.times(CONFIG.KARMA_BONUS_PER_POINT)
   const karmaBonus = softCap(karmaRaw, CONFIG.KARMA_BONUS_CAP)
-  const karmaMult = 1 + karmaBonus + acc.karmaRatio
-  const karmaStorageMult = 1 + softCap(Math.max(0, state.karma || 0) * CONFIG.KARMA_STORAGE_PER_POINT, CONFIG.KARMA_STORAGE_CAP)
-  /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。 */
-  const daoMult = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_PRODUCTION_BONUS
-  const globalMult = realmMult * karmaMult * habitabilityMult * daoMult * (1 + buffAll)
+  const karmaMult = ONE.plus(karmaBonus).plus(acc.karmaRatio)
+  const karmaStorageMult = ONE.plus(softCap(karma.times(CONFIG.KARMA_STORAGE_PER_POINT), CONFIG.KARMA_STORAGE_CAP))
+  /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。道果无上界，倍率走 Decimal。 */
+  const daoMult = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_PRODUCTION_BONUS))
+  const globalMult = money(realmMult).times(karmaMult).times(habitabilityMult).times(daoMult).times(ONE.plus(buffAll))
 
   // 工业提速同时扩大进料与出料；专业资源增益另外提高转化收益。
   for (const [res, entries] of Object.entries(expenseRaw)) {
     for (const entry of entries) {
       if (entry.kind !== 'upkeep' || !BUILDING_MAP[entry.id]?.throughput) continue
-      const extra = -entry.value * (globalMult - 1)
-      entry.value *= globalMult
-      maint[res] += extra
+      const extra = entry.value.negated().times(globalMult.minus(1))
+      entry.value = entry.value.times(globalMult)
+      maint[res] = (maint[res] ?? ZERO).plus(extra)
     }
   }
 
@@ -400,17 +457,17 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const rates = {}
   for (const r of RESOURCES) {
     if (r.noProduction) {
-      rates[r.id] = 0
+      rates[r.id] = ZERO
       continue
     }
     const base =
-      (prod[r.id] || 0) *
-      (1 + (ratio[r.id] || 0)) *
-      (1 + acc.ratioAll) *
-      (1 + (seasonRatio[r.id] || 0))
+      (prod[r.id] ?? ZERO)
+        .times(ONE.plus(ratio[r.id] || 0))
+        .times(ONE.plus(acc.ratioAll))
+        .times(ONE.plus(seasonRatio[r.id] || 0))
     // 湮灭炉增产：作用于持续产出，唯独不作用于粒子链（分子 / 正负灵子 / 灵能），保持一对一配比与燃料自洽。
-    const reactor = REACTOR_EXCLUDED.has(r.id) ? 1 : (1 + acc.reactorRatio)
-    rates[r.id] = base * globalMult * (1 + (buffRes[r.id] || 0)) * reactor
+    const reactor = REACTOR_EXCLUDED.has(r.id) ? ONE : ONE.plus(acc.reactorRatio)
+    rates[r.id] = base.times(globalMult).times(ONE.plus(buffRes[r.id] || 0)).times(reactor)
   }
 
   /**
@@ -423,41 +480,41 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const population = state.disciples.members.length
   const populationUpkeepMult = 1 + Math.min(CONFIG.POPULATION_UPKEEP_EXTRA_CAP,
     Math.max(0, population - CONFIG.POPULATION_UPKEEP_FREE) * CONFIG.POPULATION_UPKEEP_PER_DISCIPLE)
-  const baseDiscipleUpkeep = CONFIG.DISCIPLE_UPKEEP * Math.pow(realmMult, CONFIG.DISCIPLE_UPKEEP_REALM_EXP)
-  const discipleUpkeep = baseDiscipleUpkeep * populationUpkeepMult
-  const baseRawUpkeep = derived.discipleWeight * baseDiscipleUpkeep
-  const rawUpkeep = baseRawUpkeep * populationUpkeepMult
-  const reduction = rawUpkeep * Math.min(CONFIG.UPKEEP_REDUCTION_CAP, acc.consumeReduction)
-  const upkeep = rawUpkeep - reduction
+  const baseDiscipleUpkeep = money(CONFIG.DISCIPLE_UPKEEP).times(money(realmMult).pow(CONFIG.DISCIPLE_UPKEEP_REALM_EXP))
+  const discipleUpkeep = baseDiscipleUpkeep.times(populationUpkeepMult)
+  const baseRawUpkeep = baseDiscipleUpkeep.times(derived.discipleWeight)
+  const rawUpkeep = baseRawUpkeep.times(populationUpkeepMult)
+  const reduction = rawUpkeep.times(Math.min(CONFIG.UPKEEP_REDUCTION_CAP, acc.consumeReduction))
+  const upkeep = rawUpkeep.minus(reduction)
 
   // 把来源折算成最终数值（所有来源共享同一组乘区，所以按比例缩放即可对上总额）
   const sourceFactor = {}
   const sourceList = {}
   for (const res in sources) {
-    const raw = prod[res] || 0
-    const factor = raw > 0 ? (rates[res] || 0) / raw : 0
+    const raw = prod[res] ?? ZERO
+    const factor = raw.gt(0) ? (rates[res] ?? ZERO).div(raw) : ZERO
     sourceFactor[res] = factor
     sourceList[res] = sources[res]
-      .map((s) => ({ ...s, value: s.raw * factor }))
+      .map((s) => ({ ...s, value: money(s.raw).times(factor) }))
   }
   // 出项明细：弟子口粮（灵气）+ 各建筑的维护费
   const expenseList = { ...expenseRaw }
-  if (rawUpkeep > 0) {
+  if (rawUpkeep.gt(0)) {
     const items = expenseList.qi || []
     items.unshift({
       kind: 'upkeep',
       id: 'disciples',
       label: '弟子',
       count: state.disciples.total,
-      value: -baseRawUpkeep,
+      value: baseRawUpkeep.negated(),
     })
-    if (rawUpkeep > baseRawUpkeep) {
+    if (rawUpkeep.gt(baseRawUpkeep)) {
       items.splice(1, 0, {
         kind: 'upkeep', id: 'population', label: '宗门规模口粮',
-        count: population, value: -(rawUpkeep - baseRawUpkeep),
+        count: population, value: rawUpkeep.minus(baseRawUpkeep).negated(),
       })
     }
-    if (reduction > 0) {
+    if (reduction.gt(0)) {
       items.splice(1, 0, {
         kind: 'reduce',
         id: 'consumeRatio',
@@ -471,33 +528,35 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   // 逐资源的每秒出项总额（灵气 = 弟子口粮 + 维护费）
   const expense = {}
   for (const res in expenseList) {
-    expense[res] = expenseList[res].reduce((s, x) => s + x.value, 0)
+    expense[res] = moneySum(expenseList[res].map(item => item.value))
   }
-  for (const res in maint) if (expense[res] === undefined) expense[res] = -maint[res]
+  for (const res in maint) if (expense[res] === undefined) expense[res] = maint[res].negated()
   // 传功：按弟子有效境界的持续灵气开销；修为已满不收费，灵气不足（口粮与维护优先）整批暂停、不欠账。
-  let trainingCost = 0
+  let trainingCost = ZERO
   {
-    let raw = 0
+    let raw = ZERO
     let count = 0
     for (const member of state.disciples.members) {
       const cost = discipleTrainingCost(member, state.realm)
-      if (cost > 0) { raw += cost; count++ }
+      if (money(cost).gt(0)) { raw = raw.plus(cost); count++ }
     }
-    const available = Math.max(0, (state.resources.qi || 0) / seconds + (rates.qi || 0) + (expense.qi || 0))
-    if (acc.discipleTrainingUnlocked && raw > 0 && available + 1e-10 >= raw) {
+    // 可用灵气按本段时长折算；金额精确比较，不再用相对容差放行「差一点点」的支付。
+    const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(seconds)
+      .plus(rates.qi ?? ZERO).plus(expense.qi ?? ZERO))
+    if (acc.discipleTrainingUnlocked && raw.gt(0) && available.gte(raw)) {
       trainingCost = raw
       if (!expenseList.qi) expenseList.qi = []
-      expenseList.qi.push({ kind: 'upkeep', id: 'training', label: '传功', count, value: -raw })
-      expense.qi = (expense.qi || 0) - raw
+      expenseList.qi.push({ kind: 'upkeep', id: 'training', label: '传功', count, value: raw.negated() })
+      expense.qi = (expense.qi ?? ZERO).minus(raw)
     }
   }
-  derived.trainingActive = trainingCost > 0
+  derived.trainingActive = trainingCost.gt(0)
   derived.trainingCost = trainingCost
   // 净额：产出 − 出项（界面左栏与状态行显示的都是它）
   const net = {}
   for (const r of RESOURCES) {
-    const out = -(expense[r.id] || 0)
-    net[r.id] = (rates[r.id] || 0) - out
+    const out = (expense[r.id] ?? ZERO).negated()
+    net[r.id] = (rates[r.id] ?? ZERO).minus(out)
   }
 
   // 专项扩容仅增加指定建筑自身的定额仓储，基础仓容和其他来源不参与。
@@ -506,20 +565,24 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     if (!meta || !isEntryEnabled(state, meta)) continue
     const count = state.buildings[id]?.count || 0
     for (const [res, amount] of Object.entries(meta.effects?.storage || {})) {
-      max[res] = (max[res] || 0) + amount * count * value
+      max[res] = (max[res] ?? ZERO).plus(money(amount).times(count).times(value))
     }
   }
   for (const r of RESOURCES) {
     // 信符仓容完全独立：不乘仙缘仓储倍率（isolatedStorage），也不套通用扩仓（storageWeight 0）。
-    if (Number.isFinite(max[r.id]) && !r.isolatedStorage) max[r.id] *= karmaStorageMult
-    if (r.integer) max[r.id] = floorNumber(max[r.id])
+    if (max[r.id].isFinite() && !r.isolatedStorage) max[r.id] = max[r.id].times(karmaStorageMult)
   }
   derived.karmaStorageMult = karmaStorageMult
   // 比例加仓在此统一生效：上限 =（基础 + 定额）×（1 + 比例）
   if (acc.storageRatio) {
     for (const k in acc.storageRatio) {
-      if (acc.storageRatio[k] > 0) max[k] = (max[k] || 0) * (1 + acc.storageRatio[k])
+      if (acc.storageRatio[k] > 0) max[k] = (max[k] ?? ZERO).times(ONE.plus(acc.storageRatio[k]))
     }
+  }
+  // 整枚计数资源的仓容在**所有加仓之后**统一取整：比例加仓也参与，
+  // 避免出现「4.5 枚灵石」这种取整后仍然带小数的上限。
+  for (const r of RESOURCES) {
+    if (r.integer) max[r.id] = max[r.id].floor()
   }
   derived.max = max
   derived.rates = rates
@@ -541,7 +604,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.sources = sourceList
   // 供给求解只依赖偏极阵实际流量，不依赖为 tooltip 构造的来源列表。
   derived.polarizeOutput = Object.fromEntries(Object.entries(polarizeRaw)
-    .map(([res, raw]) => [res, raw * ((prod[res] || 0) > 0 ? (rates[res] || 0) / prod[res] : 0)]))
+    .map(([res, raw]) => [res, (prod[res] ?? ZERO).gt(0) ? raw.times((rates[res] ?? ZERO).div(prod[res])) : ZERO]))
   derived.sourceFactor = sourceFactor
   derived.expenseSources = expenseList
   derived.expense = expense
@@ -598,7 +661,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   // 暴露给 progression：渡劫身死减免（预览 / 结算同源）。
   derived.tribulationSafety = acc.tribulationSafety
   derived.offlineHours = acc.offlineHours
-  derived.daoAutomation = (state.dao || 0) >= 1
+  derived.daoAutomation = money(state.dao ?? ZERO).gte(1)
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
   derived.autoCraftSpeedUnlocked = acc.autoCraftSpeedUnlocked
   derived.autoCraftSpeeds = Object.fromEntries(CRAFTS.map(recipe => {
@@ -627,7 +690,7 @@ export function finishDerived(state, derived) {
     (u) => !state.upgrades[u.id] && isUpgradeUnlocked(state, u),
   ).map((u) => u.id)
   derived.availableCrafts = CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => c.id)
-  for (const rows of Object.values(derived.sources)) rows.sort((a, b) => b.value - a.value)
+  for (const rows of Object.values(derived.sources)) rows.sort((a, b) => b.value.cmp(a.value))
   derived.bonus.ratioAll.sort((a, b) => b.value - a.value)
   return derived
 }
@@ -640,7 +703,7 @@ export function finishDerived(state, derived) {
 export function canReuseEconomy(state, derived, seconds) {
   if (state.buffs.some(buff => (buff.until || 0) <= gameNow(state))) return false
   const missingMaterial = meta => Object.keys(meta?.upkeep || {}).some(res =>
-    !CONTINUOUS_OUTPUTS.has(res) && !(state.resources[res] > 0))
+    !CONTINUOUS_OUTPUTS.has(res) && !(state.resources[res] ?? ZERO).gt(0))
   for (const [id, value] of Object.entries(derived.buildingSupply)) {
     if (value !== 1 && !(value === 0 && missingMaterial(BUILDING_MAP[id]))) return false
   }
@@ -650,28 +713,29 @@ export function canReuseEconomy(state, derived, seconds) {
   }
   const dt = Math.max(0.001, seconds)
   for (const [res, demand] of Object.entries(derived.maintenance)) {
-    const available = Math.max(0, (state.resources[res] || 0) / dt + (derived.rates[res] || 0)
-      - (res === 'qi' ? derived.upkeep : 0))
-    if (demand > available) return false
+    const available = moneyMax(ZERO, (state.resources[res] ?? ZERO).div(dt)
+      .plus(derived.rates[res] ?? ZERO)
+      .minus(res === 'qi' ? derived.upkeep : ZERO))
+    if (demand.gt(available)) return false
   }
   // 偏极阵任一侧接近满仓时须重新求负荷，不能沿用满供产出而浪费上游物料。
   if (derived.buildingSupply.polarizeArray > 0) {
     for (const res of ['yangParticle', 'yinParticle']) {
-      const output = derived.polarizeOutput[res] || 0
-      const room = Math.max(0, (derived.max[res] || 0) - (state.resources[res] || 0)) / dt
-      const sink = Math.max(0, -(derived.expense[res] || 0))
-      const other = Math.max(0, (derived.rates[res] || 0) - output)
-      if (output > room + sink - other) return false
+      const output = derived.polarizeOutput[res] ?? ZERO
+      const room = moneyMax(ZERO, (derived.max[res] ?? MONEY_INFINITY).minus(state.resources[res] ?? ZERO)).div(dt)
+      const sink = moneyMax(ZERO, (derived.expense[res] ?? ZERO).negated())
+      const other = moneyMax(ZERO, (derived.rates[res] ?? ZERO).minus(output))
+      if (output.gt(room.plus(sink).minus(other))) return false
     }
   }
   if (derived.discipleTrainingUnlocked) {
-    let training = 0
-    for (const member of state.disciples.members) training += discipleTrainingCost(member, state.realm)
+    let training = ZERO
+    for (const member of state.disciples.members) training = training.plus(discipleTrainingCost(member, state.realm))
     // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功。
-    const available = Math.max(0, (state.resources.qi || 0) / dt + (derived.rates.qi || 0)
-      + (derived.expense.qi || 0) + derived.trainingCost)
-    const cost = training > 0 && available + 1e-10 >= training ? training : 0
-    if (cost !== derived.trainingCost) return false
+    const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(dt)
+      .plus(derived.rates.qi ?? ZERO).plus(derived.expense.qi ?? ZERO).plus(derived.trainingCost))
+    const cost = training.gt(0) && available.gte(training) ? training : ZERO
+    if (!cost.eq(derived.trainingCost)) return false
   }
   return true
 }
@@ -702,17 +766,19 @@ export function recompute(state, derived, seconds = 1) {
     let changed = false
     // 双极分流同时产生两种灵子；任一侧满仓时，只为下游实际消耗补料。
     if (supply.polarizeArray > 0) {
-      let factor = 1
+      let factor = ONE
       for (const res of ['yangParticle', 'yinParticle']) {
-        const output = derived.polarizeOutput[res] || 0
-        if (output <= 0) continue
-        const room = Math.max(0, (derived.max[res] || 0) - (state.resources[res] || 0)) / dt
-        const sink = Math.max(0, -(derived.expense[res] || 0))
-        const other = Math.max(0, (derived.rates[res] || 0) - output)
-        factor = Math.min(factor, Math.max(0, room + sink - other) / output)
+        const output = derived.polarizeOutput[res] ?? ZERO
+        if (output.lte(0)) continue
+        const room = moneyMax(ZERO, (derived.max[res] ?? MONEY_INFINITY).minus(state.resources[res] ?? ZERO)).div(dt)
+        const sink = moneyMax(ZERO, (derived.expense[res] ?? ZERO).negated())
+        const other = moneyMax(ZERO, (derived.rates[res] ?? ZERO).minus(output))
+        factor = moneyMin(factor, moneyMax(ZERO, room.plus(sink).minus(other)).div(output))
       }
-      if (factor < 1 - 1e-10) {
-        supply.polarizeArray *= factor
+      // 供给比例是有界量：先在 Decimal 域夹到 [0,1]，再转 Number 参与供给迭代。
+      const ratio = moneyToRatio(factor)
+      if (ratio < 1 - 1e-10) {
+        supply.polarizeArray *= ratio
         if (supply.polarizeArray < 1e-10) supply.polarizeArray = 0
         recomputeRaw(state, derived, supply, dt)
         changed = true
@@ -721,8 +787,10 @@ export function recompute(state, derived, seconds = 1) {
     const shares = {}
     for (const res in derived.maintenance) {
       const demand = derived.maintenance[res]
-      const available = Math.max(0, (state.resources[res] || 0) / dt + (derived.rates[res] || 0) - (res === 'qi' ? derived.upkeep : 0))
-      shares[res] = demand > 0 ? Math.min(1, available / demand) : 1
+      const available = moneyMax(ZERO, (state.resources[res] ?? ZERO).div(dt)
+        .plus(derived.rates[res] ?? ZERO)
+        .minus(res === 'qi' ? derived.upkeep : ZERO))
+      shares[res] = demand.gt(0) ? moneyToRatio(available.div(demand)) : 1
     }
     for (const b of consumers) {
       const drawRes = Object.keys(b.upkeep || {})

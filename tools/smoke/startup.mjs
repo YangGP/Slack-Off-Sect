@@ -15,12 +15,12 @@ export function initialState({ ok, close, section }) {
   section('初始状态：什么都没有（对标猫国开局）')
   {
     const { state, derived } = newGame()
-    ok('初始灵气为 0', state.resources.qi === 0)
+    ok('初始灵气为 0', E.moneyIsZero(state.resources.qi))
     ok('初始弟子为 0', state.disciples.total === 0)
     ok('初始没有任何职位', Object.values(state.disciples.jobs).every((n) => n === 0))
     ok('初始没有任何建筑', Object.keys(state.buildings).length === 0)
     ok('弟子上限为 0（要靠茅屋）', derived.maxDisciples === 0, `实际 ${derived.maxDisciples}`)
-    ok('开局没有任何产出', derived.rates.qi === 0 && derived.rates.wood === 0)
+    ok('开局没有任何产出', E.moneyIsZero(derived.rates.qi) && E.moneyIsZero(derived.rates.wood))
     ok('开局宜居度20且没有额外全局加成', derived.habitability === 20 && derived.habitabilityMult === 1)
 
     // 点一下「吸取天地灵气」
@@ -32,7 +32,7 @@ export function initialState({ ok, close, section }) {
     ok('点 10 下攒得出第一座聚灵阵（25 ÷ 2.5）', close(E.BUILDING_MAP.spiritField.cost.qi, 25, 1e-9))
 
     // 聚灵阵是第一座建筑，也是第一个产出源
-    state.resources.qi = 25
+    state.resources.qi = E.money(25)
     E.trackPeak(state)
     ok('灵气够了就能建聚灵阵', E.buyBuilding(state, derived, 'spiritField', 1) === 1)
     ok('聚灵阵产出灵气（春季 +20% 后 0.36/s）', close(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
@@ -40,10 +40,10 @@ export function initialState({ ok, close, section }) {
 
     // 茅屋：第一间房子花「吸来的灵气 + 炼出来的灵石」，并且要先有一座聚灵阵（对标猫国小屋）
     const hut = E.BUILDING_MAP.hut
-    ok('首屋仅需灵气，后续茅屋需要木料', E.buildingCost(state, 'hut').qi === 80 && !E.buildingCost(state, 'hut').wood && hut.cost.wood === 20)
+    ok('首屋仅需灵气，后续茅屋需要木料', E.moneyEq(E.buildingCost(state, 'hut').qi, 80) && !E.buildingCost(state, 'hut').wood && hut.cost.wood === 20)
     ok('茅屋要一座聚灵阵（第 1 分钟只有聚灵阵可选）', !!hut.needs?.building, JSON.stringify(hut.needs))
-    state.resources.qi = 80
-    state.resources.stone = 4
+    state.resources.qi = E.money(80)
+    state.resources.stone = E.money(4)
     E.trackPeak(state)
     ok('材料齐了能建茅屋', E.buyBuilding(state, derived, 'hut', 1) === 1)
     ok('茅屋把弟子上限抬到 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
@@ -52,7 +52,7 @@ export function initialState({ ok, close, section }) {
     state.disciples.total = 2
     E.setJob(state, derived, 'farmer', 1)
     E.recompute(state, derived)
-    ok('有阵徒之后灵气产出叠加', derived.rates.qi > 0.36, `实际 ${derived.rates.qi}`)
+    ok('有阵徒之后灵气产出叠加', E.moneyGt(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
     ok(
       `灵气消耗按弟子数算（2 人 × ${CONFIG.DISCIPLE_UPKEEP}，凡体倍率 1.0）`,
       close(derived.upkeep, 0.5, 1e-9),
@@ -69,24 +69,26 @@ export function initialState({ ok, close, section }) {
       const mult = REALMS[4].mult
       ok(
         `口粮随境界倍率上涨（金丹期 ×${mult}）`,
-        close(derived.upkeep, before * mult, 1e-9),
+        close(derived.upkeep, before.times(mult), 1e-9),
         `${before} → ${derived.upkeep}`,
       )
       ok(
         `每人口粮 = ${CONFIG.DISCIPLE_UPKEEP} × 境界倍率`,
-        close(derived.discipleUpkeep, beforeUnit * mult, 1e-9),
+        close(derived.discipleUpkeep, beforeUnit.times(mult), 1e-9),
         `实际 ${derived.discipleUpkeep}`,
       )
       // 渡劫期（×20）：口粮占「一名阵徒毛产出」的比例不该再往下掉。
       // 注意要用边际产出（裸 0.6 × 共用乘区），不能拿 rates.qi ÷ 人数 —— 那里面还混着聚灵阵的产出。
       state.realm = ASCEND_REALM_INDEX
       E.recompute(state, derived)
-      const factor = derived.prodRaw.qi > 0 ? derived.rates.qi / derived.prodRaw.qi : derived.globalMult
+      const factor = E.moneyIsPositive(derived.prodRaw.qi)
+        ? E.moneyToNumber(derived.rates.qi.div(derived.prodRaw.qi))
+        : E.moneyToNumber(derived.globalMult)
       const grossPerFarmer = 0.6 * factor
       ok(
         '渡劫期口粮仍占阵徒毛产出的 30% 以上（弟子没有随境界变免费）',
-        derived.discipleUpkeep / grossPerFarmer > 0.3,
-        `口粮 ${derived.discipleUpkeep.toFixed(3)} / 毛产出 ${grossPerFarmer.toFixed(3)}`,
+        E.moneyToNumber(derived.discipleUpkeep) / grossPerFarmer > 0.3,
+        `口粮 ${E.moneyToNumber(derived.discipleUpkeep).toFixed(3)} / 毛产出 ${grossPerFarmer.toFixed(3)}`,
       )
       state.realm = 0
       E.recompute(state, derived)

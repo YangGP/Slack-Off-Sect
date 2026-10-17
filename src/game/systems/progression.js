@@ -5,7 +5,7 @@ import { BREAKTHROUGH, BREAKTHROUGH_AIDS, REALMS, ASCEND_REALM_INDEX, REINCARNAT
 import { realmBaseChance } from '@/data/disciples'
 import { gameRandom, gameNow } from '../context'
 import { resetForRebirth } from '../state'
-import { floorNumber } from '../numbers'
+import { ONE, ZERO, floorMoney, money, moneyGt, moneyMax, moneyMin } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { autoAssignTalentJobs } from './disciples'
@@ -60,7 +60,8 @@ export function breakthroughPreview(state, derived, options = {}) {
   const aids = availableAids.filter(aid => options[aid.id] === true)
   const cost = { ...(realmCost(state, derived, state.realm + 1) || {}) }
   for (const aid of aids) {
-    for (const [res, amount] of Object.entries(aid.cost)) cost[res] = (cost[res] || 0) + amount
+    // 辅助材料也是金额：预览与实付共用这一份 Decimal 合计，不用原生加法。
+    for (const [res, amount] of Object.entries(aid.cost)) cost[res] = (cost[res] ?? ZERO).plus(money(amount))
   }
   const chance = Math.min(rules.chanceCap, baseChance + aids.reduce((sum, aid) => sum + aid.bonus, 0))
   // 身死减免：本次选中的护道 deathReduce 之和 + 已学技艺的 tribulationSafety（被动）。
@@ -72,7 +73,7 @@ export function breakthroughPreview(state, derived, options = {}) {
   const maxChance = Math.min(rules.chanceCap, baseChance + availableAids.reduce((sum, aid) => sum + aid.bonus, 0))
   return { baseChance, chance, maxChance, availableAids, cost, tribulation, deathOnFailure, regressionOnFailure,
     regressionRisk: (1 - chance) * regressionOnFailure, deathRisk: (1 - chance) * deathOnFailure,
-    deathKarma: Math.floor(reincarnationGain(state, derived) / 2) }
+    deathKarma: floorMoney(reincarnationGain(state, derived).times('0.5')) }
 }
 
 export function breakthrough(state, derived, options = {}, random = () => gameRandom(state)) {
@@ -94,8 +95,10 @@ export function breakthrough(state, derived, options = {}, random = () => gameRa
       const lost = []
       for (const res of Object.keys(next.cost)) {
         if (res === 'insight' || res === 'qi') continue
-        const amount = Math.min(state.resources[res] || 0, floorNumber((state.resources[res] || 0) * BREAKTHROUGH.stockLoss))
-        if (amount > 0) {
+        // 渡劫失败按库存比例没收：比例是有界 Number，库存与损失是金额。
+        const have = state.resources[res] ?? ZERO
+        const amount = moneyMin(have, floorMoney(have.times(BREAKTHROUGH.stockLoss)))
+        if (moneyGt(amount, ZERO)) {
           payCost(state, { [res]: amount })
           lost.push(`${RESOURCE_MAP[res].name} ${amount}`)
         }
@@ -120,9 +123,9 @@ export function breakthrough(state, derived, options = {}, random = () => gameRa
   return true
 }
 
-/** 本世**存下**的灵机（走 addResource，会被仓储上限截断；仙缘公式用的是它） */
+/** 本世**存下**的灵机（走 addResource，会被仓储上限截断；仙缘公式用的是它）——金额 */
 export function lifeInsightOf(state) {
-  return Math.max(0, state.stats?.lifeInsight || 0)
+  return moneyMax(ZERO, state.stats?.lifeInsight ?? ZERO)
 }
 
 /**
@@ -150,14 +153,17 @@ export function canReincarnate(state) {
  * 仙缘结算公式（转世与飞升共用）：
  *   sqrt(本世累计灵机 ÷ 2000) × (1 + 境界 × 0.3) × (1 + 飞升加成)
  * 于是「越晚结算越值钱」是自动的：化神期约 22 点、渡劫期约 197 点。
+ *
+ * 灵机与仙缘都是金额：开方与连乘全程 Decimal，最后向下取整（收益取整规则）。
+ * @returns {Decimal} 本次可得的仙缘点数
  */
 export function settleKarma(state, derived, allowed) {
-  const insight = Math.max(0, state.stats.lifeInsight || 0)
-  const base = Math.sqrt(insight / 2000)
-  const realmFactor = 1 + state.realm * 0.3
-  const daoBonus = 1 + Math.max(0, state.dao || 0) * CONFIG.DAO_KARMA_GAIN_BONUS
-  const gain = base * realmFactor * (1 + derived.ascendBonus) * daoBonus
-  return Math.max(allowed ? 1 : 0, Math.floor(gain))
+  const insight = moneyMax(ZERO, state.stats?.lifeInsight ?? ZERO)
+  const base = insight.div(2000).sqrt()
+  const realmFactor = money(1 + state.realm * 0.3)
+  const daoBonus = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_KARMA_GAIN_BONUS))
+  const gain = base.times(realmFactor).times(ONE.plus(derived.ascendBonus || 0)).times(daoBonus)
+  return moneyMax(allowed ? ONE : ZERO, floorMoney(gain))
 }
 
 export function ascensionGain(state, derived) {

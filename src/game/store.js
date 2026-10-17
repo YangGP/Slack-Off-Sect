@@ -12,6 +12,9 @@ import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/real
 import { createInitialState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
 import { atLeast } from './numbers'
+import { ZERO, floorMoney, money, moneyFinite, moneyIsPositive, moneyNonNegative, moneySum } from './decimal'
+import { fmtAmount, fmtCost, fmtInt } from './format'
+import { cloneRuntime } from './clone'
 import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
 import { deactivateModule } from './moduleRegistry'
@@ -49,7 +52,8 @@ export const ui = reactive({
 })
 
 const game = createGame({ state, derived,
-  snapshotState: value => JSON.parse(JSON.stringify(toRaw(value))),
+  // 运行时快照必须保留 Decimal 金额：JSON 往返会把金额变成字符串，structuredClone 会丢掉原型。
+  snapshotState: value => cloneRuntime(toRaw(value)),
 })
 const repository = createSaveRepository()
 const runtime = createRuntime({ game, repository,
@@ -86,12 +90,12 @@ export function initializeGame() {
   return initializing
 }
 
-/** 悬停某个花费时高亮对应资源；cost 形如 { qi: 100, wood: 20 } */
+/** 悬停某个花费时高亮对应资源；cost 形如 { qi: 100, wood: 20 }（金额可以是 Decimal 或数据层 Number） */
 export function highlightCost(cost) {
   const need = Object.keys(cost || {})
   ui.highlight = {
     need,
-    lack: need.filter((res) => !atLeast(state.resources[res] || 0, cost[res])),
+    lack: need.filter((res) => !atLeast(state.resources[res] ?? ZERO, cost[res])),
   }
 }
 
@@ -126,9 +130,10 @@ function applyOfflineProgress() {
       .map(([id, amount]) => ({
         id,
         name: resourceName(id),
-        amount,
+        // 报告里的数量是金额：保留 Decimal，界面按格式化函数显示。
+        amount: money(amount),
       }))
-      .sort((a, b) => b.amount - a.amount)
+      .sort((a, b) => b.amount.cmp(a.amount))
     ui.offlineReport = {
       awaySeconds: elapsed,
       simulatedSeconds: seconds,
@@ -139,7 +144,7 @@ function applyOfflineProgress() {
       disciples: result.disciples || 0,
     }
     if (gains.length) {
-      state.stats.offlineGains += gains.reduce((s, g) => s + g.amount, 0)
+      state.stats.offlineGains = moneySum(gains.map(gain => gain.amount), state.stats.offlineGains)
     }
     const extra = result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''
     E.pushLog(
@@ -205,7 +210,7 @@ export function advance(dt) {
 function reportAdvance(dt, result) {
   if (!result || dt <= 60) return
   const parts = Object.entries(result.gains).slice(0, 4)
-    .map(([id, amount]) => `${resourceName(id)}+${Math.round(amount)}`)
+    .map(([id, amount]) => `${resourceName(id)}+${fmtAmount(amount)}`)
   E.pushLog(state, `挂机 ${Math.round(dt)} 秒${parts.length ? '，' + parts.join('，') : ''}`, 'info')
 }
 
@@ -270,6 +275,11 @@ export function toast(text, kind = 'info') {
 // ============================================================
 
 export const actions = {
+  /**
+   * 调试：直接设定某资源存量。入参可以是 Number 或十进制字符串，
+   * 但一律先构造为 Decimal 再写回 —— 资源存量是金额域，写进 Number 会污染整条经济链。
+   * 上限沿用原来的安全整数口径，避免调试入口绕过存档校验写入难以表示的数量。
+   */
   setDebugResource(id, amount) {
     if (!ui.debug) return false
     if (ui.saveLoadError) {
@@ -277,14 +287,21 @@ export const actions = {
       return false
     }
     const meta = RESOURCES.find(r => r.id === id)
-    if (!meta || typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || amount > Number.MAX_SAFE_INTEGER) {
+    if (!meta) return false
+    let value = null
+    try {
+      value = money(amount)
+    } catch {
+      value = null
+    }
+    if (value === null || !moneyFinite(value) || value.isNegative() || value.gt(Number.MAX_SAFE_INTEGER)) {
       toast('数量必须是非负有限数字，且不超过安全整数上限', 'bad')
       return false
     }
-    const value = meta.integer ? Math.floor(amount) : amount
+    if (meta.integer) value = floorMoney(value)
     state.resources[id] = value
     if (id === 'karma' || id === 'dao') state[id] = value
-    if (value > 0) state.seen[id] = true
+    if (moneyIsPositive(value)) state.seen[id] = true
     E.trackPeak(state)
     E.recompute(state, derived)
     const saved = saveNow()
@@ -402,10 +419,10 @@ export const actions = {
       return { dismissed: 0 }
     }
     const member = preview.count === 1 ? state.disciples.members.find(member => member.id === preview.ids[0]) : null
-    if (!window.confirm(`确定将${member ? member.name : '所选 ' + preview.count + ' 名弟子'}逐出师门？\n需支付灵气 ${preview.cost.qi.toLocaleString('zh-CN')}（当前每年基础口粮×（已满年数＋1），每人向上取整）。\n逐出后移除个人成长与岗位，无法撤回。`)) return { dismissed: 0 }
+    if (!window.confirm(`确定将${member ? member.name : '所选 ' + preview.count + ' 名弟子'}逐出师门？\n需支付灵气 ${fmtCost(preview.cost.qi)}（当前每年基础口粮×（已满年数＋1），每人向上取整）。\n逐出后移除个人成长与岗位，无法撤回。`)) return { dismissed: 0 }
     const result = E.dismissDisciples(state, derived, preview.ids, preview)
     if (result.dismissed) {
-      afterAction(`已逐出 ${result.dismissed} 人，支付灵气 ${result.cost.qi}`, 'info')
+      afterAction(`已逐出 ${result.dismissed} 人，支付灵气 ${fmtCost(result.cost.qi)}`, 'info')
       saveNow()
     } else toast(result.reason === 'changed' ? '逐出费用或人数已变化，请重新确认' : '灵气不足，未逐出弟子', 'bad')
     return result
@@ -417,15 +434,15 @@ export const actions = {
   },
   /** 手动制作即时扣料与出货，自动加工单独遵守工位节拍。 */
   craft(id, { times = 1 } = {}) {
-    const made = Number.isSafeInteger(times) && times > 0 ? E.craft(state, derived, id, { times }) : 0
-    if (made > 0) afterAction(`制作完成 ×${made}`, 'good')
+    const made = Number.isSafeInteger(times) && times > 0 ? E.craft(state, derived, id, { times }) : ZERO
+    if (made.gt(0)) afterAction(`制作完成 ×${fmtAmount(made)}`, 'good')
     else toast('材料不足或仓储已满', 'bad')
   },
 
   /** 按当前材料与仓容比例立即制作。 */
   craftBatch(id, frac = 1) {
     const made = E.craftBatch(state, derived, id, frac)
-    if (made > 0) afterAction(`制作完成 ×${made}`, 'good')
+    if (made.gt(0)) afterAction(`制作完成 ×${fmtAmount(made)}`, 'good')
     else toast('材料不足或仓储已满', 'bad')
   },
 
@@ -435,10 +452,10 @@ export const actions = {
     return true
   },
 
-  /** 手动吸取天地灵气（开局唯一的灵气来源，对标猫国的采集猫薄荷） */
+  /** 手动吸取天地灵气（开局唯一的灵气来源，对标猫国的采集猫薄荷）；返回本次吸到的总额（金额）。 */
   drawQi(times = 1) {
-    let total = 0
-    for (let i = 0; i < times; i++) total += E.drawQi(state, derived)
+    let total = ZERO
+    for (let i = 0; i < times; i++) total = total.plus(E.drawQi(state, derived))
     E.recompute(state, derived)
     return total
   },
@@ -492,9 +509,9 @@ export const actions = {
     const name = REALMS[state.realm].name
     resetForReincarnation(state, gain)
     E.recompute(state, derived)
-    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${gain} 点再入红尘`, 'realm')
+    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${fmtInt(gain)} 点再入红尘`, 'realm')
     saveNow()
-    toast(`转世成功，获得仙缘 ${gain}`, 'good')
+    toast(`转世成功，获得仙缘 ${fmtInt(gain)}`, 'good')
     return true
   },
   ascend() {
@@ -502,13 +519,14 @@ export const actions = {
       toast('尚未到渡劫期，无法飞升', 'bad')
       return false
     }
+    // 结算的仙缘是金额（Decimal）：跨世累加在 resetForAscension 里走 Decimal 加法。
     const gain = E.ascensionGain(state, derived)
     const name = REALMS[state.realm].name
     resetForAscension(state, gain)
     E.recompute(state, derived)
-    E.pushLog(state, `自【${name}】飞升，携仙缘 ${gain} 点转世重修`, 'realm')
+    E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtInt(gain)} 点转世重修`, 'realm')
     saveNow()
-    toast(`飞升成功，获得仙缘 ${gain} 与 1 颗道果，道果统筹已开启`, 'good')
+    toast(`飞升成功，获得仙缘 ${fmtInt(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
     return true
   },
   /** 调试/彩蛋：立刻触发一次奇遇 */
@@ -577,6 +595,17 @@ export const actions = {
       return true
     }
     if (key === 'autoCraftSpeeds' || key === 'autoCraftSpeed' || key === 'craftWeights' || key === 'processingModes') return false
+    if (key === 'craftReserves') {
+      /**
+       * 逐项材料保留量是金额：入参来自输入框，可能是字符串、Number 或 Decimal。
+       * 统一按金额域宽容解码（损坏值与负值回退 0），不在这里做有界控制量的 Number 夹取。
+       */
+      const next = {}
+      for (const [res, amount] of Object.entries(value || {})) next[res] = moneyNonNegative(amount)
+      state.settings.craftReserves = next
+      saveNow()
+      return
+    }
     state.settings[key] = value
     saveNow()
   },
@@ -695,7 +724,9 @@ export const view = {
         const meta = RESOURCE_MAP[id]
         // 关闭的可选模块：其资源不在顶栏显示（存量保留在存档里）
         if (meta?.module && !isModuleEnabled(state, meta.module)) return false
-        return id === 'qi' || state.seen[id] || (state.resources[id] || 0) > 0 || (state.peak?.[id] || 0) > 0
+        // 存量与历史峰值都是金额：用 Decimal 判断是否为正值，不能靠对象真假。
+        return id === 'qi' || state.seen[id] ||
+          moneyIsPositive(state.resources[id] ?? ZERO) || moneyIsPositive(state.peak?.[id] ?? ZERO)
       },
     ).map((id) => RESOURCES.find((r) => r.id === id)),
   ),

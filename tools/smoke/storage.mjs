@@ -125,38 +125,39 @@ export function storageAndRefinement({ ok, section }) {
     s.buildings.depot = { count: 2, on: true }
     s.upgrades.caseStackArt = true
     E.recompute(s, d)
-    ok('基础物资通用扩仓仍全额计入', d.max.wood === RESOURCE_MAP.wood.baseMax + 6 * 200 + 2 * BUILDING_MAP.depot.effects.storage.wood + 1200)
-    ok('工艺与稀有材料容量有层级差异', d.max.plank > d.max.arrayBase && d.max.arrayBase > d.max.spiritArtifact && d.max.spiritArtifact > d.max.spiritTreasure)
+    ok('基础物资通用扩仓仍全额计入', E.moneyEq(d.max.wood,
+      E.money(RESOURCE_MAP.wood.baseMax).plus(6 * 200).plus(2 * BUILDING_MAP.depot.effects.storage.wood).plus(1200)))
+    ok('工艺与稀有材料容量有层级差异', E.moneyGt(d.max.plank, d.max.arrayBase) && E.moneyGt(d.max.arrayBase, d.max.spiritArtifact) && E.moneyGt(d.max.spiritArtifact, d.max.spiritTreasure))
     const pillBefore = d.max.pill
     s.buildings.alchemyRoom = { count: 1, on: true }
     E.recompute(s, d)
-    ok('专属成品仓储不被通用折算削弱', d.max.pill === pillBefore + BUILDING_MAP.alchemyRoom.effects.storage.pill)
-    ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer).every(r => Number.isInteger(d.max[r.id])))
-    const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: 1000 } })
+    ok('专属成品仓储不被通用折算削弱', E.moneyEq(d.max.pill, pillBefore.plus(BUILDING_MAP.alchemyRoom.effects.storage.pill)))
+    ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer).every(r => E.money(d.max[r.id]).isInteger()))
+    const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: E.money(1000) } })
     E.recompute(old, d)
     E.addResource(old, 'nineTurnPill', 10, d.max.nineTurnPill)
-    ok('旧档超额成品不被收入操作抹掉且不能继续囤货', old.resources.nineTurnPill === 1000)
+    ok('旧档超额成品不被收入操作抹掉且不能继续囤货', E.moneyEq(old.resources.nineTurnPill, 1000))
     E.payCost(old, { nineTurnPill: 3 })
     E.tick(old, d, 1, { events: false })
-    ok('旧档超额成品可正常消费', old.resources.nineTurnPill === 997)
+    ok('旧档超额成品可正常消费', E.moneyEq(old.resources.nineTurnPill, 997))
     s.buildings.spiritField = { count: 5, on: true }
-    ok('开局点击收益保留', E.clickGain(s, d) === 5)
+    ok('开局点击收益保留', E.moneyEq(E.clickGain(s, d), 5))
     s.buildings.spiritField.count = 45
-    ok('多聚灵阵点击仍增益但小于原线性收益', E.clickGain(s, d) > 7.5 && E.clickGain(s, d) < 25)
+    ok('多聚灵阵点击仍增益但小于原线性收益', E.moneyGt(E.clickGain(s, d), 7.5) && E.moneyLt(E.clickGain(s, d), 25))
     s.upgrades.flyingSword = true
     s.treasureLevels.flyingSword = 1
-    ok('低层祭炼不要求尚未需要的进阶材料', !E.refineCost(s, 'flyingSword').spiritArtifact)
+    ok('低层祭炼不要求尚未需要的进阶材料', E.moneyIsZero(E.refineCost(s, 'flyingSword').spiritArtifact))
     s.treasureLevels.flyingSword = 2
     const first = E.refineCost(s, 'flyingSword')
-    ok('进阶祭炼开始支付灵器与玄钢', first.spiritArtifact === 1 && first.steel === 2)
+    ok('进阶祭炼开始支付灵器与玄钢', E.moneyEq(first.spiritArtifact, 1) && E.moneyEq(first.steel, 2))
     for (const [res, amount] of Object.entries(first)) s.resources[res] = amount
     const denied = { ...s.resources }
-    s.resources.spiritArtifact = 0
+    s.resources.spiritArtifact = E.money(0)
     ok('缺进阶材料不能祭炼', E.refineTreasure(s, d, 'flyingSword') === 0 && s.treasureLevels.flyingSword === 2)
     s.resources.spiritArtifact = denied.spiritArtifact
     E.refineTreasure(s, d, 'flyingSword')
-    ok('祭炼实际扣除进阶材料并提升层数', s.resources.spiritArtifact === 0 && s.resources.steel === 0 && s.treasureLevels.flyingSword === 3)
-    ok('进阶用料随层数增长并整枚计价', E.refineCost(s, 'flyingSword').spiritArtifact === 2)
+    ok('祭炼实际扣除进阶材料并提升层数', E.moneyIsZero(s.resources.spiritArtifact) && E.moneyIsZero(s.resources.steel) && s.treasureLevels.flyingSword === 3)
+    ok('进阶用料随层数增长并整枚计价', E.moneyEq(E.refineCost(s, 'flyingSword').spiritArtifact, 2))
     ok('仙草增加可重复消费去向', UPGRADE_MAP.alchemyCauldron.refine.materials.immortalHerb > 0)
   }
 }

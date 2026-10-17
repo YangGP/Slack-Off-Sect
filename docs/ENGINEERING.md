@@ -79,7 +79,46 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 
 读档结算收尾与超过收益上限的循环补算使用同一套语义：超出上限的现实时间不产出，但现实到期的增益与超时威胁仍会清理；结算完成后对齐真实恢复时刻的运行时钟，已消费的离线窗口随即落盘，避免重复领取或立刻形成第二次长补算。
 
-存档结构版本为2，沿用原有localStorage键以便发现旧档。读档流程为解析、版本检查、迁移和字段校验；旧档正常兼容时保留完整进度，未知版本或结构冲突时只继承有效的仙缘和道果并显示恢复说明。无法解析的文件继续保留原档并阻止自动覆盖。序列化使用持久字段白名单，派生数据、运行上下文与恢复提示不写入存档。
+### 数值与存档
+
+经济数值域使用 **decimal.js**（唯一数值库，生产依赖），精度与舍入只在 `src/game/decimal.js` 配置：**40 位有效数字、ROUND_HALF_UP**；业务文件不得修改全局配置，一律通过该模块的构造器与助手处理金额。
+
+| 数据域 | 运行时类型 | 说明 |
+| --- | --- | --- |
+| resources、peak、karma、dao | Decimal | 永久货币顶层字段为权威来源，`resources` 中的镜像同步为同值；dao 仍为整数 |
+| 成本、产量、每秒速率、净额、经济仓容上限、材料保留量、来源与出项明细 | Decimal | 含 `sources`、`expenseSources`、`autoCraftDrain`、离线差额报告 |
+| stats.totalQi/totalInsight/totalFaith/lifeInsight/offlineGains、stats.crafted | Decimal | 产出总额不与事件次数混用 |
+| 弟子 `totalQiConsumed` | Decimal | 初始化、归一化、在线/离线累计与显示统一迁移，**取消** MAX_SAFE_INTEGER 截断 |
+| craftTargets、craftProgress | Decimal | craftProgress 保留原有「小数余量」含义 |
+| 建筑数、等级、人数、realm、订单数量、计时器、ID、随机种子、次数统计 | Number | 循环次数使用有界安全整数 |
+| 时间戳、dt、totalDays、计时器 t、冷却、任务时长与进度 | Number | 保留时间域容差；离线分段算法仍用 Number |
+| 有界概率、折扣、比例、岗位权重与有限倍率 | Number | 在独立有界计算中保留；进入金额运算时构造为 Decimal，不能先用 Number 算出金额 |
+| 无界倍率（仙缘、道果派生倍率与综合产出倍率） | Decimal | 不能先把永久货币转 Number 再乘 |
+
+约定与边界：
+
+- **金额一律用 Decimal 方法运算**（`plus/minus/times/div/pow/sqrt/cmp/gte/floor/ceil/negated`）。金额域禁止原生 `+ - * / **`、`Math.*`、`Number.isFinite`、`value || 0`、`!value`、`=== 0`、`=== Infinity`：Decimal 对象恒为真，这类写法会得到错误结果。
+- **够用判断与扣减同源**：`atLeast`/`gte` 是 Decimal 精确比较，扣减用 `moneyAvailable`；移除了 Number.EPSILON × 数值规模的宽松支付逻辑，`nearlyEqual` 不再作为支付授权（时间域容差保留）。整枚资源入库向下取整、费用向上取整（`ceilMoney`/`floorMoney`）；批量建筑仍逐座取整后求和。
+- **无仓容上限**用金额域的 `MONEY_INFINITY` 哨兵（只有派生容量允许出现），时间域的等待值继续用 Number `Infinity`，两者不跨域套用。
+- **非有限金额明确报错**（`requireFiniteMoney`）而不是把库存静默归零；读档损坏字段另行清洗。
+- **精度边界**：40 位有效数字下 `1e30 + 1` 可保留并扣回，`1e40 + 1` 会舍回 `1e40`；`1e400` 可存取、比较与参与一次有效比例结算，但不承诺该量级的逐枚增减仍可表示。需要任意规模整数逐枚精确时另行设计，不宣称有限精度无限精确。
+- **运行时快照**统一用 `cloneRuntime`（`src/game/clone.js`）：递归复制可变对象/数组，Decimal 按不可变值共享引用。**不能**用 `structuredClone`（丢失 Decimal 原型）或 `JSON.parse(JSON.stringify(...))`（金额变成字符串）作为运行时副本；存档路径的 JSON 往返仍然有效，因为写档自带金额编码。
+
+存档结构版本为 **3**，沿用原有 localStorage 键以便发现旧档。金额字段按 `src/game/moneyFields.js` 的**显式白名单**序列化为十进制字符串（允许科学计数法），控制域继续保存 JSON number；不依赖任意对象的 `toJSON`。`serialize` 返回独立的普通数据（深拷贝，不暴露状态的嵌套引用）。读档顺序固定：解析 → 结构检查 → **按字段解码/清洗金额** → 执行涉及金额算术的历史迁移 → 目标状态校验；v1/v2/无版本的有限非负 number 金额迁入 Decimal，旧值已丢失的精度不做补偿。v2 起 `disciples.members` 就是权威个体数据，版本升到 3 不会重建弟子，历史补偿也不会重复发放。未知版本或结构冲突时只继承有效的仙缘与道果并显示恢复说明；无法解析的文件保留原档并阻止自动覆盖。金额字符串限制 256 字符，拒绝空串、布尔、数组、对象与十进制以外的语法（`0x10` 之类不算存档格式）。上线前用现有导出功能保留 v2 备份；回退旧客户端需恢复该备份，v3 字符串存档不承诺由旧客户端读取。
+
+`tools/offline-benchmark.mjs` 可在同一夹具上比较迁移前后的 8/24 小时耗时、最长连续计算段与分段数（见「分析工具及口径」）。2026-10 迁移到 Decimal 的实测（Windows / Node 24，同一 `--fixture`，各取 2~3 次的中位）：
+
+| 场景 | 迁移前 | 迁移后 | 说明 |
+| --- | --- | --- | --- |
+| 8 小时 async | 916 ms | 962 ms | +5%，在测量噪声内 |
+| 24 小时 async | 950 ms | 923 ms | −3%，在测量噪声内 |
+| 24 小时 sync（optimized） | 42 ms | 107 ms | 2.6×，纯 Decimal 运算开销 |
+| 最长连续计算段（8h / 24h） | 4.3 / 4.4 ms | 7.7 / 7.6 ms | 仍远低于 16 ms 帧预算 |
+| 段数 / 工业轮数 / 猎杀批次 | 64 / 64 / 64 | 64 / 64 / 64 | 有界路径的规模未变 |
+
+浏览器实际走的是异步路径（同步路径只在测试与基准里用），因此玩家可见的读档耗时基本不变。同步路径的 2.6× 已定位为 Decimal 运算本身：profile 里 `decimal.js` 与重算循环占自耗时的多数，热点中没有字符串解析、深拷贝或调试信息（静态数据的金额常量按效果对象缓存在 WeakMap 里，运行时快照用 `cloneRuntime`，比 `structuredClone` 更快）。若后续需要进一步压缩，方向是继续减少每次重算的 Decimal 运算次数，而不是降低精度。
+
+生产构建体积（同一构建配置）：项目从 498.0 kB（gzip 177.1 kB）增至 538.7 kB（gzip 194.9 kB），增量来自 decimal.js 与新数值层模块。
 
 | 派生字段 | 含义 |
 | --- | --- |

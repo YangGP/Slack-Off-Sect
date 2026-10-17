@@ -6,9 +6,9 @@ import { TALENT_MAP } from '../src/data/talents.js'
 export function runAutoTalentChecks(E, ok, close) {
   const state = createInitialState(100000)
   state.buildings = { hut: { count: 5, on: true }, spiritField: { count: 1, on: true }, library: { count: 2, on: true }, quarry: { count: 1, on: true } }
-  state.resources.qi = 500
+  state.resources.qi = E.money(500)
   // 恰好等于《招贤纳士》(talentAssignment) 当前参悟价，让下面「扣完归零」的断言与费用表保持一致
-  state.resources.insight = 150
+  state.resources.insight = E.money(150)
   const talents = ['job_woodcutter_huang', 'job_miner_xuan', 'job_herbalist_di', 'job_incenseKeeper_tian', 'cultivation_xuan', 'job_woodcutter_di']
   for (const id of talents) {
     const member = newDisciple(state.disciples)
@@ -25,12 +25,12 @@ export function runAutoTalentChecks(E, ok, close) {
   ok('未研究知人善任不自动转岗且研究遵守前置', E.autoAssignTalentJobs(state) === 0 && !E.research(state, derived, 'talentAssignment') && members.slice(0, 5).every(m => m.roleId === 'farmer'))
   state.upgrades.homePlanning = true
   state.upgrades.qiOrigin = true
-  ok('实际参悟立即按专长分工并扣除研究费用', E.research(state, derived, 'talentAssignment') && members[0].roleId === 'woodcutter' && members[1].roleId === 'miner' && state.resources.qi === 0 && state.resources.insight === 0 && derived.autoTalentJobsUnlocked)
+  ok('实际参悟立即按专长分工并扣除研究费用', E.research(state, derived, 'talentAssignment') && members[0].roleId === 'woodcutter' && members[1].roleId === 'miner' && E.moneyIsZero(state.resources.qi) && E.moneyIsZero(state.resources.insight) && derived.autoTalentJobsUnlocked)
   ok('未开放岗位、非岗位天赋与出征弟子保持原分工', members.slice(2, 5).every(m => m.roleId === 'farmer') && members[5].roleId === null && state.disciples.jobs.woodcutter === 1 && state.disciples.jobs.miner === 1 && state.disciples.total === 6)
   const logCount = state.log.length
   ok('重复自动匹配不改人数、不追加日志', E.autoAssignTalentJobs(state) === 0 && state.disciples.jobs.farmer === 3 && state.log.length === logCount)
   state.buildings.herbGarden = { count: 1, on: true }
-  state.resources.qi = 1000
+  state.resources.qi = E.money(1000)
   E.tick(state, derived, 1, { events: false })
   ok('岗位解锁后下个结算步自动接纳对应专长', members[2].roleId === 'herbalist')
   state.settings.autoTalentJobs = false
@@ -49,8 +49,10 @@ export function runAutoTalentChecks(E, ok, close) {
   ok('新领悟的岗位专长在结算时自动分配', members[4].roleId === 'scholar')
   members[0].roleId = 'farmer'
   recountDisciples(state.disciples)
-  const stepped = JSON.parse(JSON.stringify(state))
-  const offline = JSON.parse(JSON.stringify(state))
+  // 这两份副本还要继续喂给引擎推进：必须用保留 Decimal 的运行时深拷贝。
+  // （JSON.parse(JSON.stringify(state)) 会把金额变成字符串，structuredClone 会把 Decimal 变成普通对象。）
+  const stepped = E.cloneRuntime(state)
+  const offline = E.cloneRuntime(state)
   const steppedD = E.createDerived(), offlineD = E.createDerived()
   for (let i = 0; i < 10; i++) E.tick(stepped, steppedD, 1, { events: false })
   E.tick(offline, offlineD, 10, { offline: true, events: false })

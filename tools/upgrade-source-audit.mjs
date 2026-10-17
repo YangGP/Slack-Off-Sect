@@ -32,7 +32,7 @@ const resRound = { qi: 0 }
 const producerOf = {} // 资源 -> 来源描述
 
 const fits = (cost) =>
-  Object.entries(cost || {}).every(([id, n]) => sources.has(id) && n <= derived.max[id] + 1e-9)
+  Object.entries(cost || {}).every(([id, n]) => sources.has(id) && E.moneyGte(E.money(derived.max[id]).plus(1e-9), n))
 
 const record = (res, round, label) => {
   if (resRound[res] != null) return false
@@ -83,7 +83,7 @@ for (let round = 1; round <= MAX_ROUND; round++) {
   }
   // 3) 配方（快照判定供料）
   // 猎杀是任务来源，不在 jobs/crafts 中；需要实际可达的营地、弟子容量与信符。
-  if (derived.maxDisciples > 0 && snap.has('warrant') && derived.max.warrant >= HUNT.WARRANT_COST) {
+  if (derived.maxDisciples > 0 && snap.has('warrant') && E.moneyGte(derived.max.warrant, HUNT.WARRANT_COST)) {
     for (const field of HUNT_FIELDS) {
       if (!E.isHuntUnlocked(state, field.id)) continue
       for (const res of Object.keys(field.baseYield)) {
@@ -103,7 +103,7 @@ for (let round = 1; round <= MAX_ROUND; round++) {
     if (!E.checkNeeds(state, u.needs)) continue
     const cost = E.roundCost(u.cost)
     if (!Object.keys(cost).every((r) => snap.has(r))) continue
-    if (!Object.entries(cost).every(([r, n]) => n <= derived.max[r] + 1e-9)) continue
+    if (!Object.entries(cost).every(([r, n]) => E.moneyGte(E.money(derived.max[r]).plus(1e-9), n))) continue
     state.upgrades[u.id] = true
     upRound[u.id] = round
     changed = true
@@ -123,7 +123,7 @@ for (let round = 1; round <= MAX_ROUND; round++) {
     if (count >= target && !b.effects?.storage && !b.effects?.storageAll) continue
     const cost = E.buildingCost(state, b.id, 1)
     if (!Object.keys(cost).every((r) => snap.has(r))) continue
-    if (!Object.entries(cost).every(([r, n]) => n <= derived.max[r] + 1e-9)) continue
+    if (!Object.entries(cost).every(([r, n]) => E.moneyGte(E.money(derived.max[r]).plus(1e-9), n))) continue
     if (b.id === 'hut') state.starterHutBuilt = true
     state.buildings[b.id] = { count: count + 1, on: true }
     if (count === 0 && bRound[b.id] == null) bRound[b.id] = round

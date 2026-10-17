@@ -19,7 +19,7 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
   const sources = new Set(['qi'])
   const milestones = []
   const fits = (cost) => Object.entries(cost || {}).every(([id, amount]) =>
-    sources.has(id) && amount <= derived.max[id] + 1e-9)
+    sources.has(id) && E.moneyGte(E.money(derived.max[id]).plus(1e-9), amount))
   const refresh = () => E.recompute(state, derived)
   refresh()
 
@@ -42,7 +42,7 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
       }
     }
     // 猎杀是任务来源，不在 jobs/crafts 中：营地、弟子容量与信符齐备后，猎场产物算作已开放来源。
-    if (derived.maxDisciples > 0 && sources.has('warrant') && derived.max.warrant >= HUNT.WARRANT_COST) {
+    if (derived.maxDisciples > 0 && sources.has('warrant') && E.moneyGte(derived.max.warrant, HUNT.WARRANT_COST)) {
       for (const field of HUNT_FIELDS) {
         if (!E.isHuntUnlocked(state, field.id)) continue
         for (const res of Object.keys(field.baseYield)) {
@@ -90,8 +90,8 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
   const blocked = BUILDINGS.filter(b => !state.buildings[b.id]?.count).map(b => ({
     name: b.name,
     needs: E.checkNeeds(state, b.needs) ? '已满足' : b.needs,
-    deficits: Object.entries(b.cost).filter(([id, n]) => !sources.has(id) || n > derived.max[id])
-      .map(([id, n]) => ({ resource: id, cost: n, cap: derived.max[id], source: sources.has(id) })),
+    deficits: Object.entries(b.cost).filter(([id, n]) => !sources.has(id) || E.moneyLt(derived.max[id], n))
+      .map(([id, n]) => ({ resource: id, cost: E.moneyToNumber(n), cap: E.moneyToNumber(derived.max[id]), source: sources.has(id) })),
   }))
 
   return { settled, realm: REALMS[state.realm].name, reachable: milestones, blocked, state, derived, sources }

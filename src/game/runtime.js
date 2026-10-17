@@ -2,6 +2,7 @@ import * as engine from './engine'
 import { createInitialState } from './state'
 import { setGameContext, resetRuntimeCounters, runtimeCounters } from './context'
 import { createSaveRepository, restoreSave } from './save'
+import { cloneRuntime } from './clone'
 import { CONFIG } from '@/data/config'
 import { throwIfSimulationCancelled } from './systems/simulation'
 
@@ -48,7 +49,9 @@ export function createGame({ state, derived = engine.createDerived(), snapshotSt
     const opts = { startAt: state.lastTickAt, ...options,
       isCancelled: () => revision !== stateRevision || options.isCancelled?.() }
     throwIfSimulationCancelled(opts)
-    const working = snapshotState ? snapshotState(state) : structuredClone(state)
+    // 没有外部快照函数时用统一运行时深拷贝：金额在这里必须仍是 Decimal，
+    // structuredClone 会丢掉 Decimal 原型，副本将无法继续运算。
+    const working = snapshotState ? snapshotState(state) : cloneRuntime(state)
     const workingDerived = engine.createDerived()
     setGameContext(working, { now, random })
     Object.assign(runtimeCounters(working), runtimeCounters(state))

@@ -28,7 +28,7 @@ blockedState.buildings.depot = { count: 2, on: true }
 // 此夹具隔离灵气分子仓容；灵机必须足以覆盖扩仓造价，由典籍库提供。
 blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MAP.scriptureArchive.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
-blockedState.resources.qiParticle = 100
+blockedState.resources.qiParticle = E.money(100)
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
 assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need === 120)
 assert.ok(blocked.expansions.some(b => b.id === 'grandStore' && !b.unlocked))
@@ -48,15 +48,15 @@ E.recompute(studying, studyDerived)
 studying.disciples.total = studyDerived.maxDisciples
 studying.disciples.jobs.farmer = studying.disciples.total
 E.recompute(studying, studyDerived)
-studying.resources.qi = 1000000
-studying.resources.insight = 10000
-studying.resources.ore = 80
+studying.resources.qi = E.money(1000000)
+studying.resources.insight = E.money(10000)
+studying.resources.ore = E.money(80)
 const talismanRecipe = CRAFT_MAP.drawTalisman
-const copies = Math.ceil(6 / E.craftYield(studyDerived, talismanRecipe))
-for (const [id, amount] of Object.entries(talismanRecipe.cost)) studying.resources[id] = Math.max(studying.resources[id], amount * copies)
+const copies = Math.ceil(6 / E.moneyToNumber(E.craftYield(studyDerived, talismanRecipe)))
+for (const [id, amount] of Object.entries(talismanRecipe.cost)) studying.resources[id] = E.moneyMax(studying.resources[id], E.money(amount).times(copies))
 const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false })
 studyBot.act()
-assert.ok(studying.resources.talisman >= 6, '研究所需符箓应先于住房与其他加工留存')
+assert.ok(E.moneyGte(studying.resources.talisman, 6), '研究所需符箓应先于住房与其他加工留存')
 studyBot.act()
 assert.ok(studying.upgrades.crystalCraft, '留存符箓后应能真实扣费掌握凝晶工艺')
 const spiritPrereqs = createBot(studying, studyDerived, { realmCost: () => ({ spiritTalisman: 6 }) }).prerequisites()
@@ -71,7 +71,7 @@ assert.ok([...researchExpansion.buildings.keys()].some(id => BUILDING_MAP[id].ef
 const brief = { hours: 1 / 3600 }
 const originalCap = RESOURCE_MAP.qi.baseMax
 const patched = auditResource({ ...brief, resId: 'qi', patches: { baseMax: 250 } })
-assert.equal(patched.derived.max.qi, 250)
+assert.ok(E.moneyEq(patched.derived.max.qi, 250))
 assert.equal(RESOURCE_MAP.qi.baseMax, originalCap)
 assert.throws(() => auditResource({ hours: NaN }), /小时数/)
 assert.throws(() => auditResource({ ...brief, patches: { jobFactor: -1 } }), /无效审计数值/)
@@ -136,7 +136,9 @@ priced.buildings.warehouse = { count: 3, on: true }
 E.recompute(priced, pricedDerived)
 const text = JSON.stringify(priced)
 const report = inspectSave(text)
-assert.deepEqual(report.warehouse.nextCost, E.buildingCost(priced, 'warehouse', 1))
+// 报告里的造价是显示用的 Number：逐项按金额口径比较，避免 Decimal/Number 混用。
+const warehouseCost = E.buildingCost(priced, 'warehouse', 1)
+assert.ok(Object.entries(warehouseCost).every(([res, amount]) => E.moneyEq(report.warehouse.nextCost[res] ?? 0, amount)))
 delete priced.upgrades.masonryArt
 assert.deepEqual(report.warehouse.nextCost, inspectSave(JSON.stringify(priced)).warehouse.nextCost)
 priced.upgrades.masonryArt = true

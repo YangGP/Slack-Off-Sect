@@ -4,9 +4,12 @@ import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
 import { RECIPE_STATIONS } from '@/data/industry'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
-import { floorNumber } from './numbers'
+import { ZERO, floorMoney, money, moneyClamp, moneyGt, moneyMax, moneyNonNegative } from './decimal'
 import { normalizeDisciples } from '@/data/disciples'
 
+
+/** 旧档金额：损坏值回退 0，负数按 0 处理（与读档解码同口径）。 */
+const nonNegativeMoney = value => moneyNonNegative(value, ZERO)
 
 /** 历史字段迁移保持独立，当前结构校验由 saveSchema 负责。 */
 export function migrateState(state, fresh, { preferMembers = false } = {}) {
@@ -15,14 +18,14 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   // 猎备（huntPreparation）更名为信符（warrant）：旧档存量平移，外交与猎杀自此共用。
   // 新旧数值各自独立校验（有限非负），避免非法旧值把合法新值污染成 NaN 后归零。
   if (Object.hasOwn(merged.resources, 'huntPreparation')) {
-    const validNew = Number.isFinite(merged.resources.warrant) && merged.resources.warrant >= 0 ? merged.resources.warrant : 0
-    const validOld = Number.isFinite(merged.resources.huntPreparation) && merged.resources.huntPreparation >= 0 ? merged.resources.huntPreparation : 0
-    merged.resources.warrant = Math.max(validNew, validOld)
+    const validNew = nonNegativeMoney(merged.resources.warrant)
+    const validOld = nonNegativeMoney(merged.resources.huntPreparation)
+    merged.resources.warrant = moneyMax(validNew, validOld)
     delete merged.resources.huntPreparation
   }
   // 整枚计数的资源（灵石/丹药/符箓/法器）在旧档里可能被算成小数（涨价/折扣/祭炼留下的），读档时抹平
   for (const r of RESOURCES) {
-    if (r.integer) merged.resources[r.id] = floorNumber(merged.resources[r.id] || 0)
+    if (r.integer) merged.resources[r.id] = floorMoney(nonNegativeMoney(merged.resources[r.id]))
   }
   merged.seen = { ...fresh.seen, ...(state.seen || {}) }
   merged.peak = { ...(state.peak || {}) }
@@ -32,9 +35,9 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     delete merged.seen.huntPreparation
   }
   if (Object.hasOwn(merged.peak, 'huntPreparation')) {
-    const validNew = Number.isFinite(merged.peak.warrant) && merged.peak.warrant >= 0 ? merged.peak.warrant : 0
-    const validOld = Number.isFinite(merged.peak.huntPreparation) && merged.peak.huntPreparation >= 0 ? merged.peak.huntPreparation : 0
-    merged.peak.warrant = Math.max(validNew, validOld)
+    const validNew = nonNegativeMoney(merged.peak.warrant)
+    const validOld = nonNegativeMoney(merged.peak.huntPreparation)
+    merged.peak.warrant = moneyMax(validNew, validOld)
     delete merged.peak.huntPreparation
   }
   merged.disciples = {
@@ -50,7 +53,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   merged.disciples.recruitSeed = state.disciples?.recruitSeed ?? ((state.disciples?.rootSeed ?? 1) ^ 0x1b873593) >>> 0
   normalizeDisciples(merged.disciples, { preferMembers })
   // 老档补「飞升层」与「转世计数」
-  merged.dao = state.dao || 0
+  merged.dao = nonNegativeMoney(state.dao)
   merged.stats = { ...(merged.stats || {}) }
   merged.stats.reincarnations = merged.stats.reincarnations || 0
   merged.buildings = Object.fromEntries(Object.entries(state.buildings || {}).map(([id, entry]) => [id, { ...entry }]))
@@ -83,7 +86,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     }
     // 已使用凝晶／育仙草的旧档应能继续供料，不要求重新解锁上游新配方。
     if (merged.upgrades.crystalTheory || merged.upgrades.crystalCraft ||
-        (state.stats?.crafted?.immortalHerb || 0) > 0 || state.autoCraft?.growImmortalHerb) {
+        moneyGt(state.stats?.crafted?.immortalHerb ?? ZERO, ZERO) || state.autoCraft?.growImmortalHerb) {
       merged.upgrades.liquidArt = true
     }
   }
@@ -126,8 +129,8 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   if (merged.pendingChoice?.id === 'beastThreat') {
     const p = merged.pendingChoice
     if (!Number.isFinite(p.deadline)) p.deadline = (Number.isFinite(p.at) ? p.at : fresh.createdAt) + 300000
-    if (!Number.isFinite(p.herbLoss)) p.herbLoss = 20
-    p.herbLoss = Math.max(0, Math.min(80, p.herbLoss))
+    // 预计损失是灵草数量（金额）：按 0~80 的既有范围夹取，损坏值回退 20。
+    p.herbLoss = moneyClamp(nonNegativeMoney(p.herbLoss, money(20)), ZERO, money(80))
   }
   merged.log = Array.isArray(state.log) ? state.log.filter(entry => entry && typeof entry === 'object').map(entry => {
     const event = Object.hasOwn(EVENT_MAP, entry.eventId) ? EVENT_MAP[entry.eventId] : null
@@ -155,7 +158,8 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   }
   merged.industryVersion = 1
   merged.settings.craftReserves = Object.fromEntries(Object.entries(state.settings?.craftReserves || {})
-    .filter(([id, value]) => Object.hasOwn(fresh.resources, id) && Number.isFinite(value) && value >= 0))
+    .filter(([id]) => Object.hasOwn(fresh.resources, id))
+    .map(([id, value]) => [id, nonNegativeMoney(value)]))
   for (const key of ['autoCraft', 'craftTargets', 'craftTimers', 'craftProgress']) {
     merged[key] = { ...merged[key] }
     if (Object.hasOwn(merged[key], 'condenseStone') && !Object.hasOwn(merged[key], 'infuseStone')) merged[key].infuseStone = merged[key].condenseStone
@@ -170,27 +174,34 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   return merged
 }
 
-/** 移除驯养支线前先补偿旧档；未知条目过滤发生在这之后。 */
+/**
+ * 移除驯养支线前先补偿旧档；未知条目过滤发生在这之后。
+ * 补偿金额全程 Decimal：旧档补偿不再受 Number.MAX_SAFE_INTEGER 截断，但迭代次数仍有上限，
+ * 免得损坏的极端建筑数把读档卡死（正常存档的家园数远低于此）。
+ */
+const REFUND_ITERATION_CAP = 4096
+
 function retireBeastTaming(merged, original) {
   const retired = original.beastRetirementVersion !== 1
   const refunds = {}
   const add = (resource, amount) => {
-    refunds[resource] = Math.min(Number.MAX_SAFE_INTEGER, (refunds[resource] || 0) + amount)
+    refunds[resource] = (refunds[resource] || ZERO).plus(money(amount))
   }
   const count = value => Number.isSafeInteger(value) && value > 0 ? value : 0
-  // 参考历史造价逐项向上取整，溢出或极端数量在有限次迭代内饱和。
+  // 参考历史造价逐项向上取整；超出迭代上限后按已完成的部分结算。
   const sum = (base, ratio, times) => {
-    let total = 0, next = base
-    for (let index = 0; index < times && total < Number.MAX_SAFE_INTEGER; index++) {
-      total = Math.min(Number.MAX_SAFE_INTEGER, total + Math.min(Number.MAX_SAFE_INTEGER, Math.ceil(next)))
-      next *= ratio
+    let total = ZERO, next = money(base)
+    const steps = Math.min(times, REFUND_ITERATION_CAP)
+    for (let index = 0; index < steps; index++) {
+      total = total.plus(next.ceil())
+      next = next.times(ratio)
     }
     return total
   }
   if (retired) {
     const gardens = count(original.buildings?.beastGarden?.count)
     for (const [resource, base] of Object.entries({ wood: 6000, plank: 30, herb: 4000, stone: 6000 })) {
-      if (gardens) add(resource, Math.floor(sum(base, 1.45, gardens) / 2))
+      if (gardens) add(resource, floorMoney(sum(base, 1.45, gardens).div(2)))
     }
     if (original.upgrades?.beastTaming === true) {
       for (const [resource, amount] of Object.entries({ insight: 60000, stone: 2800, herb: 1500 })) add(resource, amount)
@@ -198,13 +209,12 @@ function retireBeastTaming(merged, original) {
     if (original.upgrades?.beastBell === true) {
       const levels = count(original.treasureLevels?.beastBell)
       for (const [resource, base] of Object.entries({ insight: 1200, herb: 5000, pill: 20, stone: 4000 })) {
-        add(resource, base + sum(resource === 'insight' ? 4000 : base, 1.7, levels))
+        add(resource, money(base).plus(sum(resource === 'insight' ? 4000 : base, 1.7, levels)))
       }
     }
     for (const [resource, amount] of Object.entries(refunds)) {
-      const have = Number.isFinite(merged.resources[resource]) ? Math.max(0, merged.resources[resource]) : 0
       // 允许保留超仓补偿库存，正常消费；不让满仓吞掉旧投入。
-      merged.resources[resource] = Math.min(Number.MAX_SAFE_INTEGER, have + amount)
+      merged.resources[resource] = nonNegativeMoney(merged.resources[resource]).plus(amount)
     }
     if (Object.keys(refunds).length) {
       const sequence = Number.isSafeInteger(merged.logSeq) && merged.logSeq >= 0 ? merged.logSeq : 0

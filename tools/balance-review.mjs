@@ -45,20 +45,22 @@ const metrics = { sampledMinutes: 0, starvingMinutes: 0, crowdedMinutes: 0, nega
 const materialIds = ['qi', 'wood', 'rock', 'ore', 'herb', 'stone', 'insight', 'faith']
 let previousRealm = state.realm, elapsed = 0
 function snapshot() {
-  const fees = state.disciples.members.map(m => discipleDismissalCost(m, state.realm)).sort((a, b) => a - b)
+  const fees = state.disciples.members.map(m => discipleDismissalCost(m, state.realm))
+    .sort((a, b) => E.moneyToNumber(a) - E.moneyToNumber(b))
+  const money = E.moneyToNumber
   return {
     hours: +(elapsed / 3600).toFixed(3), realm: REALMS[state.realm].name,
     disciples: state.disciples.total, jobs: { ...state.disciples.jobs }, idle: E.idleDisciples(state),
     habitability: derived.habitability, habitabilityMult: derived.habitabilityMult,
     discipleMult: derived.discipleMult,
     materials: Object.fromEntries(materialIds.map(id => [id, {
-      have: +(state.resources[id] || 0).toFixed(2), cap: derived.max[id],
-      income: +(derived.rates[id] || 0).toFixed(3), upkeep: +(derived.expense[id] || 0).toFixed(3),
-      net: +(derived.net[id] || 0).toFixed(3),
+      have: +money(state.resources[id]).toFixed(2), cap: money(derived.max[id]),
+      income: +money(derived.rates[id]).toFixed(3), upkeep: +money(derived.expense[id]).toFixed(3),
+      net: +money(derived.net[id]).toFixed(3),
     }])),
-    dismissal: { min: fees[0], median: fees[Math.floor(fees.length / 2)], max: fees.at(-1),
-      affordable: fees.filter(fee => fee <= state.resources.qi).length,
-      firstAnnualBase: state.disciples.members[0] ? discipleAnnualBaseUpkeep(state.disciples.members[0], state.realm) : null },
+    dismissal: { min: money(fees[0]), median: money(fees[Math.floor(fees.length / 2)]), max: money(fees.at(-1)),
+      affordable: fees.filter(fee => E.moneyGte(state.resources.qi, fee)).length,
+      firstAnnualBase: state.disciples.members[0] ? money(discipleAnnualBaseUpkeep(state.disciples.members[0], state.realm)) : null },
     diagnostics: progressionDiagnostics(state, derived),
   }
 }
@@ -70,8 +72,8 @@ for (elapsed = 1; elapsed <= hours * 3600; elapsed++) {
     metrics.sampledMinutes++
     if (state.starvationTimer > 0) metrics.starvingMinutes++
     if (derived.discipleMult < 1) metrics.crowdedMinutes++
-    if (derived.netQi < 0) metrics.negativeQiMinutes++
-    for (const r of RESOURCES) if (!Number.isFinite(state.resources[r.id]) || state.resources[r.id] < 0) metrics.invalidResources.push({ second: elapsed, id: r.id })
+    if (E.moneyLt(derived.netQi, 0)) metrics.negativeQiMinutes++
+    for (const r of RESOURCES) if (!E.moneyFinite(state.resources[r.id]) || E.moneyLt(state.resources[r.id], 0)) metrics.invalidResources.push({ second: elapsed, id: r.id })
   }
   for (const [id, learned] of Object.entries(state.upgrades)) if (learned && research[id] == null) research[id] = +(elapsed / 3600).toFixed(3)
   for (const [id, entry] of Object.entries(state.buildings)) if (entry.count > 0 && buildings[id] == null) buildings[id] = +(elapsed / 3600).toFixed(3)

@@ -14,6 +14,7 @@ import { runAutoCraft, runAutoCondense, runAutoCraftTimers, runIndustrialCraftBa
 import { CALENDAR } from '@/data/calendar'
 import { recruitArrivals, autoAssignTalentJobs } from './disciples'
 import { isLongOffline, offlineSegments, offlineSegmentCount, averageSeasonRatio, BUFF_BOUNDARY_EPS_MS } from './offlinePlan'
+import { MONEY_INFINITY, ZERO, moneyMax, moneyToRatio, requireFiniteMoney } from '../decimal'
 
 export function checkAchievements(state, derived) {
   const newly = []
@@ -61,7 +62,7 @@ function createTickRunner(state, derived, seconds, opts) {
   // 其余场景逐秒结算，避免步内供给、修炼和加工状态变化被提前或延后。
   recompute(state, derived)
   const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
-    !(state.resources.qiEnergy > 0) && !(derived.rates.qiEnergy > 0) &&
+    !(state.resources.qiEnergy ?? ZERO).gt(0) && !(derived.rates.qiEnergy ?? ZERO).gt(0) &&
     !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
     !BUILDINGS.some(b => b.upkeep && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0) &&
     !ALL_UPGRADES.some(u => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false) &&
@@ -118,38 +119,40 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
 
   // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。
-  const qiDemand = Math.max(0, -(derived.expense?.qi || 0) * cap)
-  const qiAvailable = Math.max(0, (state.resources.qi || 0) + (derived.rates.qi || 0) * cap)
-  const qiSupply = qiDemand > 0 ? Math.min(1, qiAvailable / qiDemand) : 0
-  if (derived.discipleWeight > 0 && derived.upkeep > 0) {
+  const qiDemand = moneyMax(ZERO, (derived.expense?.qi ?? ZERO).negated().times(cap))
+  const qiAvailable = moneyMax(ZERO, (state.resources.qi ?? ZERO).plus((derived.rates.qi ?? ZERO).times(cap)))
+  const qiSupply = qiDemand.gt(0) ? moneyToRatio(qiAvailable.div(qiDemand)) : 0
+  if (derived.discipleWeight > 0 && derived.upkeep.gt(0)) {
+    // 段内口粮系数与个体无关：先算一次，再乘各人的境界/减耗系数，省掉每人四步 Decimal 运算。
+    const unitUpkeep = derived.upkeep.div(derived.discipleWeight).times(cap).times(qiSupply)
     for (const member of state.disciples.members) {
-      const consumed = derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight * cap * qiSupply
-      member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + consumed)
+      const consumed = unitUpkeep.times(discipleFactor(member, state.realm))
+      member.totalQiConsumed = (member.totalQiConsumed ?? ZERO).plus(consumed)
     }
   }
 
   // 1) 资源结算（灵气先算净产出）
   for (const r of RESOURCES) {
     if (r.noProduction) continue
-    let rate = derived.rates[r.id] || 0
+    let rate = derived.rates[r.id] ?? ZERO
     // 出项：弟子的灵气口粮 + 带维护费建筑的持续消耗（停用即停费）
-    if (derived.expense?.[r.id]) rate += derived.expense[r.id] // expense 里是负数
-    if (rate === 0) continue
-    const before = state.resources[r.id] || 0
-    let next = before + rate * cap
-    const max = derived.max[r.id]
+    if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id]) // expense 里是负数
+    if (rate.isZero()) continue
+    const before = state.resources[r.id] ?? ZERO
+    let next = before.plus(rate.times(cap))
+    const max = derived.max[r.id] ?? MONEY_INFINITY
     // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
-    if (next > max && rate > 0) next = Math.max(before, max)
-    if (next < 0) next = 0
-    state.resources[r.id] = next
-    if (next > 0) state.seen[r.id] = true
-    const gained = next - before
-    if (r.id === 'qi' && gained > 0) state.stats.totalQi += gained
-    if (r.id === 'insight' && gained > 0) {
-      state.stats.totalInsight += gained
-      state.stats.lifeInsight = (state.stats.lifeInsight || 0) + gained
+    if (next.gt(max) && rate.gt(0)) next = moneyMax(before, max)
+    if (next.isNegative()) next = ZERO
+    state.resources[r.id] = requireFiniteMoney(next, `${r.id} 库存`)
+    if (next.gt(0)) state.seen[r.id] = true
+    const gained = next.minus(before)
+    if (r.id === 'qi' && gained.gt(0)) state.stats.totalQi = state.stats.totalQi.plus(gained)
+    if (r.id === 'insight' && gained.gt(0)) {
+      state.stats.totalInsight = state.stats.totalInsight.plus(gained)
+      state.stats.lifeInsight = (state.stats.lifeInsight ?? ZERO).plus(gained)
     }
-    if (r.id === 'faith' && gained > 0) state.stats.totalFaith += gained
+    if (r.id === 'faith' && gained.gt(0)) state.stats.totalFaith = state.stats.totalFaith.plus(gained)
   }
 
   trackPeak(state)
@@ -160,14 +163,15 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
 
   // 1.5) 灵能逸散：湮灭能不稳定，每秒衰减 QI_ENERGY_DECAY。
   // 于是存量有稳态 —— 稳态 ≈ 产出 ÷ 逸散率（一台湮灭炉 0.06/秒 → 12 灵能）。
-  if ((state.resources.qiEnergy || 0) > 0) {
-    const left = state.resources.qiEnergy * Math.pow(1 - CONFIG.QI_ENERGY_DECAY, cap)
-    state.resources.qiEnergy = left < 1e-9 ? 0 : left
+  // 衰减系数只与时间有关，保留 Number，随后参与 Decimal 金额乘法。
+  if ((state.resources.qiEnergy ?? ZERO).gt(0)) {
+    const left = state.resources.qiEnergy.times(Math.pow(1 - CONFIG.QI_ENERGY_DECAY, cap))
+    state.resources.qiEnergy = left.lt(1e-9) ? ZERO : left
   }
 
   // 2) 宜居度：灵气断供则下滑，供应正常则回升
   const previousPenalty = state.habitabilityPenalty
-  const starving = (state.resources.qi || 0) <= 1 && derived.netQi < 0
+  const starving = (state.resources.qi ?? ZERO).lte(1) && derived.netQi.lt(0)
   if (starving) {
     state.habitabilityPenalty = clamp(
       state.habitabilityPenalty - CONFIG.HABITABILITY_STARVE_RATE * cap,
@@ -294,8 +298,8 @@ export function simulateOffline(state, derived, seconds, opts = {}) {
 function offlineSummary(state, before, disciplesBefore, cap, stats = null) {
   const gains = {}
   for (const r of RESOURCES) {
-    const diff = (state.resources[r.id] || 0) - (before[r.id] || 0)
-    if (diff > 0.01) gains[r.id] = diff
+    const diff = (state.resources[r.id] ?? ZERO).minus(before[r.id] ?? ZERO)
+    if (diff.gt(0.01)) gains[r.id] = diff
   }
   const summary = { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
   // 有界近似额外报告实际工作量，便于基准与回归断言「计算量没有换到内部循环」。
@@ -429,13 +433,14 @@ function approximateSegment(state, derived, segment, opts) {
     if (settleExpiredThreat(state, derived)) recompute(state, derived, dt)
 
     // 4) 个人口粮按实际有效境界与减耗累计；断供时按口粮与维护共有的供给比例记账。
-    const qiDemand = Math.max(0, -(derived.expense?.qi || 0) * dt)
-    const qiAvailable = Math.max(0, (state.resources.qi || 0) + (derived.rates.qi || 0) * dt)
-    const qiSupply = qiDemand > 0 ? Math.min(1, qiAvailable / qiDemand) : 0
-    if (derived.discipleWeight > 0 && derived.upkeep > 0) {
+    const qiDemand = moneyMax(ZERO, (derived.expense?.qi ?? ZERO).negated().times(dt))
+    const qiAvailable = moneyMax(ZERO, (state.resources.qi ?? ZERO).plus((derived.rates.qi ?? ZERO).times(dt)))
+    const qiSupply = qiDemand.gt(0) ? moneyToRatio(qiAvailable.div(qiDemand)) : 0
+    if (derived.discipleWeight > 0 && derived.upkeep.gt(0)) {
+      const unitUpkeep = derived.upkeep.div(derived.discipleWeight).times(dt).times(qiSupply)
       for (const member of state.disciples.members) {
-        const consumed = derived.upkeep * discipleFactor(member, state.realm) / derived.discipleWeight * dt * qiSupply
-        member.totalQiConsumed = Math.min(Number.MAX_SAFE_INTEGER, (member.totalQiConsumed || 0) + consumed)
+        const consumed = unitUpkeep.times(discipleFactor(member, state.realm))
+        member.totalQiConsumed = (member.totalQiConsumed ?? ZERO).plus(consumed)
       }
     }
 
@@ -443,42 +448,44 @@ function approximateSegment(state, derived, segment, opts) {
     //    维护与加工共用同一份材料预算：两者都在这里按同一批库存封顶。
     for (const r of RESOURCES) {
       if (r.noProduction || r.id === 'qiEnergy') continue
-      let rate = derived.rates[r.id] || 0
-      if (derived.expense?.[r.id]) rate += derived.expense[r.id]
-      if (rate === 0) continue
-      const before = state.resources[r.id] || 0
-      let next = before + rate * dt
-      const max = derived.max[r.id]
+      let rate = derived.rates[r.id] ?? ZERO
+      if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id])
+      if (rate.isZero()) continue
+      const before = state.resources[r.id] ?? ZERO
+      let next = before.plus(rate.times(dt))
+      const max = derived.max[r.id] ?? MONEY_INFINITY
       // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
-      if (next > max && rate > 0) next = Math.max(before, max)
-      if (!Number.isFinite(next) || next < 0) next = 0
-      state.resources[r.id] = next
-      if (next > 0) state.seen[r.id] = true
-      const gained = next - before
-      if (gained > 0) {
-        if (r.id === 'qi') state.stats.totalQi += gained
+      if (next.gt(max) && rate.gt(0)) next = moneyMax(before, max)
+      if (next.isNegative()) next = ZERO
+      state.resources[r.id] = requireFiniteMoney(next, `${r.id} 库存`)
+      if (next.gt(0)) state.seen[r.id] = true
+      const gained = next.minus(before)
+      if (gained.gt(0)) {
+        if (r.id === 'qi') state.stats.totalQi = state.stats.totalQi.plus(gained)
         if (r.id === 'insight') {
-          state.stats.totalInsight += gained
-          state.stats.lifeInsight = (state.stats.lifeInsight || 0) + gained
+          state.stats.totalInsight = state.stats.totalInsight.plus(gained)
+          state.stats.lifeInsight = (state.stats.lifeInsight ?? ZERO).plus(gained)
         }
-        if (r.id === 'faith') state.stats.totalFaith += gained
+        if (r.id === 'faith') state.stats.totalFaith = state.stats.totalFaith.plus(gained)
       }
     }
 
     // 6) 灵能：持续产出与每秒逸散的闭式解，兼顾消耗与仓储。
     //    不能先把整段产出入库、再把全部产出按期初库存衰减 —— 那样稳定产出会长期归零。
     {
-      const before = state.resources.qiEnergy || 0
-      const net = (derived.rates.qiEnergy || 0) + (derived.expense?.qiEnergy || 0)
+      const before = state.resources.qiEnergy ?? ZERO
+      const net = (derived.rates.qiEnergy ?? ZERO).plus(derived.expense?.qiEnergy ?? ZERO)
       const decay = clamp(CONFIG.QI_ENERGY_DECAY, 0, 1)
       const remain = Math.pow(1 - decay, dt)
       const lambda = decay > 0 && decay < 1 ? -Math.log(1 - decay) : 0
-      let next = before * remain + (lambda > 0 ? net / lambda * (1 - remain) : net * dt)
-      const max = derived.max.qiEnergy
-      if (next > max && net > 0) next = Math.max(before, max)
-      if (!Number.isFinite(next) || next < 0) next = 0
-      state.resources.qiEnergy = next
-      if (next > 0) state.seen.qiEnergy = true
+      let next = before.times(remain).plus(lambda > 0
+        ? net.div(lambda).times(1 - remain)
+        : net.times(dt))
+      const max = derived.max.qiEnergy ?? MONEY_INFINITY
+      if (next.gt(max) && net.gt(0)) next = moneyMax(before, max)
+      if (next.isNegative()) next = ZERO
+      state.resources.qiEnergy = requireFiniteMoney(next, '灵能库存')
+      if (next.gt(0)) state.seen.qiEnergy = true
     }
     trackPeak(state)
 
@@ -489,7 +496,7 @@ function approximateSegment(state, derived, segment, opts) {
 
     // 8) 宜居度：断供下滑、正常回升，触底即止。
     const previousPenalty = state.habitabilityPenalty
-    const starving = (state.resources.qi || 0) <= 1 && derived.netQi < 0
+    const starving = (state.resources.qi ?? ZERO).lte(1) && derived.netQi.lt(0)
     state.habitabilityPenalty = clamp(
       starving ? state.habitabilityPenalty - CONFIG.HABITABILITY_STARVE_RATE * dt
         : state.habitabilityPenalty + CONFIG.HABITABILITY_RECOVER_RATE * dt,

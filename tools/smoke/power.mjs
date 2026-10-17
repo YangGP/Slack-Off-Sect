@@ -16,14 +16,14 @@ export function particleChain({ ok, close, section }) {
     // 灵能会逸散：无产出时应当衰减到 0
     {
       const { state: s, derived: d } = newGame()
-      s.resources.qiEnergy = 100
+      s.resources.qiEnergy = E.money(100)
       E.recompute(s, d)
       // 注意：tick 内部把单步上限压到 60 秒，所以"6 小时"要自己循环推进
       for (let i = 0; i < 6 * 60; i++) E.tick(s, d, 60, { events: false })
       ok(
         '灵能会逸散（无产出时衰减到接近 0）',
-        (s.resources.qiEnergy || 0) < 0.01,
-        '6 小时后剩 ' + (s.resources.qiEnergy || 0).toFixed(6),
+        E.moneyLt(s.resources.qiEnergy, 0.01),
+        '6 小时后剩 ' + E.moneyToNumber(s.resources.qiEnergy).toFixed(6),
       )
     }
 
@@ -33,20 +33,22 @@ export function particleChain({ ok, close, section }) {
       s.upgrades.annihilationArt = true
       s.buildings.annihilationFurnace = { count: 1, on: true }
       s.buildings.grotto = { count: 1, on: true } // 足够容纳整段稳态测量所需的粒子
-      s.resources.yangParticle = 1e6 // 粒子管够，隔离掉分灵阵的变量
-      s.resources.yinParticle = 1e6
-      s.resources.qi = 1e6
+      s.resources.yangParticle = E.money(1e6) // 粒子管够，隔离掉分灵阵的变量
+      s.resources.yinParticle = E.money(1e6)
+      s.resources.qi = E.money(1e6)
       E.recompute(s, d)
       for (let i = 0; i < 4000; i++) {
         E.tick(s, d, 1, { events: false })
         if (i % 300 === 0) E.recompute(s, d)
       }
-      const steady = s.resources.qiEnergy || 0
-      const expect = (d.rates.qiEnergy || 0) / CONFIG.QI_ENERGY_DECAY
+      const steady = E.money(s.resources.qiEnergy)
+      const expect = E.money(d.rates.qiEnergy).div(CONFIG.QI_ENERGY_DECAY)
+      const steadyNum = E.moneyToNumber(steady)
+      const expectNum = E.moneyToNumber(expect)
       ok(
         '灵能有稳态（≈ 产出 ÷ 逸散率）',
-        Math.abs(steady - expect) / Math.max(expect, 1e-9) < 0.1,
-        '实测 ' + steady.toFixed(2) + '，预期 ' + expect.toFixed(2),
+        Math.abs(steadyNum - expectNum) / Math.max(expectNum, 1e-9) < 0.1,
+        '实测 ' + steadyNum.toFixed(2) + '，预期 ' + expectNum.toFixed(2),
       )
     }
 
@@ -59,21 +61,21 @@ export function particleChain({ ok, close, section }) {
         s.buildings.library = { count: 2, on: true }
         s.disciples.total = 2
         s.disciples.jobs = { woodcutter: 1, scholar: 1 }
-        s.resources.qiEnergy = energy
+        s.resources.qiEnergy = E.money(energy)
         E.recompute(s, d)
-        return { wood: d.rates.wood || 0, insight: d.rates.insight || 0 }
+        return { wood: E.money(d.rates.wood), insight: E.money(d.rates.insight) }
       }
       const before = build(0)
       const after = build(250) // 250 灵能 → 满额 +500%
       ok(
         '囤积灵能不再免费提高基础物资产出',
         close(after.wood, before.wood),
-        '灵木 ' + before.wood.toFixed(3) + '/秒 → ' + after.wood.toFixed(3) + '/秒',
+        '灵木 ' + E.moneyToNumber(before.wood).toFixed(3) + '/秒 → ' + E.moneyToNumber(after.wood).toFixed(3) + '/秒',
       )
       ok(
         '灵能不加成灵机（只作用于基础物资）',
-        Math.abs(after.insight - before.insight) < 1e-9,
-        '灵机 ' + before.insight.toFixed(4) + ' → ' + after.insight.toFixed(4),
+        after.insight.minus(before.insight).abs().lt(1e-9),
+        '灵机 ' + E.moneyToNumber(before.insight).toFixed(4) + ' → ' + E.moneyToNumber(after.insight).toFixed(4),
       )
     }
 
@@ -82,7 +84,7 @@ export function particleChain({ ok, close, section }) {
       const probe = (learned, energy) => {
         const { state: s, derived: d } = newGame()
         if (learned) s.upgrades.energyApplication = true
-        s.resources.qiEnergy = energy
+        s.resources.qiEnergy = E.money(energy)
         E.recompute(s, d)
         return {
           stone: E.craftYield(d, CRAFT_MAP.infuseStone),
@@ -96,15 +98,15 @@ export function particleChain({ ok, close, section }) {
       const learned = probe(true, 250)
       ok(
         '未参悟《灵能应用》时，灵能不进入点石成灵/刨木成板的制作收益',
-        Math.abs(stockOnly.stone - before.stone) < 1e-9 && Math.abs(stockOnly.plank - before.plank) < 1e-9,
-        `灵石 ${before.stone.toFixed(3)} → ${stockOnly.stone.toFixed(3)}`,
+        stockOnly.stone.minus(before.stone).abs().lt(1e-9) && stockOnly.plank.minus(before.plank).abs().lt(1e-9),
+        `灵石 ${E.moneyToNumber(before.stone).toFixed(3)} → ${E.moneyToNumber(stockOnly.stone).toFixed(3)}`,
       )
       ok(
         '灵能应用改为驱动工位，不再凭库存提高单份收益',
         close(learned.stone, stockOnly.stone) && close(learned.plank, stockOnly.plank),
-        `灵石 ${stockOnly.stone.toFixed(3)} → ${learned.stone.toFixed(3)}`,
+        `灵石 ${E.moneyToNumber(stockOnly.stone).toFixed(3)} → ${E.moneyToNumber(learned.stone).toFixed(3)}`,
       )
-      ok('灵能应用不外溢到名单之外的配方（采药制丹不变）', Math.abs(learned.pill - before.pill) < 1e-9)
+      ok('灵能应用不外溢到名单之外的配方（采药制丹不变）', learned.pill.minus(before.pill).abs().lt(1e-9))
       ok('点石成灵仍保持原始收益', close(learned.infusedStone, stockOnly.infusedStone))
     }
 
@@ -133,13 +135,14 @@ export function particleChain({ ok, close, section }) {
       const { state: s, derived: d } = newGame()
       s.upgrades.yinyangSplit = true
       s.buildings.splitArray = { count: 2, on: true }
-      s.resources.qi = 100
+      s.resources.qi = E.money(100)
       E.recompute(s, d)
-      const on = d.expense?.qi || 0
+      const on = E.money(d.expense?.qi)
       s.buildings.splitArray = { count: 2, on: false }
       E.recompute(s, d)
-      const off = d.expense?.qi || 0
-      ok('停用分灵阵后灵气开销归零', off > on && Math.abs(off) < Math.abs(on), on + ' → ' + off)
+      const off = E.money(d.expense?.qi)
+      ok('停用分灵阵后灵气开销归零', E.moneyGt(off, on) && off.abs().lt(on.abs()),
+        E.moneyToNumber(on) + ' → ' + E.moneyToNumber(off))
     }
   }
 }

@@ -10,13 +10,14 @@ import { DIPLOMACY, DIPLOMACY_SECTS } from './data.js'
 import { RESOURCE_MAP, resourceName } from '@/data/resources'
 import { REALMS } from '@/data/realms'
 import { isDiplomacyUnlocked, tradePreview } from '@/game/engine'
+import { ZERO, ceilMoney } from '@/game/decimal'
 import { fmtAmount, fmtInt, fmtPercent } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
 
 const unlocked = computed(() => isDiplomacyUnlocked(state))
 const fortunePct = computed(() => fmtPercent(tradePreview(state, derived, DIPLOMACY_SECTS[0].id)?.fortuneChance || 0))
-const warrant = computed(() => state.resources.warrant || 0)
-const warrantMax = computed(() => derived.max.warrant || 0)
+const warrant = computed(() => state.resources.warrant ?? ZERO)
+const warrantMax = computed(() => derived.max.warrant ?? ZERO)
 
 function previewOf(sectId) {
   return tradePreview(state, derived, sectId)
@@ -29,7 +30,9 @@ function costText(cost) {
 function fortuneText(options) {
   const parts = []
   for (const [res, amount] of Object.entries(options || {})) {
-    parts.push(`${resourceName(res)} ≈${RESOURCE_MAP[res]?.integer ? Math.ceil(amount) : fmtAmount(amount)}`)
+    // 机缘掉落是金额：整枚计数的资源向上取整展示（与入库口径一致），其余交给格式化助手。
+    const shown = RESOURCE_MAP[res]?.integer ? ceilMoney(amount) : amount
+    parts.push(`${resourceName(res)} ≈${fmtAmount(shown)}`)
   }
   return parts.join(' 或 ')
 }

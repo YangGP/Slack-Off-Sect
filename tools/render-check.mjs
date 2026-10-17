@@ -32,26 +32,26 @@ try {
     state.achievements = {}
     for (const a of ACHIEVEMENTS.slice(0, 6)) state.achievements[a.id] = true
     state.resources = {
-      qi: 12345,
-      wood: 4321,
-      stone: 999,
-      ore: 555,
-      herb: 321,
-      pill: 42,
-      talisman: 17,
-      artifact: 9,
-      insight: 8888,
-      faith: 666,
-      karma: 30,
+      qi: E.money(12345),
+      wood: E.money(4321),
+      stone: E.money(999),
+      ore: E.money(555),
+      herb: E.money(321),
+      pill: E.money(42),
+      talisman: E.money(17),
+      artifact: E.money(9),
+      insight: E.money(8888),
+      faith: E.money(666),
+      karma: E.money(30),
     }
     state.seen = Object.fromEntries(Object.keys(state.resources).map((k) => [k, true]))
     state.disciples.total = 40
     state.disciples.jobs = {}
     for (const j of JOBS) state.disciples.jobs[j.id] = 4
-    state.craftProgress = { infuseStone: 0.5 }
+    state.craftProgress = { infuseStone: E.money(0.5) }
     state.autoCraft = { infuseStone: true }
     state.realm = 8
-    state.karma = 30
+    state.karma = E.money(30)
     state.habitabilityPenalty = -10
     state.buffs = [
       { id: 'spiritRain', name: '灵雨润泽', mult: 0.35, target: null, until: Date.now() + 60000 },

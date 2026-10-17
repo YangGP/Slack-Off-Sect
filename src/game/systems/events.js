@@ -5,7 +5,7 @@ import { isCraftUnlocked, canAfford, clamp, addResource, pushLog } from './core'
 import { RECIPE_STATIONS } from '@/data/industry'
 import { craftYield } from './craftingRules'
 import { RESOURCE_MAP } from '@/data/resources'
-import { ceilNumber, floorNumber } from '../numbers'
+import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyClamp, moneyGt, moneyMax, moneyMin, moneyToNumber } from '../decimal'
 import { CONFIG } from '@/data/config'
 import { newDisciple, recountDisciples, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
 
@@ -38,9 +38,14 @@ export function pickEvent(state) {
  * 结算一份"事件效果声明"。三种事件与"选择的其中一个选项"共用这一处，
  * 所以选项里的 lootRate / disaster / buff 与普通事件是同一套机制。
  */
-/** 工艺品按原料供给与配方节拍估算产能，不依赖是否勾选自动。 */
+/**
+ * 工艺品按原料供给与配方节拍估算产能，不依赖是否勾选自动。
+ * 返回的是**金额速率**（每秒产出，Decimal）；配方耗时是秒（Number）、投入是金额，
+ * 两者只在换算「每秒可做几份」时短暂相遇，份数按 Number 传递。
+ */
 export function eventResourceRate(state, derived, res, path = new Set()) {
-  const direct = Math.max(0, derived.rates[res] || 0)
+  // 速率是金额：零值判断与取大值一律走 Decimal（Decimal 对象恒为真，`|| 0` 会出错）。
+  const direct = moneyMax(ZERO, derived.rates?.[res] ?? ZERO)
   if (path.has(res)) return direct
   const next = new Set(path).add(res)
   let best = direct
@@ -50,9 +55,10 @@ export function eventResourceRate(state, derived, res, path = new Set()) {
     const station = derived.industrial && RECIPE_STATIONS[recipe.id]
     if (station) batches *= Math.min(1, derived.processingCapacity[station] || 0) * (1 + (derived.craftSpeedByRecipe[recipe.id] || 0))
     for (const [input, amount] of Object.entries(craftCost(derived, recipe))) {
-      batches = Math.min(batches, eventResourceRate(state, derived, input, next) / amount)
+      // 上游每秒能供几份 = 上游速率 ÷ 每份用料；份数是 Number 计数域。
+      batches = Math.min(batches, moneyToNumber(eventResourceRate(state, derived, input, next).div(amount)))
     }
-    best = Math.max(best, batches * craftYield(derived, recipe))
+    best = moneyMax(best, craftYield(derived, recipe).times(batches))
   }
   return best
 }
@@ -72,7 +78,8 @@ export function eventEffect(state, derived, spec) {
     case 'withdraw':
       return { buff: { id: 'withdrawHerbs', name: '收缩采药', mult: -0.25, target: 'herb', duration: 120 }, peaceSeconds: 600 }
     case 'default':
-      return { boundedLoss: { herb: Math.min(80, Math.max(0, state.pendingChoice?.herbLoss ?? 20)) }, peaceSeconds: 300 }
+      // 按产能估出的损失上限是金额（存档字段 pendingChoice.herbLoss），钳制在 [0, 80]。
+      return { boundedLoss: { herb: moneyClamp(state.pendingChoice?.herbLoss ?? money(20), ZERO, 80) }, peaceSeconds: 300 }
     default:
       return spec
   }
@@ -83,9 +90,12 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
   const rows = []
   const required = {}
   for (const [res, cost] of Object.entries(spec.tradeCost || {})) {
-    const amount = Math.max(cost.floor, eventResourceRate(state, derived, res) * cost.seconds)
-    const bounded = Math.min(amount, Math.max(cost.floor, (derived.max[res] || 0) * 0.1))
-    required[res] = RESOURCE_MAP[res]?.integer ? ceilNumber(bounded) : bounded
+    // cost.floor 是金额下限、cost.seconds 是秒数；按产能折算出的交易用料是金额，全程 Decimal。
+    const floorCost = money(cost.floor)
+    const amount = moneyMax(floorCost, eventResourceRate(state, derived, res).times(cost.seconds))
+    const cap = moneyMax(floorCost, money(derived.max[res] ?? ZERO).times('0.1'))
+    const bounded = moneyMin(amount, cap)
+    required[res] = RESOURCE_MAP[res]?.integer ? ceilMoney(bounded) : bounded
   }
   const affordable = canAfford(state, required)
   const resources = new Set([
@@ -94,22 +104,25 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
   ])
   for (const res of resources) {
     const integer = RESOURCE_MAP[res]?.integer
-    const whole = (amount) => integer ? floorNumber(amount) : amount
-    const have = state.resources[res] || 0
-    const fixed = Math.min(have, whole((spec.cost?.[res] || 0) + (required[res] || 0)))
-    const share = whole((have - fixed) * (spec.costShare?.[res] || 0))
-    const remaining = have - fixed - share
+    // 整枚计数的资源在损失与奖励口径上先向下取整，与 addResource 的入库口径一致。
+    const whole = (amount) => integer ? floorMoney(amount) : amount
+    const have = state.resources[res] ?? ZERO
+    const fixed = moneyMin(have, whole(money(spec.cost?.[res] ?? 0).plus(required[res] ?? ZERO)))
+    const share = whole(have.minus(fixed).times(spec.costShare?.[res] || 0))
+    const remaining = have.minus(fixed).minus(share)
     const guard = clamp((derived.disasterGuard || 0) + (derived.disasterGuardByResource?.[res] || 0), 0, 0.8)
     const disaster = spec.disaster?.resources.includes(res)
-      ? whole(remaining * disasterPercent * (1 - guard)) : 0
-    const bounded = whole(Math.min(remaining, (spec.boundedLoss?.[res] || 0) * (1 - guard)))
-    const lost = fixed + share + disaster + bounded
-    const rewardCap = (derived.max[res] ?? Infinity) * CONFIG.EVENT_REWARD_STORAGE_SHARE
+      ? whole(remaining.times(disasterPercent).times(1 - guard)) : ZERO
+    const boundedLoss = whole(moneyMin(remaining, money(spec.boundedLoss?.[res] ?? 0).times(1 - guard)))
+    const lost = fixed.plus(share).plus(disaster).plus(boundedLoss)
+    // 单次奖励上限是仓容的固定份额；无上限仓容用金额域的哨兵，时间域的 Infinity 不跨域套用。
+    const rewardCap = money(derived.max[res] ?? MONEY_INFINITY).times(CONFIG.EVENT_REWARD_STORAGE_SHARE)
     const offered = spec.lootRate?.[res] != null
-      ? whole(Math.min(rewardCap, Math.max(spec.floor?.[res] || 0, eventResourceRate(state, derived, res) * spec.lootRate[res]))) : 0
-    const room = Math.max(0, (derived.max[res] ?? Infinity) - (have - lost))
-    const gained = Math.min(offered, whole(room))
-    rows.push({ res, lost, gained, overflow: offered - gained })
+      ? whole(moneyMin(rewardCap, moneyMax(money(spec.floor?.[res] ?? 0),
+        eventResourceRate(state, derived, res).times(spec.lootRate[res])))) : ZERO
+    const room = moneyMax(ZERO, money(derived.max[res] ?? MONEY_INFINITY).minus(have.minus(lost)))
+    const gained = moneyMin(offered, whole(room))
+    rows.push({ res, lost, gained, overflow: offered.minus(gained) })
   }
   const recruits = Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
   return { rows, recruits, required, affordable }
@@ -120,12 +133,15 @@ export function settleEventOutcome(state, derived, spec, text, kind, source) {
   const pct = range[0] + gameRandom(state) * (range[1] - range[0])
   const outcome = eventOutcome(state, derived, spec, pct)
   const parts = []
+  // 纪事文案里的金额：到显示边界才转 Number 四舍五入，不参与结算。
+  const logAmount = (value) => Math.round(moneyToNumber(value))
   for (const row of outcome.rows) {
-    state.resources[row.res] = (state.resources[row.res] || 0) - row.lost
-    if (row.lost > 0) parts.push(`${RESOURCE_MAP[row.res].name} -${Math.round(row.lost)}`)
+    // 损失在 eventOutcome 里已按库存夹过；扣减仍走金额助手的「不足归零」，库存不会变负。
+    state.resources[row.res] = moneyAvailable(state.resources[row.res] ?? ZERO, row.lost)
+    if (moneyGt(row.lost, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} -${logAmount(row.lost)}`)
     const gained = addResource(state, row.res, row.gained, derived.max[row.res])
-    if (gained > 0) parts.push(`${RESOURCE_MAP[row.res].name} +${Math.round(gained)}`)
-    if (row.overflow > 0) parts.push(`${RESOURCE_MAP[row.res].name} ${Math.round(row.overflow)} 装不下`)
+    if (moneyGt(gained, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} +${logAmount(gained)}`)
+    if (moneyGt(row.overflow, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} ${logAmount(row.overflow)} 装不下`)
   }
   if (spec.disaster || spec.boundedLoss) {
     state.stats.disasters += 1
@@ -198,8 +214,8 @@ export function fireEvent(state, derived, ev = null) {
     state.pendingChoice = { id: event.id, at: gameNow(state) }
     if (event.threat) {
       state.pendingChoice.deadline = gameNow(state) + event.responseSeconds * 1000
-      // 按触发时产能估价并封顶，扩仓与囤货不会抬高灾损。
-      state.pendingChoice.herbLoss = Math.min(80, Math.max(20, eventResourceRate(state, derived, 'herb') * 20))
+      // 按触发时产能估价并封顶，扩仓与囤货不会抬高灾损；灾损上限是金额（20~80）。
+      state.pendingChoice.herbLoss = moneyClamp(eventResourceRate(state, derived, 'herb').times(20), 20, 80)
     }
     pushLog(state, `${event.text}【待你决断】`, 'event', event)
     return event
