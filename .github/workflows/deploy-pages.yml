@@ -36,6 +36,7 @@ jobs:
         run: npm run build
         env:
           VITE_DEPLOY_CHANNEL: ${{ matrix.branch == 'dev1' && 'dev' || 'production' }}
+          VITE_GA_MEASUREMENT_ID: ${{ vars.VITE_GA_MEASUREMENT_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: site-${{ matrix.branch }}
