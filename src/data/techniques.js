@@ -63,7 +63,7 @@ const CORE_TECHNIQUES = [
     desc: '御剑运木探矿，剑火淬炼器胚。灵木与玄铁产出 +20%，法器、灵器与灵宝制作产出 +10%。',
     effects: { ratio: { wood: 0.2, ore: 0.2 }, craftBonusByResource: { artifact: 0.1, spiritArtifact: 0.1, spiritTreasure: 0.1 } },
     // 御剑术与灵流要诀分别承接高阶与基础产能投资。
-    needs: { upgrades: ['deepShaft', 'steelWorking', 'infuseTheory'], building: { id: 'forge', count: 3 } },
+    needs: { upgrades: ['deepShaft', 'steelWorking', 'infuseTheory'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'spiritSmelting',
@@ -119,8 +119,8 @@ const CORE_TECHNIQUES = [
     name: '矿脉通灵',
     glyph: '脉',
     cost: { insight: 8000, stone: 600, ore: 400 },
-    desc: '以灵流疏通矿脉，矿石与灵石更易采出。矿石与灵石产出 +25%。',
-    effectDesc: '因此矿脉贯通：矿石与灵石产出各 +25%。',
+    desc: '以灵流疏通矿脉，玄铁与灵石更易采出。玄铁与灵石产出 +25%。',
+    effectDesc: '因此矿脉贯通：玄铁与灵石产出各 +25%。',
     effects: { ratio: { ore: 0.25, stone: 0.25 } },
     needs: { upgrades: ['prospectStudy', 'spiritCanal'] },
   },
@@ -206,7 +206,7 @@ const CORE_TECHNIQUES = [
     desc: '以预制纹模重复刻制标准构件。符箓与阵基加工效率 +100%；灵符仍需精密刻纹，继续共用符箓堂容量。',
     effects: { craftSpeedByRecipe: { drawTalisman: 1, assembleArrayBase: 1 } },
     // 造价里的灵晶要「凝晶工艺」才产得出：把该工艺列进前置，避免条目先露面却找不到来源。
-    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft', 'etchTheory'], building: { id: 'talismanHall', count: 2 } },
+    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft', 'etchTheory'], building: { id: 'talismanHall', count: 1 } },
   },
   // ---------- 单族技艺：由「修真应用·原理」资格承接 ----------
   {
@@ -265,7 +265,7 @@ const CORE_TECHNIQUES = [
     desc: '看石色便知矿脉走向。玄铁产出 +20%。',
     effects: { ratio: { ore: 0.2 } },
     // 修真页另有「探矿术」（开放炼铁炉），这里改名避免同名混淆
-    needs: { building: { id: 'ironFurnace', count: 3 } },
+    needs: { building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'herbLore',
@@ -274,7 +274,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 45, herb: 150, wood: 300 },
     desc: '识得三百味灵草，采药不再空手而归。灵草产出 +20%。',
     effects: { ratio: { herb: 0.2 } },
-    needs: { building: { id: 'herbGarden', count: 3 } },
+    needs: { building: { id: 'herbGarden', count: 1 } },
   },
   // ---------- 四条线的第二层（链式前置） ----------
   {
@@ -293,7 +293,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 70, wood: 450 },
     desc: '樵夫的号子顺着山势走，一唱一和，斧子就轻了三分。樵夫产出 +30%。',
     effects: { jobRatio: { woodcutter: 0.3 } },
-    needs: { upgrades: ['forestryArt'], building: { id: 'lumberYard', count: 3 } },
+    needs: { upgrades: ['forestryArt'], building: { id: 'lumberYard', count: 1 } },
   },
   {
     id: 'deepShaft',
@@ -302,7 +302,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 145, ore: 700, wood: 300 },
     desc: '顺着矿脉往深处打，玄铁自己往外冒。玄铁产出 +25%。',
     effects: { ratio: { ore: 0.25 } },
-    needs: { upgrades: ['prospectArt'], building: { id: 'ironFurnace', count: 6 } },
+    needs: { upgrades: ['prospectArt'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'herbRotation',
@@ -311,7 +311,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 130, herb: 700, wood: 240 },
     desc: '四时轮种、地力不竭。灵草产出 +25%。',
     effects: { ratio: { herb: 0.25 } },
-    needs: { upgrades: ['herbLore'], building: { id: 'herbGarden', count: 6 } },
+    needs: { upgrades: ['herbLore'], building: { id: 'herbGarden', count: 1 } },
   },
   {
     id: 'dewNurtureArt',
@@ -320,7 +320,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 160, herb: 800, spiritLiquid: 4 },
     desc: '晨露未干时下圃培土，仙草成活率高出一截。仙草制作产出 +15%。',
     effects: { craftBonusByResource: { immortalHerb: 0.15 } },
-    needs: { upgrades: ['herbRotation'], building: { id: 'herbGarden', count: 5 } },
+    needs: { upgrades: ['herbRotation'], building: { id: 'herbGarden', count: 1 } },
   },
   {
     id: 'spiritIrrigation',
@@ -338,7 +338,7 @@ const CORE_TECHNIQUES = [
     name: '叠匣术',
     glyph: '叠',
     cost: { insight: 260, stone: 1500, wood: 900, talisman: 3 },
-    desc: '分格装箱、依尺寸码放，减少空隙与搬运损耗。通用仓储 +1200，成品按层级折算。',
+    desc: '分格装箱、依尺寸码放，减少空隙与搬运损耗。通用仓储 +1200（成品按层级折算），灵机仓容 +30%。',
     // 灵机仓容百分比：定额给建筑，比例给技艺与研究应用（后者如 upgrades.js 的液藏之术 / 符匣分装），分工明确。
     effects: { storageAll: 1200, storageRatio: { insight: 0.3 } },
     // 造价含符箓，而符箓要「符文入门 → 符箓堂」才产得出：列进前置，避免先露面却找不到来源。
@@ -374,7 +374,7 @@ const CORE_TECHNIQUES = [
     name: '须弥纳芥',
     glyph: '芥',
     cost: { insight: 6000, stone: 12000, plank: 60, crystal: 20 },
-    desc: '一芥子可纳须弥。灵气与基础物资上限再 +60%，玄钢/木板/灵液/灵晶/阵基/符箓/法器翻倍。',
+    desc: '一芥子可纳须弥。灵气与基础物资上限同层 +60%，玄钢、木板、灵液、灵晶、阵基、符箓、法器、丹药与仙灵力同层 +100%（不是在其他加成之后再乘 2）。',
     effects: {
       storageRatio: {
         qi: 0.6, wood: 0.6, rock: 0.6, stone: 0.6, ore: 0.6, herb: 0.6,
@@ -394,7 +394,7 @@ const CORE_TECHNIQUES = [
     desc: '同门腰间都佩一枚结，人心齐了，干活也带劲。宜居度 +4。',
     effects: { habitability: 4 },
     // 造价里的香火要「香火愿 → 山门 → 香使」才产得出：列进前置，避免先露面却找不到来源。
-    needs: { building: { id: 'logHouse', count: 3 }, upgrades: ['incenseVow'] },
+    needs: { building: { id: 'logHouse', count: 1 }, upgrades: ['incenseVow'] },
   },
 
   // ---------- 灵机 ----------
@@ -412,7 +412,7 @@ const CORE_TECHNIQUES = [
     name: '星象推演',
     glyph: '象',
     cost: { insight: 105, talisman: 8, herb: 300 },
-    desc: '把星轨当算筹，推得比抄书快。灵机产出 +15%。',
+    desc: '把星轨当算筹，推得比抄书快。灵机产出 +15%，灵机仓容 +50%。',
     effects: { ratio: { insight: 0.15 }, storageRatio: { insight: 0.5 } },
     needs: { upgrades: ['oralTeaching'], building: { id: 'academy', count: 1 } },
   },
@@ -421,9 +421,9 @@ const CORE_TECHNIQUES = [
     name: '坐忘功',
     glyph: '忘',
     cost: { insight: 125, wood: 600, stone: 300 },
-    desc: '坐忘则神凝，悟道者一坐便是一昼夜。悟道者产出 +35%。',
+    desc: '坐忘则神凝，悟道者一坐便是一昼夜。悟道者产出 +35%，灵机仓容 +60%。',
     effects: { jobRatio: { scholar: 0.35 }, storageRatio: { insight: 0.6 } },
-    needs: { upgrades: ['starReading'], building: { id: 'library', count: 5 } },
+    needs: { upgrades: ['starReading'], building: { id: 'library', count: 1 } },
   },
 
   {
@@ -433,7 +433,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 3000, plank: 20, arrayBase: 4, daoNote: 4 },
     desc: '分席研读、相互诘问，以阵基记录论证中的分歧。悟道者产出 +25%，与坐忘功的岗位加成相加。',
     effects: { jobRatio: { scholar: 0.25 } },
-    needs: { realm: 5, upgrades: ['zuowangArt'], building: { id: 'academy', count: 2 } },
+    needs: { realm: 5, upgrades: ['zuowangArt'], building: { id: 'academy', count: 1 } },
   },
   {
     id: 'celestialDeduction',
@@ -456,7 +456,7 @@ const CORE_TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 45, wood: 600, stone: 200 },
     refine: { insight: 150 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '按灵源考的图样缝成的幡，为气田与药圃引来灵气。灵气与灵草产出 +10%。',
+    desc: '按灵源考的图样缝成的幡，为气田与药圃引来灵气。基础效果：灵气产出 +25%，灵草产出 +10%。',
     // 原「聚灵幡」的灵气 +15% 并入此处（法宝收窄，效果不丢）
     effects: { ratio: { qi: 0.25, herb: 0.1 } },
     needs: { upgrades: ['qiOrigin'] },
@@ -468,7 +468,7 @@ const CORE_TECHNIQUES = [
     kind: 'treasure',
     cost: { insight: 125, pill: 10, herb: 600, stone: 400 },
     refine: { insight: 500, materials: { immortalHerb: 5,  nineTurnPill: 1 }, materialFromLevel: 2 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
-    desc: '炼丹术推演出的炉子，火候不必再靠手感。丹药与九转丹制作产出 +8%。',
+    desc: '炼丹术推演出的炉子，火候不必再靠手感。丹药与九转丹制作产出 +8%，灵液制作 +15%，灵草产出 +30%。',
     // 原「凝露瓶」的效果并入此处：灵液制作 +15%（法宝数量收窄，效果不丢）
     // 原「凝露瓶」的灵液 +15% 与原「百草葫芦」的灵草 +30% 都并入此处（法宝收窄，效果不丢）
     effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08, spiritLiquid: 0.15 }, ratio: { herb: 0.3 } },

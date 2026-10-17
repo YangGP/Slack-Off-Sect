@@ -271,7 +271,7 @@ function downloadLegacy() {
       开发预览版使用独立存档，可能随开发调整规则；游玩数据采集已关闭。
     </div>
     <div class="update-notice" role="note" aria-label="版本更新提示">
-      <HoverTip :label="`${CURRENT_VERSION} · 更新说明`"><template #tip><p>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</p></template></HoverTip>
+      <HoverTip :label="`${CURRENT_VERSION} · 更新说明`"><template #tip><p>资源产出、建筑造价与修真解锁已大幅调整。旧代存档需先导出备份并确认开始新宗门；同代存档按现有兼容规则读取。</p></template></HoverTip>
       <button class="btn" type="button" @click="actions.setTab('realm')">前往境界</button>
     </div>
 

@@ -14,7 +14,7 @@
  *   craftBonusByResource 按成品区分的专业制作加成
  *   disasterGuard 妖兽侵袭的损失减免（最多 80%）
  *   ascendBonus 飞升时获得的仙缘加成
- *   arrivalBonus 弟子前来速度加成（缩短自动前来的间隔）
+ *   arrivalBonus 自动来人间隔缩短加成（不是同百分比速度提升）
  *
  * needs 为解锁条件，可组合：building / buildings[] / upgrade / upgrades[] / realm
  */
@@ -159,7 +159,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.55,
     desc: '木梁榫卯相扣，灵石嵌入梁柱引气，冬暖夏凉，可容六名弟子。',
     effects: { maxDisciples: 6, storage: { qi: 200, wood: 120 } },
-    needs: { building: { id: 'hut', count: 5 }, upgrades: ['homePlanning'] },
+    needs: { building: { id: 'hut', count: 1 }, upgrades: ['homePlanning'] },
   },
   {
     id: 'mansion',
@@ -172,7 +172,7 @@ const CORE_BUILDINGS = [
     effects: { maxDisciples: 10, storage: { qi: 400, wood: 200 }, habitability: 4 },
     // 持续供能（变更 4，占位数值待测）：住房与定额仓储保留，主动收益随供能缩放；灵能档 ×powerMult。
     upkeepQi: 0.3, upkeepEnergy: 0.003, powerMult: 1.6,
-    needs: { building: { id: 'logHouse', count: 5 }, upgrades: ['buildingCode'] },
+    needs: { building: { id: 'logHouse', count: 1 }, upgrades: ['buildingCode'] },
   },
   {
     id: 'caveDwelling',
@@ -246,7 +246,7 @@ const CORE_BUILDINGS = [
     desc: '囤灵气如囤粮，也堆得下木料与草药 —— 荒年不至于饿着弟子。',
     // 灵木也在这里囤：早期灵木产量几天内涨几十倍，只靠基础上限 200 会一直在「0 ↔ 满仓」之间跳
     effects: { storage: { qi: 800, wood: 300, herb: 120 } },
-    needs: { building: { id: 'spiritField', count: 2 } },
+    needs: { building: { id: 'spiritField', count: 1 } },
   },  {
     // 早期补充仓储：在库房开放前缓解原料与灵石仓容，每项增量低于库房。
     // 库房承担主要扩仓，料场的较高涨价率也避免长期替代库房。
@@ -285,7 +285,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.25,
     desc: '石殿分设料架与阵材格，专存营造原料、木板、玄钢、阵基与后期复合建材。',
     effects: { storage: { wood: 10000, stone: 8000, rock: 6000, ore: 6000, plank: 1500, steel: 120, arrayBase: 100, spiritMortar: 200, ironMortar: 100, mithril: 60, arcaneGold: 40, crystalSilver: 40 } },
-    needs: { building: { id: 'warehouse', count: 3 }, upgrades: ['earthEssence'] },
+    needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['earthEssence'] },
   },
   {
     // 中场仓储：填「材料库（金丹）↔ 洞天（合体）」之间的空档。
@@ -363,7 +363,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.18,
     desc: '弟子在此研读、论道，把典籍中的道理化为灵机。每座灵机产出 +10%；典籍收存与灵机仓容由典籍库承担。',
     effects: { ratio: { insight: 0.1 } },
-    needs: { building: { id: 'spiritField', count: 3 } },
+    needs: { building: { id: 'spiritField', count: 1 } },
   },
   {
     id: 'scriptureArchive',
@@ -509,7 +509,7 @@ const CORE_BUILDINGS = [
     desc: '山门一立，香客便知此处有仙。开放香使职位，派遣弟子接待香客才能收取香火。',
     // 香火是全局最易贴顶的资源（72h 实测 100%），每座仓位按灵木档位的同量级上调
     effects: { storage: { faith: 240 } },
-    needs: { upgrades: ['incenseVow'], building: { id: 'hut', count: 3 } },
+    needs: { upgrades: ['incenseVow'], building: { id: 'hut', count: 1 } },
   },
   {
     id: 'incenseCauldron',
@@ -518,11 +518,11 @@ const CORE_BUILDINGS = [
     group: 'incense',
     cost: { ore: 300, plank: 4 },
     priceRatio: 1.3,
-    desc: '青铜大鼎终日不熄，把念力一炉炉炼成香火。',
+    desc: '青铜大鼎终日不熄，承接香火仓储，也为宗门添一分宜居。',
     effects: { habitability: 3, storage: { faith: 240 } },
     upkeep: { wood: 0.12 }, // 鼎里得一直添香柴
 
-    needs: { building: { id: 'gate', count: 2 }, upgrades: ['incenseStudy'] },
+    needs: { building: { id: 'gate', count: 1 }, upgrades: ['incenseStudy'] },
   },
   {
     id: 'ancestorHall',
@@ -622,8 +622,8 @@ const CORE_BUILDINGS = [
     // 化神可达：造价用灵器／灵符／灵晶／玄钢等化神前已有来源的材料，不依赖炼虚的秘银与合体的玄金。
     cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, stone: 30000, artifact: 30, arrayDiagram: 2 },
     priceRatio: 1.6,
-    desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座运行的湮灭炉还会为宗门添一层全局增产。',
-    // 化神入门：既产灵能，又是那层全局增产（参考猫国核反应堆）。毛输出 0.06，炉内自用 0.015，净 0.045。
+    desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座运行还会为多数资源添一层独立产出乘区（香火、灵气分子、正负灵子与灵能不吃此层），不放大每份制作收益与维护费。',
+    // 化神入门：既产灵能，又给多数资源一层独立产出乘区（参考猫国核反应堆；不含香火与粒子链）。毛输出 0.06，炉内自用 0.015，净 0.045。
     // ratioReactor：每座给一层全局产出倍率，多座相加；维护费每座固定，不随该层缩放。
     effects: { prod: { qiEnergy: 0.06 }, ratioReactor: 0.05 },
     // 正负灵子是燃料；炉内自用能从毛输出扣减（净 = 0.06 − 0.015）。自用能即其稳定后的控制用能，故不再重复收灵气费；不依赖已有灵能库存。
@@ -669,7 +669,7 @@ const CORE_BUILDINGS = [
     // 复合池壁与晶银阵眼承托因果，九转丹与灵符持续镇守。
     cost: { ironMortar: 150, crystalSilver: 20, stone: 300000, insight: 140000, pill: 1000, spiritArtifact: 25, spiritTreasure: 10, nineTurnPill: 25, spiritTalisman: 50 },
     priceRatio: 1.7,
-    desc: '池中养着一缕前世因果，飞升时能多带走几分。',
+    desc: '池中养着一缕前世因果，转世与飞升时都能多带走几分。',
     effects: { ratio: { insight: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },
     upkeep: { insight: 4 }, // 养一缕因果要耗灵机
     upkeepQi: 1.5, upkeepEnergy: 0.015, powerMult: 1.6, // 基础仪式可用灵气，参悟维护另计

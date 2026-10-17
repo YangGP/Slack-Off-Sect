@@ -71,7 +71,7 @@ export const CONFIG = {
   CLICK_QI_PER_FIELD: 0.5,
   // 前20座保留原点击增长；此后按平方根增长，主动点击仍有用但不会线性膨胀。
   CLICK_QI_FULL_FIELDS: 20,
-  // 弟子不用招募：有空房就每这么多秒自己来一名（可被《广开山门》缩短）
+  // 默认自动来人：有空房就每这么多秒自己来一名（可被《广开山门》缩短）；主动礼聘为可选模式
   DISCIPLE_ARRIVAL_SECONDS: 15,
   // 宜居度是点数；只限制产量倍率，不限制宜居度本身。
   HABITABILITY_BASE: 20,

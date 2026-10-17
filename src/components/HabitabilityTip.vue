@@ -1,12 +1,18 @@
 <script setup>
 import { computed } from 'vue'
 import { state, derived } from '@/game/store'
-import { nextArrivalIn } from '@/game/engine'
+import { isManualRecruit, nextArrivalIn } from '@/game/engine'
 import { fmt, fmtPercent, fmtTime } from '@/game/format'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 
 const waitNext = computed(() => nextArrivalIn(state, derived))
+const arrivalState = computed(() => {
+  if (isManualRecruit(state, derived)) return '主动招募 · 自动来人暂停'
+  if (derived.leaveChance > 0) return '宜居度不足 · 暂停来人'
+  if (waitNext.value === null) return '居所已满'
+  return '正常'
+})
 </script>
 
 <template>
@@ -25,7 +31,7 @@ const waitNext = computed(() => nextArrivalIn(state, derived))
       <div class="tip-row"><span class="k">弟子岗位</span><span class="v" :class="derived.discipleMult < 1 ? 'bad' : ''">×{{ derived.discipleMult.toFixed(2) }}{{ derived.discipleMult < 1 ? ' · 拥挤减产' : ' · 正常' }}</span></div>
       <div class="tip-row"><span class="k">弟子岗位综合倍率</span><span class="v">×{{ (derived.habitabilityMult * derived.discipleMult).toFixed(2) }}</span></div>
       <div class="tip-row"><span class="k">弟子离开概率</span><span class="v" :class="derived.leaveChance > 0 ? 'bad' : ''">{{ fmtPercent(derived.leaveChance, 1) }} / {{ fmtTime(CONFIG.HABITABILITY_LEAVE_INTERVAL) }}</span></div>
-      <div class="tip-row"><span class="k">弟子前来</span><span class="v">{{ derived.leaveChance > 0 ? '宜居度不足 · 暂停来人' : waitNext === null ? '居所已满' : '正常' }}</span></div>
+      <div class="tip-row"><span class="k">弟子前来</span><span class="v">{{ arrivalState }}</span></div>
       <div class="tip-section">宜居度来源</div>
       <div class="tip-row"><span class="k">基础</span><span class="v">{{ CONFIG.HABITABILITY_BASE }}</span></div>
       <div class="tip-row"><span class="k">建筑 / 修真（含入住配套）</span><span class="v good">+{{ fmt(derived.habitabilityBonus) }}</span></div>

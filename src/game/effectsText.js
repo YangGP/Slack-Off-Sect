@@ -62,7 +62,7 @@ export function scaleEffectsForTotal(ef, count, active, upkeep = false) {
 }
 
 /**
- * 把一整套效果整体乘一个倍率（法宝祭炼就是「每级 ×1.3」这种整体放大）。
+ * 把一整套效果整体乘一个倍率（法宝祭炼就是「每级线性叠加 0.3 倍」这种整体放大）。
  * 与 `scaleEffectsForTotal` 的区别：那个按数量/启用数缩放，这个按一个任意倍率缩放。
  */
 export function scaleEffectsBy(ef, mult) {
@@ -91,7 +91,7 @@ export function describeEffects(ef) {
     for (const k in ef.ratio) push(`${resourceName(k)} 产出`, `+${fmtPercent(ef.ratio[k])}`, 'good', k)
   }
   if (ef.ratioAll) push('全局产出', `+${fmtPercent(ef.ratioAll)}`, 'good')
-  if (ef.ratioReactor) push('全局增产（每座）', `+${fmtPercent(ef.ratioReactor)}`, 'good')
+  if (ef.ratioReactor) push('湮灭炉增产（每座，不含香火与粒子链）', `+${fmtPercent(ef.ratioReactor)}`, 'good')
   if (ef.jobRatio) {
     for (const k in ef.jobRatio) push(`${JOB_MAP[k]?.name || k} 产出`, `+${fmtPercent(ef.jobRatio[k])}`, 'good', JOB_MAP[k]?.resource)
   }
@@ -138,13 +138,13 @@ export function describeEffects(ef) {
       push(`${resourceName(res)} 灾损额外减免`, `${fmtPercent(value)}（合计上限80%）`, 'good', res)
     }
   }
-  if (ef.ascendBonus) push('飞升仙缘', `+${fmtPercent(ef.ascendBonus)}`, 'good')
-  if (ef.arrivalBonus) push('弟子前来速度', `+${fmtPercent(ef.arrivalBonus)}`, 'good')
+  if (ef.ascendBonus) push('转世／飞升仙缘加成', `+${fmtPercent(ef.ascendBonus)}`, 'good')
+  if (ef.arrivalBonus) push('自动来人间隔', `-${fmtPercent(ef.arrivalBonus)}（合计最多缩短80%）`, 'good')
   if (ef.breakthroughDiscount) push('破境花费', `-${fmtPercent(ef.breakthroughDiscount)}`, 'good')
   // 身死减免（香火线《愿力护道》等）：作用于所有身死道消境界，与 progression 的 deathReduce 同源。
   if (ef.tribulationSafety) push('突破失败后身死概率', `-${fmtPercent(ef.tribulationSafety).replace('%', ' 个百分点')}（最低0%）`, 'good')
   if (ef.offlineHours) push('离线收益上限', `+${ef.offlineHours} 小时`, 'good')
-  if (ef.karmaRatio) push('每点仙缘额外', `+${fmtPercent(ef.karmaRatio)} 全局`, 'good')
+  if (ef.karmaRatio) push('仙缘乘区固定加成', `+${fmtPercent(ef.karmaRatio)} 全局（不随仙缘点数缩放）`, 'good')
   if (ef.autoCraft) push('解锁自动制作', '', 'good')
   if (ef.autoTalentJobs) push('自动按岗位专长分工', '弟子页可暂停', 'good')
   if (ef.recruitMode) push('解锁主动招募', '弟子页可切换礼聘招募，档位越高天赋越好', 'unlock')

@@ -197,7 +197,7 @@ export function applyEventBody(state, derived, event, text, kind, source) {
 /**
  * 触发一个事件。
  * - 自然环境类 / 突发事件类：立刻结算（applyEventEffects）
- * - 选择类：挂成"待决"（state.pendingChoice），等玩家在纪事面板里挑一个，再 resolveChoice
+ * - 选择类：挂成"待决"（state.pendingChoice），由纪事面板或事件弹窗（真实操作后打开）提交，再 resolveChoice
  */
 export function fireEvent(state, derived, ev = null) {
   const event = ev || pickEvent(state)

@@ -83,7 +83,7 @@ export async function checkMount(context) {
     const label = notice?.querySelector('.tip-label')
     label?.focus()
     await new Promise(r => setTimeout(r, 180))
-    ok('说明标题支持键盘聚焦，完整建议只出现在提示内', window.document.querySelector('[role="tooltip"]')?.textContent.includes('建议旧档达到转世条件后转世') && !text().includes('建议旧档'))
+    ok('说明标题支持键盘聚焦，完整建议只出现在提示内', window.document.querySelector('[role="tooltip"]')?.textContent.includes('旧代存档需先导出备份并确认开始新宗门') && !text().includes('旧代存档需先导出备份并确认开始新宗门'))
     const ruleTip = window.document.querySelector('[role="tooltip"]')
     ok('规则提示使用统一正文与标题外壳', ruleTip?.querySelectorAll('.tip-body').length === 1 && ruleTip.querySelectorAll('.tip-title').length === 1)
     ok('提示触发器关联可见的提示内容', label?.closest('.tip-trigger').getAttribute('aria-describedby') === ruleTip?.id && !!ruleTip?.id)

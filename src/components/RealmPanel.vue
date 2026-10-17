@@ -135,7 +135,7 @@ function reincarnate() {
                   </div>
                   <div class="tip-section">仓储加成</div>
                   <div class="tip-row">
-                    <span class="k">每点</span><span class="v good">全部有限容量 +{{ fmtPercent(CONFIG.KARMA_STORAGE_PER_POINT, 2) }}</span>
+                    <span class="k">每点</span><span class="v good">适用资源有限容量 +{{ fmtPercent(CONFIG.KARMA_STORAGE_PER_POINT, 2) }}（信符除外）</span>
                   </div>
                   <div class="tip-row">
                     <span class="k">软上限</span><span class="v">+{{ fmtPercent(CONFIG.KARMA_STORAGE_CAP) }}（{{ Math.round(CONFIG.KARMA_STORAGE_CAP * 0.75 / CONFIG.KARMA_STORAGE_PER_POINT) }}点之后递减）</span>
@@ -182,7 +182,7 @@ function reincarnate() {
       <HoverTip label="破境"><template #tip>
           <p>辅助方案可叠加，须备齐整组材料，费用另加于基础材料，换境后需重新选择。每次尝试均消耗全部投料，失败不退回。</p>
           <p v-if="!preview.tribulation">失败无额外惩罚，不损失修为。</p>
-          <p v-else>突破失败后：身死 {{ fmtPercent(preview.deathOnFailure) }}、退境 {{ fmtPercent(preview.regressionOnFailure) }}、保境 {{ fmtPercent(preview.holdOnFailure) }}（合计 100%，均为无条件份额）。身死清空范围同转世，保留已有仙缘、道果、道心、成就与累计统计；本次仙缘减半，不结道果。存活则另扣突破所用库存材料的 2%，全局产出降低 5% 持续 120 秒（重复失败只刷新时间）。</p>
+          <p v-else>突破失败后：身死 {{ fmtPercent(preview.deathOnFailure) }}、退境 {{ fmtPercent(preview.regressionOnFailure) }}、保境 {{ fmtPercent(preview.holdOnFailure) }}（合计 100%，以本次突破失败为前提；单次总风险见下方概率）。身死清空范围同转世，保留已有仙缘、道果、道心、成就与累计统计；本次仙缘减半，不结道果。存活则另扣突破所用库存材料的 2%，全局产出降低 5% 持续 120 秒（重复失败只刷新时间）。</p>
         </template></HoverTip><span class="hint">{{ next ? '下一境：' + next.name : '已至此界尽头' }}</span>
     </div>
     <div class="box-body">

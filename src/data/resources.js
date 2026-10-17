@@ -24,7 +24,7 @@ const CORE_RESOURCES = [
     // 仓容完全独立：不套通用扩仓（比例为 0），也不乘仙缘仓储倍率（isolatedStorage）。
     storageWeight: 0,
     isolatedStorage: true,
-    desc: '宗门开具的差遣凭信：入山猎妖每趟百枚，拜访邻宗互市每回五十枚。基础备百枚之量，执符堂每座再供 300。',
+    desc: '宗门开具的差遣凭信：入山猎妖每趟百枚，拜访邻宗互市每回五十枚。基础备百枚之量，执符堂每座再供 300；不套通用扩仓，也不乘仙缘仓储倍率。',
   },
   {
     id: 'wood',
@@ -189,7 +189,7 @@ const CORE_RESOURCES = [
     color: '#a8e6a1',
     baseMax: 20,
     storageWeight: 0.02,
-    desc: '以灵泉浇灌百年，草叶上凝着露似的灵光。',
+    desc: '以灵泉与灵液培育，草叶上凝着露似的灵光。',
     integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
@@ -375,7 +375,7 @@ const CORE_RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '飞升时结下的道果。每颗永久提升全局产出，并让下次转世的仙缘更多。',
+    desc: '飞升时结下的道果。每颗永久提升全局产出，并让下次转世或飞升的仙缘更多。',
   },
   {
     id: 'karma',
