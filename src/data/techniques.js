@@ -385,46 +385,6 @@ const CORE_TECHNIQUES = [
     needs: { realm: 7, upgrades: ['storeStoneArt', 'capacityRune'] },
   },
 
-  // ---------- 香火 ----------
-  {
-    id: 'incensePower',
-    name: '香火愿力',
-    glyph: '愿',
-    cost: { insight: 110, faith: 200, wood: 800 },
-    desc: '香客的念力也是力。香火产出 +30%。',
-    effects: { ratio: { faith: 0.3 } },
-    needs: { building: { id: 'gate', count: 2 } },
-  },
-  {
-    id: 'ancestorIncense',
-    name: '祖师香火',
-    glyph: '祖',
-    cost: { insight: 290, faith: 900, talisman: 12, wood: 1500 },
-    desc: '祖师殿里那一炉香，从早到晚没断过。香火产出 +20%。',
-    effects: { ratio: { faith: 0.2 } },
-    needs: { upgrades: ['incensePower'], building: { id: 'incenseCauldron', count: 2 } },
-  },
-  {
-    id: 'incenseRite',
-    name: '迎香礼',
-    glyph: '礼',
-    cost: { insight: 115, faith: 150, wood: 500 },
-    desc: '山门迎香有一套礼数，香客走得顺，香使收得也稳。香使产出 +35%。',
-    effects: { jobRatio: { incenseKeeper: 0.35 } },
-    needs: { upgrades: ['incensePower'], building: { id: 'gate', count: 3 } },
-  },
-  {
-    // 香火线后期技艺：承接《愿力》研究，提供作用于渡劫的被动减死（见 docs/MATERIAL-RESEARCH.md §2.3）。
-    id: 'vowGuard',
-    name: '愿力护道',
-    glyph: '愿',
-    cost: { insight: 12000, faith: 6000 }, // 待校准
-    desc: '以愿力护持道体、消解天威。渡劫身死概率 −5 个百分点。',
-    effectDesc: '因此渡劫多一分护身之力：身死概率降低 5 个百分点。',
-    effects: { tribulationSafety: 0.05 }, // 待校准
-    needs: { upgrades: ['vowPower'] },
-  },
-
   // ---------- 宜居度 ----------
   {
     id: 'bondKnot',
@@ -610,6 +570,7 @@ const CORE_TECHNIQUES = [
     name: '聚愿鼎',
     glyph: '鼎',
     kind: 'treasure',
+    page: 'faith',
     cost: { insight: 720, faith: 2000, talisman: 12, stone: 2000 },
     refine: { insight: 2400 }, // 祭炼要打坐参悟：炼成只花材料，祭炼才花灵机
     desc: '祖师殿里那口鼎，把香客的愿力收得更干净。香火产出 +40%。',

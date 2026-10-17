@@ -519,7 +519,7 @@ const CORE_BUILDINGS = [
     cost: { ore: 300, plank: 4 },
     priceRatio: 1.3,
     desc: '青铜大鼎终日不熄，把念力一炉炉炼成香火。',
-    effects: { ratio: { faith: 0.3 }, habitability: 3, storage: { faith: 240 } },
+    effects: { habitability: 3, storage: { faith: 240 } },
     upkeep: { wood: 0.12 }, // 鼎里得一直添香柴
 
     needs: { building: { id: 'gate', count: 2 }, upgrades: ['incenseStudy'] },
@@ -532,7 +532,7 @@ const CORE_BUILDINGS = [
     cost: { ironMortar: 20, stone: 3000, plank: 10, insight: 6000, talisman: 25 },
     priceRatio: 1.35,
     desc: '历代祖师的牌位在此，弟子路过都要收一收心思。',
-    effects: { ratio: { faith: 0.5, insight: 0.1 }, habitability: 8 },
+    effects: { ratio: { insight: 0.1 }, habitability: 8 },
     upkeepQi: 0.4, upkeepEnergy: 0.004, powerMult: 1.6,
     needs: { upgrades: ['ancestorArt'] },
   },
@@ -670,7 +670,7 @@ const CORE_BUILDINGS = [
     cost: { ironMortar: 150, crystalSilver: 20, stone: 300000, insight: 140000, pill: 1000, spiritArtifact: 25, spiritTreasure: 10, nineTurnPill: 25, spiritTalisman: 50 },
     priceRatio: 1.7,
     desc: '池中养着一缕前世因果，飞升时能多带走几分。',
-    effects: { ratio: { insight: 0.5, faith: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },
+    effects: { ratio: { insight: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },
     upkeep: { insight: 4 }, // 养一缕因果要耗灵机
     upkeepQi: 1.5, upkeepEnergy: 0.015, powerMult: 1.6, // 基础仪式可用灵气，参悟维护另计
 

@@ -80,7 +80,7 @@ try {
   assert.equal(typeof oldHot.accepted, 'function', 'store 成为游戏模块热更新边界')
   oldHot.disposed()
   assert.equal(intervals.size, 0, '热更新清理旧循环，包括句柄 0')
-  const raw = browser.localStorage.getItem('slack-off-sect.save.v1')
+  const raw = browser.localStorage.getItem('slack-off-sect.save.d7.v1')
   // 存档里的金额是十进制字符串，与运行时 Decimal 用 toString 对齐。
   assert.equal(JSON.parse(raw).resources.qi, qi.toString(), '热更新保存完整当前进度')
   oldHot.accepted()

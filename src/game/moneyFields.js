@@ -25,6 +25,7 @@ export const MONEY_PATHS = [
   ['stats', 'lifeInsight'],
   ['stats', 'offlineGains'],
   ['stats', 'crafted', '*'],
+  ['faithProgression', 'totalDaoHeart'],
   ['disciples', 'members', '[]', 'totalQiConsumed'],
   ['pendingChoice', 'herbLoss'],
   ['hunting', 'yieldRemainders', '*'],

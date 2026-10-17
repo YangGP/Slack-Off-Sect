@@ -223,17 +223,23 @@ export function createBot(state, derived, policy = {}) {
       const id = candidates[idx]
       if (!derived.unlockedBuildings.includes(id)) continue
       const cost = E.buildingCost(state, id, 1)
+      const meta = E.BUILDING_MAP[id]
       // 攒破境前置研究期间：先别买吃这些资源的建筑，把手头那份攒够再去点研究。
       const required = E.countOf(state, id) < (requiredBuildings.get(id) || 0)
-      if (!required && !wantsComfortBuilding(E.BUILDING_MAP[id])) continue
-      const storageFix = shortRes.some((r) => (E.BUILDING_MAP[id]?.effects?.storage?.[r] || 0) > 0)
+      // 居所是硬前置：人口已满（或还没有任何床位）时，必须允许买床位建筑，
+      // 否则首屋涨价后会出现「没弟子→没灵机→不能参悟」的开局死锁。
+      const housing = (meta?.effects?.maxDisciples || 0) > 0 &&
+        state.disciples.total >= (derived.maxDisciples || 0)
+      if (!required && !housing && !wantsComfortBuilding(meta)) continue
+      const storageFix = shortRes.some((r) => (meta?.effects?.storage?.[r] || 0) > 0)
       if (policy.onlyBreakthrough && !required && !storageFix) {
         const support = ['hut', 'spiritField', 'lumberYard', 'granary', 'quarry'].includes(id) && E.countOf(state, id) === 0
-        const housing = E.BUILDING_MAP[id]?.effects?.maxDisciples > 0 && state.disciples.total >= derived.maxDisciples
-        const comfort = comfortOnly(E.BUILDING_MAP[id]) && normalHabitability() < state.disciples.total
+        const comfort = comfortOnly(meta) && normalHabitability() < state.disciples.total
         if (!support && !housing && !comfort) continue
       }
-      if (reserveCost && !required && !storageFix && Object.keys(cost).some((k) =>
+      // 床位不足时不能因为「在攒破境材料」把住房一起锁死：首屋现在要灵木，
+      // 木料一旦被预留就再也买不起房，开局会永久停在无弟子状态。
+      if (reserveCost && !required && !housing && !storageFix && Object.keys(cost).some((k) =>
         moneyLt(money(state.resources[k] ?? ZERO).minus(cost[k]), reserveCost[k] ?? ZERO))) continue
       // 开局自举期：先伐木场、后谷仓，再攒首座采矿场 —— 避免反复扩屋把开局木料花光。
       //

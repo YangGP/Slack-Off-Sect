@@ -19,6 +19,7 @@ import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
 import * as analytics from '@/analytics/collector'
 import { deactivateModule } from './moduleRegistry'
+import { IS_DEV_PREVIEW, STORAGE_PREFIX } from './deployment'
 
 // ============================================================
 // 单例状态
@@ -29,7 +30,7 @@ let initialized = false
 let initializing = null
 let loopRequested = false
 let offlineController = null
-const ANALYTICS_CONSENT_KEY = 'slack-off-sect.analytics.consent.v1'
+const ANALYTICS_CONSENT_KEY = `${STORAGE_PREFIX}.analytics.consent.v1`
 export const state = reactive(createInitialState())
 export const derived = reactive(E.createDerived())
 
@@ -37,7 +38,9 @@ export const derived = reactive(E.createDerived())
 export const ui = reactive({
   saveLoadError: '',
   saveRecoveryNotice: '',
-  analyticsConsent: 'unknown',
+  // D7：只存在旧代存档时的阻断提示（不加载、不结算、不覆盖）。
+  rulesetBlock: null,
+  analyticsConsent: IS_DEV_PREVIEW ? 'denied' : 'unknown',
   analyticsStatus: 'disabled',
   analyticsFailureReason: '',
   analyticsFailureOpen: false,
@@ -59,7 +62,7 @@ export const ui = reactive({
 
 // 同意选择属于当前浏览器，导入游戏存档或重开不能代替玩家授权。
 function applyAnalyticsConsent() {
-  state.settings.analyticsEnabled = ui.analyticsConsent === 'granted'
+  state.settings.analyticsEnabled = !IS_DEV_PREVIEW && ui.analyticsConsent === 'granted'
 }
 
 function handleAnalyticsStatus({ status, reason }) {
@@ -92,11 +95,17 @@ const runtime = createRuntime({ game, repository,
 export function initializeGame() {
   if (initialized) return initializing
   initialized = true
-  restored = runtime.load()
+  // 采集偏好属于浏览器，必须先于旧代分支读取；读取偏好本身不启动采集。
   try {
     const consent = localStorage.getItem(ANALYTICS_CONSENT_KEY)
-    if (consent === 'granted' || consent === 'denied') ui.analyticsConsent = consent
+    if (!IS_DEV_PREVIEW && (consent === 'granted' || consent === 'denied')) ui.analyticsConsent = consent
   } catch {}
+  // D7：只有旧代存档时进入独立的大版本提示；确认前不读档、不结算、不写新键。
+  if (repository.legacyOnly()) {
+    ui.rulesetBlock = { legacy: repository.legacyPayload() || '' }
+    return null
+  }
+  restored = runtime.load()
   applyAnalyticsConsent()
   // 采集在离线结算之前初始化：离线成功结算的秒数要计入本世时钟。
   analytics.initAnalytics({ state, derived, restored: !!restored, debug: ui.debug === true,
@@ -267,6 +276,7 @@ function onBeforeUnload() {
 export function startLoop() {
   loopRequested = true
   const ready = initializeGame()
+  if (ui.rulesetBlock) return
   // 离线结算失败也必须启动主循环：否则 error 分支会吞掉后续启动，页面永久卡住。
   if (ready) {
     // 用 then(ok, err) 而非 catch().then()：少一个微任务跳，离线 Promise 一落定即启动循环，
@@ -298,6 +308,7 @@ export function stopLoop() {
 }
 
 export function saveNow() {
+  if (ui.rulesetBlock) return false
   if (ui.offlineLoading) return false
   return runtime.save()
 }
@@ -356,7 +367,19 @@ export const actions = {
     toast(saved ? `${meta.name}已修改并保存` : `${meta.name}已修改，但保存失败`, saved ? 'good' : 'bad')
     return true
   },
+  setDebugProductionBoost(enabled) {
+    if (!ui.debug || typeof enabled !== 'boolean') return false
+    if (ui.saveLoadError || ui.rulesetBlock || ui.offlineLoading) return false
+    if (enabled) analytics.markDebug()
+    // 仅运行时使用；保存白名单不包含此字段，读档／刷新后自动取消。
+    state.__debugProductionBoost = enabled
+    E.recompute(state, derived)
+    toast(enabled ? '调试全局产出 ×10 已开启' : '调试全局产出 ×10 已关闭', 'info')
+    return true
+  },
   closeDebug() {
+    delete state.__debugProductionBoost
+    E.recompute(state, derived)
     ui.debug = false
     ui.debugPage = false
   },
@@ -647,7 +670,10 @@ export const actions = {
     ui.saveRecoveryNotice = next.__recoveryNotice || ''
     analytics.beforeStateReplace()
     game.replaceState(next)
+    ui.rulesetBlock = null
     applyAnalyticsConsent()
+    analytics.initAnalytics({ state, derived, restored: false, debug: ui.debug === true,
+      onStatus: handleAnalyticsStatus })
     runtime.resetClock()
     // 回档不能复用旧的分析 run_id：换新世身份，本世标 partial，不补发 run_start。
     analytics.noteImport({ debug: ui.debug === true })
@@ -657,11 +683,12 @@ export const actions = {
     repository.allowRecovery()
     ui.saveLoadError = ''
     saveNow()
-    if (recovering) startLoop()
+    if (recovering || !runtime.running) startLoop()
     toast(ui.saveRecoveryNotice || '读档成功', 'good')
     return true
   },
   resetGame() {
+    if (ui.rulesetBlock) return false
     if (!repository.clear()) return false
     cancelOfflineProgress()
     const recovering = !!ui.saveLoadError
@@ -670,12 +697,65 @@ export const actions = {
     game.reset()
     applyAnalyticsConsent()
     runtime.resetClock()
+    analytics.initAnalytics({ state, derived, restored: false, debug: ui.debug === true,
+      onStatus: handleAnalyticsStatus })
     analytics.startFreshSave({ debug: ui.debug === true })
     ui.saveRecoveryNotice = ''
     saveNow()
     if (recovering) startLoop()
     ui.offlineReport = null
     toast('已重新开山立派', 'good')
+  },
+  /** D7 大版本提示：导出原始旧档，不得导出内存里的空白新状态。 */
+  exportLegacySave() {
+    return ui.rulesetBlock?.legacy || ''
+  },
+  /** 确认开始新代：写真正空白的新代档，旧键保留为原始备份。 */
+  startNewGeneration() {
+    if (!ui.rulesetBlock) return false
+    game.reset()
+    ui.rulesetBlock = null
+    applyAnalyticsConsent()
+    runtime.resetClock()
+    analytics.initAnalytics({ state, derived, restored: false, debug: ui.debug === true,
+      onStatus: handleAnalyticsStatus })
+    analytics.startFreshSave({ debug: ui.debug === true })
+    repository.allowRecovery()
+    saveNow()
+    startLoop()
+    return true
+  },
+  condenseVow(amount) {
+    const result = E.condenseVow(state, amount)
+    if (!result?.ok) { toast(result?.reason || '凝愿失败', 'bad'); return false }
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  attestDaoHeart(amount) {
+    const result = E.attestDaoHeart(state, amount)
+    if (!result?.ok) { toast(result?.reason || '证心失败', 'bad'); return false }
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  buyRitual(id) {
+    if (!E.buyRitual(state, id)) return false
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  buyCultivation(id) {
+    if (!E.buyCultivation(state, id)) return false
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  buyFaithUpgrade(id) {
+    if (!E.buyFaithUpgrade(state, id)) return false
+    E.recompute(state, derived)
+    saveNow()
+    return true
   },
   setSetting(key, value) {
     if (key === 'autoTalentJobs') {
@@ -699,6 +779,11 @@ export const actions = {
       return
     }
     if (key === 'analyticsEnabled') {
+      if (IS_DEV_PREVIEW) {
+        ui.analyticsConsent = 'denied'
+        state.settings.analyticsEnabled = false
+        return false
+      }
       const firstChoice = ui.analyticsConsent === 'unknown'
       ui.analyticsConsent = value === true ? 'granted' : 'denied'
       try { localStorage.setItem(ANALYTICS_CONSENT_KEY, ui.analyticsConsent) } catch {}
@@ -858,10 +943,10 @@ export const view = {
   ),
   /** 修真（解锁层）与技艺·法宝（数值层）各自的可参悟 / 已参悟 */
   researchableCultivation: computed(() =>
-    CULTIVATION.filter((u) => !state.upgrades[u.id] && E.isUpgradeUnlocked(state, u)).map((u) => u.id),
+    CULTIVATION.filter((u) => u.page !== 'faith' && !state.upgrades[u.id] && E.isUpgradeUnlocked(state, u)).map((u) => u.id),
   ),
   researchableSkills: computed(() =>
-    TECHNIQUES.filter((u) => !state.upgrades[u.id] && E.isUpgradeUnlocked(state, u)).map((u) => u.id),
+    TECHNIQUES.filter((u) => u.page !== 'faith' && !state.upgrades[u.id] && E.isUpgradeUnlocked(state, u)).map((u) => u.id),
   ),
   researchedCultivation: computed(() => CULTIVATION.filter((u) => state.upgrades[u.id]).map((u) => u.id)),
   researchedSkills: computed(() => TECHNIQUES.filter((u) => state.upgrades[u.id]).map((u) => u.id)),

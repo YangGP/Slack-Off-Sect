@@ -2,7 +2,7 @@
 import { computed, reactive, watch } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
-import { breakthroughPreview, canAfford } from '@/game/engine'
+import { breakthroughPreview, canAfford, realmProductionMultiplier } from '@/game/engine'
 import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
 import { ZERO, money, moneyToNumber } from '@/game/decimal'
 import { enough as enoughOf } from '@/game/pricing'
@@ -35,6 +35,16 @@ const perPersonUpkeep = computed(() =>
 /** 破境后的每人口粮与涨幅（涨跌是有界比例，转 Number 后再格式化） */
 const upkeepAfter = computed(() => perPersonUpkeep.value.times(ratio.value))
 const upkeepRise = computed(() => ((ratio.value - 1) * 100).toFixed(0))
+/** 破境后的有效生产倍率之比：含万民归心，口粮仍用原始境界倍率。 */
+const productionRatio = computed(() => {
+  const nowMult = derived.realmProductionMult || 1
+  const afterMult = next.value ? realmProductionMultiplier(state, next.value.mult) : nowMult
+  return nowMult > 0 ? afterMult / nowMult : 1
+})
+/** 当前勾选护道的材料加成合计（预览 chance 已含）。 */
+const selectedAidBonus = computed(() =>
+  preview.value.availableAids.reduce((sum, aid) => sum + (aids[aid.id] ? aid.bonus : 0), 0),
+)
 /** 仙缘仓储加成：倍率减 1 留在 Decimal 域，转百分比前才转 Number */
 const karmaStorageBonus = computed(() => moneyToNumber(derived.karmaStorageMult.minus(1)))
 const affordable = computed(() => (cost.value ? canAfford(state, cost.value) : false))
@@ -53,7 +63,7 @@ const ascendRealmOk = computed(() => state.realm >= ASCEND_REALM_INDEX)
 
 function ascend() {
   const ok = window.confirm(
-    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gainText.value} 点仙缘与 1 颗道果（都是永久的）。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
+    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gainText.value} 点仙缘与 1 颗道果（都是永久的）。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
   )
   if (ok) actions.ascend()
 }
@@ -64,7 +74,7 @@ function ascend() {
  */
 function reincarnate() {
   const ok = window.confirm(
-    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGainText.value} 点仙缘。\n如果继续修到渡劫期再飞升，同一套公式能拿到更多（当前可飞升时约 ${gainText.value} 点），还多结一颗道果。确定转世吗？`,
+    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGainText.value} 点仙缘。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。\n如果继续修到渡劫期再飞升，同一套公式能拿到更多（当前可飞升时约 ${gainText.value} 点），还多结一颗道果。确定转世吗？`,
   )
   if (ok) actions.reincarnate()
 }
@@ -172,8 +182,7 @@ function reincarnate() {
       <HoverTip label="破境"><template #tip>
           <p>辅助方案可叠加，须备齐整组材料，费用另加于基础材料，换境后需重新选择。每次尝试均消耗全部投料，失败不退回。</p>
           <p v-if="!preview.tribulation">失败无额外惩罚，不损失修为。</p>
-          <p v-else>失败且存活：{{ preview.regressionOnFailure ? '退回上一境' : '境界不变' }}，全局产出降低5%，持续120秒（重复失败只刷新时间）；另扣突破所用库存材料的2%，向下取整，不扣灵气与灵机。</p>
-          <p v-if="preview.deathOnFailure">冲关失败后，{{ fmtPercent(preview.deathOnFailure) }}概率身死道消；{{ preview.regressionOnFailure ? fmtPercent(preview.regressionOnFailure) + '概率退一境' : fmtPercent(1 - preview.deathOnFailure) + '概率存活且境界不变' }}。身死清空范围同转世，保留已有仙缘、道果、成就与累计统计；本次仙缘减半，不结道果。</p>
+          <p v-else>突破失败后：身死 {{ fmtPercent(preview.deathOnFailure) }}、退境 {{ fmtPercent(preview.regressionOnFailure) }}、保境 {{ fmtPercent(preview.holdOnFailure) }}（合计 100%，均为无条件份额）。身死清空范围同转世，保留已有仙缘、道果、道心、成就与累计统计；本次仙缘减半，不结道果。存活则另扣突破所用库存材料的 2%，全局产出降低 5% 持续 120 秒（重复失败只刷新时间）。</p>
         </template></HoverTip><span class="hint">{{ next ? '下一境：' + next.name : '已至此界尽头' }}</span>
     </div>
     <div class="box-body">
@@ -181,7 +190,7 @@ function reincarnate() {
         <div style="padding: 6px 0">
           {{ preview.tribulation ? '渡劫成功率' : '突破成功率' }}
           <b class="good">{{ fmtPercent(preview.chance) }}</b>
-          <span class="dim">（基础 {{ fmtPercent(preview.baseChance) }}，本境满配 {{ fmtPercent(preview.maxChance) }}）</span>
+          <span class="dim">（基础 {{ fmtPercent(preview.baseChance) }}，材料护道 +{{ fmtPercent(selectedAidBonus) }}，应劫正愿 +{{ fmtPercent(preview.vowBonus) }}，上限 {{ fmtPercent(preview.chanceCap) }}）</span>
         </div>
         <div class="small" style="display: flex; gap: 16px; flex-wrap: wrap; padding-bottom: 6px">
           <label v-for="aid in preview.availableAids" :key="aid.id">
@@ -191,13 +200,13 @@ function reincarnate() {
           </label>
         </div>
         <div v-if="preview.deathOnFailure" class="small bad" style="padding-bottom: 6px">
-          本次总退境概率 {{ fmtPercent(preview.regressionRisk, 1) }}，本次总身死概率 {{ fmtPercent(preview.deathRisk, preview.deathRisk < 0.01 ? 2 : 1) }}。
+          本次总退境概率 {{ fmtPercent(preview.regressionRisk, 1) }}，本次总身死概率 {{ fmtPercent(preview.deathRisk, preview.deathRisk < 0.01 ? 2 : 1) }}，本次总保境概率 {{ fmtPercent(preview.holdRisk, 1) }}。
           身死立即重开，本次仙缘减半为 {{ deathKarmaText }} 点，不结道果。
         </div>
         <div style="padding: 4px 0">
-          全局产出 ×{{ derived.realmMult.toFixed(2) }} →
-          <span class="good">×{{ next.mult.toFixed(2) }}</span>
-          <span class="dim">（×{{ ratio.toFixed(2) }}）</span>
+          全局产出 ×{{ derived.realmProductionMult.toFixed(2) }} →
+          <span class="good">×{{ realmProductionMultiplier(state, next.mult).toFixed(2) }}</span>
+          <span class="dim">（生产 ×{{ productionRatio.toFixed(2) }}，口粮 ×{{ ratio.toFixed(2) }}）</span>
         </div>
         <table class="grid">
           <tbody>

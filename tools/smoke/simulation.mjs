@@ -3,6 +3,7 @@ import * as E from '../engine-fixture.mjs'
 import { RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
 import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
+import { FAITH_UPGRADES } from '../../src/data/faith.js'
 import { TECHNIQUES } from '../../src/data/techniques.js'
 import { ACHIEVEMENT_REWARD } from '../../src/data/achievements.js'
 import { SEASONS, CALENDAR } from '../../src/data/calendar.js'
@@ -136,7 +137,7 @@ export function playerBot({ ok, section }) {
     )
     ok(
       '参悟表覆盖两层（修真 + 技艺·法宝）',
-      Object.keys(state.upgrades).every((id) => !!E.UPGRADE_MAP[id]) && ALL_UPGRADES.length === CULTIVATION.length + TECHNIQUES.length,
+      Object.keys(state.upgrades).every((id) => !!E.UPGRADE_MAP[id]) && ALL_UPGRADES.length === CULTIVATION.length + TECHNIQUES.length + FAITH_UPGRADES.length,
     )
   }
 }

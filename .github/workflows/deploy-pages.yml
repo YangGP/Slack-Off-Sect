@@ -1,55 +1,76 @@
 name: 部署到 GitHub Pages
 
-# 推到 main 就跑：先过三层测试，再构建并发布到 Pages。
-# 一次性设置：仓库 Settings → Pages → Build and deployment → Source 选「GitHub Actions」。
+# 同时发布 main（根目录）和 dev1（/dev/），避免单分支发布覆盖另一版本。
+# Settings → Pages 选择 GitHub Actions；github-pages 环境允许 main、dev1 部署。
 on:
   push:
-    branches: [main]
+    branches: [main, dev1]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  # ① 质量门：测试不过就不发布（编码检查 / 引擎 / SSR 渲染 / jsdom 交互）
-  test:
+  build:
+    name: 检查并构建 ${{ matrix.branch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, dev1]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run check
-
-  # ② 构建静态站点（vite.config.js 的 base 是 './'，相对路径，能直接挂在子路径下）
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: 构建当前分支
+        run: npm run build
+        env:
+          VITE_DEPLOY_CHANNEL: ${{ matrix.branch == 'dev1' && 'dev' || 'production' }}
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
+          name: site-${{ matrix.branch }}
           path: dist
+          if-no-files-found: error
+          retention-days: 1
 
-  # ③ 发布
-  deploy:
+  package:
+    name: 合并正式版与开发预览版
     needs: build
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-main
+          path: site
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-dev1
+          path: site/dev
+      - name: 确认两个入口完整
+        run: |
+          test -f site/index.html
+          test -f site/dev/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: 发布合并后的站点
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -348,6 +348,26 @@ const CORE_RESOURCES = [
     desc: '山下香客的念力，可安稳人心、招徕门徒。冲关时可供奉祈愿，增加突破成功率；需求与加成因目标境界而异，后期需更多香火抵御更强天劫。',
   },
   {
+    id: 'vow',
+    name: '愿力',
+    glyph: '愿',
+    color: '#ffc48a',
+    baseMax: Infinity,
+    noProduction: true,
+    storageWeight: 0,
+    desc: '香客念力经《凝愿法》立成的大愿。本世积累，可投入仪轨或证心；转世、飞升与身死时清空。',
+  },
+  {
+    id: 'daoHeart',
+    name: '道心',
+    glyph: '心',
+    color: '#8be0c8',
+    baseMax: Infinity,
+    noProduction: true,
+    storageWeight: 0,
+    desc: '以愿力证得的心性，跨轮回积累。用于永久修持，不随转世、飞升或身死清空。',
+  },
+  {
     id: 'dao',
     name: '道果',
     glyph: '果',
@@ -384,7 +404,8 @@ export const VISIBLE_RESOURCES = RESOURCES.filter((r) => !r.hidden).map((r) => r
 
 /** 左栏按用途分组；混合来源的灵石、玄铁仍属于基础原料。 */
 export const RESOURCE_GROUPS = [
-  { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'faith', 'warrant'] },
+  { id: 'cultivation', name: '修行资源', resources: ['qi', 'insight', 'warrant'] },
+  { id: 'faith', name: '香火修持', resources: ['faith', 'vow', 'daoHeart'] },
   { id: 'knowledge', name: '知识典籍', resources: ['daoNote', 'daoTreatise', 'arrayDiagram'] },
   { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
   { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },

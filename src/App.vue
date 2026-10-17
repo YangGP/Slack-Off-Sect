@@ -5,6 +5,7 @@ import { fmtInt, fmtPercent, fmtRate, fmtTime } from '@/game/format'
 import { ZERO, moneyIsPositive, moneySubtract } from '@/game/decimal'
 import { idleDisciples, nextArrivalIn, resourceFlow } from '@/game/engine'
 import { CURRENT_VERSION } from '@/data/changelog'
+import { IS_DEV_PREVIEW } from '@/game/deployment'
 import { isModuleEnabled } from '@/data/modules'
 import { MODULE_UI } from '@/modules/uiRegistry'
 import ResourcePanel from './components/ResourcePanel.vue'
@@ -15,6 +16,7 @@ import CultivationPanel from './components/CultivationPanel.vue'
 import SkillPanel from './components/SkillPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
+import FaithPanel from './components/FaithPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugPanel from './components/DebugPanel.vue'
@@ -34,6 +36,7 @@ const corePanels = {
   cultivation: CultivationPanel,
   skills: SkillPanel,
   craft: CraftPanel,
+  faith: FaithPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,
@@ -65,11 +68,38 @@ const waitNext = computed(() => nextArrivalIn(state, derived))
 const status = computed(() => ui.toast?.text || '')
 /** 离线进度是有界比例（Number），取整只在脚本里做 */
 const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
-const analyticsDialogOpen = computed(() => !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
+const analyticsDialogOpen = computed(() => !ui.rulesetBlock && !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
   && (ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen))
+
+/** D7 大版本提示：导出的是旧键原始载荷，不是内存里的空白新状态。 */
+function downloadLegacy() {
+  const text = actions.exportLegacySave()
+  if (!text) return
+  const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '摸鱼宗门-旧规则存档备份.json'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 </script>
 
 <template>
+  <div v-if="ui.rulesetBlock" class="offline-loading" role="alertdialog" aria-modal="true" aria-label="规则代际提示">
+    <div class="offline-loading-content">
+      <div class="offline-loading-head">规则代际更新：需要开始新宗门</div>
+      <div class="box-body">
+        <p class="small">检测到旧规则存档（D7 之前的代际）。新规则不继承资源、建筑、弟子、研究、仙缘、道果、成就及累计统计；旧存档保留为原始备份，不会被删除或覆盖。</p>
+        <div class="btn-row">
+          <button class="btn" @click="downloadLegacy">导出旧存档</button>
+          <button class="btn primary" @click="actions.startNewGeneration()">开始新宗门</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div v-if="ui.offlineLoading" class="offline-loading" role="status" aria-live="polite">
     <div class="offline-loading-content">
       <div class="offline-loading-head">
@@ -84,7 +114,7 @@ const analyticsDialogOpen = computed(() => !ui.offlineLoading && !ui.offlineRepo
       </div>
     </div>
   </div>
-  <div class="wrap" :inert="ui.offlineLoading || analyticsDialogOpen" :aria-busy="ui.offlineLoading">
+  <div class="wrap" :inert="!!ui.rulesetBlock || ui.offlineLoading || analyticsDialogOpen" :aria-busy="ui.offlineLoading">
     <div v-if="ui.saveLoadError" class="update-notice bad" role="alert">
       <strong>本地存档读取失败，游戏与保存已暂停，原存档未被覆盖。</strong>
       <span>请在设置中导入有效备份。错误：{{ ui.saveLoadError }}</span>
@@ -92,9 +122,13 @@ const analyticsDialogOpen = computed(() => !ui.offlineLoading && !ui.offlineRepo
     <div v-if="ui.saveRecoveryNotice" class="update-notice" role="status">{{ ui.saveRecoveryNotice }}</div>
     <div class="title-line">
       摸鱼宗门<span class="sub">Slack Off Sect</span>
+      <span v-if="IS_DEV_PREVIEW" class="small warn">开发预览版 · dev1</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
     </div>
 
+    <div v-if="IS_DEV_PREVIEW" class="update-notice" role="note" aria-label="开发预览提示">
+      开发预览版使用独立存档，可能随开发调整规则；游玩数据采集已关闭。
+    </div>
     <div class="update-notice" role="note" aria-label="版本更新提示">
       <HoverTip :label="`${CURRENT_VERSION} · 更新说明`"><template #tip><p>资源产出、建筑造价与修真解锁已大幅调整。建议旧档达到转世条件后转世，重新体验新版节奏。</p></template></HoverTip>
       <button class="btn" type="button" @click="actions.setTab('realm')">前往境界</button>

@@ -5,7 +5,7 @@ import { actions, ui } from '@/game/store'
 const dialog = ref(null)
 let previousFocus = null
 const mode = computed(() => {
-  if (ui.offlineLoading || ui.offlineReport || ui.saveLoadError) return null
+  if (ui.rulesetBlock || ui.offlineLoading || ui.offlineReport || ui.saveLoadError) return null
   if (ui.analyticsConsent === 'unknown') return 'consent'
   return ui.analyticsFailureOpen ? 'failure' : null
 })

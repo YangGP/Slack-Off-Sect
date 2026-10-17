@@ -104,6 +104,10 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 - **精度边界**：40 位有效数字下 `1e30 + 1` 可保留并扣回，`1e40 + 1` 会舍回 `1e40`；`1e400` 可存取、比较与参与一次有效比例结算，但不承诺该量级的逐枚增减仍可表示。需要任意规模整数逐枚精确时另行设计，不宣称有限精度无限精确。
 - **运行时快照**统一用 `cloneRuntime`（`src/game/clone.js`）：递归复制可变对象/数组，Decimal 按不可变值共享引用。**不能**用 `structuredClone`（丢失 Decimal 原型）或 `JSON.parse(JSON.stringify(...))`（金额变成字符串）作为运行时副本；存档路径的 JSON 往返仍然有效，因为写档自带金额编码。
 
+D7 起采用新代存档：键名为 slack-off-sect.save.d7.v1，ruleset 固定 d7.1；旧键 slack-off-sect.save.v1 只作为原始备份读取，永不覆盖。启动与导入都先校验 ruleset，异代存档在 normalizeState／离线结算之前拒绝，不走「继承仙缘／道果并重开」的旧恢复分支。新代状态新增 faithProgression（本世仪轨、永久道心修持、累计道心），愿力与道心作为 resources 金额；转世／飞升／身死保留道心与永久修持，清空愿力、仪轨与一次性专属研究。同代结构冲突进入读档失败保护，不再静默重开并覆盖原档；旧结构兼容恢复只保留为显式工具入口。
+
+DEBUG 页的全局产出×10开关使用独立乘区，追加于现有全局倍率，吞吐产线按既有规则同步扩张进料；不改变口粮、仓容或单份制作收益。开关使用运行时字段 `__debugProductionBoost`，不进保存白名单，关闭调试、读档或刷新后取消；运行时离线快照保留本次会话的开关，资源来源明细单独列出该倍率。
+
 存档结构版本为 **3**，沿用原有 localStorage 键以便发现旧档。金额字段按 `src/game/moneyFields.js` 的**显式白名单**序列化为十进制字符串（允许科学计数法），控制域继续保存 JSON number；不依赖任意对象的 `toJSON`。`serialize` 返回独立的普通数据（深拷贝，不暴露状态的嵌套引用）。读档顺序固定：解析 → 结构检查 → **按字段解码/清洗金额** → 执行涉及金额算术的历史迁移 → 目标状态校验；v1/v2/无版本的有限非负 number 金额迁入 Decimal，旧值已丢失的精度不做补偿。v2 起 `disciples.members` 就是权威个体数据，版本升到 3 不会重建弟子，历史补偿也不会重复发放。未知版本或结构冲突时只继承有效的仙缘与道果并显示恢复说明；无法解析的文件保留原档并阻止自动覆盖。金额字符串限制 256 字符，拒绝空串、布尔、数组、对象与十进制以外的语法（`0x10` 之类不算存档格式）。上线前用现有导出功能保留 v2 备份；回退旧客户端需恢复该备份，v3 字符串存档不承诺由旧客户端读取。
 
 存档里另有 `analytics` 元数据（`src/game/analyticsState.js`）：本世 `run_id`、`save_id`、`run_index`、`cohort`（fresh/legacy/imported）、`data_quality`（clean/partial/debug）、四项时钟累计、首次到达表、按目标境界的尝试次数与上一世摘要。它只服务 GA4 平衡采集，不参与任何数值计算；读档由 `validateState` 归一化，旧档缺失时补默认值并由采集侧标为 partial。采集分两层：`src/analytics/collector.js` 管世生命周期、计时器、可见性与卡点采样，`src/analytics/ga.js` 按需加载，只做 gtag 注入与发送；引擎不依赖 window/gtag。

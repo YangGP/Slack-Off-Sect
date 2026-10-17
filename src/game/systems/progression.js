@@ -7,8 +7,10 @@ import { gameRandom, gameNow } from '../context'
 import { resetForRebirth } from '../state'
 import { ONE, ZERO, floorMoney, money, moneyGt, moneyMax, moneyMin } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
+import { FAITH_UPGRADE_MAP } from '@/data/faith'
 import { CONFIG } from '@/data/config'
 import { autoAssignTalentJobs } from './disciples'
+import { deathReduceFactor, regressionReduceFactor, tribulationVowBonus } from './faith'
 
 export function toggleUpkeepUpgrade(state, derived, id) {
   const up = UPGRADE_MAP[id]
@@ -22,6 +24,10 @@ export function toggleUpkeepUpgrade(state, derived, id) {
 export function research(state, derived, id) {
   const up = UPGRADE_MAP[id]
   if (!up || state.upgrades[id] || !isUpgradeUnlocked(state, up)) return false
+  if (FAITH_UPGRADE_MAP[id]) {
+    pushLog(state, '《' + up.name + '》需在香火页以愿力修持。', 'bad')
+    return false
+  }
   if (!canAfford(state, up.cost)) {
     pushLog(state, `推演《${up.name}》的材料不足。`, 'bad')
     return false
@@ -51,29 +57,46 @@ export function refineTreasure(state, derived, id) {
   return state.treasureLevels[id]
 }
 
-/** 预览与支付使用同一份报价，辅助材料不受破境折扣影响。 */
+/**
+ * 预览与支付使用同一份报价，辅助材料不受破境折扣影响。
+ *
+ * D7：后期三档的成功率上限、应劫正愿加成，以及失败后的身死／退境／保境
+ * 三个互斥条件概率都在这里一次算出，实际判定直接复用。
+ */
 export function breakthroughPreview(state, derived, options = {}) {
   const rules = BREAKTHROUGH
+  const target = state.realm + 1
   const tribulation = state.realm >= rules.tribulationRealm
-  const baseChance = realmBaseChance(state.realm + 1)
-  const availableAids = BREAKTHROUGH_AIDS[state.realm + 1] || []
+  const baseChance = realmBaseChance(target)
+  const availableAids = BREAKTHROUGH_AIDS[target] || []
   const aids = availableAids.filter(aid => options[aid.id] === true)
-  const cost = { ...(realmCost(state, derived, state.realm + 1) || {}) }
+  const cost = { ...(realmCost(state, derived, target) || {}) }
   for (const aid of aids) {
-    // 辅助材料也是金额：预览与实付共用这一份 Decimal 合计，不用原生加法。
     for (const [res, amount] of Object.entries(aid.cost)) cost[res] = (cost[res] ?? ZERO).plus(money(amount))
   }
-  const chance = Math.min(rules.chanceCap, baseChance + aids.reduce((sum, aid) => sum + aid.bonus, 0))
+  const aidBonus = aids.reduce((sum, aid) => sum + aid.bonus, 0)
+  const vowBonus = tribulationVowBonus(state, target)
+  const chanceCap = rules.lateChanceCaps[target] ?? rules.chanceCap
+  const chance = Math.min(chanceCap, baseChance + aidBonus + vowBonus)
   // 身死减免：本次选中的护道 deathReduce 之和 + 已学技艺的 tribulationSafety（被动）。
-  // 被动减免（《愿力护道》）作用于所有身死道消境界（金丹起）；预览与实际结算共用这处计算，保证同源。
   const baseDeath = state.realm >= rules.deathRealm ? (rules.deathChances[state.realm] || 0) : 0
   const deathReduce = aids.reduce((sum, aid) => sum + (aid.deathReduce || 0), 0) + Math.max(0, derived?.tribulationSafety || 0)
-  const deathOnFailure = Math.max(0, baseDeath - deathReduce)
-  const regressionOnFailure = state.realm >= rules.regressionRealm ? 1 - deathOnFailure : 0
-  const maxChance = Math.min(rules.chanceCap, baseChance + availableAids.reduce((sum, aid) => sum + aid.bonus, 0))
-  return { baseChance, chance, maxChance, availableAids, cost, tribulation, deathOnFailure, regressionOnFailure,
-    regressionRisk: (1 - chance) * regressionOnFailure, deathRisk: (1 - chance) * deathOnFailure,
-    deathKarma: floorMoney(reincarnationGain(state, derived).times('0.5')) }
+  const deathOnFailure = Math.max(0, baseDeath - deathReduce) * deathReduceFactor(state)
+  // 退境只在“存活失败”里发生：先扣除身死，再按定神守境相对降低。
+  const regressionOnFailure = state.realm >= rules.regressionRealm
+    ? Math.max(0, 1 - deathOnFailure) * regressionReduceFactor(state)
+    : 0
+  const holdOnFailure = Math.max(0, 1 - deathOnFailure - regressionOnFailure)
+  const maxChance = Math.min(chanceCap,
+    baseChance + availableAids.reduce((sum, aid) => sum + aid.bonus, 0) + vowBonus)
+  return {
+    baseChance, chance, maxChance, availableAids, cost, tribulation, vowBonus, chanceCap,
+    deathOnFailure, regressionOnFailure, holdOnFailure,
+    regressionRisk: (1 - chance) * regressionOnFailure,
+    deathRisk: (1 - chance) * deathOnFailure,
+    holdRisk: (1 - chance) * holdOnFailure,
+    deathKarma: floorMoney(reincarnationGain(state, derived).times('0.5')),
+  }
 }
 
 export function breakthrough(state, derived, options = {}, random = () => gameRandom(state)) {
@@ -87,31 +110,40 @@ export function breakthrough(state, derived, options = {}, random = () => gameRa
   }
   payCost(state, cost)
   if (random() >= preview.chance) {
-    if (preview.deathOnFailure > 0 && random() < preview.deathOnFailure) {
+    // 失败后只掷一次均匀随机数：先判身死，再判存活退境，其余为保境。
+    // 没有任何风险时不再消耗随机数，保持与旧规则相同的抽取次数。
+    const fate = preview.deathOnFailure > 0 || preview.regressionOnFailure > 0 ? random() : Infinity
+    if (preview.deathOnFailure > 0 && fate < preview.deathOnFailure) {
       const name = REALMS[state.realm].name
       resetForRebirth(state, preview.deathKarma, 'death')
       pushLog(state, `自【${name}】冲关失败，身死道消，强制重开；本次仙缘减半，获得 ${preview.deathKarma} 点。`, 'bad')
-    } else if (preview.tribulation) {
-      const lost = []
-      for (const res of Object.keys(next.cost)) {
-        if (res === 'insight' || res === 'qi') continue
-        // 渡劫失败按库存比例没收：比例是有界 Number，库存与损失是金额。
-        const have = state.resources[res] ?? ZERO
-        const amount = moneyMin(have, floorMoney(have.times(BREAKTHROUGH.stockLoss)))
-        if (moneyGt(amount, ZERO)) {
-          payCost(state, { [res]: amount })
-          lost.push(`${RESOURCE_MAP[res].name} ${amount}`)
-        }
-      }
-      const injury = { id: 'breakthroughInjury', name: '渡劫调养', mult: -BREAKTHROUGH.productionLoss,
-        target: null, until: gameNow(state) + BREAKTHROUGH.recoverySeconds * 1000 }
-      state.buffs = state.buffs.filter(b => b.id !== injury.id)
-      state.buffs.push(injury)
-      if (preview.regressionOnFailure > 0) state.realm -= 1
-      const realmOutcome = preview.regressionOnFailure > 0 ? `退回【${REALMS[state.realm].name}】` : '境界不变'
-      pushLog(state, `冲击【${next.name}】失败，材料不退回，${realmOutcome}；全局产出降低5%，持续120秒${lost.length ? `；额外损失 ${lost.join('、')}` : '；无额外库存损失'}。`, 'bad')
     } else {
-      pushLog(state, `冲击【${next.name}】失败，材料不退回，境界不变，无额外惩罚。`, 'bad')
+      const lost = []
+      if (preview.tribulation) {
+        for (const res of Object.keys(next.cost)) {
+          if (res === 'insight' || res === 'qi') continue
+          // 渡劫失败按库存比例没收：比例是有界 Number，库存与损失是金额。
+          const have = state.resources[res] ?? ZERO
+          const amount = moneyMin(have, floorMoney(have.times(BREAKTHROUGH.stockLoss)))
+          if (moneyGt(amount, ZERO)) {
+            payCost(state, { [res]: amount })
+            lost.push(`${RESOURCE_MAP[res].name} ${amount}`)
+          }
+        }
+        const injury = { id: 'breakthroughInjury', name: '渡劫调养', mult: -BREAKTHROUGH.productionLoss,
+          target: null, until: gameNow(state) + BREAKTHROUGH.recoverySeconds * 1000 }
+        state.buffs = state.buffs.filter(b => b.id !== injury.id)
+        state.buffs.push(injury)
+      }
+      const regress = preview.regressionOnFailure > 0 &&
+        fate < preview.deathOnFailure + preview.regressionOnFailure
+      if (regress) state.realm -= 1
+      const realmOutcome = regress ? `退回【${REALMS[state.realm].name}】` : '境界不变'
+      if (preview.tribulation) {
+        pushLog(state, `冲击【${next.name}】失败，材料不退回，${realmOutcome}；全局产出降低5%，持续120秒${lost.length ? `；额外损失 ${lost.join('、')}` : '；无额外库存损失'}。`, 'bad')
+      } else {
+        pushLog(state, `冲击【${next.name}】失败，材料不退回，${realmOutcome}，无额外惩罚。`, 'bad')
+      }
     }
     recompute(state, derived)
     return false
@@ -128,13 +160,7 @@ export function lifeInsightOf(state) {
   return moneyMax(ZERO, state.stats?.lifeInsight ?? ZERO)
 }
 
-/**
- * 飞升的唯一条件：**渡劫期**。
- *
- * 转世不是门槛 —— 它是达成飞升的**正常游玩途径**：每一世带着仙缘重来、
- * 跑得更快，几世之后冲渡劫期最省力。但愿意一世硬磨到底的玩家，
- * 同样可以飞升（见 CONFIG.ASCEND_TURNS_REFERENCE 与 docs/DESIGN.md §8.2）。
- */
+/** 飞升的唯一条件：**渡劫期**。 */
 export function canAscend(state) {
   return state.realm >= ASCEND_REALM_INDEX
 }
@@ -152,10 +178,6 @@ export function canReincarnate(state) {
 /**
  * 仙缘结算公式（转世与飞升共用）：
  *   sqrt(本世累计灵机 ÷ 2000) × (1 + 境界 × 0.3) × (1 + 飞升加成)
- * 于是「越晚结算越值钱」是自动的：化神期约 22 点、渡劫期约 197 点。
- *
- * 灵机与仙缘都是金额：开方与连乘全程 Decimal，最后向下取整（收益取整规则）。
- * @returns {Decimal} 本次可得的仙缘点数
  */
 export function settleKarma(state, derived, allowed) {
   const insight = moneyMax(ZERO, state.stats?.lifeInsight ?? ZERO)

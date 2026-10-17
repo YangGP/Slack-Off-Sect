@@ -1,7 +1,7 @@
 import { createInitialState, normalizeState, resetForReincarnation } from '../../src/game/state.js'
 import * as E from '../engine-fixture.mjs'
 import { RESOURCE_GROUPS, VISIBLE_RESOURCES } from '../../src/data/resources.js'
-import { exportSave, parseImport } from '../../src/game/save.js'
+import { exportSave, parseImport, serialize, createSaveRepository, SAVE_KEY, LEGACY_SAVE_KEY } from '../../src/game/save.js'
 import { newGame } from './fixtures.mjs'
 
 export function saveSerialization({ ok, close, section }) {
@@ -41,5 +41,40 @@ export function saveSerialization({ ok, close, section }) {
       threw = true
     }
     ok('非法存档会抛错', threw)
+  }
+  {
+    const state = createInitialState()
+    state.resources.daoHeart = E.money('0.8')
+    state.faithProgression.cultivation.realmDevotion = 3
+    state.faithProgression.totalDaoHeart = E.money('7.8')
+    state.__debugProductionBoost = true
+    const payload = serialize(state)
+    const restored = parseImport(JSON.stringify(payload))
+    ok('道心余额、累计与永久等级保存恢复', restored.resources.daoHeart.eq('0.8') &&
+      restored.faithProgression.totalDaoHeart.eq('7.8') && restored.faithProgression.cultivation.realmDevotion === 3)
+    ok('DEBUG产出开关不进入存档', !('__debugProductionBoost' in payload) && restored.__debugProductionBoost === undefined)
+    const missing = { ...payload }
+    delete missing.faithProgression
+    ok('同代缺失香火切片补默认值', parseImport(JSON.stringify(missing)).faithProgression.cultivation.realmDevotion === 0)
+    for (const conflict of [
+      { faithProgression: [] },
+      { faithProgression: { ...payload.faithProgression, cultivation: [] } },
+      { faithProgression: { ...payload.faithProgression, rituals: 'broken' } },
+      { resources: [] }, { version: 999 }, { ruleset: 'legacy' },
+    ]) {
+      const raw = JSON.stringify({ ...payload, ...conflict })
+      const records = new Map([[SAVE_KEY, raw], [LEGACY_SAVE_KEY, 'original legacy payload']])
+      const repo = createSaveRepository({ storage: {
+        getItem: key => records.get(key) ?? null,
+        setItem: (key, value) => records.set(key, value),
+      }, warn: () => {} })
+      const label = JSON.stringify(conflict)
+      ok('损坏或异代档阻止加载与写回：' + label, repo.load() === null && !!repo.loadError &&
+        repo.save(state) === false && records.get(SAVE_KEY) === raw && records.get(LEGACY_SAVE_KEY) === 'original legacy payload')
+      let rejected = false
+      try { parseImport(raw) } catch { rejected = true }
+      ok('损坏或异代导入拒绝且不改当前局：' + label, rejected && state.resources.daoHeart.eq('0.8') &&
+        state.faithProgression.cultivation.realmDevotion === 3)
+    }
   }
 }

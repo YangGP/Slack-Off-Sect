@@ -144,7 +144,7 @@ assert.deepEqual(report.warehouse.nextCost, inspectSave(JSON.stringify(priced)).
 priced.upgrades.masonryArt = true
 assert.equal(JSON.stringify(priced), text)
 assert.throws(() => inspectSave('{invalid'))
-assert.throws(() => inspectSave(JSON.stringify({ ...priced, version: 999 })), /无法完整兼容/)
+assert.throws(() => inspectSave(JSON.stringify({ ...priced, version: 999 })), /存档版本无法兼容/)
 
 // 对照去掉护道减死亡率的情况，防止报告只算成功率而漏算保命材料。
 const aided = modelBreakthroughRisk('aided')
