@@ -58,7 +58,32 @@ export const ui = reactive({
    *   lack —— 其中当前不够的那些（左栏会额外标红）
    */
   highlight: { need: [], lack: [] },
+  /** 事件提示：会话 UI，不写存档。 */
+  eventNotice: null,
+  eventModal: null,
+  changelogOpen: false,
+  eventPromptEpoch: 0,
+  eventPromptRevision: 0,
 })
+
+/** 导入、重开、转世等换局时清掉旧事件提示，避免旧按钮操作新局。 */
+function resetEventPrompt() {
+  ui.eventNotice = null
+  ui.eventModal = null
+  ui.eventPromptEpoch += 1
+}
+
+// 离线边界仅丢弃普通通知和旧交互资格，保留已提示选择的会话去重。
+function discardEventNotice() {
+  ui.eventNotice = null
+  ui.eventPromptRevision += 1
+}
+
+/** 引擎只在真实在线实例上回调；离线副本不会进入这里。 */
+function handleGameEvent(payload) {
+  // 选择事件以 state.pendingChoice 为权威；普通提示只保留最近一条。
+  if (payload.kind !== 'choice') ui.eventNotice = { ...payload, receivedAt: Date.now() }
+}
 
 // 同意选择属于当前浏览器，导入游戏存档或重开不能代替玩家授权。
 function applyAnalyticsConsent() {
@@ -83,6 +108,7 @@ function handleAnalyticsStatus({ status, reason }) {
 const game = createGame({ state, derived,
   // 运行时快照必须保留 Decimal 金额：JSON 往返会把金额变成字符串，structuredClone 会丢掉原型。
   snapshotState: value => cloneRuntime(toRaw(value)),
+  onEvent: handleGameEvent,
 })
 const repository = createSaveRepository()
 const runtime = createRuntime({ game, repository,
@@ -208,6 +234,7 @@ function applyOfflineProgress() {
 }
 
 async function withOfflineLoading(run) {
+  discardEventNotice()
   const controller = new AbortController()
   offlineController = controller
   ui.offlineLoading = true
@@ -232,6 +259,7 @@ async function withOfflineLoading(run) {
     if (error.name !== 'AbortError') throw error
   } finally {
     if (offlineController === controller) {
+      discardEventNotice()
       offlineController = null
       ui.offlineLoading = false
     }
@@ -599,6 +627,7 @@ export const actions = {
    * 与飞升的分工见 docs/DESIGN.md「转世与飞升」。
    */
   reincarnate() {
+    resetEventPrompt()
     if (!E.canReincarnate(state)) {
       toast('尚未到化神期，无法转世', 'bad')
       return false
@@ -617,6 +646,7 @@ export const actions = {
     return true
   },
   ascend() {
+    resetEventPrompt()
     if (!E.canAscend(state)) {
       toast('尚未到渡劫期，无法飞升', 'bad')
       return false
@@ -635,6 +665,20 @@ export const actions = {
     saveNow()
     toast(`飞升成功，获得仙缘 ${fmtInt(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
     return true
+  },
+  /** 事件弹窗：打开/关闭只影响会话 UI，不改变待决事件。 */
+  openEventModal(payload) {
+    const openedAt = Date.now()
+    ui.eventModal = { ...payload, openedAt, closeAt: openedAt + 60000 }
+  },
+  closeEventModal() {
+    ui.eventModal = null
+  },
+  clearEventPrompt() {
+    resetEventPrompt()
+  },
+  setChangelogOpen(open) {
+    ui.changelogOpen = !!open
   },
   /** 调试/彩蛋：立刻触发一次奇遇 */
   resolveChoice(index) {
@@ -666,6 +710,7 @@ export const actions = {
   },
   importText(text) {
     const next = parseImport(text)
+    resetEventPrompt()
     cancelOfflineProgress()
     ui.saveRecoveryNotice = next.__recoveryNotice || ''
     analytics.beforeStateReplace()
@@ -689,6 +734,7 @@ export const actions = {
   },
   resetGame() {
     if (ui.rulesetBlock) return false
+    resetEventPrompt()
     if (!repository.clear()) return false
     cancelOfflineProgress()
     const recovering = !!ui.saveLoadError
@@ -713,6 +759,7 @@ export const actions = {
   /** 确认开始新代：写真正空白的新代档，旧键保留为原始备份。 */
   startNewGeneration() {
     if (!ui.rulesetBlock) return false
+    resetEventPrompt()
     game.reset()
     ui.rulesetBlock = null
     applyAnalyticsConsent()

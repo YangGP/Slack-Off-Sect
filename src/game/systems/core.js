@@ -413,7 +413,7 @@ export function calendarAt(totalDays) {
   }
 }
 
-/** 弟子前来的间隔（秒）。有空房时每过这么久就来一名，不用手动招募。
+/** 弟子前来的间隔（秒）。默认自动模式下，有空房时每过这么久就来一名；主动礼聘模式另行处理。
  * 《广开山门》可以缩短这个间隔。
  */
 export function arrivalInterval(derived) {

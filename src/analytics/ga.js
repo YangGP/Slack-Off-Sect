@@ -20,6 +20,8 @@ let loadTimer = null
 let readyPoll = null
 let configured = false
 let onStatus = null
+// 每次完整页面加载、每个目标只记一次，不随游戏读档、页签或采集开关重置。
+const pageViewsSent = new Set()
 
 function notifyStatus(status) {
   try { onStatus?.(status) } catch {}
@@ -42,13 +44,30 @@ function clearWaiters() {
 
 /** 目标衡量 ID 只配置一次，避免重复 page_view；所有路径都走这里。 */
 function ensureConfig() {
-  if (configured || !browserReady() || !gtagReady()) return
+  if (!enabled || !measurementId || configured || !browserReady() || !gtagReady()) return
   window.gtag('config', measurementId, { send_page_view: false })
   configured = true
 }
 
+function sendPageView() {
+  if (!enabled || loadState !== 'ready' || !browserReady() || !gtagReady() ||
+      !measurementId || pageViewsSent.has(measurementId)) return
+  ensureConfig()
+  const params = {
+    send_to: measurementId,
+    page_title: document.title,
+    // 不把查询参数或片段中的存档、调试参数等带入访问记录。
+    page_location: window.location.origin + window.location.pathname,
+  }
+  if (debugMode) params.debug_mode = true
+  window.gtag('event', 'page_view', params)
+  // 只代表已交给标签，不表示GA4服务端确认收件。
+  pageViewsSent.add(measurementId)
+}
+
 function flush() {
   if (!enabled || loadState !== 'ready') return
+  sendPageView()
   while (queue.length) {
     const item = queue.shift()
     window.gtag('event', item.name, item.params)
@@ -92,7 +111,7 @@ function waitForExistingTag(existing) {
 
 function loadTag() {
   if (!browserReady()) return false
-  if (loadState === 'ready') return true
+  if (loadState === 'ready') { flush(); return true }
   if (loadState === 'failed') return false
   // 已在等待：保持 loading，不因“又看到函数/脚本”跳到 ready。
   if (loadState === 'loading') return true
@@ -159,6 +178,7 @@ export function setTransportEnabled(on) {
   enabled = true
   notifyStatus(loadState === 'ready' ? 'ready' : 'loading')
   if (loadState === 'idle') loadTag()
+  else if (loadState === 'ready') flush()
 }
 
 export function setTransportDebug(on) {
@@ -179,6 +199,7 @@ export function sendEvent(name, params) {
   if (loadState === 'idle') loadTag()
   if (loadState === 'ready' && gtagReady()) {
     ensureConfig()
+    sendPageView()
     window.gtag('event', name, payload)
     return true
   }

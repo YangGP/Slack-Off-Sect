@@ -1,11 +1,13 @@
 <script setup>
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { CHANGELOG, CURRENT_VERSION } from '@/data/changelog'
+import { actions } from '@/game/store'
 
 const open = ref(false)
 const entry = ref(null)
 const closeButton = ref(null)
 const body = ref(null)
+watch(open, (value) => actions.setChangelogOpen(value))
 
 function cycleFocus() {
   if (document.activeElement === closeButton.value) body.value?.focus()

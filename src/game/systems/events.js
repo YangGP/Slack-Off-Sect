@@ -1,5 +1,5 @@
-import { isEventInRealm, EVENTS, EVENT_MAP } from '@/data/events'
-import { gameNow, gameRandom } from '../context'
+import { isEventInRealm, EVENTS, EVENT_MAP, getEventLevel } from '@/data/events'
+import { gameNow, gameRandom, notifyGameEvent } from '../context'
 import { CRAFTS, craftTime, craftCost } from '@/data/crafts'
 import { isCraftUnlocked, canAfford, clamp, addResource, pushLog } from './core'
 import { RECIPE_STATIONS } from '@/data/industry'
@@ -197,7 +197,7 @@ export function applyEventBody(state, derived, event, text, kind, source) {
 /**
  * 触发一个事件。
  * - 自然环境类 / 突发事件类：立刻结算（applyEventEffects）
- * - 选择类：挂成"待决"（state.pendingChoice），等玩家在纪事面板里挑一个，再 resolveChoice
+ * - 选择类：挂成"待决"（state.pendingChoice），由纪事面板或事件弹窗（真实操作后打开）提交，再 resolveChoice
  */
 export function fireEvent(state, derived, ev = null) {
   const event = ev || pickEvent(state)
@@ -218,10 +218,22 @@ export function fireEvent(state, derived, ev = null) {
       state.pendingChoice.herbLoss = moneyClamp(eventResourceRate(state, derived, 'herb').times(20), 20, 80)
     }
     pushLog(state, `${event.text}【待你决断】`, 'event', event)
+    notifyGameEvent(state, {
+      kind: 'choice', eventId: event.id, level: getEventLevel(event).id,
+      instanceId: `choice:${event.id}:${state.pendingChoice.at}`, at: state.pendingChoice.at,
+    })
     return event
   }
 
+  const beforeSeq = state.logSeq || 0
   applyEventEffects(state, derived, event, event.text, event.kind, event)
+  // 只取本次结算新增的纪事（id > beforeSeq），同名旧事件不会复用旧文本。
+  const settled = state.log.filter(item => item.id > beforeSeq && item.eventId === event.id).sort((a, b) => a.id - b.id)[0]
+  notifyGameEvent(state, {
+    kind: 'notice', eventId: event.id, level: getEventLevel(event).id,
+    title: event.name, text: event.text, summary: settled?.text || event.text,
+    instanceId: `notice:${event.id}:${state.stats.eventsSeen}`, at: gameNow(state),
+  })
   return event
 }
 

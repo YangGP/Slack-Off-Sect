@@ -33,6 +33,28 @@ export async function checkMount(context) {
   ok('关闭失败弹窗后不阻挡游戏且不加载统计标签', !ui.analyticsFailureOpen
     && !window.document.querySelector('[aria-labelledby="analytics-dialog-title"]')
     && !window.document.querySelector('script[src*="googletagmanager.com"]'))
+  {
+    const previousPending = state.pendingChoice
+    const at = Date.now()
+    state.pendingChoice = { id: 'beastThreat', at, deadline: at + 300000 }
+    await new Promise(resolve => setTimeout(resolve, 0))
+    context.actions.openEventModal({ kind: 'choice', eventId: 'beastThreat', at, instanceId: 'focus-regression' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const eventDialog = window.document.querySelector('[aria-labelledby="event-dialog-title"]')
+    const closeButton = eventDialog?.querySelector('.dialog-foot button')
+    ok('事件首选项材料不足时仍将焦点放在可用关闭按钮', eventDialog?.querySelector('button')?.disabled
+      && !!closeButton && window.document.activeElement === closeButton)
+    closeButton?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    ok('键盘关闭事件弹窗保留待决选择', !ui.eventModal && state.pendingChoice?.at === at)
+    context.actions.openEventModal({ kind: 'choice', eventId: 'beastThreat', at, instanceId: 'blocked-regression' })
+    ui.offlineLoading = true
+    await new Promise(resolve => setTimeout(resolve, 0))
+    ok('高优先级离线状态立即收起事件框且不抢回焦点', !ui.eventModal
+      && !window.document.querySelector('[aria-labelledby="event-dialog-title"]'))
+    ui.offlineLoading = false
+    state.pendingChoice = previousPending
+  }
   const app = window.document.getElementById('app')
   const text = () => app.textContent || ''
   const html = () => app.innerHTML || ''
@@ -61,7 +83,7 @@ export async function checkMount(context) {
     const label = notice?.querySelector('.tip-label')
     label?.focus()
     await new Promise(r => setTimeout(r, 180))
-    ok('说明标题支持键盘聚焦，完整建议只出现在提示内', window.document.querySelector('[role="tooltip"]')?.textContent.includes('建议旧档达到转世条件后转世') && !text().includes('建议旧档'))
+    ok('说明标题支持键盘聚焦，完整建议只出现在提示内', window.document.querySelector('[role="tooltip"]')?.textContent.includes('旧代存档需先导出备份并确认开始新宗门') && !text().includes('旧代存档需先导出备份并确认开始新宗门'))
     const ruleTip = window.document.querySelector('[role="tooltip"]')
     ok('规则提示使用统一正文与标题外壳', ruleTip?.querySelectorAll('.tip-body').length === 1 && ruleTip.querySelectorAll('.tip-title').length === 1)
     ok('提示触发器关联可见的提示内容', label?.closest('.tip-trigger').getAttribute('aria-describedby') === ruleTip?.id && !!ruleTip?.id)
@@ -77,7 +99,7 @@ export async function checkMount(context) {
     await new Promise(r => setTimeout(r, 50))
   }
   ok('资源栏渲染出来了', text().includes('灵气') && text().includes('灵木'))
-  ok('顶栏状态行带弟子与灵气账目', /弟子 \d+\/\d+/.test(text()) && text().includes('净额'))
+  ok('顶栏状态行带弟子与产出摘要', /弟子 \d+\/\d+/.test(text()) && text().includes('全局') && text().includes('挂机'))
   ok('顶栏宜居度使用点数而非士气百分比', /宜居度\s*-?\d+(?![\d.%])/.test(window.document.querySelector('.stat-line')?.textContent || '') && !window.document.querySelector('.stat-line')?.textContent.includes('士气'))
   ok(
     '宗门概况通栏已移除',

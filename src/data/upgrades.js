@@ -33,7 +33,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: [] },
     note: '开启参悟：观气法、引气诀',
     effectDesc: '因此懂得气脉的来路，才能继续观气、练习吐纳。',
-    needs: { building: { id: 'library', count: 2 } },
+    needs: { building: { id: 'library', count: 1 } },
   },
   {
     id: 'qiGazing',
@@ -133,7 +133,7 @@ const CORE_CULTIVATION = [
     desc: '观星知势，方能布阵。解锁护山大阵。',
     effectDesc: '因此布得起护山大阵，天灾来时损失大减。',
     effects: { unlockBuildings: ['mountainArray'] },
-    needs: { upgrades: ['astrologyArt'], building: { id: 'academy', count: 2 } },
+    needs: { upgrades: ['astrologyArt'], building: { id: 'academy', count: 1 } },
   },
   {
     id: 'arrayMastery',
@@ -143,7 +143,7 @@ const CORE_CULTIVATION = [
     desc: '一草一木皆可为阵。解锁锁灵阵。',
     effectDesc: '因此锁得住一山之灵：锁灵阵把灵气囤得更紧。',
     effects: { unlockBuildings: ['spiritLockArray'] },
-    needs: { upgrades: ['arrayBasics'], building: { id: 'mountainArray', count: 3 } },
+    needs: { upgrades: ['arrayBasics'], building: { id: 'mountainArray', count: 1 } },
   },
 
   // ---------- Ⅳ 拆解：灵气由什么构成 ----------
@@ -222,8 +222,8 @@ const CORE_CULTIVATION = [
     name: '因果通感',
     glyph: '感',
     cost: { insight: 160000, stone: 40000, pill: 100 },
-    desc: '看清因果的人，飞升时能多带走三成仙缘。',
-    effectDesc: '因此看得见因果：下一次飞升带走的仙缘更多。',
+    desc: '看清因果的人，转世与飞升时都能多带走三成仙缘，并让仙缘乘区获得固定加成。',
+    effectDesc: '因此看得见因果：转世／飞升仙缘 +30%；仙缘乘区固定 +0.5%（不随仙缘点数缩放）。',
     effects: { ascendBonus: 0.3, karmaRatio: 0.005 },
     needs: { upgrades: ['greatVehicleSeal', 'ancestorArt'] },
   },
@@ -253,7 +253,7 @@ const CORE_CULTIVATION = [
       spiritTreasure: 2,
     },
     desc: '把历世的因果摊开对照，才知道哪些是债、哪些是缘。',
-    effectDesc: '因此开得出因果池，也看得清下一次飞升能带走多少仙缘。',
+    effectDesc: '因此开得出因果池，也看得清下一次转世／飞升能带走多少仙缘。',
     effects: { unlockBuildings: ['karmaPool'] },
     note: '解锁建筑：因果池',
     needs: { upgrades: ['karmaSense', 'towerPlan'] },
@@ -288,7 +288,7 @@ const CORE_CULTIVATION = [
     glyph: '乘',
     cost: { insight: 140000, artifact: 60, talisman: 120, plank: 40, spiritTreasure: 1 },
     desc: '统合历世修持的经验，凝成一道可辨识、可传承的心印结构。',
-    effectDesc: '因此参悟得出《大乘心经》—— 全局产出再上一阶。',
+    effectDesc: '因此参悟得出《大乘心经》：灵机与灵草产出提升，仙草、九转丹与灵宝制作同步增强。',
     effects: { unlockBuildings: [] },
     note: '开启参悟：大乘心经',
     needs: { upgrades: ['mindSeal'] },
@@ -328,7 +328,7 @@ const CORE_CULTIVATION = [
     effects: { craftBonusByResource: { plank: 0.05 } },
     // 它是木料链的第二环：伐木场出原木 → 器械解板 → 木板才是百工坊的料。
     // 所以它**不能**要百工坊，也不能要木板（否则与"百工坊用木板下料"闭环）。
-    needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 2 }, { id: 'ironFurnace', count: 1 }] },
+    needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 1 }, { id: 'ironFurnace', count: 1 }] },
   },
 
   // ---------- 金铁族 ----------
@@ -494,7 +494,7 @@ const CORE_CULTIVATION = [
     desc: '识得药性并建成药圃后，研究如何以丹火提炼灵草，方能开炉制丹。解锁炼丹房与「采药制丹」。',
     effectDesc: '因此灵草可以入炉，丹药有了出处。',
     effects: { unlockBuildings: ['alchemyRoom'] },
-    needs: { upgrades: ['herbStudy'], buildings: [{ id: 'library', count: 2 }, { id: 'herbGarden', count: 1 }] },
+    needs: { upgrades: ['herbStudy'], buildings: [{ id: 'library', count: 1 }, { id: 'herbGarden', count: 1 }] },
   },
   // 自技艺页迁入（工艺）：丹道族自有工艺环，承接「凝元炼丹」与丹鼎（见 docs/MATERIAL-RESEARCH.md §1.1/§1.3）。
   {
@@ -507,7 +507,7 @@ const CORE_CULTIVATION = [
     // 解锁建筑仅为注释：建筑解锁实际看其自身 needs（见 buildings.js 的 pillFurnace）。
     effects: { unlockBuildings: ['pillFurnace'] },
     note: '解锁配方：凝元炼丹；解锁建筑：丹鼎',
-    needs: { upgrades: ['alchemyArt', 'alchemyFire'], building: { id: 'alchemyRoom', count: 2 } },
+    needs: { upgrades: ['alchemyArt', 'alchemyFire'], building: { id: 'alchemyRoom', count: 1 } },
   },
 
   // ---------- 香火族 ----------
@@ -528,12 +528,11 @@ const CORE_CULTIVATION = [
     glyph: '香',
     cost: { insight: 2800, wood: 800, faith: 200 },
     desc: '香火不是凭空来的：愿力聚于一处，才会结成气数。',
-    effectDesc: '因此立得起香火鼎，把念力一炉炉炼成香火。',
+    effectDesc: '因此立得起香火鼎：承接香火仓储并提供宜居度，香火产出由香火页的聚香法等条目负责。',
     effects: { unlockBuildings: ['incenseCauldron'] },
     note: '解锁建筑：香火鼎',
-    // 原需香火 200，但基础上限仅 100、扩容建筑（香火鼎）又由本节点解锁 → 显式补「山门 ≥ 2」
-    // （100 + 80×2 = 260 ≥ 200），消除隐含前置（见 docs/MATERIAL-RESEARCH.md §2.4）。
-    needs: { upgrades: ['incenseVow', 'preachArt'], building: { id: 'gate', count: 2 } },
+    // 建筑前置只需一座；当前山门每座提供香火仓容240，足以承接本研究费用。
+    needs: { upgrades: ['incenseVow', 'preachArt'], building: { id: 'gate', count: 1 } },
   },
   // 香火族工艺层：承接渡劫护道机制（见 docs/MATERIAL-RESEARCH.md §2.3），故进修真族而非技艺页。
   {
@@ -610,7 +609,7 @@ const CORE_CULTIVATION = [
     desc: '识别弟子的岗位专长，依其所长安排分工。学会后自动将有岗位专长的弟子调到对应已开放岗位，弟子页可暂停。',
     effectDesc: '新弟子与新领悟的岗位专长也自动匹配；未开放的岗位等待解锁，出征弟子归队后再调配，无岗位专长者保持分工。',
     effects: { autoTalentJobs: true },
-    needs: { upgrades: ['qiOrigin', 'homePlanning'], building: { id: 'library', count: 2 } },
+    needs: { upgrades: ['qiOrigin', 'homePlanning'], building: { id: 'library', count: 1 } },
   },
   {
     id: 'preachArt',
@@ -622,7 +621,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['academy'] },
     // 符箓入门经炼器术已含木作器械；讲经堂造价又含阵基（要求木作器械与符箓入门）。
     // 直接列《木作器械》属跨线重复，去掉后由符阵链与建筑造价卡进度。
-    needs: { building: { id: 'library', count: 3 }, upgrades: ['talismanArt', 'arrayAssembly'] },
+    needs: { building: { id: 'library', count: 1 }, upgrades: ['talismanArt', 'arrayAssembly'] },
   },
   {
     id: 'calmMind',
@@ -630,11 +629,11 @@ const CORE_CULTIVATION = [
     glyph: '静',
     cost: { insight: 6000, herb: 200 },
     desc: '心静则灵气自聚。解锁静心池。',
-    effectDesc: '因此弟子坐得住：静心池让心神与仓储都稳下来。',
+    effectDesc: '因此弟子坐得住：静心池提供宜居度，让弟子心神更稳。',
     effects: { unlockBuildings: ['meditationPool'] },
     // 静心池造价含阵基与仙草；符箓入门经炼器术已含木作器械，仙草要求凝液与育草产业。
     // 去掉直接列出的跨线《木作器械》，由符阵链与建筑造价卡进度。
-    needs: { building: { id: 'herbGarden', count: 3 }, upgrades: ['talismanArt'] },
+    needs: { building: { id: 'herbGarden', count: 1 }, upgrades: ['talismanArt'] },
   },
   {
     id: 'recruitDrive',
@@ -644,7 +643,7 @@ const CORE_CULTIVATION = [
     desc: '下山贴榜、沿途施粥。弟子前来的间隔缩短 30%。',
     effectDesc: '因此山门名声在外，愿意上山的弟子更勤。',
     effects: { arrivalBonus: 0.3 },
-    needs: { upgrades: ['incenseStudy'], building: { id: 'gate', count: 3 } },
+    needs: { upgrades: ['incenseStudy'], building: { id: 'gate', count: 1 } },
   },
   {
     id: 'seekTalents',
@@ -695,9 +694,9 @@ const CORE_CULTIVATION = [
     glyph: '泽',
     cost: { insight: 30000, stone: 900, talisman: 8 },
     desc: '翻出祖师手札，字里行间都是捷径。解锁祖师殿。',
-    effectDesc: '因此立得起祖师殿，香火更盛、人心更齐。',
+    effectDesc: '因此立得起祖师殿：提升灵机产出与宜居度；不直接增加香火产出。',
     effects: { unlockBuildings: ['ancestorHall'] },
-    needs: { upgrades: ['incenseStudy'], building: { id: 'incenseCauldron', count: 2 } },
+    needs: { upgrades: ['incenseStudy'], building: { id: 'incenseCauldron', count: 1 } },
   },
   {
     id: 'grottoArt',
@@ -707,7 +706,7 @@ const CORE_CULTIVATION = [
     desc: '以空间节点锚定与内部折叠，在山上开一方小世界。解锁洞天与洞府。',
     effectDesc: '因此开得出洞天与洞府：一方自成一界，装得下也住得下。',
     effects: { unlockBuildings: ['grotto', 'caveDwelling'] },
-    needs: { upgrades: ['buildingCode', 'capacityRune'], building: { id: 'depot', count: 2 } },
+    needs: { upgrades: ['buildingCode', 'capacityRune'], building: { id: 'depot', count: 1 } },
   },
   {
     id: 'longBreath',
@@ -809,7 +808,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 45, stone: 60, wood: 400 },
     desc: '阵纹怎么走更省灵气，阵徒心里最有数。掌握后可营造聚灵大阵。',
     effects: { ratio: { qi: 0.1 }, jobRatio: { farmer: 0.25 } },
-    needs: { upgrades: ['qiGazing', 'qiArt'], building: { id: 'spiritField', count: 5 } },
+    needs: { upgrades: ['qiGazing', 'qiArt'], building: { id: 'spiritField', count: 1 } },
   },
   {
     id: 'quarryArt',
@@ -818,7 +817,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 30, rock: 120, wood: 220 },
     desc: '顺纹下凿、量山取料，整块石料运下山也不碎一角。矿石产出 +30%。',
     effects: { ratio: { rock: 0.3 } },
-    needs: { upgrades: ['qiOrigin'], building: { id: 'quarry', count: 2 } },
+    needs: { upgrades: ['qiOrigin'], building: { id: 'quarry', count: 1 } },
   },
   {
     id: 'homePlanning',
@@ -827,7 +826,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 25, wood: 120, rock: 40 },
     desc: '按入住人数布置通风、采光与排水，掌握后可营造木屋与清风小院。居所每个已入住名额提供1点宜居度，空房不计；超出居所容量的弟子不受益。',
     effects: { habitabilityPerHousing: 1 },
-    needs: { upgrades: ['qiOrigin'], buildings: [{ id: 'hut', count: 2 }, { id: 'library', count: 1 }, { id: 'quarry', count: 1 }] },
+    needs: { upgrades: ['qiOrigin'], buildings: [{ id: 'hut', count: 1 }, { id: 'library', count: 1 }, { id: 'quarry', count: 1 }] },
   },
   {
     id: 'waterSanitation',

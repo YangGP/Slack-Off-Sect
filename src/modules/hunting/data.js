@@ -91,7 +91,7 @@ export const HUNT_JOBS = [
     id: 'huntPlanner',
     name: '执符使',
     glyph: '符',
-    desc: '在营房备弓弩、刻符牌，为宗门开具差遣凭信：入山猎妖、拜访邻宗都要用它。不产兽材——兽材由出征任务带回。',
+    desc: '在执符堂刻符牌、开凭信：入山猎妖、拜访邻宗都要用它。不产兽材——兽材由出征任务带回。',
     resource: 'warrant',
     base: 0.2,
     needs: { building: { id: 'huntingCamp', count: 1 } },
@@ -99,16 +99,16 @@ export const HUNT_JOBS = [
   },
 ]
 
-/** 建筑：猎杀营地、暖裘居室 */
+/** 建筑：执符堂、暖裘居室 */
 export const HUNT_BUILDINGS = [
   {
     id: 'huntingCamp',
-    name: '猎杀营地',
-    glyph: '猎',
+    name: '执符堂',
+    glyph: '符',
     group: 'hunt',
     cost: { wood: 500, rock: 200, stone: 60 },
     priceRatio: 1.35,
-    desc: '扎在近山处的营寨，弓箭、缚索与兽栏一应俱全。执符使在此开符备猎，也是出征的起点。',
+    desc: '临山而设的堂口，执符使在此开具宗门差遣凭信，入山猎妖与邻宗互市都从这里起行。',
     // 信符仓容单独配置，不套通用仓储加成；兽皮兽骨按普通材料计容。
     effects: { storage: { warrant: 300, beastHide: 200, beastBone: 150 } },
     needs: { realm: 3, upgrades: ['wildHunting'] },
@@ -133,7 +133,7 @@ export const HUNT_BUILDINGS = [
 export const HUNT_BUILDING_ORDER_ANCHOR = 'ancestorHall'
 
 /** 建筑分组：猎杀 */
-export const HUNT_BUILDING_GROUP = { id: 'hunt', name: '猎杀', hint: '营地、信符与兽材' }
+export const HUNT_BUILDING_GROUP = { id: 'hunt', name: '猎杀', hint: '执符堂、信符与兽材' }
 
 /** 配方：兽骨炼器 */
 export const HUNT_CRAFTS = [
@@ -162,9 +162,9 @@ export const HUNT_UPGRADES = [
     name: '山野猎法',
     glyph: '猎',
     cost: { insight: 300, wood: 200, stone: 30 },
-    desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建猎杀营地，并布置暖裘居室；营地开出的信符也供邻宗互市使用。',
+    desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建执符堂，并布置暖裘居室；执符堂开出的信符也供邻宗互市使用。',
     effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
-    note: '解锁建筑：猎杀营地、暖裘居室',
+    note: '解锁建筑：执符堂、暖裘居室',
     effectDesc: '因此敢入山猎兽：有了稳定的兽材来源，信符也可供互市。',
     // 承草木（灵植术）与起居（引泉净水）两线：研究可先掌握，实际应用仍需筑基与木屋等条件。
     needs: { upgrades: ['herbStudy', 'waterSanitation'] },

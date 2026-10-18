@@ -63,7 +63,7 @@ function doReset() {
 <template>
   <div class="box">
     <div class="box-head">
-      <HoverTip label="存档"><template #tip><p>导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持旧版文本存档和JSON存档；结构冲突时仅继承仙缘和道果。</p></template></HoverTip><span class="hint">
+      <HoverTip label="存档"><template #tip><p>导出下载存档文件；读取选择本地文件，将覆盖当前进度。支持同代文本存档与JSON存档；异代或结构冲突会拒绝读取并保留当前进度，加载失败时暂停自动保存。旧代备份不会被覆盖。</p></template></HoverTip><span class="hint">
         上次保存 {{ fmtClock(ui.lastSavedAt || state.lastSaveAt) }}，自动保存每
         {{ CONFIG.AUTOSAVE_MS / 1000 }} 秒
       </span>

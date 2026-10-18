@@ -82,7 +82,7 @@ export function researchAndAscension({ ok, close, section }) {
     state.resources.wood = E.money(5000)
     state.resources.stone = E.money(500)
     state.resources.herb = E.money(500)
-    state.buildings.spiritField = { count: 3, on: true } // 藏经阁现在要三座聚灵阵，且不要灵草
+    state.buildings.spiritField = { count: 3, on: true } // 夹具保留三座聚灵阵供产出；藏经阁前置仅需一座
     E.buyBuilding(state, derived, 'hut', 1)
     E.buyBuilding(state, derived, 'library', 1)
     ok('建成藏经阁仍需研究灵源考才出现引气诀', !derived.availableUpgrades.includes('qiArt'))

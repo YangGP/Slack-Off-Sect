@@ -125,6 +125,45 @@ select option {
   padding: 3px 0 6px;
 }
 
+.stat-line .stat-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  padding: 3px 0;
+}
+
+.stat-line .stat-group > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stat-line .stat-breakthrough {
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 6px;
+  margin-bottom: 3px;
+}
+
+.stat-line .stat-materials {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.stat-line b.good {
+  color: var(--good);
+}
+
+.stat-line b.bad,
+.stat-line .bad b {
+  color: var(--bad);
+}
+
+.stat-line b.warn {
+  color: var(--accent);
+}
+
 .update-notice {
   display: flex;
   flex-wrap: wrap;

@@ -49,7 +49,7 @@ export const FAITH_UPGRADES = [
     desc: '山门迎香的礼数。香使岗位产出 +35%。',
     effectDesc: '因此香使收得更稳：香使岗位产出 +35%。',
     effects: { jobRatio: { incenseKeeper: 0.35 } },
-    needs: { realm: 4, upgrades: ['vowPower'], ritual: { gatherIncense: 1 }, building: { id: 'gate', count: 3 } },
+    needs: { realm: 4, upgrades: ['vowPower'], ritual: { gatherIncense: 1 }, building: { id: 'gate', count: 1 } },
   },
   {
     id: 'ancestorIncense', name: '祖师香火', glyph: '祖', kind: 'faith', page: 'faith',

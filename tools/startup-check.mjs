@@ -100,10 +100,14 @@ try {
   assert.ok(reloaded.state.totalDays > days, '热更新后历法继续推进')
   assert.ok(moneyGt(reloaded.state.resources.qi, qi), '热更新后资源继续结算')
   const beforeCatchup = reloaded.state.stats.playTime
+  const promptEpoch = reloaded.ui.eventPromptEpoch
+  const promptRevision = reloaded.ui.eventPromptRevision
+  reloaded.ui.eventNotice = { instanceId: 'before-catchup', receivedAt: now }
   now += 600000
   for (const step of intervals.values()) {
     const completion = step()
     assert.equal(reloaded.ui.offlineLoading, true, '补算开始先显示加载提示')
+    assert.equal(reloaded.ui.eventNotice, null, '补算开始丢弃结算前普通提示')
     assert.equal(reloaded.state.stats.playTime, beforeCatchup, '加载提示显示时收益尚未写回')
     await Promise.resolve()
     assert.ok(browser.document.querySelector('.offline-loading'), '补算之前先渲染加载符号')
@@ -112,6 +116,9 @@ try {
     await completion
   }
   assert.equal(reloaded.ui.offlineLoading, false, '补算结束收起加载提示')
+  assert.equal(reloaded.ui.eventNotice, null, '补算结束不补弹旧普通提示')
+  assert.equal(reloaded.ui.eventPromptRevision, promptRevision + 2, '补算两个边界使旧交互展示资格失效')
+  assert.equal(reloaded.ui.eventPromptEpoch, promptEpoch, '补算不重置选择事件的会话去重')
   assert.equal(reloaded.ui.offlineProgress.percent, 100, '补算完成后进度达到100%')
   assert.equal(browser.document.querySelector('.offline-progress'), null, '补算完成后移除进度条')
   assert.equal(reloaded.state.stats.playTime, beforeCatchup + 600, '恢复页面只补算尚未推进的十分钟')

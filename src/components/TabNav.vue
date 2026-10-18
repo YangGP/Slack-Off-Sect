@@ -9,12 +9,12 @@ import { MODULE_UI } from '@/modules/uiRegistry'
 
 const CORE_TABS = [
   { id: 'sect', name: '宗门' },
+  { id: 'realm', name: '境界' },
   { id: 'disciples', name: '弟子' },
   { id: 'cultivation', name: '修真' },
   { id: 'skills', name: '技艺' },
   { id: 'craft', name: '炼制' },
   { id: 'faith', name: '香火' },
-  { id: 'realm', name: '境界' },
   { id: 'achievements', name: '成就' },
   { id: 'settings', name: '设置' },
 ]

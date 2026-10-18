@@ -45,7 +45,7 @@ const CORE_CRAFTS = [
     // 定价口径：樵夫 0.15 灵木/秒 vs 阵徒 0.6 灵气/秒 → 劳动平价是 4 灵气/灵木。
     // 与「点石成灵」取同一条溢价（1.25×）→ 收 5 灵气。早期写过 10，等于 2.5 倍溢价，
     // 比雇樵夫贵一倍多，会让这个入口变成陷阱（见文档的汇率表）。
-    desc: '以灵气催动山中木芽，开局即可使用：每份消耗灵气 5，得灵木 1；仓满时自然停下。',
+    desc: '以灵气催动山中木芽，开局即可使用：基础口径为每份消耗灵气 5、得灵木 1，实际用料与产出按当前加成结算；仓满时自然停下。',
   },
 
   {
@@ -57,7 +57,7 @@ const CORE_CRAFTS = [
     primary: ['rock'],
     cost: { rock: 3, qi: 15 },
     time: 3,
-    desc: '从三块石材中筛选、切出易于存气的矿料，再灌入灵气制成一枚灵石。需采矿场提供石材，每份消耗矿石3与灵气15。',
+    desc: '从石材中筛选、切出易于存气的矿料，再灌入灵气制成灵石。需采矿场提供石材；基础口径为每份消耗矿石 3 与灵气 15，实际用料与产出按加成结算。',
     needs: { building: { id: 'quarry', count: 1 } },
   },
   {
@@ -107,7 +107,7 @@ const CORE_CRAFTS = [
     primary: ['wood'],
     cost: { wood: 175 },
     time: 1.5,
-    desc: '百工坊的匠人把一百七十五根灵木解成板材、刨平上蜡，精选一方好板，殿宇梁柱全指着它。',
+    desc: '百工坊的匠人把灵木解成板材、刨平上蜡，精选一方好板，殿宇梁柱全指着它。基础用料为 175 灵木，实际用料与产出按加成结算。',
     // 会解板的是「木作器械」，不是百工坊 —— 否则百工坊（用木板下料）永远盖不起来
     needs: { upgrades: ['woodworking'] },
   },
@@ -145,7 +145,7 @@ const CORE_CRAFTS = [
     primary: ['plank', 'ore'],
     cost: { plank: 10, ore: 100, qi: 300 },
     time: 4,
-    desc: '十方木板搭骨、百份玄铁固结，直接刻入导灵纹与固形纹，再注入三百灵气成一座阵基。用于讲经堂、静心池与护山大阵。',
+    desc: '木板搭骨、玄铁固结，刻入导灵纹与固形纹，再注入灵气成阵基。基础口径为木板 10、玄铁 100、灵气 300，实际用料与产出按加成结算；用于讲经堂、静心池与护山大阵。',
     needs: { realm: 4, upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -169,7 +169,7 @@ const CORE_CRAFTS = [
     primary: ['spiritLiquid'],
     cost: { spiritLiquid: 3, qi: 300 },
     time: 5,
-    desc: '以固形纹约束结晶边界，三瓶灵液与三百灵气凝成稳定晶核。用于晶核凝炼阵、观星台与高级阵法。',
+    desc: '以固形纹约束结晶边界，灵液与灵气凝成稳定晶核。基础口径为灵液 3、灵气 300，实际用料与产出按加成结算；用于晶核凝炼阵、观星台与高级阵法。',
     needs: { realm: 5, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -182,7 +182,7 @@ const CORE_CRAFTS = [
     cost: { herb: 100, spiritLiquid: 2 },
     time: 5,
     desc: '以灵液浇灌，一株灵草要养到叶上凝露才算是仙草。',
-    needs: { building: { id: 'herbGarden', count: 3 } },
+    needs: { building: { id: 'herbGarden', count: 1 } },
   },
   {
     id: 'refineNineTurnPill',
@@ -312,7 +312,7 @@ export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
-export const DEFAULT_QUICK_CRAFTS = ['infuseStone', 'refinePill', 'sawPlank']
+export const DEFAULT_QUICK_CRAFTS = ['growWood', 'infuseStone', 'refinePill', 'sawPlank']
 export const ADVANCED_CRAFT_OUTPUTS = ['daoNote', 'daoTreatise', 'arrayDiagram', 'spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {

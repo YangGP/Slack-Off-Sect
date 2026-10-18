@@ -11,10 +11,10 @@ import { throwIfSimulationCancelled } from './systems/simulation'
  * @param {{state?: object, derived?: object, now?: () => number, random?: () => number}} options
  */
 export function createGame({ state, derived = engine.createDerived(), snapshotState = null,
-  now = () => Date.now(), random = () => Math.random() } = {}) {
+  now = () => Date.now(), random = () => Math.random(), onEvent = null } = {}) {
   state ||= createInitialState(now())
   let stateRevision = 0
-  setGameContext(state, { now, random })
+  setGameContext(state, { now, random, live: true, onEvent })
   engine.recompute(state, derived)
 
   function replaceState(next) {

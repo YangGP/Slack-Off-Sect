@@ -298,11 +298,11 @@ export const EVENTS = [
     weight: 8,
     kind: 'event',
     minRealm: 2,
-    text: '一名化神散修在山门外立了三日，说愿入宗为客卿。',
+    text: '一名散修在山门外立了三日，说愿入宗为客卿。',
     options: [
       {
         label: '收为客卿',
-        desc: '得一位好手（弟子 +1）与灵机；但客卿嘴刁，要备一批丹药。',
+        desc: '得一名弟子（凡体入门）与灵机；但客卿嘴刁，要备一批丹药。',
         effect: { recruit: 1, lootRate: { insight: 200 }, floor: { insight: 80 }, tradeCost: { pill: { seconds: 90, floor: 2 } } },
       },
       {
@@ -324,7 +324,7 @@ export const EVENTS = [
     options: [
       {
         label: '强行引脉',
-        desc: '灵气暴涨一大截；但引脉要垫灵石，且震塌了几处仓房。',
+        desc: '灵气暴涨一大截；但灵脉震动会造成灵石库存损失。',
         effect: {
           lootRate: { qi: 600 },
           floor: { qi: 200 },
@@ -415,7 +415,7 @@ export const EVENTS = [
       },
       {
         label: '设卡征税',
-        desc: '抽一笔香火与灵石作过路钱；但商队从此绕道，宗门名声受损（灵石小损）。',
+        desc: '抽一笔香火作过路钱；但商队从此绕道，宗门名声受损（损失少量灵石）。',
         effect: { lootRate: { faith: 900 }, floor: { faith: 300 }, disaster: { resources: ['stone'], lossPercent: [0.05, 0.05] } },
       },
     ],
@@ -441,7 +441,7 @@ export const EVENTS = [
       },
       {
         label: '封缝镇石',
-        desc: '用灵符与香火把缝封死：得一批灵符；但香火耗去不少。',
+        desc: '以香火镇封裂隙：得一批灵符；但香火耗去不少。',
         effect: { lootRate: { spiritTalisman: 6 }, floor: { spiritTalisman: 2 }, disaster: { resources: ['faith'], lossPercent: [0.2, 0.2] } },
       },
     ],
