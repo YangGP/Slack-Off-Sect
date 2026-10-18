@@ -41,7 +41,7 @@ export function checkAchievements(state, derived) {
 /**
  * 推进游戏时间。
  * @param {number} dt 经过的秒数
- * @param {{offline?: boolean, events?: boolean}} opts
+ * @param {{offline?: boolean, events?: boolean, economyDetails?: boolean, finalEconomyDetails?: boolean}} opts
  */
 export function tick(state, derived, dt, opts = {}) {
   if (!Number.isFinite(dt) || dt <= 0) return
@@ -60,7 +60,10 @@ function createTickRunner(state, derived, seconds, opts) {
   const end = now + seconds * 1000
   // 大步长只用于没有人口、维护、加工与灵能逸散的稳定生产。
   // 其余场景逐秒结算，避免步内供给、修炼和加工状态变化被提前或延后。
-  recompute(state, derived)
+  // 审计等待期可省略提示明细；调用方在玩家行动前恢复完整派生，默认运行路径不变。
+  if (opts.finalEconomyDetails === false) {
+    withGameContext(state, { economyDetails: false }, () => recompute(state, derived))
+  } else recompute(state, derived)
   const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
     !(state.resources.qiEnergy ?? ZERO).gt(0) && !(derived.rates.qiEnergy ?? ZERO).gt(0) &&
     !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
@@ -76,7 +79,8 @@ function createTickRunner(state, derived, seconds, opts) {
     get done() { return end - now <= 1e-6 },
     get completedSeconds() { return end - now <= 1e-6 ? seconds : Math.min(seconds, (now - start) / 1000) },
     runBatch(shouldYield = () => false) {
-      return withGameContext(state, { now: () => now, economyDetails: !opts.offline || opts.economyDetails === true }, () => {
+      return withGameContext(state, { now: () => now,
+        economyDetails: opts.economyDetails === false ? false : !opts.offline || opts.economyDetails === true }, () => {
         while (end - now > 1e-6) {
           let next = Math.min(end, now + maxSliceMs)
           // 与逐秒参考结算相同：下一次逐秒采样进入新节气时切步。
@@ -94,7 +98,8 @@ function createTickRunner(state, derived, seconds, opts) {
           const moduleDeadline = nextModuleDeadline(state, now)
           if (moduleDeadline < next) next = moduleDeadline
           tickStep(state, derived, (next - now) / 1000, opts, reuseEconomy)
-          reuseEconomy = opts.offline === true && opts.cacheEconomy !== false
+          // 审计可显式复用同一次在线tick的相邻逐秒经济；默认在线行为不变。
+          reuseEconomy = opts.cacheEconomy === true || opts.offline === true && opts.cacheEconomy !== false
           now = next
           if (shouldYield()) break
         }
@@ -102,7 +107,7 @@ function createTickRunner(state, derived, seconds, opts) {
           state.buffs = state.buffs.filter(buff => buff.until > now)
           settleExpiredThreat(state, derived)
           state.lastTickAt = now
-          withGameContext(state, { economyDetails: true }, () => recompute(state, derived))
+          withGameContext(state, { economyDetails: opts.finalEconomyDetails !== false }, () => recompute(state, derived))
           finished = true
         }
       })

@@ -3,6 +3,8 @@
  * 灵感来自猫国建设者的 tick/资源/价格递增模型，但全部按“修仙宗门”重写。
  */
 export const CONFIG = {
+  // 仅削减宗门全局生产奖励，个人修炼与加工节拍沿用独立系数。
+  REALM_PRODUCTION_BONUS_RATIO: 0.5,
   // 金丹后加工速度按境界倍率的平方根提升，保留加工设施的增产价值。
   CRAFT_SPEED_REALM_BASE: 2,
   AUTO_CRAFT_SPEEDS: [1, 2, 5, 10],
@@ -31,16 +33,15 @@ export const CONFIG = {
    */
   DISCIPLE_UPKEEP_REALM_EXP: 1,
   /** 每点仙缘的全局产出加成（转世/飞升带走的永久加成） */
-  KARMA_BONUS_PER_POINT: 0.02,
+  KARMA_BONUS_PER_POINT: 0.04,
   /**
    * 仙缘加成的**软上限**（对标猫国领导力）：前 75% 不打折，剩下的渐近到上限 ——
-   * 也就是最多 +200%（这里 limit = 2）。取软上限而不是硬上限，是为了让「多刷几轮」
+   * 也就是最多 +400%（这里 limit = 4）。取软上限而不是硬上限，是为了让「多刷几轮」
    * 永远还有一点点收益，但不会线性膨胀把后期压平。见 docs/DESIGN.md §8.4。
    */
-  KARMA_BONUS_CAP: 2,
-  /** 仙缘仓储：每点 +0.15%，累计 +37.5% 后递减，渐近 +50%；不改变产出倍率。 */
+  KARMA_BONUS_CAP: 4,
+  /** 仙缘仓储：每点线性 +0.15%，只作用于有限仓储；不改变产出倍率。 */
   KARMA_STORAGE_PER_POINT: 0.0015,
-  KARMA_STORAGE_CAP: 0.5,
   /** 每颗道果的全局产出加成（道果是飞升才给的更高一层货币） */
   DAO_PRODUCTION_BONUS: 0.05,
   /** 每颗道果对「转世/飞升时能拿多少仙缘」的加成 —— 上层反哺下层 */

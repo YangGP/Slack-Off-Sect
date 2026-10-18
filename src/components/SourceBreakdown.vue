@@ -154,7 +154,8 @@ const bonusRows = computed(() => {
 </script>
 
 <template>
-    <div v-if="meta.storageWeight != null" class="tip-row">
+    <div v-if="!max.isFinite()" class="tip-row"><span class="k">库存</span><span class="v">无仓容上限</span></div>
+    <div v-if="max.isFinite() && meta.storageWeight != null" class="tip-row">
       <span class="k">通用扩仓</span>
       <span class="v">基础容量的 {{ Math.round(meta.storageWeight * 1000) / 10 }}%；专属仓储全额计入</span>
     </div>

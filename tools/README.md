@@ -28,12 +28,15 @@
 | `npm run audit:economy -- 6400` | 整件资源去向与假设仓容 |
 | `npm run audit:save -- "存档路径.txt"` | 只读重算存档：仓容、产出、超限、库房报价与破境需求 |
 | `npm run audit:crafts -- 24 0` | 加工链与指定研究的边际收益 |
+| `npm run audit:crafts -- --specialization 600` | 六项效率专精的富料单配方对照；真实购买、手动扣费与自动出货分别列出，非自然回本 |
 | `npm run audit:disciples -- 24` | 不同弟子培养策略对照 |
 | `npm run audit:buildings -- 5` | 指定境界内的建筑来源及仓容闭包；省略参数检查全境界 |
 | `npm run audit:sources` | 研究露出层次与材料来源层次；用于发现前后置循环 |
 | `npm run audit:power` | 固定阶段的电力供需和完整供应链 |
 | `npm run audit:pacing -- 72 0 0 1` | 小时数、仙缘、祭炼等级、事件种子；后续参数见 ENGINEERING |
 | `npm run audit:breakthrough -- power 12345 72` | 固定策略下的真实准备成本和强制突破结果实验 |
+| `npm run audit:breakthrough -- --paired --hours=1008 --seed=1 --outcomes=natural --aids=full --faith=growth --visits=three --lives=2` | P1同策略成对测量；记录真实飞升结算、身死、香火投资、决策与经济边际报价 |
+| `npm run audit:breakthrough -- --paired --hours=168 --seed=1 --faith=growth --visits=waking --decision-seconds=150 --batch-actions=12 --reserve=ready --wall-seconds=900` | 未主动转世的直飞基线：每日16小时在线、8小时睡眠离线，每150秒集中操作，观察最多7天 |
 | `npm run audit:breakthrough-risk` | 固定概率的有限状态模型，含倒退、死亡重置和护道减免 |
 | `npm run audit:review -- 72 12345 natural on` | 综合进度报告；小时数、种子、guaranteed/natural、自动分工 on/off |
 | `npm run balance:events -- 24 0` | 事件种子与应对策略对照 |
@@ -47,6 +50,24 @@
 
 可达性闭包不估计耗时；独立加工能力不代表共享材料下的并发产量；固定概率风险模型不包含生产时间及转世增长。综合报告、资源审计和专项报告保留各自口径，不合并成一个混杂的模拟器。
 
+P1成对模式参数：`--hours`为总观察时长（0～3024小时），`--seed`为1～uint32上限，`--outcomes=natural|guaranteed`，`--aids=full|none`，`--faith=off|growth`，`--visits=active|quarter|hourly|three|waking`，`--lives=1..5`为目标飞升次数，`--events=0|1`，`--labor=reference|active`，`--projects=stage|none`，`--specialization=on|off`，`--reserve=legacy|ready`。预留默认legacy保留旧策略；ready只在已有首屋且非凡体、其余破境材料齐备而仅缺灵气时保护该费用，避免日常制作反复花掉早期破境灵气。比较时只切换要研究的变量。阶段项目共用同一设施及产出门槛；与旧power／aided分别保留口径。
+
+共同开局15分钟，之后先离线再各次上线2分钟、每5秒行动；active持续在线。在线由真实tick内部逐秒推进，显式复用同一tick内满足条件的经济数据并省略中途提示明细，最终恢复完整派生；默认游戏在线路径不变，在线事件／缺供边界与默认逐秒结果由既有专项对照。离线使用游戏有界近似与实际上限，期间不研究／建造／凝愿／突破；事件与突破分离随机流。growth为有限投资策略：明确研究《凝愿法》，聚香5级／收愿1级及迎香礼，后期大乘愿典；预留近期破境和加工香火后凝愿，完整道心优先万民归心／应劫正愿，再考虑其他永久修持。不代表最优路线。
+
+v4另支持`--visits=waking`：从开局起每日前16小时在线、后8小时离线，无额外15分钟开局；未模拟工作等其他离开。`--decision-seconds=5..3600`控制集中操作间隔（默认5秒），`--batch-actions=1..24`控制每次至多运行的参照机器人步骤数（默认1）。每步可能含备料、研究、建造与破境，并非一次点击；12步表示有限批量处理，不能当作真人已验证的操作负担。等待期间照常逐秒生产，不运行玩家决策；醒来立即操作。v3历史报告保留原口径，不与新增作息样本直接混算。
+
+v5增加主动转世路线：`--reincarnations=0..3`为全程主动转世次数上限（默认0），`--reincarnate-realm=6..9`为转世境界（默认6，即化神）。到达后通过真实转世动作结算仙缘，不给道果；作息、累计时钟与随机流不重启，每次转世保留结算前后状态和仙缘乘区。`--reincarnate-preparation=none|faith`默认none立即转世；faith在同一操作内先执行一次既有有限香火策略，兑现能当场证得的道心及永久修持，不赠资源或等待额外积累。之后从零重建并飞升；`--lives`仍指实际飞升次数，不把主动转世计作飞升。
+
+例：在上述waking命令追加`--events=1 --reincarnations=1 --reincarnate-preparation=faith`，测一次化神转世后的累计首飞。直接路线用`--reincarnations=0`。比较必须计入转世前耗时与重建，不能只比最后一世；同种子不是保证同一突破结果，重走境界会消耗更多随机抽样。
+
+v6增加`--stop-realm=1..10`（默认0关闭）用于先校准化神等阶段，不能与主动转世或多次飞升目标混用。到境界后报告`realm-target`，`completed`仍为false，不把它当作实际飞升。正式在线批次保持5秒，实际决策仍按`--decision-seconds`间隔；不通过放大tick批次改变对照。报告源码摘要现覆盖境界费用、配置、仙缘结算及经济实现，价格试算不得与旧规则报告混算。
+
+v7可指定`--details=decisions`，仅在5秒等待批次中省略悬停来源和解锁列表的明细计算，仍逐秒推进生产与事件；每次玩家决策前、离线返回及最终恢复完整派生，默认full保留原路径。状态、事件随机序列和最终派生由默认路径对照，不使用放大tick的探索结果替代该对照。
+
+`--wall-seconds`限制单次测量的墙钟预算（默认600秒，上限7200秒），到期输出已推进部分，`wall-budget`不得写成不可达或完成。预算不改变游戏时钟、资源或随机流。`--trace-limit`控制保留的开局及末尾决策条数（默认1000，上限10000），聚合计数不随截断丢失。每次输出到`.smoke-breakthrough-time/p1-时间-进程号/result.json`，不覆盖旧样本，附提交与工具源码摘要。`.smoke*`仍是可清理产物；需要长期引用的结果应摘录至正式测量文档并保存必要数据。
+
+经济边际报价只读副本，区分已学研究贡献和下一座设施增量。各资源分别列回收自身投入的秒数，null代表没有该资源直接净增产；不相加异种资源，也不把瞬发手动加工解释为效率专精收益。净额包含当前自动加工耗料，仍受当前人口、库存、供给和季节限制，不能替代实际长期回本测量。
+
 ## 公共实现
 
 - `lib/checks.mjs`：smoke、SSR、DOM 共用断言统计和控制台捕获。
@@ -59,3 +80,7 @@
 - `dom-entry.js` / `vite.domcheck.config.js`、`startup-entry.js`：分别提供客户端 DOM 与真实 main 启动夹具，保留不同构建方式。
 
 新增脚本应先明确属于检查、报告还是基准，优先扩展现有入口。SSR 入口在 `run.mjs` 白名单登记，再添加 npm 命令。构建不清空报告目录，避免重跑时丢失旧测量；产物由 `clean` 显式统一清除。历史审计文档中的旧命令仅记录当时的测量方式。
+
+### P1 无上限加工基线（2026-10-18）
+
+参照机器人 `p1-reincarnation-v9` 为23项稳定加工品设置近期库存目标；0仍代表主动不限量。百分比保留仅用于有限容量，加工品使用定额保留。报告的 `capacity` 对无上限仍写JSON null，同时由 `unlimitedCapacity` 明确列出资源，不能按0解释。可达性只检查有限前置所需容量，不求无限扩仓的不动点。当前化神基础灵机30万，其余参数与实测结果见 [P1实施](../docs/P1-IMPLEMENTATION.md)。

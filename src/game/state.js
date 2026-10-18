@@ -65,6 +65,7 @@ export function createInitialState(now = Date.now()) {
     legacyNineTurnPill: false,
     scriptureArchiveVersion: 1,
     beastRetirementVersion: 1,
+    uncappedCraftVersion: 1,
 
     buildings: {},
     // 兼容旧档免费首屋的拆除记录；新建首屋同样支付木料。

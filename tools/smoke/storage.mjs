@@ -1,7 +1,7 @@
 import { createInitialState, normalizeState, resetForAscension, resetForReincarnation } from '../../src/game/state.js'
 import { ADVANCED_CRAFTS } from '../player-bot.mjs'
 import * as E from '../engine-fixture.mjs'
-import { RESOURCES, RESOURCE_MAP } from '../../src/data/resources.js'
+import { RESOURCES, RESOURCE_MAP, UNCAPPED_CRAFTED_RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
 import { ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { TECHNIQUES } from '../../src/data/techniques.js'
@@ -10,6 +10,66 @@ import { REALMS } from '../../src/data/realms.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { describeEffects } from '../../src/game/effectsText.js'
 import { newGame } from './fixtures.mjs'
+import { autoCraftReserve } from '../../src/game/systems/craftingRules.js'
+import { discipleFactor, recruitCost } from '../../src/data/disciples.js'
+
+export function uncappedCrafting({ ok, close, section }) {
+  section('转世生产、无限加工库存与旧档保留')
+  const { state: s, derived: d } = newGame()
+  s.realm = 10
+  s.karma = E.money(100)
+  E.recompute(s, d)
+  ok('23种稳定加工品无仓容，原料、猎物与粒子仍有限', UNCAPPED_CRAFTED_RESOURCES.size === 23 &&
+    [...UNCAPPED_CRAFTED_RESOURCES].every(id => !d.max[id].isFinite()) &&
+    ['qi', 'insight', 'faith', 'wood', 'stone', 'beastHide', 'qiParticle', 'qiEnergy', 'immortalForce', 'warrant'].every(id => d.max[id].isFinite()))
+  ok('100仙缘生产4.5倍、有限仓储1.15倍，信符独立', d.karmaMult.eq(4.5) && d.karmaStorageMult.eq(1.15) && d.max.warrant.eq(100))
+  ok('渡劫全局境界5.5倍，个人系数仍10倍', d.realmProductionMult === 5.5 && discipleFactor({ realm: 10 }, 10) === 10)
+  s.faithProgression.cultivation.realmDevotion = 10
+  E.recompute(s, d)
+  ok('万民归心强化削减后的奖励，口粮基准不叠加修持', d.realmProductionMult === 10 && d.realmBaseProductionMult === 5.5)
+  ok('招募按削减后的口粮基准报价', recruitCost({ qi: 100 }, 10).qi === 550)
+  s.dao = E.money(1)
+  s.settings.craftReservePercent = 20
+  s.settings.craftReserves.plank = E.money(7)
+  E.recompute(s, d)
+  ok('无限仓容不产生NaN或无限保留，有限原料仍按比例', autoCraftReserve(s, d, 'plank').eq(7) && autoCraftReserve(s, d, 'wood').eq(d.max.wood.times(0.2)))
+  s.settings.craftReservePercent = 0
+  ok('零比例乘无限仓容仍是有限定额', autoCraftReserve(s, d, 'plank').eq(7))
+  s.upgrades.woodworking = true
+  s.resources.wood = E.money(1000)
+  s.resources.plank = E.money('1e30')
+  E.recompute(s, d)
+  const available = E.maxCraftableMoney(s, d, 'sawPlank')
+  ok('无限成品仓仍由有限原料约束完整份数', available.isFinite() && available.gt(0))
+  E.craftBatch(s, d, 'sawPlank', 1)
+  ok('超大加工品库存可继续制作且库存始终有限', s.resources.plank.gt('1e30') && Object.values(s.resources).every(v => v.isFinite() && !v.isNegative()))
+
+  delete s.uncappedCraftVersion
+  s.settings.craftReservePercent = 20
+  s.resources.plank = E.money(40)
+  s.settings.craftReserves.plank = E.money(50)
+  s.resources.steel = E.money(12)
+  const old = normalizeState(s)
+  ok('旧档保守保留库存和较高定额，保留原设置输入', old.settings.craftReserves.plank.eq(50) && old.settings.craftReserves.steel.eq(12) && !s.settings.craftReserves.steel)
+  old.resources.steel = E.money(20)
+  const restored = parseImport(exportSave(old))
+  ok('迁移标记随保存恢复，不反复抬高保留量', restored.uncappedCraftVersion === 1 && restored.settings.craftReserves.steel.eq(12) && restored.resources.steel.eq(20))
+
+  const { state: early, derived: ed } = newGame()
+  early.upgrades.condenseArt = early.upgrades.qiLiquid = true
+  early.buildings.granary = { count: 10, on: true }
+  E.recompute(early, ed)
+  early.resources.qi = ed.max.qi
+  early.settings.craftReserves.qi = ed.max.qi
+  ok('仅凝灵诀时可设目标且尊重定额保留', ed.autoCondenseLiquidUnlocked && !ed.autoCraftUnlocked &&
+    E.setCraftTarget(early, ed, 'condenseLiquid', 2) && !E.runAutoCondense(early, ed) && early.resources.qi.eq(ed.max.qi))
+  early.settings.craftReserves.qi = E.ZERO
+  const batch = E.cloneRuntime(early), bd = E.createDerived()
+  E.recompute(batch, bd)
+  E.runAutoCondense(early, ed)
+  E.runAutoCondenseBatch(batch, bd, 0, 360, 1080)
+  ok('无仓容凝液在线与离线批量都按有限目标停止', early.resources.spiritLiquid.eq(2) && batch.resources.spiritLiquid.eq(2) && early.resources.qi.eq(batch.resources.qi))
+}
 
 export function purchaseReachability({ ok, section }) {
   section('可购买性：不会被仓储上限卡死')
@@ -127,19 +187,19 @@ export function storageAndRefinement({ ok, section }) {
     E.recompute(s, d)
     ok('基础物资通用扩仓仍全额计入', E.moneyEq(d.max.wood,
       E.money(RESOURCE_MAP.wood.baseMax).plus(6 * 200).plus(2 * BUILDING_MAP.depot.effects.storage.wood).plus(1200)))
-    ok('工艺与稀有材料容量有层级差异', E.moneyGt(d.max.plank, d.max.arrayBase) && E.moneyGt(d.max.arrayBase, d.max.spiritArtifact) && E.moneyGt(d.max.spiritArtifact, d.max.spiritTreasure))
+    ok('稳定加工品不受仓容约束', ['plank', 'arrayBase', 'spiritArtifact', 'spiritTreasure'].every(id => !d.max[id].isFinite()))
     const pillBefore = d.max.pill
     s.buildings.alchemyRoom = { count: 1, on: true }
     E.recompute(s, d)
-    ok('专属成品仓储不被通用折算削弱', E.moneyEq(d.max.pill, pillBefore.plus(BUILDING_MAP.alchemyRoom.effects.storage.pill)))
-    ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer).every(r => E.money(d.max[r.id]).isInteger()))
+    ok('专属成品仓储不被通用折算削弱', E.moneyEq(d.max.pill, pillBefore))
+    ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer && Number.isFinite(r.baseMax)).every(r => E.money(d.max[r.id]).isInteger()))
     const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: E.money(1000) } })
     E.recompute(old, d)
     E.addResource(old, 'nineTurnPill', 10, d.max.nineTurnPill)
-    ok('旧档超额成品不被收入操作抹掉且不能继续囤货', E.moneyEq(old.resources.nineTurnPill, 1000))
+    ok('旧档加工品保留库存且可继续累积', E.moneyEq(old.resources.nineTurnPill, 1010))
     E.payCost(old, { nineTurnPill: 3 })
     E.tick(old, d, 1, { events: false })
-    ok('旧档超额成品可正常消费', E.moneyEq(old.resources.nineTurnPill, 997))
+    ok('旧档超额成品可正常消费', E.moneyEq(old.resources.nineTurnPill, 1007))
     s.buildings.spiritField = { count: 5, on: true }
     ok('开局点击收益保留', E.moneyEq(E.clickGain(s, d), 5))
     s.buildings.spiritField.count = 45

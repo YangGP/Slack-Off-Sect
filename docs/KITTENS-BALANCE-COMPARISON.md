@@ -1,5 +1,17 @@
 # 猫国（Kittens Game）对照：数值结构与节奏差距
 
+## 2026-10-18：重置循环复核
+
+用户提出直接放大破境费用是否过于粗糙。本节重新核对官方 master 源码及 Wiki；下文早期本作数值仍为历史资料，不能作为当前规则。P1现有加价版保留为实验对照，尚未定为最终平衡方案。
+
+- 汉化中的“领导力”对应 Paragon，与指定某只猫担任领袖不同。普通情况下重置所得为当前猫数减70；超过35只猫便开始获得另一项重置收益 Karma。130猫重置通常得60 Paragon。[官方重置入口](https://github.com/nuclear-unicorn/kittensgame/blob/master/game.js)。
+- 早期未花费的每点 Paragon 提供1%主要产出及0.1%仓容加成；产出存在递减，普通 Paragon 的仓容加成没有同样的软上限。Paragon还能购买跨轮保留的形而上学升级，包括降低建筑涨价系数。消费会减少未花费余额的被动收益，存在留存与投资取舍。它缓解的是反复扩建的成本曲线，并非只让所有资源更快贴顶。[官方永久升级与倍率实现](https://github.com/nuclear-unicorn/kittensgame/blob/master/js/prestige.js)。
+- 常见首轮重置建议是混凝土小屋后、130猫以上，往往同时准备宗教收益保留；这是有明确后续购买用途的里程碑，不是最早能重置的条件。[Wiki攻略](https://wiki.kittensgame.com/en/guides-and-advice-and-stuff/monstrous-advice)。现实约1～3周、常见约2周只是历史社区经验，受版本、在线时间和熟练度影响；不是官方固定时长，也不是按本项目150秒操作节奏做的同条件实测。[历史讨论](https://www.reddit.com/r/kittensgame/comments/eiwz68/)、[133猫首轮约3周的个人记录](https://www.reddit.com/r/kittensgame/comments/x10nfx/)。
+- 高级材料与仓容共同控进度。例：混凝土小屋需125000科学、3000钛、45混凝土；科学和钛必须有足够仓容，同时要完成钛来源及混凝土加工链。科学仓容由图书馆、学院、天文台及有上限的纲要增容等扩展；高级科技也开放更有效的仓储。[官方升级费用](https://github.com/nuclear-unicorn/kittensgame/blob/master/js/workshop.js)、[科学仓容](https://wiki.kittensgame.com/en/general-information/resources/science)、[钛来源与仓储](https://wiki.kittensgame.com/en/general-information/resources/titanium)。
+- 木梁、石板、钢等常规加工材料没有本作这样的逐项仓容限制，能将有限仓容的原料分批转为长期备料；不能将猫国概括为“每一种高级材料都再加一道仓容墙”。仓容、加工、贸易、效率及新设施共同形成破局路径。[官方资源定义](https://github.com/nuclear-unicorn/kittensgame/blob/master/js/resources.js)。
+
+对本作的设计结论：首次转世3～5天目标保留；分段价格仍需校准，但不能用单笔灵机与材料费放大代替完整成长结构。后续优先复评现有永久修持是否可承接营造涨价缓解、加工效率或早期减负，并给飞升前各阶段安排真实产业升级与更有效的扩仓途径。此处是方向复评，不代表已经新增永久升级、取消加工品仓容，或恢复改价前报价。直飞仍须有独立可达路线，转世次数不作为门槛。
+
 状态复核：2026-10-17。本文保留早期结构比较，不是现行待办；人口成本、外交、仓容、知识加工及离线机制已有后续调整，优先级与剩余工作以 [ROADMAP](ROADMAP.md) 为准。
 
 分析日期：2026-10-15。对照基准：

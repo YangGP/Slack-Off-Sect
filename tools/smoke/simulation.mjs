@@ -1,6 +1,6 @@
 import { createBot } from '../player-bot.mjs'
 import * as E from '../engine-fixture.mjs'
-import { RESOURCES } from '../../src/data/resources.js'
+import { RESOURCES, UNCAPPED_CRAFTED_RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
 import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { FAITH_UPGRADES } from '../../src/data/faith.js'
@@ -31,7 +31,7 @@ export function playerBot({ ok, section }) {
     for (const [id, count] of Object.entries({ spiritField: 3, hut: 10, lumberYard: 2, granary: 10, quarry: 2, library: 3, logHouse: 8, herbGarden: 3, ironFurnace: 1, alchemyRoom: 2, scriptureArchive: 24, warehouse: 2, forge: 1, talismanHall: 1, gate: 1 })) s.buildings[id] = { count, on: true }
     for (const id of ['qiOrigin', 'homePlanning', 'herbStudy', 'alchemyArt', 'prospectStudy', 'oralTeaching', 'quarryArt', 'woodworking', 'earthArt', 'qiGazing', 'forgeArt', 'talismanArt', 'incenseVow', 'qiMeasure', 'qiLiquid', 'storeFrameArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
     E.recompute(s, d)
-    for (const res of RESOURCES) s.resources[res.id] = d.max[res.id]
+    for (const res of RESOURCES) s.resources[res.id] = d.max[res.id].isFinite() ? d.max[res.id] : E.money(UNCAPPED_CRAFTED_RESOURCES.has(res.id) ? 10000 : 0)
     const bot = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayBase: 4 }), breakthrough: () => false })
     const archiveCost = E.buildingCost(s, 'scriptureArchive', 1)
     ok('回归夹具确实受灵机及典籍库建材仓容限制', E.moneyLt(d.max.insight, UPGRADE_MAP.arrayAssembly.cost.insight) && E.moneyGt(archiveCost.rock, d.max.rock))
@@ -46,7 +46,7 @@ export function playerBot({ ok, section }) {
     s.upgrades.earthEssence = true
     s.buildings.depot = { count: 1, on: true }
     E.recompute(s, d)
-    for (const res of RESOURCES) s.resources[res.id] = d.max[res.id]
+    for (const res of RESOURCES) s.resources[res.id] = d.max[res.id].isFinite() ? d.max[res.id] : E.money(UNCAPPED_CRAFTED_RESOURCES.has(res.id) ? 10000 : 0)
     E.recompute(s, d)
     ok('必需仓储即使不在旧采购表中也能实际建造', bot.buildStep(0, null, [], new Map([['grandStore', 1]])) && E.countOf(s, 'grandStore') === 1)
     s.realm = 6

@@ -9,7 +9,7 @@ import { CULTIVATION, ALL_UPGRADES } from '../src/data/upgrades.js'
 import { TECHNIQUES } from '../src/data/techniques.js'
 import { RITUALS, CULTIVATION as FAITH_CULTIVATION } from '../src/data/faith.js'
 import { CRAFTS } from '../src/data/crafts.js'
-import { REALMS, BREAKTHROUGH_AIDS } from '../src/data/realms.js'
+import { REALMS, BREAKTHROUGH_AIDS, realmProductionBase } from '../src/data/realms.js'
 import { RESOURCES } from '../src/data/resources.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_LEVELS, getEventLevel } from '../src/data/events.js'
@@ -203,7 +203,7 @@ for (const c of CRAFTS) {
 emit('\n## A.8 境界\n')
 emit('| 境界 | 全局倍率 | 破境花费 |')
 emit('| --- | --- | --- |')
-for (const r of REALMS) emit(`| ${r.name} | ×${r.mult} | ${r.cost ? cost(r.cost) : '—'} |`)
+for (const r of REALMS) emit(`| ${r.name} | ×${realmProductionBase(r.mult)} | ${r.cost ? cost(r.cost) : '—'} |`)
 
 emit('\n### 可选护道材料\n')
 emit('护道费用另加于基础破境费用，不享受破境折扣。各组可选并可叠加，失败投料不退回；加成为成功率百分点。完整概率与失败规则见 [DESIGN](DESIGN.md)。\n')

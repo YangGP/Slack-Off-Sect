@@ -67,7 +67,7 @@ export function initialState({ ok, close, section }) {
       const beforeUnit = derived.discipleUpkeep
       state.realm = 4 // 金丹期 ×2.0
       E.recompute(state, derived)
-      const mult = REALMS[4].mult
+      const mult = 1 + (REALMS[4].mult - 1) * CONFIG.REALM_PRODUCTION_BONUS_RATIO
       ok(
         `口粮随境界倍率上涨（金丹期 ×${mult}）`,
         close(derived.upkeep, before.times(mult), 1e-9),

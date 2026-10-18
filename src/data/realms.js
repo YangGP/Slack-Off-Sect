@@ -5,6 +5,11 @@
  * 各境描述同时记载修士对灵子的认知阶梯（见 docs/SPIRIT-ENERGY.md）：
  * 只知灵气 → 灵子之猜 → 金丹内观首证 → 元婴驱使 → 化神观势 → 炼虚取自由灵子。
  */
+import { CONFIG } from './config.js'
+
+/** 宗门全局生产与基础口粮共用；个人修炼和加工速度不使用此折减。 */
+export const realmProductionBase = mult => 1 + (mult - 1) * CONFIG.REALM_PRODUCTION_BONUS_RATIO
+
 export const REALMS = [
   { name: '凡体', mult: 1.0, desc: '尚未引气入体，与山下凡人无异 —— 只识风水地气，不识灵气。', cost: null },
   {
@@ -38,39 +43,39 @@ export const REALMS = [
     mult: 2.6,
     desc: '元婴出窍，神游百里而肉身不动 —— 神识所及，已能分辨并驱使正负灵子。',
     // 金丹后新记录道札、凝聚灵液，避免只靠筑基时的丹药库存连续跨境。
-    cost: { insight: 3000, qi: 12000, pill: 180, stone: 1200, talisman: 80, daoNote: 30, spiritLiquid: 60 },
+    cost: { insight: 12000, qi: 12000, pill: 360, stone: 2400, talisman: 160, daoNote: 120, spiritLiquid: 180 },
   },
   {
     name: '化神期',
     mult: 3.4,
     desc: '神识与灵能合一：灵子之云、之波、之势尽收眼底，山门内外如观掌纹。',
     // 灵晶在元婴开放，先掌握凝聚产业再化神；三境使用同一组材料。
-    cost: { insight: 9000, qi: 18000, spiritLiquid: 90, crystal: 35, artifact: 80, arrayBase: 10 },
+    cost: { insight: 300000, qi: 18000, spiritLiquid: 5400, crystal: 2100, artifact: 4800, arrayBase: 600 },
   },
   {
     name: '炼虚期',
     mult: 4.4,
     desc: '炼化虚空，能提取自由灵子、结成灵子束与灵子对 —— 举手投足皆是天地之力。',
-    cost: { insight: 30000, qi: 20000, spiritLiquid: 180, crystal: 100, artifact: 160, arrayBase: 20 },
+    cost: { insight: 360000, qi: 20000, spiritLiquid: 10800, crystal: 4200, artifact: 9600, arrayBase: 1200 },
   },
   {
     name: '合体期',
     mult: 5.8,
     desc: '与道合真：肉身与天地灵能共振，人与宗门同呼吸。',
-    cost: { insight: 60000, qi: 30000, spiritLiquid: 360, crystal: 280, artifact: 320, arrayBase: 40 },
+    cost: { insight: 1500000, qi: 30000, spiritLiquid: 21600, crystal: 8400, artifact: 19200, arrayBase: 2400 },
   },
   {
     name: '大乘期',
     mult: 7.5,
     desc: '灵子与灵能的运化之则已尽在掌中 —— 此界修行之极，再往前便是天。',
     cost: {
-      insight: 120000,
+      insight: 3000000,
       qi: 38000,
       // 元婴已能参悟灵子论并布分灵阵；化神布偏极阵；湮灭炉随化神研究开放；合体固结飞升阵印。先掌握离析，再进大乘。
-      qiParticle: 120,
+      qiParticle: 2400,
       // 化神已能铸灵器，合体已能炼玄金；同时验证器物与储灵合金的准备。
-      spiritArtifact: 24,
-      arcaneGold: 20,
+      spiritArtifact: 480,
+      arcaneGold: 400,
     },
   },
   {
@@ -78,12 +83,12 @@ export const REALMS = [
     mult: 10,
     desc: '体内正负失衡在即，天雷 —— 天地之力贯穿失衡之躯 —— 在头顶盘旋，只等一个正负归一、飞升而去的时机。',
     cost: {
-      insight: 240000,
+      insight: 6000000,
       qi: 45000,
       // 稳定阵印为主，灵宝与晶银辅助；不额外要求囤积会逸散的灵能。
-      ascensionSeal: 300,
-      spiritTreasure: 12,
-      crystalSilver: 40,
+      ascensionSeal: 9000,
+      spiritTreasure: 360,
+      crystalSilver: 1200,
     },
   },
 ]

@@ -4,6 +4,17 @@ import { createBot } from './player-bot.mjs'
 import { CRAFTS } from '../src/data/crafts.js'
 import { REALMS } from '../src/data/realms.js'
 import { UPGRADE_MAP } from '../src/data/upgrades.js'
+import fs from 'node:fs'
+
+if (process.argv[2] === '--specialization') {
+  const { measureSpecialization } = await import('./lib/pacing-economy.mjs')
+  const result = measureSpecialization(Number(process.argv[3] || 600))
+  const directory = `.smoke-tier/specialization-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
+  fs.mkdirSync(directory, { recursive: true })
+  fs.writeFileSync(`${directory}/result.json`, JSON.stringify(result, null, 2))
+  console.log(JSON.stringify({ report: `${directory}/result.json`, ...result }, null, 2))
+  process.exit(0)
+}
 
 // 同一参照玩家的加工链审计；产能是独立供料上界，不是并发实际收入。
 const clock = createAuditContext()

@@ -1,8 +1,9 @@
 <script setup>
 import { computed, reactive, watch } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
-import { breakthroughPreview, canAfford, realmProductionMultiplier } from '@/game/engine'
+import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, realmProductionBase } from '@/data/realms'
+import { DAO_HEART_DIVISOR } from '@/data/faith'
+import { breakthroughPreview, canAfford, realmProductionMultiplier, karmaMultipliers, canAttest } from '@/game/engine'
 import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
 import { ZERO, money, moneyToNumber } from '@/game/decimal'
 import { enough as enoughOf } from '@/game/pricing'
@@ -22,8 +23,8 @@ const cost = computed(() => next.value ? preview.value.cost : null)
 
 /** 破境后的口粮倍率：口粮随境界倍率上涨，破境既升产能也升成本（§5.4） */
 const ratio = computed(() => {
-  const now = REALMS[state.realm]?.mult ?? 1
-  const after = next.value?.mult ?? now
+  const now = realmProductionBase(REALMS[state.realm]?.mult ?? 1)
+  const after = next.value ? realmProductionBase(next.value.mult) : now
   return now > 0 ? after / now : 1
 })
 /** 当前每名弟子每秒吃多少灵气（含境界倍率与减耗，取实际值）；金额 ÷ 人数，全程 Decimal */
@@ -35,7 +36,7 @@ const perPersonUpkeep = computed(() =>
 /** 破境后的每人口粮与涨幅（涨跌是有界比例，转 Number 后再格式化） */
 const upkeepAfter = computed(() => perPersonUpkeep.value.times(ratio.value))
 const upkeepRise = computed(() => ((ratio.value - 1) * 100).toFixed(0))
-/** 破境后的有效生产倍率之比：含万民归心，口粮仍用原始境界倍率。 */
+/** 破境后的有效生产倍率之比：含万民归心，口粮使用削减后的基础生产倍率。 */
 const productionRatio = computed(() => {
   const nowMult = derived.realmProductionMult || 1
   const afterMult = next.value ? realmProductionMultiplier(state, next.value.mult) : nowMult
@@ -55,6 +56,12 @@ const canAscend = computed(() => view.canAscend.value)
 const reincarnateGain = computed(() => view.reincarnateGain.value)
 const reincarnateGainText = computed(() => fmtInt(reincarnateGain.value))
 const canReincarnate = computed(() => view.canReincarnate.value)
+const reincarnationEffects = computed(() => ({
+  before: karmaMultipliers(state.karma),
+  after: karmaMultipliers(money(state.karma).plus(reincarnateGain.value)),
+}))
+const unusedDaoHeart = computed(() => canAttest(state) && money(state.resources.vow).gte(DAO_HEART_DIVISOR))
+const karmaEffectText = value => '+' + fmtPercent(moneyToNumber(value.minus(1)), 2)
 /** 身死时减半的仙缘也是金额 */
 const deathKarmaText = computed(() => fmtInt(preview.value.deathKarma))
 
@@ -70,11 +77,11 @@ function ascend() {
 
 /**
  * 转世：化神期起可做，清空范围与飞升**完全一样**（连修真/技艺·法宝也不保留），
- * 只结算仙缘 —— 门槛低所以到手少（化神期约 25 点，渡劫期飞升约 197 点）。
+ * 只结算仙缘；具体收益取决于本世实际入库灵机及当前境界。
  */
 function reincarnate() {
   const ok = window.confirm(
-    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGainText.value} 点仙缘。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。\n如果继续修到渡劫期再飞升，同一套公式能拿到更多（当前可飞升时约 ${gainText.value} 点），还多结一颗道果。确定转世吗？`,
+    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGainText.value} 点仙缘。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。\n继续修到渡劫期可选择飞升，额外结一颗道果；仙缘仍按届时本世积累结算。确定转世吗？`,
   )
   if (ok) actions.reincarnate()
 }
@@ -106,7 +113,7 @@ function reincarnate() {
             <td class="dim nowrap">当前境界</td>
             <td class="num good">{{ view.realmName.value }}</td>
             <td class="dim nowrap">境界倍率</td>
-            <td class="num">×{{ derived.realmMult.toFixed(2) }}</td>
+            <td class="num">×{{ derived.realmProductionMult.toFixed(2) }}</td>
             <td class="dim nowrap">本世灵机</td>
             <td class="num">{{ fmtAmount(state.stats.lifeInsight ?? ZERO) }}</td>
           </tr>
@@ -120,12 +127,12 @@ function reincarnate() {
                   <div class="tip-desc">转世与飞升带走的因果，下一世还在身上。</div>
                   <div class="tip-section">加成倍率</div>
                   <div class="tip-row">
-                    <span class="k">每点</span><span class="v good">全局产出 +2%</span>
+                    <span class="k">每点</span><span class="v good">全局产出 +{{ fmtPercent(CONFIG.KARMA_BONUS_PER_POINT) }}</span>
                   </div>
                   <div class="tip-row">
                     <span class="k">软上限</span>
                     <span class="v">
-                      +200%（
+                      +{{ fmtPercent(CONFIG.KARMA_BONUS_CAP) }}（
                       {{ Math.round(CONFIG.KARMA_BONUS_CAP * 0.75 / CONFIG.KARMA_BONUS_PER_POINT) }}
                       点之后递减）
                     </span>
@@ -138,7 +145,7 @@ function reincarnate() {
                     <span class="k">每点</span><span class="v good">适用资源有限容量 +{{ fmtPercent(CONFIG.KARMA_STORAGE_PER_POINT, 2) }}（信符除外）</span>
                   </div>
                   <div class="tip-row">
-                    <span class="k">软上限</span><span class="v">+{{ fmtPercent(CONFIG.KARMA_STORAGE_CAP) }}（{{ Math.round(CONFIG.KARMA_STORAGE_CAP * 0.75 / CONFIG.KARMA_STORAGE_PER_POINT) }}点之后递减）</span>
+                    <span class="k">增长方式</span><span class="v">线性累加，无软上限；加工品无需仓容</span>
                   </div>
                   <div class="tip-row">
                     <span class="k">当前仓储</span><span class="v good">+{{ fmtPercent(karmaStorageBonus, 1) }}</span>
@@ -226,7 +233,7 @@ function reincarnate() {
                   </span>
                   <template #heading>
                     {{ next.name }}
-                    <span class="tip-right">基础境界倍率 ×{{ next.mult.toFixed(2) }}</span>
+                    <span class="tip-right">基础境界倍率 ×{{ realmProductionBase(next.mult).toFixed(2) }}</span>
                   </template>
                   <template #tip>
                     <div class="tip-desc">{{ next.desc }}</div>
@@ -264,7 +271,7 @@ function reincarnate() {
           </tbody>
         </table>
       </template>
-      <div v-else class="empty">已经是渡劫期，接下来只有飞升一途。</div>
+      <div v-else class="empty">已经达到渡劫期，可以选择飞升。</div>
     </div>
   </div>
 
@@ -272,7 +279,7 @@ function reincarnate() {
     <div class="box-head">
       <HoverTip label="转世与飞升"><template #tip>
           <p>两者清空范围相同，都结算仙缘；飞升额外结一颗道果。转世并非飞升门槛。</p>
-          <p>重置：资源、弟子、建筑、修真、技艺·法宝（含祭炼等级）、制作进度、境界。保留：成就、仙缘、道果、累计统计与宗门纪事。</p>
+          <p>重置：资源、弟子、建筑、修真、技艺·法宝（含祭炼等级）、制作进度、境界。保留：成就、仙缘、道果、道心与永久修持、累计统计与宗门纪事。</p>
           <p>首颗道果解锁「道果统筹」：重修时即可自动炼制，可指定优先配方并保留材料。</p>
         </template></HoverTip>
     </div>
@@ -310,6 +317,18 @@ function reincarnate() {
         <span v-else class="v dim">待修到 {{ REALMS[REINCARNATE_REALM_INDEX].name }} 结算</span>
       </div>
       <div style="padding: 8px 0">
+        <template v-if="canReincarnate">
+          <div class="tip-row">
+            <span class="k">仙缘产出加成</span>
+            <span class="v">{{ karmaEffectText(reincarnationEffects.before.karmaMult) }} → {{ karmaEffectText(reincarnationEffects.after.karmaMult) }}</span>
+          </div>
+          <div class="tip-row">
+            <span class="k">仙缘仓储加成</span>
+            <span class="v">{{ karmaEffectText(reincarnationEffects.before.karmaStorageMult) }} → {{ karmaEffectText(reincarnationEffects.after.karmaStorageMult) }}</span>
+          </div>
+          <p class="small dim">仓储加成仅作用于有上限资源，加工品不受仓容限制。仅比较永久仙缘的加成；境界、建筑与研究需要重修，道心和永久修持保留。</p>
+          <p v-if="unusedDaoHeart" class="small">已有愿力可证心；请先前往香火页处理。转世会清空愿力，不会自动证心。</p>
+        </template>
         <button class="btn" :disabled="!canReincarnate" @click="reincarnate">转世</button>
       </div>
 

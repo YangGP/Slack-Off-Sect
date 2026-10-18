@@ -385,9 +385,20 @@ const CORE_RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '转世与飞升带走的因果。每点仙缘永久提升全局产出与仓储容量，两种加成分别递减。',
+    desc: '转世与飞升带走的因果。每点仙缘永久提升全局产出与有限仓储容量。生产加成递减，仓储每点线性增加0.15%。',
   },
 ]
+
+/** 稳定加工品可以累积；原料、粒子及能量仍由有限仓容约束。 */
+export const UNCAPPED_CRAFTED_RESOURCES = new Set([
+  'plank', 'daoNote', 'daoTreatise', 'arrayDiagram', 'steel', 'arrayBase',
+  'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver',
+  'spiritLiquid', 'crystal', 'immortalHerb', 'pill', 'condensePill', 'nineTurnPill',
+  'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure', 'ascensionSeal',
+])
+for (const resource of CORE_RESOURCES) {
+  if (UNCAPPED_CRAFTED_RESOURCES.has(resource.id)) resource.baseMax = Infinity
+}
 
 /** 核心资源 + 可选模块（猎杀）贡献的资源，按锚点插回保持原顺序 */
 export const RESOURCES = insertAfter(CORE_RESOURCES, HUNT_RESOURCE_ANCHOR, HUNT_RESOURCES)

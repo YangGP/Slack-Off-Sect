@@ -12,12 +12,37 @@ import { longOfflineFixture } from './lib/offline-fixture.mjs'
 
 const startAt = Date.UTC(2026, 9, 15)
 
+/** 比较同一在线窗口：审计复用必须保留逐秒事件、日志、状态与最终派生。 */
+export function compareOnlineEconomy(seed, seconds = 60) {
+  const run = optimized => {
+    const state = E.cloneRuntime(seed), derived = E.createDerived()
+    state.nextEventAt = startAt + 5000
+    let randomSeed = 2468
+    setGameContext(state, { now: () => startAt, random: () => {
+      randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >>> 0
+      return randomSeed / 4294967296
+    } })
+    E.tick(state, derived, seconds, { startAt, events: true,
+      ...(optimized ? { cacheEconomy: true, economyDetails: false, ...(optimized === 'deferred' ? { finalEconomyDetails: false } : {}) } : {}) })
+    assert.equal(economyDetailsEnabled(state), true)
+    if (optimized === 'deferred') {
+      setGameContext(state, { now: () => state.lastTickAt })
+      E.recompute(state, derived)
+    }
+    return { state: serialize(state, state.lastTickAt), derived, randomSeed }
+  }
+  assert.deepEqual(run(true), run(false), '在线审计复用与默认逐秒一致')
+  assert.deepEqual(run('deferred'), run(false), '仅延后提示明细不改变在线状态或最终派生')
+  return true
+}
+
 export function runOfflineChecks(ok) {
   /**
    * 同一离线窗口的两次推演必须逐位一致：区别只有「逐步复用经济数据」与「完整重算」，
    * 以及是否生成界面明细。长离线已改为有界近似，这条断言保证近似本身是确定性的。
    */
   function compare(label, seed, seconds = 180) {
+    compareOnlineEconomy(seed, Math.min(seconds, 60))
     const run = cacheEconomy => {
       const state = E.cloneRuntime(seed), derived = E.createDerived()
       let randomSeed = 2468

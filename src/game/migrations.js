@@ -1,4 +1,4 @@
-import { RESOURCES } from '@/data/resources'
+import { RESOURCES, UNCAPPED_CRAFTED_RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
 import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
@@ -160,6 +160,17 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   merged.settings.craftReserves = Object.fromEntries(Object.entries(state.settings?.craftReserves || {})
     .filter(([id]) => Object.hasOwn(fresh.resources, id))
     .map(([id, value]) => [id, nonNegativeMoney(value)]))
+  // 无上限加工品不能继续按仓容取百分比。旧道果自动化保守保留全部现有加工品，
+  // 高于现有库存的显式定额保持不变；仅迁移一次，玩家可在逐项保留中调整。
+  if (state.uncappedCraftVersion !== 1 && merged.dao.gte(1) && Number(merged.settings.craftReservePercent) > 0) {
+    for (const id of UNCAPPED_CRAFTED_RESOURCES) {
+      merged.settings.craftReserves[id] = moneyMax(merged.settings.craftReserves[id] ?? ZERO, merged.resources[id] ?? ZERO)
+    }
+    merged.logSeq = Math.min(Number.MAX_SAFE_INTEGER, (Number.isSafeInteger(merged.logSeq) && merged.logSeq >= 0 ? merged.logSeq : 0) + 1)
+    merged.log.unshift({ id: merged.logSeq, at: merged.lastSaveAt, kind: 'info',
+      text: '加工品已取消仓容：原百分比保留已改为保留当前加工品库存（已有更高定额不变），可在炼制页逐项保留中调整。原料仍按仓容比例保留。' })
+  }
+  merged.uncappedCraftVersion = 1
   for (const key of ['autoCraft', 'craftTargets', 'craftTimers', 'craftProgress']) {
     merged[key] = { ...merged[key] }
     if (Object.hasOwn(merged[key], 'condenseStone') && !Object.hasOwn(merged[key], 'infuseStone')) merged[key].infuseStone = merged[key].condenseStone

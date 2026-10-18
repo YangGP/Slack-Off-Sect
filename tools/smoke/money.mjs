@@ -91,7 +91,7 @@ export function moneyDomain({ ok, section }) {
       s.upgrades.storeFrameArt = true
       s.upgrades.storeFrameRefine = true
       E.recompute(s, d)
-      return RESOURCES.filter(r => r.integer).every(r => d.max[r.id].isInteger())
+      return RESOURCES.filter(r => r.integer && d.max[r.id].isFinite()).every(r => d.max[r.id].isInteger())
     })())
 
     // 运行时快照必须保留 Decimal 才能继续运算。

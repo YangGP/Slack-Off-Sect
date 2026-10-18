@@ -149,7 +149,7 @@ export function goldenCoreProduction({ ok, close, section }) {
       E.moneyEq(s.resources.qi, qiBefore.minus(CRAFT_MAP.condenseCrystal.cost.qi * crystalNeed)) &&
       E.moneyEq(s.resources.stone, stoneBefore))
     ok('学工艺后能加工阵基并完成第一座晶核阵', E.moneyEq(E.craft(s, d, 'assembleArrayBase', { times: arrayNeed }), arrayNeed) && E.buyBuilding(s, d, 'crystalArray', 1) === 1)
-    ok('晶核阵消费成品并扩充灵晶仓储', E.moneyIsZero(s.resources.crystal) && E.moneyIsZero(s.resources.arrayBase) && E.moneyEq(d.max.crystal, 45))
+    ok('晶核阵消费成品并保留无限灵晶库存', E.moneyIsZero(s.resources.crystal) && E.moneyIsZero(s.resources.arrayBase) && !d.max.crystal.isFinite() && d.craftBonusByResource.crystal > 0)
     const recipe = CRAFT_MAP.condenseCrystal
     const beforeRate = E.eventResourceRate(s, d, 'crystal')
     const beforeYield = E.craftYield(d, recipe)
