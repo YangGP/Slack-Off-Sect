@@ -29,16 +29,10 @@ export function habitabilityEffects(habitability, population) {
   return { globalMult, discipleMult, leaveChance }
 }
 
-/** 派生数据的初始结构（不存档，每帧重算） */
 /**
  * 软上限（通用 idler 形状）：前 75% 原样给，剩下的渐近到 limit 但永远不到。
  *   softCap(x, L)：x ≤ 0.75L 时返回 x；否则 0.75L + 0.25L·(1 − 0.25L/(x − 0.5L))
- * 例：L = 2 时，x = 2 → 1.60，x = 10 → 1.94，x = ∞ → 2.00。
- */
-/**
- * 软上限（通用 idler 形状）：前 75% 原样给，剩下的渐近到 limit 但永远不到。
- *   softCap(x, L)：x ≤ 0.75L 时返回 x；否则 0.75L + 0.25L·(1 − 0.25L/(x − 0.5L))
- * 例：L = 2 时，x = 2 → 1.60，x = 10 → 1.94，x = ∞ → 2.00。
+ * 例：L = 2 时，x = 2 → 1.75，x = 10 → 1.97，x = ∞ → 2.00。
  * 入参可能是随永久货币增长的无界金额，全程在 Decimal 域计算，不先转 Number。
  */
 export function softCap(x, limit) {
@@ -51,6 +45,15 @@ export function softCap(x, limit) {
   const over = abs.minus(free)
   const capped = free.plus(delta).minus(delta.times(delta).div(over.plus(delta)))
   return value.isNegative() ? capped.negated() : capped
+}
+
+/** 永久仙缘自身的乘区；不含本世研究提供的额外加成。预览与经济结算共用。 */
+export function karmaMultipliers(amount) {
+  const karma = moneyMax(ZERO, amount ?? ZERO)
+  return {
+    karmaMult: ONE.plus(softCap(karma.times(CONFIG.KARMA_BONUS_PER_POINT), CONFIG.KARMA_BONUS_CAP)),
+    karmaStorageMult: ONE.plus(karma.times(CONFIG.KARMA_STORAGE_PER_POINT)),
+  }
 }
 
 export function createDerived() {
@@ -84,6 +87,7 @@ export function createDerived() {
     /** 综合产出倍率：含无界的仙缘/道果层，金额运算全程 Decimal */
     globalMult: ONE,
     realmMult: 1,
+    realmBaseProductionMult: 1,
     karmaMult: ONE,
     /** 仙缘对有限资源容量的独立倍率 */
     karmaStorageMult: ONE,

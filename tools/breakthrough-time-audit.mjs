@@ -15,9 +15,40 @@ import { setGameContext } from '../src/game/context.js'
  * to isolate preparation/recovery cost. These forced outcomes are not random samples.
  */
 import fs from 'node:fs'
+import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { createInitialState } from '../src/game/state.js'
 import * as E from './engine-fixture.mjs'
 import { createBot } from './player-bot.mjs'
+
+// 新成对测量保留独立参数与报告，旧模式及历史报告口径不变。
+if (process.argv[2] === '--paired') {
+  const { measurePacing, pacingOptions } = await import('./lib/pacing-scenario.mjs')
+  const options = pacingOptions(process.argv.slice(3))
+  const baseline = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    node: process.version,
+    files: Object.fromEntries(['tools/breakthrough-time-audit.mjs', 'tools/player-bot.mjs',
+      'tools/lib/pacing-scenario.mjs', 'tools/lib/pacing-economy.mjs', 'src/game/systems/simulation.js',
+      'src/data/realms.js', 'src/data/resources.js', 'src/data/buildings.js', 'src/data/techniques.js', 'src/data/disciples.js',
+      'src/game/systems/faith.js', 'src/game/systems/craftingRules.js', 'src/game/migrations.js', 'src/data/config.js', 'src/game/systems/progression.js', 'src/game/systems/economy.js', 'src/game/systems/core.js'].map(path =>
+      [path, createHash('sha256').update(fs.readFileSync(path)).digest('hex')])) }
+  const reportId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
+  const directory = `.smoke-breakthrough-time/p1-${reportId}`
+  fs.mkdirSync(directory, { recursive: true })
+  const result = measurePacing(options, entry => {
+    const { snapshot, ...progress } = entry
+    fs.writeFileSync(`${directory}/progress.json`, JSON.stringify({ completed: false, status: 'running', options, baseline, ...progress, snapshot }))
+    console.log(JSON.stringify({ progress }))
+  })
+  result.baseline = baseline
+  fs.writeFileSync(`${directory}/result.json`, JSON.stringify(result, null, 2))
+  fs.writeFileSync(`${directory}/progress.json`, JSON.stringify({ completed: result.completed, status: result.stopReason, simulatedSeconds: result.simulatedSeconds }))
+  console.log(JSON.stringify({ report: `${directory}/result.json`, completed: result.completed,
+    stopReason: result.stopReason, hours: result.simulatedSeconds / 3600,
+    realm: result.final.realm, ascensions: result.ascensions.length, reincarnations: result.reincarnations.length, deaths: result.deaths.length,
+    firstDaoHeartSeconds: result.firstDaoHeartSeconds, wallSeconds: result.wallSeconds }))
+  process.exit(0)
+}
 
 const mode = process.argv[2] || 'baseline'
 /** 报告边界：金额统一降到 Number 再输出，保持原有 JSON 形状（数字，而不是 Decimal 字符串）。 */

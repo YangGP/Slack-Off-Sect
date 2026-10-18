@@ -22,6 +22,7 @@ import * as extensions from './extensions.mjs'
 export const smokeChecks = [
   catalog.dataIntegrity,
   startup.initialState,
+  storage.uncappedCrafting,
   buildings.buildingActions,
   economy.incomeBreakdown,
   disciples.discipleArrivals,

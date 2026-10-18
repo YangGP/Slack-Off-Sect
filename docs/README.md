@@ -1,6 +1,6 @@
 # 文档导航
 
-更新：2026-10-17，对照v0.384。了解当前游戏先读DESIGN，查待开发项读ROADMAP，查完整参数读TABLES。研究、工艺、弟子等专题分别维护细节，避免同一状态或费用多处漂移。
+更新：2026-10-18，对照v0.41.0。了解当前游戏先读DESIGN，查待开发项读ROADMAP，查完整参数读TABLES。研究、工艺、弟子等专题分别维护细节，避免同一状态或费用多处漂移。
 
 ## 当前规则与工程
 
@@ -20,7 +20,7 @@
 
 | 文档 | 状态与范围 |
 | --- | --- |
-| [ROADMAP](ROADMAP.md) | 待办与优先级的统一入口；D2待校准，D7香火长期成长已实现、长期平衡待验证，D5＋D9／D8待设计或实施，D3暂缓 |
+| [ROADMAP](ROADMAP.md) | 全部待办与阶段排期：P0上线收尾→P1节奏经济→P2弟子减负→P3誓约→P4猎场→P5事务→P6评审；D5＋D9首版已完成，D3在P1末复评 |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
 | [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现，深山、禁地与生态来袭联动待扩展 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |
@@ -29,10 +29,13 @@
 
 | 文档 | 阅读边界 |
 | --- | --- |
-| [PACING-AUDIT](PACING-AUDIT.md) | 2026-10-17修正备料策略后的逐境测量，截至化神；当前完整首飞尚未重测 |
+| [PACING-AUDIT](PACING-AUDIT.md) | 2026-10-17历史逐境测量，截至化神；当前完整首飞参照样本见P1-BASELINE |
+| [P1-BASELINE](P1-BASELINE.md) | 2026-10-18首飞、多世、低频、事件、专精与供能测量；含150秒操作／睡眠作息的未转世直飞对照，非全局平衡验收 |
+| [REINCARNATION-PACING](REINCARNATION-PACING.md) | 修改前的化神转世与直飞补测，以及分段校准方案；历史结果不能作为修改后节奏 |
+| [P1-IMPLEMENTATION](P1-IMPLEMENTATION.md) | 新版机制已实施；首转5种子3.33～4.36天，种子2直飞／转世1次／2次为27.26／16.39／12.40天，旧版12份报告单列 |
 | [BUILDING-PRICE-COMPARISON](BUILDING-PRICE-COMPARISON.md) | 建筑报价与扩张回报分析；候选涨价不等于现价 |
 | [RESEARCH-CRAFT-PRICE-COMPARISON](RESEARCH-CRAFT-PRICE-COMPARISON.md) | 科研、材料与专精分析；早期试调值已部分由知识费用替换 |
-| [KITTENS-BALANCE-COMPARISON](KITTENS-BALANCE-COMPARISON.md) | 早期猫国结构对照与D编号依据，旧数值和诊断以当前规则及路线图修正为准 |
+| [KITTENS-BALANCE-COMPARISON](KITTENS-BALANCE-COMPARISON.md) | 2026-10-18重新核对猫国重置、永久降涨价升级和仓容／加工结构；后文早期数值及D编号按历史资料阅读 |
 | [KITTENS-RESEARCH-REFERENCE](KITTENS-RESEARCH-REFERENCE.md) | 猫国研究设计参考，不是本作现行规则 |
 
 ## 维护原则

@@ -28,7 +28,7 @@ export function runDiscipleChecks(E, ok, close) {
   const other = s.disciples.members[1]
   E.recompute(s, d)
   const source = d.sources.qi.find(row => row.kind === 'job')
-  ok('岗位按不同境界个体汇总，口粮同系数', close(d.discipleJobWeights.farmer, 3) && close(d.upkeep, 1.5) && close(source.raw, 1.8))
+  ok('岗位按不同境界个体汇总，口粮同系数', close(d.discipleJobWeights.farmer, 3) && close(d.upkeep, 1.125) && close(source.raw, 1.8))
   ok('弟子成长不增加建筑自带产出', close(d.sources.qi.find(row => row.kind === 'building' && row.id === 'spiritField')?.value, buildingIncome))
   const grownRate = source.value
   first.realm = 0
@@ -37,7 +37,7 @@ export function runDiscipleChecks(E, ok, close) {
   first.realm = 4
   s.realm = 3
   E.recompute(s, d)
-  ok('退境保留个人境界并压低产出及口粮', first.realm === 4 && close(discipleFactor(first, s.realm), 1.6) && close(d.upkeep, 0.25 * 1.6 * 2.6))
+  ok('退境保留个人境界并压低产出及口粮', first.realm === 4 && close(discipleFactor(first, s.realm), 1.6) && close(d.upkeep, 0.25 * 1.3 * 2.6))
   s.realm = 4
   E.recompute(s, d)
   ok('宗门恢复后个人加成恢复', first.realm === 4 && close(discipleFactor(first, s.realm), 2))
@@ -186,11 +186,11 @@ export function runDiscipleChecks(E, ok, close) {
   const [account, ad] = setup(2, 4)
   account.disciples.members[0].realm = 4
   E.tick(account, ad, 10, { events: false })
-  ok('个人口粮按有效境界累计，停留时间独立于灵根', close(account.disciples.members[0].totalQiConsumed, 10) && close(account.disciples.members[1].totalQiConsumed, 5) && account.disciples.members.every(member => member.residenceSeconds === 10))
+  ok('个人口粮按有效境界累计，停留时间独立于灵根', close(account.disciples.members[0].totalQiConsumed, 7.5) && close(account.disciples.members[1].totalQiConsumed, 3.75) && account.disciples.members.every(member => member.residenceSeconds === 10))
   const full = account.disciples.members[0]
   full.cultivation = cultivationRequired(full.realm)
   E.tick(account, ad, 1, { events: false })
-  ok('修满后仍累计在宗门时间与实际口粮', full.residenceSeconds === 11 && close(full.totalQiConsumed, 11))
+  ok('修满后仍累计在宗门时间与实际口粮', full.residenceSeconds === 11 && close(full.totalQiConsumed, 8.25))
   const [shortage, shortageDerived] = setup(2, 0)
   shortage.disciples.jobs.farmer = 0
   shortage.resources.qi = E.money(0.125)
@@ -202,9 +202,9 @@ export function runDiscipleChecks(E, ok, close) {
   const accountingSave = normalizeState(JSON.parse(JSON.stringify(account)))
   ok('个人停留与累计消耗随存档保留', accountingSave.disciples.members[0].residenceSeconds === full.residenceSeconds && E.moneyEq(accountingSave.disciples.members[0].totalQiConsumed, full.totalQiConsumed))
   const year = DISCIPLE_DISMISSAL.yearSeconds
-  ok('逐出按当前年基础口粮乘已满年数加1并向上取整', E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year - 0.01 }, 1), 358) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year }, 1), 715) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year * 2 }, 1), 1072))
+  ok('逐出按当前年基础口粮乘已满年数加1并向上取整', E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year - 0.01 }, 1), 334) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year }, 1), 668) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year * 2 }, 1), 1002))
   ok('逐出费用不随历史突破或累计口粮增加', E.moneyEq(discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: E.money(0) }, 0), 540) && E.moneyEq(discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: E.money(1000000) }, 0), 540))
-  ok('宗门退境按当前有效境界计算年基础口粮', E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 1), 715) && E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 4), 2160))
+  ok('宗门退境按当前有效境界计算年基础口粮', E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 1), 668) && E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 4), 1620))
   const [expel, ed] = setup(3, 0)
   const [a, b, c] = expel.disciples.members
   a.residenceSeconds = year

@@ -9,6 +9,7 @@ import * as E from './engine-fixture.mjs'
 import { JOB_MAP } from '../src/data/jobs.js'
 import { CONFIG } from '../src/data/config.js'
 import { ALL_UPGRADES } from '../src/data/upgrades.js'
+import { UNCAPPED_CRAFTED_RESOURCES } from '../src/data/resources.js'
 import { CRAFTS, craftCost } from '../src/data/crafts.js'
 import { ZERO, ceilMoney, money, moneyGt, moneyGte, moneyLt, moneyLte, moneyMax, moneyMin, moneySum } from '../src/game/decimal.js'
 
@@ -120,8 +121,14 @@ export const STONE_QI_FLOOR = 400
 
 export function createBot(state, derived, policy = {}) {
   const submitCraft = (id, times = 1) => E.craft(state, derived, id, { times })
-  const realmNeed = () => policy.realmCost
-    ? policy.realmCost(state, derived) : E.realmCost(state, derived, state.realm + 1)
+  const realmNeed = () => {
+    const cost = policy.realmCost ? policy.realmCost(state, derived) : E.realmCost(state, derived, state.realm + 1)
+    const goals = policy.resourceGoals?.(state, derived)
+    if (!goals) return cost
+    const plan = { ...(cost || {}) }
+    for (const [id, amount] of Object.entries(goals)) plan[id] = moneyMax(plan[id] ?? ZERO, amount)
+    return plan
+  }
   const normalHabitability = () => derived.habitability - (state.habitabilityPenalty || 0)
   const comfortFloor = () => state.disciples.total + (state.realm >= 5 ? 100 : 40)
   const comfortCeiling = () => state.disciples.total + (state.realm >= 5 ? 120 : 60)
@@ -173,7 +180,7 @@ export function createBot(state, derived, policy = {}) {
     // 宜居度试行后拥挤可让岗位减半；此处保留原基准分工策略，用于观察同一参照玩家受到的影响。
     const realmUpkeepMult = Math.max(
       1e-9,
-      Math.pow(derived.realmMult || 1, CONFIG.DISCIPLE_UPKEEP_REALM_EXP),
+      Math.pow(derived.realmBaseProductionMult || 1, CONFIG.DISCIPLE_UPKEEP_REALM_EXP),
     )
     // 口粮是金额：除出来的仍是金额，只在最后转成人数（Number 计数）。
     const baseUpkeep = E.moneyToNumber(money(derived.upkeep).div(realmUpkeepMult))
@@ -217,11 +224,13 @@ export function createBot(state, derived, policy = {}) {
     const qiBudget = moneyMax(ZERO, money(state.resources.qi ?? ZERO).minus(reserveQi))
     let bestId = null
     let bestScore = Infinity
+    const decisions = policy.onBuildDecision ? [] : null
+    const reject = (id, reason, cost) => decisions?.push({ id, reason, cost })
     // 依赖追踪选中的设施必须可买，不能因旧的可选采购表遗漏而永久等仓容。
     const candidates = [...new Set([...PRIORITY, ...requiredBuildings.keys()])]
     for (let idx = 0; idx < candidates.length; idx++) {
       const id = candidates[idx]
-      if (!derived.unlockedBuildings.includes(id)) continue
+      if (!derived.unlockedBuildings.includes(id)) { reject(id, 'locked'); continue }
       const cost = E.buildingCost(state, id, 1)
       const meta = E.BUILDING_MAP[id]
       // 攒破境前置研究期间：先别买吃这些资源的建筑，把手头那份攒够再去点研究。
@@ -230,17 +239,17 @@ export function createBot(state, derived, policy = {}) {
       // 否则首屋涨价后会出现「没弟子→没灵机→不能参悟」的开局死锁。
       const housing = (meta?.effects?.maxDisciples || 0) > 0 &&
         state.disciples.total >= (derived.maxDisciples || 0)
-      if (!required && !housing && !wantsComfortBuilding(meta)) continue
+      if (!required && !housing && !wantsComfortBuilding(meta)) { reject(id, 'comfort-target', cost); continue }
       const storageFix = shortRes.some((r) => (meta?.effects?.storage?.[r] || 0) > 0)
       if (policy.onlyBreakthrough && !required && !storageFix) {
         const support = ['hut', 'spiritField', 'lumberYard', 'granary', 'quarry'].includes(id) && E.countOf(state, id) === 0
         const comfort = comfortOnly(meta) && normalHabitability() < state.disciples.total
-        if (!support && !housing && !comfort) continue
+        if (!support && !housing && !comfort) { reject(id, 'optional-project', cost); continue }
       }
       // 床位不足时不能因为「在攒破境材料」把住房一起锁死：首屋现在要灵木，
       // 木料一旦被预留就再也买不起房，开局会永久停在无弟子状态。
       if (reserveCost && !required && !housing && !storageFix && Object.keys(cost).some((k) =>
-        moneyLt(money(state.resources[k] ?? ZERO).minus(cost[k]), reserveCost[k] ?? ZERO))) continue
+        moneyLt(money(state.resources[k] ?? ZERO).minus(cost[k]), reserveCost[k] ?? ZERO))) { reject(id, 'reserve', cost); continue }
       // 开局自举期：先伐木场、后谷仓，再攒首座采矿场 —— 避免反复扩屋把开局木料花光。
       //
       // 但这条锁必须留一个例外，否则会死锁：采矿场自己也要木材（前置还得先有谷仓），
@@ -260,10 +269,10 @@ export function createBot(state, derived, policy = {}) {
       if (bootstrapLocked) {
         const housingCapped = state.disciples.total >= (derived.maxDisciples || 0)
         const isHousing = (E.BUILDING_MAP[id]?.effects?.maxDisciples || 0) > 0
-        if (!(housingCapped && isHousing)) continue
+        if (!(housingCapped && isHousing)) { reject(id, 'bootstrap', cost); continue }
       }
-      if (moneyGt(cost.qi ?? ZERO, qiBudget)) continue
-      if (!E.canAfford(state, cost)) continue
+      if (moneyGt(cost.qi ?? ZERO, qiBudget)) { reject(id, 'qi-budget', cost); continue }
+      if (!E.canAfford(state, cost)) { reject(id, 'materials', cost); continue }
       let score = idx + E.countOf(state, id) * 0.6
       if (comfortOnly(E.BUILDING_MAP[id]) && normalHabitability() < comfortFloor()) score -= 500
       if (required) score -= 2000
@@ -276,9 +285,13 @@ export function createBot(state, derived, policy = {}) {
         bestScore = score
         bestId = id
       }
+      decisions?.push({ id, reason: 'eligible', cost, score, required, housing, storageFix })
     }
+    policy.onBuildDecision?.({ candidates: decisions, selected: bestId, reserveCost, shortRes })
     if (!bestId) return false
-    E.buyBuilding(state, derived, bestId, 1)
+    const cost = E.buildingCost(state, bestId, 1)
+    const bought = E.buyBuilding(state, derived, bestId, 1)
+    policy.onBuildResult?.({ id: bestId, cost, bought })
     return true
   }
 
@@ -342,6 +355,7 @@ export function createBot(state, derived, policy = {}) {
       if (policy.onlyBreakthrough) continue
       if (derived.availableUpgrades.includes(id)) visit(id)
     }
+    for (const id of policy.upgrades?.(state, derived) || []) visit(id)
     for (const res of Object.keys(next)) visitResource(res)
     // 专项审计可主动投资当前阶段的设施；仍走真实研究、材料和建设动作。
     for (const project of policy.projects?.(state, derived) || []) {
@@ -459,7 +473,7 @@ export function createBot(state, derived, policy = {}) {
         // 灵石（stone）必须在这张名单里：破境与研究都要它，而它的唯一来源就是点石成灵。
         // 早先漏了它，参照玩家于是把矿石与灵气堆到满仓、却一件灵石都不做（实测卡在筑基期/元婴期）。
         const knowledge = ['daoNote', 'daoTreatise', 'arrayDiagram'].includes(c.out)
-        if (!knowledge && !['plank', 'pill', 'talisman', 'artifact', 'arrayBase', 'stone'].includes(c.out)) continue
+        if (!knowledge && !UNCAPPED_CRAFTED_RESOURCES.has(c.out) && c.out !== 'stone') continue
         // 阵基的下料也是短期需求；普通成品还预留进阶配方的一份料。
         let inputDemand = ZERO
         for (const recipe of CRAFTS) {
@@ -518,14 +532,19 @@ export function createBot(state, derived, policy = {}) {
       }),
     )
     let reserveCost = null
-    const investmentOrder = [...new Set(['homePlanning', 'flowField', 'earthEssence', ...derived.availableUpgrades])]
-      .filter(id => derived.availableUpgrades.includes(id))
+    let reserveSource = null
+    // 专题页研究（如凝愿法）不在普通页列表；只纳入策略明确请求且真实已解锁的条目。
+    const availableUpgrades = [...new Set([...derived.availableUpgrades,
+      ...(policy.upgrades?.(state, derived) || []).filter(id => E.UPGRADE_MAP[id] && !state.upgrades[id] && E.isUpgradeUnlocked(state, E.UPGRADE_MAP[id]))])]
+    const investmentOrder = [...new Set(['homePlanning', 'flowField', 'earthEssence', ...availableUpgrades])]
+      .filter(id => availableUpgrades.includes(id))
     for (const id of investmentOrder) {
       if (!prereq.has(id) && !storageFixIds.has(id)) continue
       const u = E.UPGRADE_MAP[id]
       // 仓容不足时先扩仓；不能一边攒永远装不下的费用，一边禁止买仓库。
       if (u && Object.entries(u.cost).every(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)) && !E.canAfford(state, u.cost)) {
         reserveCost = u.cost
+        reserveSource = { kind: 'research', id }
         break
       }
     }
@@ -537,6 +556,7 @@ export function createBot(state, derived, policy = {}) {
         const cost = E.buildingCost(state, id, 1)
         if (Object.entries(cost).every(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)) && !E.canAfford(state, cost)) {
           reserveCost = cost
+          reserveSource = { kind: 'building', id }
           break
         }
       }
@@ -545,10 +565,13 @@ export function createBot(state, derived, policy = {}) {
     if (!reserveCost && shortRes.length) {
       const expansion = E.BUILDINGS.filter(b => E.checkNeeds(state, b.needs) &&
         shortRes.some(r => (b.effects?.storage?.[r] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
-        .map(b => E.buildingCost(state, b.id, 1))
-        .filter(cost => Object.entries(cost).every(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)))
-        .sort((a, b) => moneySum(Object.values(a)).cmp(moneySum(Object.values(b))))[0]
-      if (expansion && !E.canAfford(state, expansion)) reserveCost = expansion
+        .map(b => ({ id: b.id, cost: E.buildingCost(state, b.id, 1) }))
+        .filter(({ cost }) => Object.entries(cost).every(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)))
+        .sort((a, b) => moneySum(Object.values(a.cost)).cmp(moneySum(Object.values(b.cost))))[0]
+      if (expansion && !E.canAfford(state, expansion.cost)) {
+        reserveCost = expansion.cost
+        reserveSource = { kind: 'capacity', id: expansion.id }
+      }
     }
     // 材料只差少数几项时攒一次完整破境费用，并预留缺失加工品的一份投入。
     // 金丹以前仅由加工品触发，以免开局攒基础资源时把自举建筑一起停掉。
@@ -557,7 +580,9 @@ export function createBot(state, derived, policy = {}) {
       const need = realmNeed() || {}
       const missing = Object.entries(need).filter(([r, v]) => moneyLt(state.resources[r] ?? ZERO, v))
       const craftedMissing = missing.filter(([r]) => !PRIMARY.has(r))
-      if (missing.length > 0 && missing.length <= 3 && (craftedMissing.length > 0 || state.realm >= 4)) {
+      const protectReadyQi = policy.protectBreakthrough && state.realm > 0 && E.countOf(state, 'hut') > 0 &&
+        missing.length === 1 && missing[0][0] === 'qi'
+      if (missing.length > 0 && missing.length <= 3 && (craftedMissing.length > 0 || state.realm >= 4 || protectReadyQi)) {
         const reserve = Object.fromEntries(Object.entries(need).filter(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)))
         for (const [r, v] of craftedMissing) {
           if (moneyGt(v, derived.max[r] ?? ZERO)) continue
@@ -567,7 +592,10 @@ export function createBot(state, derived, policy = {}) {
             for (const [k, val] of Object.entries(recipe.cost)) reserve[k] = moneyMax(reserve[k] ?? ZERO, val)
           }
         }
-        if (Object.keys(reserve).length) reserveCost = reserve
+        if (Object.keys(reserve).length) {
+          reserveCost = reserve
+          reserveSource = { kind: 'breakthrough', target: state.realm + 1 }
+        }
       }
     }
 
@@ -605,9 +633,10 @@ export function createBot(state, derived, policy = {}) {
       }
       return worst
     }
-    const ups = derived.availableUpgrades
+    const ups = availableUpgrades
       .map((id) => ALL_UPGRADES.find((u) => u.id === id))
       .filter(Boolean)
+      .filter(u => !policy.allowUpgrade || policy.allowUpgrade(u))
       .filter(u => !policy.onlyBreakthrough || prereq.has(u.id) || storageFixIds.has(u.id) ||
         (comfortOnly(u) && normalHabitability() < state.disciples.total))
       .filter(u => prereq.has(u.id) || storageFixIds.has(u.id) ||
@@ -622,6 +651,7 @@ export function createBot(state, derived, policy = {}) {
       const cost = (u) => E.moneySum(Object.values(u.cost || {}))
       return cost(a).cmp(cost(b)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
     })
+    let researchDecision = null
     if (ups.length) {
       // 优先：破境链上的前置研究、以及补仓储上限的研究；其余仍只点队首那条以免过度参悟。
       const u =
@@ -634,9 +664,13 @@ export function createBot(state, derived, policy = {}) {
         ups[0]
       const spendsReserve = reserveCost && !prereq.has(u.id) && !storageFixIds.has(u.id) &&
         Object.entries(u.cost).some(([r, v]) => moneyLt(money(state.resources[r] ?? ZERO).minus(v), reserveCost[r] ?? ZERO))
-      if (!spendsReserve && E.canAfford(state, u.cost)) E.research(state, derived, u.id)
+      const affordable = E.canAfford(state, u.cost)
+      researchDecision = { id: u.id, cost: u.cost, spendsReserve: !!spendsReserve, affordable, purchased: false }
+      if (!spendsReserve && affordable) researchDecision.purchased = E.research(state, derived, u.id)
     }
 
+    policy.onDecision?.({ reserveSource, reserveCost, shortRes, capacityNeed,
+      research: researchDecision, requiredBuildings: Object.fromEntries(requiredBuildings), prerequisites: [...prereq] })
     buildStep(0, reserveCost, shortRes, requiredBuildings)
 
     const housingNeed = state.disciples.total >= derived.maxDisciples

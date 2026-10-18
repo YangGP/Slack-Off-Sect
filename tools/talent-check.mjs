@@ -70,7 +70,7 @@ export function runTalentChecks(E, ok, close) {
   specialist.talents = [{ id: 'job_miner_xuan', level: 1 }]
   E.recompute(state, derived)
   const upkeep = derived.upkeep
-  ok('混合矿工只增加对应个人权重，口粮仍按人数境界', close(derived.discipleJobWeights.miner, 2.2) && close(derived.discipleWeight, 2) && close(upkeep, 1))
+  ok('混合矿工只增加对应个人权重，口粮仍按人数境界', close(derived.discipleJobWeights.miner, 2.2) && close(derived.discipleWeight, 2) && close(upkeep, 0.75))
   const rates = Object.fromEntries(['rock', 'ore', 'stone'].map(id => [id, derived.sources[id]?.find(row => row.kind === 'job')?.value]))
   specialist.talents = []
   E.recompute(state, derived)

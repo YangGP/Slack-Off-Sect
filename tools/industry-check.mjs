@@ -50,9 +50,11 @@ export function runIndustryChecks(E = Engine,
     s.resources.artifact = s.craftTargets.forgeArtifact
     plan = E.processingPlan(s, d)
     ok('达标配方释放全部工位给仍需加工的配方', plan.forgeArtifact.work === 0 && close(plan.refineSteel.work, d.processingCapacity.forge))
-    s.resources.steel = d.max.steel
-    ok('成品满仓不占用加工容量且状态明确', E.processingPlan(s, d).refineSteel.work === 0 && E.autoCraftStatus(s, d, 'refineSteel').reason.includes('满仓'))
+    s.resources.steel = E.money(10000)
+    s.craftTargets.refineSteel = E.money(10000)
+    ok('无限仓加工品达到有限库存目标后释放工位', E.processingPlan(s, d).refineSteel.work === 0 && E.autoCraftStatus(s, d, 'refineSteel').reason.includes('目标已达'))
     s.resources.steel = E.money(0)
+    s.craftTargets.refineSteel = E.money(0)
     s.resources.ore = E.money(0)
     ok('缺料产线释放容量并标明缺少的材料', E.processingPlan(s, d).refineSteel.work === 0 && E.autoCraftStatus(s, d, 'refineSteel').reason.includes('玄铁'))
     s.resources.ore = E.money(1000)
@@ -155,10 +157,12 @@ export function runIndustryChecks(E = Engine,
     ok('取消未做订单不收费，不留下待加工数量', !s.craftOrders.refineSteel && E.moneyEq(s.resources.ore, after))
     s.resources.ore = E.money(200)
     s.resources.steel = E.money(0)
+    s.craftTargets.refineSteel = E.money(0)
     const timerBeforeManual = JSON.stringify(s.craftTimers)
     ok('专业批量点击立即扣料出货，不排单也不改变自动进度', E.moneyIsPositive(E.craftBatch(s, d, 'refineSteel')) && E.moneyIsZero(E.craftBatch(s, d, 'refineSteel')) && E.moneyIsPositive(s.resources.steel) && !s.craftOrders.refineSteel && JSON.stringify(s.craftTimers) === timerBeforeManual)
     s.resources.ore = E.money(200)
     s.resources.steel = E.money(0)
+    s.craftTargets.refineSteel = E.money(0)
     E.requestCraft(s, d, 'refineSteel', 2)
     ok('订单流量出现在资源账目与供料缺口中', E.resourceFlow(d, 'ore').expenseItems.some(item => item.id === 'refineSteel') && E.processingBottleneck(s, d, 'refineSteel').inputs.some(input => input.res === 'ore'))
     s.settings.craftReserves.ore = E.money(200)
@@ -180,6 +184,7 @@ export function runIndustryChecks(E = Engine,
     ok('订单可以超过自动目标，结束后恢复补库目标而不双重出货', s.craftTimers.refineSteel.made === 3 && !s.craftOrders.refineSteel && E.processingPlan(s, d).refineSteel.work === 0)
     s.autoCraft.refineSteel = false
     s.resources.steel = E.money(0)
+    s.craftTargets.refineSteel = E.money(0)
     E.requestCraft(s, d, 'refineSteel', 10)
     E.requestCraft(s, d, 'forgeArtifact', 10)
     const a = s.craftTimers.refineSteel.made
@@ -219,11 +224,13 @@ export function runIndustryChecks(E = Engine,
     s.settings.craftReserves.qiEnergy = E.money(100)
     ok('驱动保留灵能库存', E.processingPlan(s, d).refineSteel.boost === 0)
     s.settings.craftReserves.qiEnergy = E.money(0)
-    s.resources.steel = d.max.steel
+    s.resources.steel = E.money(10000)
+    s.craftTargets.refineSteel = E.money(10000)
     const before = s.resources.qiEnergy
     E.runAutoCraft(s, d, 2)
-    ok('满仓停线不耗加工动力', E.moneyEq(s.resources.qiEnergy, before))
+    ok('达标停线不耗加工动力', E.moneyEq(s.resources.qiEnergy, before))
     s.resources.steel = E.money(0)
+    s.craftTargets.refineSteel = E.money(0)
     s.upgradeEnabled.energyCore = false
     E.recompute(s, d)
     ok('停用灵能枢释放维持费并停止灵能加速', d.processingPowerCapacity === 0 && E.processingPlan(s, d).refineSteel.boost === 0)

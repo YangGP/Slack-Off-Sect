@@ -133,7 +133,7 @@ const CORE_BUILDINGS = [
     cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
     desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座提高灵液、灵晶制作产出各15%，并保存备用晶核。',
-    effects: { craftBonusByResource: { spiritLiquid: 0.15, crystal: 0.15 }, storage: { crystal: 15 } },
+    effects: { craftBonusByResource: { spiritLiquid: 0.15, crystal: 0.15 } },
     upkeep: { qi: 1 },
     needs: { realm: 5, upgrades: ['crystalTheory', 'crystalCraft'] },
   },
@@ -283,8 +283,8 @@ const CORE_BUILDINGS = [
     group: 'store',
     cost: { plank: 12, ore: 700, steel: 4 },
     priceRatio: 1.25,
-    desc: '石殿分设料架与阵材格，专存营造原料、木板、玄钢、阵基与后期复合建材。',
-    effects: { storage: { wood: 10000, stone: 8000, rock: 6000, ore: 6000, plank: 1500, steel: 120, arrayBase: 100, spiritMortar: 200, ironMortar: 100, mithril: 60, arcaneGold: 40, crystalSilver: 40 } },
+    desc: '石殿分设料架与阵材格，专存灵木、灵石、矿石与玄铁；木板、玄钢等加工品无需仓容。',
+    effects: { storage: { wood: 10000, stone: 8000, rock: 6000, ore: 6000 } },
     needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['earthEssence'] },
   },
   {
@@ -296,9 +296,9 @@ const CORE_BUILDINGS = [
     group: 'store',
     cost: { spiritMortar: 20, stone: 2000, plank: 15, ore: 500, insight: 2000 },
     priceRatio: 1.3,
-    desc: '混灵土固基、铁箍封边，专存大宗营造料与铸造件，兼收灵气 —— 洞天之前的主力仓。',
+    desc: '混灵土固基、铁箍封边，专存大宗营造原料，兼收灵气 —— 洞天之前的主力仓。',
     effects: {
-      storage: { qi: 15000, wood: 15000, rock: 15000, stone: 15000, ore: 15000, herb: 8000, steel: 400, plank: 1500, arrayBase: 200, talisman: 300, artifact: 300, spiritMortar: 600, ironMortar: 300, mithril: 120, arcaneGold: 80, crystalSilver: 80 },
+      storage: { qi: 15000, wood: 15000, rock: 15000, stone: 15000, ore: 15000, herb: 8000 },
     },
     needs: { realm: 5, upgrades: ['earthEssence'] },
   },
@@ -309,8 +309,8 @@ const CORE_BUILDINGS = [
     group: 'store',
     cost: { spiritMortar: 8, plank: 6, arrayBase: 2, herb: 500 },
     priceRatio: 1.22,
-    desc: '药架通风、玉匣封灵，灵草与丹药分格收存。普通药材多存，仙草、凝元丹与九转丹少量精藏。',
-    effects: { storage: { herb: 2000, immortalHerb: 80, pill: 1000, condensePill: 300, nineTurnPill: 100 } },
+    desc: '通风药架与封灵禁制专储灵草，每座增加6000灵草仓容。丹药与仙草等加工品无需仓容。',
+    effects: { storage: { herb: 6000 } },
     // 金丹重排：仙草随凝链后移到元婴，药藏同档开放（金丹档的仓储由材料库前移承接）
     needs: { realm: 5, upgrades: ['alchemyArt', 'woodworking'] },
   },
@@ -321,8 +321,8 @@ const CORE_BUILDINGS = [
     group: 'store',
     cost: { plank: 12, arrayBase: 2, ore: 500 },
     priceRatio: 1.22,
-    desc: '符匣与器架各有禁制，符箓、法器及其进阶成品在此收存，灵液另设玉瓶，灵晶另设晶格，灵宝独占小龛。',
-    effects: { storage: { talisman: 1000, spiritTalisman: 200, artifact: 600, spiritArtifact: 100, spiritTreasure: 10, spiritLiquid: 120, crystal: 150 } },
+    desc: '以封灵禁制收容灵气、香火与灵子。符箓、法器、灵液和灵晶等加工品无需仓容。',
+    effects: { storage: { qi: 6000, faith: 1200, qiParticle: 1000, yangParticle: 500, yinParticle: 500 } },
     needs: { realm: 4, upgrades: ['forgeArt', 'talismanArt'] },
   },
   {
@@ -333,7 +333,7 @@ const CORE_BUILDINGS = [
     // 洞天以复合建材承重、玄金储灵，避免继续堆基础木板与玄钢。
     cost: { ironMortar: 40, arcaneGold: 10, stone: 12000, insight: 10000, artifact: 30 },
     priceRatio: 1.35,
-    desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；大批成品仍需专藏。',
+    desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；加工品无需仓容。',
     effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000, immortalForce: 20000 }, habitability: 5 },
     upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
     // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档；中后期扩仓由《广储库》承接（见 docs/MATERIAL-RESEARCH.md §3.3）。
@@ -373,7 +373,7 @@ const CORE_BUILDINGS = [
     cost: { wood: 60, rock: 80 },
     priceRatio: 1.14,
     desc: '书架分格、典籍归档，保存悟道所得，也方便弟子查阅。每座灵机上限 +80、灵机产出 +5%。',
-    effects: { storage: { insight: 80, daoNote: 20 }, ratio: { insight: 0.05 } },
+    effects: { storage: { insight: 80 }, ratio: { insight: 0.05 } },
     needs: { building: { id: 'library', count: 1 } },
   },
   {
@@ -384,7 +384,7 @@ const CORE_BUILDINGS = [
     cost: { arrayBase: 4, plank: 25, insight: 200 },
     priceRatio: 1.25,
     desc: '长老登坛讲经，一人讲、百人悟。',
-    effects: { ratio: { insight: 0.35 }, storage: { insight: 800, daoTreatise: 10 } },
+    effects: { ratio: { insight: 0.35 }, storage: { insight: 800 } },
     // 造价含阵基，而阵基要「阵基装配」才产得出：列进前置，避免先露面却找不到来源。
     needs: { upgrades: ['preachArt', 'arrayAssembly'] },
   },
@@ -399,7 +399,7 @@ const CORE_BUILDINGS = [
     // 后期改"比例 + 定额并存"：比例让仓容随产业一起长，定额保证「首座洞天/通天塔」这类
     // 下游花费仍然买得起（早先只留比例时，渡劫期破境 200000 灵机与通天塔 250000 直接越界）。
     // 灵机仓容分工：建筑只给定额（压低），百分比由技艺与「修真应用·仓储」研究节点提供（见 techniques.js 的叠匣术等）。
-    effects: { ratio: { insight: 0.5 }, storage: { insight: 3000, arrayDiagram: 5 } },
+    effects: { ratio: { insight: 0.5 }, storage: { insight: 3000 } },
     needs: { upgrades: ['astrologyArt'] },
   },
   {
@@ -441,13 +441,13 @@ const CORE_BUILDINGS = [
     cost: { wood: 360, rock: 240, stone: 150, ore: 60 },
     priceRatio: 1.25,
     desc: '三足鼎立、文武火候，灵草在这里变成丹药。',
-    // 生产设施只留周转仓；大批囤丹由药藏承接，扩建同时提高制作收益与加工容量。
-    effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 }, ratio: { herb: 0.1 }, storage: { pill: 80 } },
+    // 加工品无需仓容；扩建提高制作收益与加工容量。
+    effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 }, ratio: { herb: 0.1 } },
     upkeep: { wood: 0.25 }, // 丹炉要一直添柴
     needs: { upgrades: ['alchemyArt'] },
   },
   {
-    // 丹道高阶设施：承接二级/三级丹的产能与仓容，使高阶丹不再只依赖一件法宝（见 docs/MATERIAL-RESEARCH.md §1.5）。
+    // 丹道高阶设施：承接二级/三级丹的产能，使高阶丹不再只依赖一件法宝（见 docs/MATERIAL-RESEARCH.md §1.5）。
     id: 'pillFurnace',
     name: '丹鼎',
     glyph: '鼎',
@@ -455,7 +455,7 @@ const CORE_BUILDINGS = [
     cost: { ironMortar: 6, plank: 12, ore: 500, insight: 2000 },
     priceRatio: 1.28,
     desc: '玄铁混灵土铸鼎、三才定位，凝元丹与九转丹皆由此出。高阶丹不再只靠一件法宝。',
-    effects: { craftBonusByResource: { condensePill: 0.12, nineTurnPill: 0.12 }, storage: { condensePill: 80, nineTurnPill: 20 } },
+    effects: { craftBonusByResource: { condensePill: 0.12, nineTurnPill: 0.12 } },
     upkeep: { wood: 0.5 }, // 丹鼎火候更盛，耗柴更多
     needs: { upgrades: ['alchemyEssence'], building: { id: 'alchemyRoom', count: 1 } },
   },
@@ -467,7 +467,7 @@ const CORE_BUILDINGS = [
     cost: { ore: 400, wood: 500, rock: 240 },
     priceRatio: 1.25,
     desc: '风箱一响，玄铁就有了骨气。',
-    effects: { craftBonusByResource: { artifact: 0.08, steel: 0.08, spiritArtifact: 0.08, spiritTreasure: 0.08 }, ratio: { ore: 0.1 }, storage: { artifact: 40 } },
+    effects: { craftBonusByResource: { artifact: 0.08, steel: 0.08, spiritArtifact: 0.08, spiritTreasure: 0.08 }, ratio: { ore: 0.1 } },
     upkeep: { wood: 0.5 }, // 风箱炭火不熄
     needs: { upgrades: ['forgeArt'] },
   },
@@ -479,7 +479,7 @@ const CORE_BUILDINGS = [
     cost: { wood: 420, rock: 200, herb: 300 },
     priceRatio: 1.25,
     desc: '以灵木与金属为载体，刻纹注灵，制成符箓、灵符与阵法构件。',
-    effects: { craftBonusByResource: { talisman: 0.08, spiritTalisman: 0.08 }, storage: { talisman: 80 } },
+    effects: { craftBonusByResource: { talisman: 0.08, spiritTalisman: 0.08 } },
     upkeep: { wood: 0.2 }, // 抄符耗纸
     needs: { upgrades: ['talismanArt'] },
   },
@@ -492,9 +492,9 @@ const CORE_BUILDINGS = [
     priceRatio: 1.3,
     desc: '灵木搭棚、矿石垒台，采木采矿之后即可开张。匠人在此整料、修具并交流工艺，每座制作产出 +6%（可叠加）。',
     // 它**只是加成建筑**：不锁任何配方或条目（数据里没有一条 needs 指向它），
-    // 效果也只留与制作有关的：制作产出 +6%/座、木板上限 +300/座。
+    // 效果也只留与制作有关的：制作产出 +6%/座；木板无需仓容。
     // 无维护费，建成后即可持续提供制作增益。
-    effects: { craftBonus: 0.06, storage: { plank: 300 } },
+    effects: { craftBonus: 0.06 },
     needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }] },
   },
 

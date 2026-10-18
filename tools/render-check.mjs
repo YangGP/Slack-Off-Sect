@@ -100,6 +100,23 @@ try {
     }
   }
 
+  // 转世预览：真实永久收益与可证心提醒，不替玩家消耗愿力。
+  {
+    state.ui.tab = 'realm'
+    state.realm = 6
+    state.karma = E.money(10)
+    state.stats.lifeInsight = E.money(40000)
+    state.resources.vow = E.money(10000)
+    E.recompute(state, derived)
+    const html = await renderToString(createSSRApp(App))
+    ok('转世预览显示永久仙缘生产与仓储变化', html.includes('仙缘产出加成') && html.includes('仙缘仓储加成') && html.includes('+40.00%') && html.includes('加工品不受仓容限制') && !html.includes('NaN'))
+    ok('现成愿力可证心时显示提醒且不自动兑换', html.includes('已有愿力可证心') && state.resources.vow.eq(10000) && state.karma.eq(10))
+    state.resources.vow = E.money(9999)
+    const noAttest = await renderToString(createSSRApp(App))
+    ok('不足完整道心时不提示已有愿力可证心', !noAttest.includes('已有愿力可证心'))
+    makeRichState()
+  }
+
   // 离线报告弹窗
   ui.offlineReport = {
     awaySeconds: 3600,

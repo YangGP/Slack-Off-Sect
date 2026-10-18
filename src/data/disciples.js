@@ -1,4 +1,4 @@
-import { REALMS, BREAKTHROUGH } from './realms'
+import { REALMS, BREAKTHROUGH, realmProductionBase } from './realms'
 import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
@@ -72,7 +72,7 @@ const clampRealm = value => Math.max(0, Math.min(REALMS.length - 1, value))
 
 /** 招募花费：灵气随宗门境界倍率缩放，附加材料为固定值。 */
 export function recruitCost(tier, sectRealm) {
-  const mult = REALMS[sectRealm]?.mult ?? 1
+  const mult = realmProductionBase(REALMS[sectRealm]?.mult ?? 1)
   const cost = { qi: Math.max(1, Math.ceil((tier.qi || 0) * mult)) }
   for (const [id, amount] of Object.entries(tier.cost || {})) if (amount > 0) cost[id] = amount
   return cost
@@ -97,7 +97,7 @@ export function discipleResidenceYears(member) {
 
 /** 当前一年基础口粮：沿用口粮的境界倍率，不计减耗、供给或其他培养费用。金额为 Decimal。 */
 export function discipleAnnualBaseUpkeep(member, sectRealm) {
-  const realmMult = REALMS[sectRealm]?.mult ?? 1
+  const realmMult = realmProductionBase(REALMS[sectRealm]?.mult ?? 1)
   return money(CONFIG.DISCIPLE_UPKEEP)
     .times(money(realmMult).pow(CONFIG.DISCIPLE_UPKEEP_REALM_EXP))
     .times(discipleFactor(member, sectRealm))

@@ -210,11 +210,12 @@ const condenseStatus = computed(() => {
         <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resourceName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ perMinute(derived.rates[id]) }}/分 · 设施消耗 {{ expensePerMinute(derived.expense[id]) }}/分</span></div>
       </div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.qiLiquid" class="small dim">凝灵诀 · 需凝气化液</div>
-      <div v-if="!compact && derived.autoCraftUnlocked" class="small craft-settings">
+      <p v-if="!compact && derived.craftTargetsUnlocked" class="small dim">加工品无仓容上限。设置库存目标可让自动炼制达标暂停、消耗后补回；0表示持续加工。</p>
+      <div v-if="!compact && derived.craftTargetsUnlocked" class="small craft-settings">
         <div class="good">
-          <HoverTip :label="derived.daoAutomation ? '道果统筹' : '百工统筹'"><template #tip>
+          <HoverTip :label="derived.daoAutomation ? '道果统筹' : derived.autoCraftUnlocked ? '百工统筹' : '凝灵保留'"><template #tip>
               <p>优先加工指定配方，自动炼制遵守材料保留量。首颗道果让重修时即可自动炼制。</p>
-              <p v-if="derived.daoAutomation">保留比例按仓储上限计算，与逐项保留取较高值。</p>
+              <p v-if="derived.daoAutomation">保留比例仅按有限仓储上限计算，与逐项保留取较高值。加工品无仓容限制，请设置逐项保留数量及库存目标。</p>
               <p>逐项保留指定数量，扩仓不会改变保留量；0表示不保留。保留量仅约束自动炼制，手动制作可动用保留材料。</p>
             </template></HoverTip>
         </div>
@@ -223,7 +224,7 @@ const condenseStatus = computed(() => {
             <option v-for="n in [0, 10, 20, 30, 50]" :key="n" :value="n">{{ n }}% 仓储</option>
           </select>
         </label>
-        <label>优先
+        <label v-if="derived.autoCraftUnlocked">优先
           <select aria-label="优先配方" :value="state.settings.autoCraftPriority" @change="actions.setSetting('autoCraftPriority', $event.target.value)">
             <option v-for="row in allRows" :key="row.meta.id" :value="row.meta.id">{{ row.meta.name }}</option>
           </select>

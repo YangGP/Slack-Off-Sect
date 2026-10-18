@@ -21,7 +21,7 @@ export function incomeBreakdown({ ok, close, section }) {
       state.disciples.total = population
       E.recompute(state, derived)
       ok(`人口${population}人的规模倍率为${multiplier}`, close(derived.populationUpkeepMult, multiplier, 1e-9))
-      const base = derived.discipleWeight * CONFIG.DISCIPLE_UPKEEP * derived.realmMult ** CONFIG.DISCIPLE_UPKEEP_REALM_EXP
+      const base = derived.discipleWeight * CONFIG.DISCIPLE_UPKEEP * derived.realmBaseProductionMult ** CONFIG.DISCIPLE_UPKEEP_REALM_EXP
       ok('规模口粮计入实际扣费及来源总额', close(derived.upkeep, base * multiplier, 1e-9) &&
         close(E.moneySum(derived.expenseSources.qi.map((item) => item.value)), derived.upkeep.neg(), 1e-9))
       const fee = discipleDismissalCost(state.disciples.members[0], state.realm)
@@ -110,7 +110,7 @@ export function incomeBreakdown({ ok, close, section }) {
         ).map((b) => b.name)
       ok('灵气上限另有来源（谷仓 / 茅屋 / 木屋）', capSource('qi').includes('谷仓') && capSource('qi').includes('茅屋'), capSource('qi').join('、'))
       ok('灵机上限归典籍库 / 讲经堂 / 观星台', ['典籍库', '讲经堂', '观星台'].every((n) => capSource('insight').includes(n)), capSource('insight').join('、'))
-      ok('丹药 / 符箓 / 法器各有专属仓（炼丹房 / 符箓堂 / 炼器坊）', ['炼丹房', '符箓堂', '炼器坊'].every((n) => capSource('pill').includes(n) || capSource('talisman').includes(n) || capSource('artifact').includes(n)), `${capSource('pill')} / ${capSource('talisman')} / ${capSource('artifact')}`)
+      ok('丹药、符箓、法器无需专属仓容', ['pill', 'talisman', 'artifact'].every(id => !Number.isFinite(E.RESOURCE_MAP[id].baseMax)))
       ok('香火上限归山门 / 香火鼎', capSource('faith').includes('山门') && capSource('faith').includes('香火鼎'), capSource('faith').join('、'))
       // 生效检查：建 1 座库房，基础物资的上限按表抬高，其它资源一律不动
       const { state: s4, derived: d4 } = newGame()
@@ -133,8 +133,8 @@ export function incomeBreakdown({ ok, close, section }) {
       )
       ok(
         '其它资源的上限一点都不动',
-        ['qi', 'insight', 'pill', 'talisman', 'faith', 'artifact'].every((r) => close(delta(r), 0, 1e-6)),
-        ['qi', 'insight', 'pill', 'talisman', 'faith', 'artifact'].map((r) => `${r}+${delta(r)}`).join(' '),
+        ['qi', 'insight', 'pill', 'talisman', 'faith', 'artifact'].every((r) => d4.max[r].eq(before[r])),
+        '逐项比较原上限，避免对无穷仓容作减法',
       )
     }
 

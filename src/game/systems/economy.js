@@ -2,11 +2,11 @@ import { RESOURCES } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
-import { treasureMult, habitabilityEffects, jobOutputs, softCap, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
+import { treasureMult, habitabilityEffects, jobOutputs, karmaMultipliers, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { JOBS } from '@/data/jobs'
 import { gameNow, economyDetailsEnabled, seasonRatioOverride } from '../context'
-import { REALMS } from '@/data/realms'
+import { REALMS, realmProductionBase } from '@/data/realms'
 import { MONEY_INFINITY, ONE, ZERO, money, moneyMax, moneyMin, moneySum, moneyToRatio } from '../decimal'
 import { PROCESSING_STATIONS } from '@/data/industry'
 import { CRAFTS } from '@/data/crafts'
@@ -431,15 +431,14 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const realmProductionMult = realmProductionMultiplier(state, realmMult)
   derived.craftSpeed = Math.max(1, Math.sqrt(realmMult / CONFIG.CRAFT_SPEED_REALM_BASE))
   /**
-   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
+   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +400%）。
    * 这是通用 idler 的 soft cap 形状：early 不打折、late 不膨胀。
    * 仙缘本身是随进度无界的金额，全程在 Decimal 域计算，不先转 Number。
    */
   const karma = moneyMax(ZERO, state.karma ?? ZERO)
-  const karmaRaw = karma.times(CONFIG.KARMA_BONUS_PER_POINT)
-  const karmaBonus = softCap(karmaRaw, CONFIG.KARMA_BONUS_CAP)
-  const karmaMult = ONE.plus(karmaBonus).plus(acc.karmaRatio)
-  const karmaStorageMult = ONE.plus(softCap(karma.times(CONFIG.KARMA_STORAGE_PER_POINT), CONFIG.KARMA_STORAGE_CAP))
+  const permanentKarma = karmaMultipliers(karma)
+  const karmaMult = permanentKarma.karmaMult.plus(acc.karmaRatio)
+  const karmaStorageMult = permanentKarma.karmaStorageMult
   /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。道果无上界，倍率走 Decimal。 */
   const daoMult = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_PRODUCTION_BONUS))
   // DEBUG 专属独立乘区；运行时字段不进存档，离线快照仍保留本次会话的开关。
@@ -503,7 +502,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const population = state.disciples.members.length
   const populationUpkeepMult = 1 + Math.min(CONFIG.POPULATION_UPKEEP_EXTRA_CAP,
     Math.max(0, population - CONFIG.POPULATION_UPKEEP_FREE) * CONFIG.POPULATION_UPKEEP_PER_DISCIPLE)
-  const baseDiscipleUpkeep = money(CONFIG.DISCIPLE_UPKEEP).times(money(realmMult).pow(CONFIG.DISCIPLE_UPKEEP_REALM_EXP))
+  const baseDiscipleUpkeep = money(CONFIG.DISCIPLE_UPKEEP).times(money(realmProductionBase(realmMult)).pow(CONFIG.DISCIPLE_UPKEEP_REALM_EXP))
   const discipleUpkeep = baseDiscipleUpkeep.times(populationUpkeepMult)
   const baseRawUpkeep = baseDiscipleUpkeep.times(derived.discipleWeight)
   const rawUpkeep = baseRawUpkeep.times(populationUpkeepMult)
@@ -621,7 +620,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     reactorRatio: bonus.reactorRatio,
     buffAll: bonusBuffAll,
     buffRes: bonusBuffRes,
-    realmMult,
+    realmMult: realmProductionBase(realmMult),
     realmProductionMult,
     debugProductionMult,
     karmaMult,
@@ -653,6 +652,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.maxDisciples = Math.floor(acc.maxDisciples)
   derived.globalMult = globalMult
   derived.realmMult = realmMult
+  derived.realmBaseProductionMult = realmProductionBase(realmMult)
   derived.realmProductionMult = realmProductionMult
   derived.faithRatioBonus = faithBonusRatio
   derived.faithStorageRatio = holdVowRatio
@@ -730,7 +730,7 @@ export function finishDerived(state, derived) {
 /**
  * 离线逐秒推进期间，只有供给仍充足（或无来源物料持续断供）、传功状态不变时才复用经济数据。
  * 人口、岗位、历法、增益与模块结算仍由 simulation 在各自边界重算；这里检查库存变化。
- * 只供同一次离线推演的相邻步骤使用，不能用来跳过玩家操作后的重算。
+ * 只供同一次逐秒推演的相邻步骤使用（默认离线，审计可显式启用在线复用），不能跳过玩家操作后的重算。
  */
 export function canReuseEconomy(state, derived, seconds) {
   if (state.buffs.some(buff => (buff.until || 0) <= gameNow(state))) return false

@@ -17,9 +17,10 @@ export function runPowerChecks(E, ok, close) {
   const high = measurePower({ chains: 1, mode: 'energy' })
   ok('一条完整产线切高阶后连续十分钟不自耗停炉', high.fullSeconds === 600 && high.minSupply > 0.999 && E.moneyGt(high.energy, high.energyBefore))
   ok('高阶余能支付维护与逸散后仍有缓冲', E.moneyGt(high.output, high.maintenance.plus(high.energyDecay)))
-  const core = measurePower({ chains: 2, core: true })
-  ok('两条基础产线能满供未祭炼灵能枢并攒够一份阵印灵能', core.coreSupply === 1 && E.moneyGte(core.energy, E.CRAFT_MAP.condenseAscensionSeal.cost.qiEnergy))
-  const gathering = measurePower({ chains: 2, gathering: true })
+  // 削减境界全局奖励后，零仙缘在合体期需四条基础链才有足够阵印余能。
+  const core = measurePower({ chains: 4, core: true })
+  ok('零仙缘四条基础产线能满供未祭炼灵能枢并积累阵印灵能', core.coreSupply === 1 && E.moneyGte(core.energy, E.CRAFT_MAP.condenseAscensionSeal.cost.qiEnergy))
+  const gathering = measurePower({ chains: 4, gathering: true })
   ok('灵能引采满供后仍能积累阵印供料', gathering.gatheringSupply === 1 && E.moneyGte(gathering.energy, E.CRAFT_MAP.condenseAscensionSeal.cost.qiEnergy))
   const homes = measurePower({ chains: 2, mode: 'energy', core: true, homes: true })
   ok('住宅环境与灵能枢并用时主产线持续运行', homes.fullSeconds === 600 && homes.coreSupply === 1 && E.moneyIsPositive(homes.energy))

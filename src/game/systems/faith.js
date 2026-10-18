@@ -2,7 +2,7 @@ import { ONE, ZERO, money, moneyAvailable, moneyMax } from '../decimal'
 import { addResource, canAfford, countOf, payCost, pushLog } from './core'
 import { BUILDING_MAP } from '@/data/buildings'
 import { UPGRADE_MAP } from '@/data/upgrades'
-import { REALMS } from '@/data/realms'
+import { REALMS, realmProductionBase } from '@/data/realms'
 import {
   CULTIVATION, CULTIVATION_MAP, DAO_HEART_DIVISOR, FAITH_UPGRADE_MAP, RITUAL_MAP, RITUALS,
   createFaithProgression,
@@ -52,10 +52,10 @@ export function vowGainFactor(state) {
   return raw.gt(ONE) ? ONE : raw
 }
 
-/** 万民归心：R_effective = 1 + (R-1)×(1+min(1,0.10n))。 */
+/** 万民归心：R_effective = 1 + 0.5×(R-1)×(1+min(1,0.10n))。 */
 export function realmProductionMultiplier(state, realmMult) {
   const n = cultivationLevel(state, 'realmDevotion')
-  return 1 + (realmMult - 1) * (1 + Math.min(1, 0.10 * n))
+  return 1 + (realmProductionBase(realmMult) - 1) * (1 + Math.min(1, 0.10 * n))
 }
 
 /** 香火同层产出加成：聚香法每级 +30%，大乘愿典 +120%。 */

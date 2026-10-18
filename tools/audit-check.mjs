@@ -13,6 +13,121 @@ import { inspectSave } from './lib/save-report.mjs'
 import { modelBreakthroughRisk } from './lib/breakthrough-risk.mjs'
 import { BREAKTHROUGH_AIDS } from '../src/data/realms.js'
 import { gameRandom } from '../src/game/context.js'
+import { measurePacing, pacingOptions, stageProjects, reincarnatePacingState } from './lib/pacing-scenario.mjs'
+import { economyAssessment, measureSpecialization } from './lib/pacing-economy.mjs'
+import { compareOnlineEconomy } from './offline-check.mjs'
+import { powerFixture } from './power-scenarios.mjs'
+
+// 成对报告的开关必须显式有效；记录开关不能改变实际经济状态。
+assert.throws(() => pacingOptions(['--hours=NaN']), /范围/)
+assert.equal(pacingOptions(['--wall-seconds=7200']).wallSeconds, 7200)
+assert.throws(() => pacingOptions(['--wall-seconds=7201']), /范围/)
+assert.throws(() => pacingOptions(['--seed=0']), /范围/)
+assert.throws(() => pacingOptions(['--aids=almost']), /范围/)
+assert.throws(() => pacingOptions(['--visits=daily']), /范围/)
+assert.throws(() => pacingOptions(['--unknown=1']), /未知/)
+assert.throws(() => pacingOptions(['--decision-seconds=0']), /范围/)
+assert.throws(() => pacingOptions(['--batch-actions=25']), /范围/)
+assert.throws(() => pacingOptions(['--reincarnations=4']), /范围/)
+assert.throws(() => pacingOptions(['--reincarnate-realm=5']), /范围/)
+assert.throws(() => pacingOptions(['--reincarnate-preparation=free']), /范围/)
+assert.throws(() => pacingOptions(['--stop-realm=6', '--reincarnations=1']), /范围/)
+const realmStop = measurePacing({ hours: 2, stopRealm: 1, traceLimit: 0, wallSeconds: 30 })
+assert.equal(realmStop.stopReason, 'realm-target')
+assert.equal(realmStop.completed, false)
+assert.equal(realmStop.final.realm, 1)
+assert.equal(realmStop.ascensions.length, 0)
+assert.throws(() => pacingOptions(['--details=unknown']), /范围/)
+const detailCase = { hours: 600 / 3600, visits: 'waking', decisionSeconds: 150, batchActions: 12, events: 1, traceLimit: 0 }
+const fullDetails = measurePacing(detailCase), deferredDetails = measurePacing({ ...detailCase, details: 'decisions' })
+assert.deepEqual(fullDetails.final, deferredDetails.final)
+assert.deepEqual(fullDetails.attempts, deferredDetails.attempts)
+// 用真实结算校验转世边界：不送道果，永久修持保留，世内积累清空。
+const rebirthClock = createAuditContext(), rebirthDerived = E.createDerived(), rebirthState = rebirthClock.state
+E.recompute(rebirthState, rebirthDerived)
+assert.equal(reincarnatePacingState(rebirthState, rebirthDerived), null)
+rebirthState.realm = 6
+rebirthState.stats.lifeInsight = E.money(200000)
+rebirthState.resources.daoHeart = E.money(2)
+rebirthState.faithProgression.cultivation.realmDevotion = 1
+E.recompute(rebirthState, rebirthDerived)
+const expectedRebirthGain = E.reincarnationGain(rebirthState, rebirthDerived)
+const startingRebirthKarma = E.money(rebirthState.karma), startingRebirthDao = E.money(rebirthState.dao)
+const startingRebirthCount = rebirthState.stats.reincarnations
+assert.ok(reincarnatePacingState(rebirthState, rebirthDerived).eq(expectedRebirthGain))
+assert.ok(rebirthState.karma.eq(startingRebirthKarma.plus(expectedRebirthGain)))
+assert.ok(rebirthState.resources.karma.eq(rebirthState.karma))
+assert.ok(rebirthState.dao.eq(startingRebirthDao))
+assert.ok(rebirthState.resources.dao.eq(startingRebirthDao))
+assert.equal(rebirthState.stats.reincarnations, startingRebirthCount + 1)
+assert.equal(rebirthState.realm, 0)
+assert.ok(E.lifeInsightOf(rebirthState).isZero())
+assert.ok(rebirthState.resources.daoHeart.eq(2))
+assert.equal(rebirthState.faithProgression.cultivation.realmDevotion, 1)
+const spacedPacing = measurePacing({ hours: 301 / 3600, visits: 'waking', decisionSeconds: 150, batchActions: 12, traceLimit: 0 })
+assert.equal(spacedPacing.interactionCount, 3)
+assert.equal(spacedPacing.decisionCount, 36)
+assert.equal(spacedPacing.activeSeconds, 301)
+assert.deepEqual(stageProjects(8), ['splitArray', 'polarizeArray', 'annihilationFurnace'].map(id => ({ id, count: 2 })))
+assert.deepEqual(stageProjects(8, false), [])
+const tinyPacing = { hours: 10 / 3600, wallSeconds: 60 }
+const pacingRecorded = measurePacing(tinyPacing)
+const pacingUnrecorded = measurePacing({ ...tinyPacing, traceLimit: 0 })
+assert.deepEqual(pacingRecorded.final, pacingUnrecorded.final)
+assert.deepEqual(pacingRecorded.attempts, pacingUnrecorded.attempts)
+assert.deepEqual(pacingRecorded.final, measurePacing(tinyPacing).final)
+assert.equal(pacingRecorded.stopReason, 'horizon')
+assert.equal(pacingRecorded.simulatedSeconds, 10)
+assert.equal(pacingRecorded.ascensions.length, 0)
+assert.equal(pacingRecorded.completed, false)
+assert.ok(pacingRecorded.trace.some(row => row.buildDecision.candidates.some(candidate => candidate.reason)))
+assert.equal(pacingUnrecorded.trace.length, 0)
+assert.ok(pacingUnrecorded.traceDropped > 0)
+const briefOfflinePacing = measurePacing({ hours: 0.3, visits: 'three', wallSeconds: 60, traceLimit: 0 })
+assert.equal(briefOfflinePacing.simulatedSeconds, 1080)
+assert.equal(briefOfflinePacing.activeSeconds, 900)
+assert.equal(briefOfflinePacing.cappedSeconds, 0)
+assert.equal(briefOfflinePacing.completed, false)
+// 默认共享机器人的观察回调本身只读，不得改变原有行动。
+const observedClock = createAuditContext(), silentClock = createAuditContext()
+const observedDerived = E.createDerived(), silentDerived = E.createDerived()
+E.recompute(observedClock.state, observedDerived)
+E.recompute(silentClock.state, silentDerived)
+let buildObservation = null, reserveObservation = null
+createBot(observedClock.state, observedDerived, {
+  onBuildDecision: row => { buildObservation = row }, onDecision: row => { reserveObservation = row },
+}).act()
+createBot(silentClock.state, silentDerived).act()
+assert.deepEqual(observedClock.state, silentClock.state)
+assert.ok(buildObservation && reserveObservation)
+// 只差灵气时，显式修正策略必须停止普通支出；旧策略保留为对照，开局仍能自举。
+const savingClock = createAuditContext(), savingDerived = E.createDerived()
+const saving = savingClock.state
+saving.realm = 2
+for (const upgrade of E.ALL_UPGRADES) saving.upgrades[upgrade.id] = true
+for (const building of E.BUILDINGS) saving.buildings[building.id] = { count: 1, on: true }
+saving.buildings.granary.count = 50
+E.recompute(saving, savingDerived)
+for (const id of Object.keys(saving.resources)) saving.resources[id] = E.money(100000)
+saving.resources.qi = E.money(500)
+let qiReserve = null
+createBot(saving, savingDerived, { protectBreakthrough: true, realmCost: () => ({ qi: 1700 }),
+  breakthrough: () => false, onDecision: row => { qiReserve = row.reserveSource } }).act()
+assert.equal(qiReserve?.kind, 'breakthrough')
+assert.ok(saving.resources.qi.eq(500), '齐备其余材料时，不得继续将灵气花到普通制作和可选建设')
+const bootClock = createAuditContext(), bootDerived = E.createDerived()
+E.recompute(bootClock.state, bootDerived)
+createBot(bootClock.state, bootDerived, { protectBreakthrough: true }).act()
+assert.ok(bootClock.state.stats.buildingsBuilt > 0, '突破预留不能阻止首座设施自举')
+const specializationProbe = measureSpecialization(60)
+assert.equal(specializationProbe.rows.length, 6)
+for (const row of specializationProbe.rows) {
+  assert.deepEqual(row.before.manual, row.after.manual, `${row.id}: 不增加瞬发手动收益或减少费用`)
+  assert.ok(row.before.manual.output > 0, `${row.id}: 手动对照必须实际出货，不能比较两次拒绝`)
+  assert.ok(row.after.output > row.before.output, `${row.id}: 富料自动加工必须有真实增量`)
+  assert.equal(row.before.work, row.after.work, `${row.id}: 效率不能伪造工位扩容`)
+  assert.ok(Object.keys(row.after.paid).length > 0, `${row.id}: 专精必须实际支付成本`)
+}
 
 // 配方改料后不得继续按已经移除的原料暂停模拟加工。
 for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
@@ -30,12 +145,13 @@ blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MA
 E.recompute(blockedState, blockedDerived)
 blockedState.resources.qiParticle = E.money(100)
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
-assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need === 120)
+assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need > blocked.have)
+assert.equal(blocked.need, E.moneyToNumber(E.realmCost(blockedState, blockedDerived, 9).qiParticle))
 assert.ok(blocked.expansions.some(b => b.id === 'grandStore' && !b.unlocked))
 assert.equal(blocked.producer.id, 'splitArray')
 const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
 assert.ok(prerequisites.upgrades.has('earthEssence'))
-assert.ok(prerequisites.buildings.has('grandStore'))
+assert.ok(prerequisites.buildings.has('arcaneVault')) // 法藏现在提供有限粒子仓容，早于广储库解决此缺口
 
 // 满员、等待昂贵新住房时，凝晶研究的符箓和上游木料不能被常规建设抢走。
 const studying = createInitialState(), studyDerived = E.createDerived()
@@ -67,6 +183,33 @@ E.recompute(studying, studyDerived)
 delete studying.upgrades.crystalCraft
 const researchExpansion = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }) }).prerequisites()
 assert.ok([...researchExpansion.buildings.keys()].some(id => BUILDING_MAP[id].effects?.storage?.insight > 0), '研究费用超过仓容时应追踪扩仓，不能只看破境灵机需求')
+
+// 香火页研究不在普通availableUpgrades里，明确投资D7时仍须真实学习入口研究。
+studying.upgrades.incenseVow = true
+studying.buildings.gate = { count: 1, on: true }
+studying.resources.faith = E.money(500)
+studying.resources.insight = E.money(10000)
+E.recompute(studying, studyDerived)
+assert.ok(!studyDerived.availableUpgrades.includes('vowPower'))
+createBot(studying, studyDerived, { realmCost: () => ({}), breakthrough: () => false,
+  upgrades: () => ['vowPower'] }).act()
+assert.equal(studying.upgrades.vowPower, true, 'D7策略必须真实购买凝愿法，不能只请求普通页不可见条目')
+const beforeAssessment = JSON.stringify(studying)
+const assessment = economyAssessment(studying, studyDerived)
+assert.equal(JSON.stringify(studying), beforeAssessment, '边际报价不得改变真实经营状态')
+assert.ok(assessment.investments.some(row => row.id === 'pillFurnace'))
+assert.ok(assessment.investments.some(row => row.id === 'harvestPlatform'))
+assert.ok(assessment.recipes.every(row => Number.isFinite(row.efficiency)))
+assert.ok(assessment.investments.every(row => Object.values(row.capacityDelta || {}).every(Number.isFinite)),
+  '无限容量的相等项不得相减生成NaN并被JSON静默写成null')
+assert.ok(compareOnlineEconomy(studying))
+assert.ok(compareOnlineEconomy(powerFixture({ chains: 2, core: true, homes: true }).state))
+studying.buildings.forge.on = false
+E.recompute(studying, studyDerived)
+const stoppedForge = economyAssessment(studying, studyDerived).investments.find(row => row.id === 'forge')
+assert.deepEqual(stoppedForge.netDelta, {}, '扩建报价不得将已停用的全部炼器坊重新启用并计为新增收益')
+studying.buildings.forge.on = true
+E.recompute(studying, studyDerived)
 
 const brief = { hours: 1 / 3600 }
 const originalCap = RESOURCE_MAP.qi.baseMax

@@ -18,6 +18,23 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
   // 开局只能点击吸气；其它资源必须先开放生产或配方。
   const sources = new Set(['qi'])
   const milestones = []
+  const entries = [...BUILDINGS, ...ALL_UPGRADES, ...CRAFTS, ...JOBS]
+  const targetCount = building => Math.max(1, ...entries.flatMap(entry =>
+    [entry.needs?.building, ...(entry.needs?.buildings || [])]
+      .filter(b => b?.id === building.id).map(b => b.count)))
+  // 加工品无限仓容使重复扩仓不再有有限不动点；只扩至所有实际前置所需的容量。
+  const required = {}
+  const requireCost = cost => {
+    for (const [id, value] of Object.entries(cost || {})) {
+      required[id] = E.moneyMax(required[id] || 0, value)
+    }
+  }
+  for (const entry of [...ALL_UPGRADES, ...CRAFTS, ...REALMS]) requireCost(entry.cost)
+  for (const building of BUILDINGS) {
+    for (const [id, value] of Object.entries(building.cost)) {
+      requireCost({ [id]: E.money(value).times(E.money(building.priceRatio || 1).pow(targetCount(building) - 1)).ceil() })
+    }
+  }
   const fits = (cost) => Object.entries(cost || {}).every(([id, amount]) =>
     sources.has(id) && E.moneyGte(E.money(derived.max[id]).plus(1e-9), amount))
   const refresh = () => E.recompute(state, derived)
@@ -63,10 +80,12 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
       if (!E.checkNeeds(state, building.needs)) continue
       const count = state.buildings[building.id]?.count || 0
       // 首座验证解锁；重复营造只用于扩仓与数量前置，始终保留实际涨价。
-      const target = Math.max(1, ...[...BUILDINGS, ...ALL_UPGRADES, ...CRAFTS, ...JOBS].flatMap(entry =>
-        [entry.needs?.building, ...(entry.needs?.buildings || [])]
-          .filter(b => b?.id === building.id).map(b => b.count)))
-      if (count >= target && !building.effects.storage && !building.effects.storageAll) continue
+      const target = targetCount(building)
+      const expandsNeededCapacity = Object.entries(required).some(([id, amount]) =>
+        E.moneyLt(derived.max[id], amount) &&
+        ((building.effects.storage?.[id] || 0) > 0 ||
+          ((building.effects.storageAll || 0) > 0 && E.money(derived.max[id]).isFinite())))
+      if (count >= target && !expandsNeededCapacity) continue
       if (!fits(E.buildingCost(state, building.id, 1))) continue
       if (Object.keys(building.upkeep || {}).some(id => !sources.has(id))) continue
       if (building.id === 'hut') state.starterHutBuilt = true
@@ -94,5 +113,9 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
       .map(([id, n]) => ({ resource: id, cost: E.moneyToNumber(n), cap: E.moneyToNumber(derived.max[id]), source: sources.has(id) })),
   }))
 
-  return { settled, realm: REALMS[state.realm].name, reachable: milestones, blocked, state, derived, sources }
+  const realmDeficits = Object.entries(E.realmCost(state, derived, state.realm + 1) || {})
+    .filter(([id, amount]) => !sources.has(id) || E.moneyLt(derived.max[id], amount))
+    .map(([id, amount]) => ({ resource: id, cost: E.moneyToNumber(amount), cap: E.moneyToNumber(derived.max[id]), source: sources.has(id) }))
+  const nextRealmCapacity = Object.fromEntries(Object.keys(E.realmCost(state, derived, state.realm + 1) || {}).map(id => [id, E.moneyToNumber(derived.max[id])]))
+  return { settled, realm: REALMS[state.realm].name, reachable: milestones, blocked, realmDeficits, nextRealmCapacity, state, derived, sources }
 }

@@ -220,12 +220,13 @@ export function canAutoCraft(state, derived, recipe) {
 
 /**
  * 材料 / 成品的保留量（金额）：比例保留按仓容折算，另有逐项定额保留。
- * 自动制作未解锁时没有保留量。
+ * 自动制作与凝灵诀都未解锁时没有保留量。
  */
 export function autoCraftReserve(state, derived, res) {
-  if (!derived.autoCraftUnlocked) return ZERO
+  if (!derived.autoCraftUnlocked && !derived.autoCondenseLiquidUnlocked) return ZERO
   const reserve = clamp(Number(state.settings.craftReservePercent) || 0, 0, 90) / 100
-  const byPercent = derived.daoAutomation ? (derived.max[res] ?? ZERO).times(reserve) : ZERO
+  const cap = derived.max[res] ?? ZERO
+  const byPercent = derived.daoAutomation && cap.isFinite() ? cap.times(reserve) : ZERO
   return moneyMax(byPercent, state.settings.craftReserves?.[res] ?? ZERO)
 }
 
