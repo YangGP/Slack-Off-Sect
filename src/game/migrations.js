@@ -6,6 +6,7 @@ import { RECIPE_STATIONS } from '@/data/industry'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
 import { ZERO, floorMoney, money, moneyClamp, moneyGt, moneyMax, moneyNonNegative } from './decimal'
 import { normalizeDisciples } from '@/data/disciples'
+import { WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS } from '@/data/buildings'
 
 
 /** 旧档金额：损坏值回退 0，负数按 0 处理（与读档解码同口径）。 */
@@ -57,6 +58,18 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   merged.stats = { ...(merged.stats || {}) }
   merged.stats.reincarnations = merged.stats.reincarnations || 0
   merged.buildings = Object.fromEntries(Object.entries(state.buildings || {}).map(([id, entry]) => [id, { ...entry }]))
+  const warehouseVersion = state.warehouseCapacityVersion
+  const legacyWarehouseVersion = !Object.hasOwn(state, 'warehouseCapacityVersion') || warehouseVersion === 0
+  if (!legacyWarehouseVersion && warehouseVersion !== WAREHOUSE_CAPACITY_VERSION) {
+    throw new Error('仓库容量标记无法兼容')
+  }
+  const warehouseCount = id => Number.isFinite(state.buildings?.[id]?.count)
+    ? Math.max(0, Math.floor(state.buildings[id].count)) : 0
+  merged.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
+  merged.legacyWarehouseCounts = legacyWarehouseVersion
+    ? Object.fromEntries(LEGACY_WAREHOUSE_IDS.map(id => [id, warehouseCount(id)]))
+    : Object.fromEntries(LEGACY_WAREHOUSE_IDS.map(id => [id, Number.isFinite(state.legacyWarehouseCounts?.[id])
+      ? Math.max(0, Math.floor(state.legacyWarehouseCounts[id])) : 0]))
   // 首次拆分藏经阁时，原有书架迁入同数量典籍库，保留旧档的仓容与合计产出。
   if (state.scriptureArchiveVersion !== 1 && !merged.buildings.scriptureArchive) {
     const library = merged.buildings.library

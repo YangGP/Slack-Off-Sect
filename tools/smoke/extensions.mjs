@@ -1,6 +1,6 @@
 import * as E from '../engine-fixture.mjs'
 import { runIndustryChecks } from '../industry-check.mjs'
-import { runDiscipleChecks } from '../disciple-check.mjs'
+import { runDiscipleChecks, budgetUnlockRegression, focusPriorityRegression } from '../disciple-check.mjs'
 import { runTalentChecks } from '../talent-check.mjs'
 import { runAutoTalentChecks } from '../auto-talent-check.mjs'
 import { runPowerChecks } from '../power-check.mjs'
@@ -20,6 +20,9 @@ export function discipleScenarios({ ok, close, section }) {
   runAutoTalentChecks(E, ok, close)
   runPowerChecks(E, ok, close)
 }
+
+export const discipleBudgetRegression = harness => budgetUnlockRegression(E, harness)
+export const discipleFocusRegression = harness => focusPriorityRegression(E, harness)
 
 export async function offlineScenarios({ ok, section }) {
   section('离线结算优化与边界一致性')

@@ -1,5 +1,5 @@
 import { RESOURCE_MAP, RESOURCE_GROUPS } from '@/data/resources'
-import { BUILDING_MAP } from '@/data/buildings'
+import { BUILDING_MAP, WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS } from '@/data/buildings'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { CRAFT_MAP } from '@/data/crafts'
 import { ACHIEVEMENTS } from '@/data/achievements'
@@ -17,7 +17,7 @@ export const SAVE_VERSION = 3
 const CORE_SAVE_FIELDS = [
   'version', 'createdAt', 'lastTickAt', 'lastSaveAt', 'resources', 'seen', 'peak',
   'disciples', 'arrivalTimer', 'totalDays', 'treasureLevels', 'craftTimers', 'craftOrders',
-  'uncappedCraftVersion', 'industryVersion', 'qiLiquidVersion', 'alchemyProgressionVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
+  'uncappedCraftVersion', 'warehouseCapacityVersion', 'legacyWarehouseCounts', 'industryVersion', 'qiLiquidVersion', 'alchemyProgressionVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'analytics', 'ui',
@@ -55,9 +55,13 @@ const STATS_MONEY_KEYS = ['totalQi', 'totalInsight', 'totalFaith', 'lifeInsight'
 /** 结构冲突与单个数值损坏分开处理；浏览器加载／导入遇结构冲突时保护原档。 */
 export function assertSaveShape(data) {
   if (!isRecord(data)) throw new Error('存档必须是对象')
+  if (Object.hasOwn(data, 'warehouseCapacityVersion') &&
+      (!Number.isInteger(data.warehouseCapacityVersion) || data.warehouseCapacityVersion < 0)) {
+    throw new Error('仓库容量标记无效')
+  }
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
     'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
-    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', ...moduleSaveKeys()]) {
+    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', 'legacyWarehouseCounts', ...moduleSaveKeys()]) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
   for (const key of ['jobs']) {
@@ -121,6 +125,9 @@ export function validateState(state, fresh) {
       if (entry.power === 'energy') out.power = 'energy'
       return [id, out]
     }))
+  result.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
+  result.legacyWarehouseCounts = Object.fromEntries(LEGACY_WAREHOUSE_IDS.map(id => [id,
+    Math.min(result.buildings[id]?.count || 0, Math.floor(safeNumber(result.legacyWarehouseCounts?.[id])))]))
   result.upgrades = flags(result.upgrades, UPGRADE_MAP)
   result.upgradeEnabled = Object.fromEntries(Object.entries(result.upgradeEnabled)
     .filter(([id, enabled]) => result.upgrades[id] && enabled === false))
@@ -150,7 +157,7 @@ export function validateState(state, fresh) {
   }
   result.log = result.log.filter(entry => isRecord(entry) && typeof entry.text === 'string')
     .map(entry => ({ ...entry, id: safeNumber(entry.id), at: safeNumber(entry.at) }))
-  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress', 'analyticsEnabled']) {
+  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress', 'analyticsEnabled', 'sectBreakthroughReserve', 'autoBreakthrough']) {
     result.settings[key] = typeof result.settings[key] === 'boolean' ? result.settings[key] : fresh.settings[key]
   }
   result.settings = Object.fromEntries(Object.keys(fresh.settings).map(key => [key, result.settings[key] ?? fresh.settings[key]]))
@@ -159,6 +166,13 @@ export function validateState(state, fresh) {
   result.settings.recruitMode = result.settings.recruitMode === 'manual' ? 'manual' : 'auto'
   result.settings.modules = moduleFlags
   result.settings.craftReservePercent = safeNumber(result.settings.craftReservePercent, 20, 100)
+  result.settings.trainingQiFloorSeconds = safeNumber(result.settings.trainingQiFloorSeconds, 30, 300)
+  result.settings.mentorLimit = Math.floor(safeNumber(result.settings.mentorLimit, 20, 999))
+  // 自动突破的目标上限与适用人选：非法值回默认（'sect'／'focus'），开关本身随布尔清单归一化。
+  result.settings.autoBreakthroughCap = Number.isInteger(result.settings.autoBreakthroughCap) &&
+    result.settings.autoBreakthroughCap >= 1 && result.settings.autoBreakthroughCap < REALMS.length
+    ? result.settings.autoBreakthroughCap : 'sect'
+  result.settings.autoBreakthroughScope = result.settings.autoBreakthroughScope === 'all' ? 'all' : 'focus'
   result.settings.autoCraftPriority = Object.hasOwn(CRAFT_MAP, result.settings.autoCraftPriority) ? result.settings.autoCraftPriority : fresh.settings.autoCraftPriority
   result.ui = { ...fresh.ui, ...Object.fromEntries(Object.keys(fresh.ui).map(key => [key, result.ui[key] ?? fresh.ui[key]])) }
   result.ui.collapsedResourceGroups = flags(

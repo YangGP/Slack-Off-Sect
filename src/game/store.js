@@ -213,11 +213,12 @@ function applyOfflineProgress() {
       estimated: result.approximate === true,
       gains,
       disciples: result.disciples || 0,
+      readyToBreak: result.readyToBreak || 0,
     }
     if (gains.length) {
       state.stats.offlineGains = moneySum(gains.map(gain => gain.amount), state.stats.offlineGains)
     }
-    const extra = result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''
+    const extra = `${result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''}${result.readyToBreak > 0 ? `，${result.readyToBreak} 名弟子修满待突破` : ''}`
     E.pushLog(
       state,
       `闭关 ${E.clamp(Math.floor(elapsed / 60), 0, 999999)} 分钟，弟子们替你干活${
@@ -472,12 +473,22 @@ export const actions = {
   },
   breakthroughDisciples(ids) {
     const result = E.breakthroughDisciples(state, derived, ids)
-    afterAction(`突破成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient ? 'bad' : 'info')
+    afterAction(`突破成功 ${result.success} 人，失败 ${result.failed} 人${result.reserved ? '；已保留宗门破境材料，停止' : result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient || result.reserved ? 'bad' : 'info')
     return result
   },
   setMentored(ids, value) {
+    const limit = state.settings.mentorLimit ?? 20
+    const existing = new Set(state.disciples.members.map(member => member.id))
+    // 传功人数上限在开关时校验：统计本次真正需要开启的人数，与实际改动数对比即可识别「到上限被拦」。
+    const wanted = value === true ? ids.filter(id => existing.has(id) && state.disciples.members.find(member => member.id === id).mentored !== true).length : 0
     const changed = E.setMentored(state, derived, ids, value)
     if (changed) afterAction(value ? `已开始传功 ${changed} 人` : `已停止传功 ${changed} 人`, 'info')
+    if (value === true && changed < wanted) toast(`已达传功人数上限（${limit}），本次开启 ${changed} 人`, 'bad')
+    return changed
+  },
+  setDiscipleFocus(ids, value) {
+    const changed = E.setDiscipleFocus(state, derived, ids, value)
+    if (changed) afterAction(value ? `已标为重点 ${changed} 人` : `已取消重点 ${changed} 人`, 'info')
     return changed
   },
   applyDiscipleAid(ids) {
@@ -813,6 +824,37 @@ export const actions = {
       saveNow()
       return true
     }
+    if (key === 'autoBreakthrough' || key === 'autoBreakthroughCap' || key === 'autoBreakthroughScope') {
+      // 自动突破（需《因材施教》）：纯开关与口径，在线 tick 在下一步自行拾取，不需立即重算经济。
+      if (!derived.autoDiscipleBreakthroughUnlocked) return false
+      if (key === 'autoBreakthrough') {
+        if (typeof value !== 'boolean') return false
+        state.settings.autoBreakthrough = value
+      } else if (key === 'autoBreakthroughCap') {
+        state.settings.autoBreakthroughCap = value === 'sect' ||
+          (Number.isInteger(value) && value >= 1 && value < REALMS.length) ? value : 'sect'
+      } else {
+        state.settings.autoBreakthroughScope = value === 'all' ? 'all' : 'focus'
+      }
+      saveNow()
+      return true
+    }
+    if (key === 'trainingQiFloorSeconds' || key === 'sectBreakthroughReserve' || key === 'mentorLimit') {
+      // 培养预算（需《传功授业》）：灵气底线影响传功门控，改动后立即重算；上限与材料保留只影响动作结算。
+      if (!derived.discipleTrainingUnlocked) return false
+      if (key === 'trainingQiFloorSeconds') {
+        const seconds = Number.isFinite(Number(value)) ? Math.max(0, Math.min(300, Math.floor(Number(value)))) : 30
+        state.settings.trainingQiFloorSeconds = seconds
+        E.recompute(state, derived)
+      } else if (key === 'sectBreakthroughReserve') {
+        state.settings.sectBreakthroughReserve = value === true
+      } else {
+        const limit = Number.isFinite(Number(value)) ? Math.max(0, Math.min(999, Math.floor(Number(value)))) : 20
+        state.settings.mentorLimit = limit
+      }
+      saveNow()
+      return true
+    }
     if (key === 'autoCraftSpeeds' || key === 'autoCraftSpeed' || key === 'craftWeights' || key === 'processingModes') return false
     if (key === 'craftReserves') {
       /**
@@ -896,18 +938,22 @@ export const actions = {
   },
   huntDepart(fieldId, teamIds) {
     const result = E.departHunt(state, derived, { fieldId, teamIds })
-    if (!result.ok) { toast(result.reason || '无法出征', 'bad'); return false }
+    if (!result.ok) { toast(result.reason || '无法猎杀', 'bad'); return false }
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  huntRecommend() {
+    const ids = E.recommendHuntTeam(state, derived)
+    if (!ids.length) { toast('没有合格弟子', 'bad'); return false }
+    E.setHuntTeam(state, ids)
     E.recompute(state, derived)
     saveNow()
     return true
   },
   huntCancel() {
-    const result = E.cancelHunt(state, derived)
-    if (!result.ok) return false
-    E.recompute(state, derived)
-    saveNow()
-    toast('已召回，弟子归队', 'info')
-    return true
+    toast('即时猎杀无需召回', 'info')
+    return false
   },
   huntSetField(fieldId) {
     if (!E.setHuntField(state, fieldId)) return false
@@ -923,6 +969,11 @@ export const actions = {
   },
   huntSetAutoRepeat(value) {
     E.setHuntAutoRepeat(state, value)
+    saveNow()
+    return true
+  },
+  huntSetAutoInterval(value) {
+    E.setHuntAutoInterval(state, value)
     saveNow()
     return true
   },
@@ -973,7 +1024,6 @@ export const view = {
     ).map((id) => RESOURCES.find((r) => r.id === id)),
   ),
   idle: computed(() => E.idleDisciples(state)),
-  huntMission: computed(() => isModuleEnabled(state, 'hunting') ? E.activeMission(state) : null),
   huntTeamIds: computed(() => isModuleEnabled(state, 'hunting') ? (state.hunting?.settings?.teamIds || []) : []),
   // 注意：这几个 computed 统一返回 **id 数组**，与 derived.unlockedBuildings 等保持一致，
   // 避免出现「拿 id 去 includes 一个对象数组」这类判断永远为假的坑。

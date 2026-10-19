@@ -6,7 +6,7 @@ import { exportJson, parseImport } from '../src/game/save.js'
 export function runTalentChecks(E, ok, close) {
   const sequence = values => { let index = 0; return () => values[index++] ?? 0 }
   const categories = list => list.map(entry => TALENT_MAP[entry.id]?.category)
-  ok('天赋库包含32条有效固定身份，品级权重总计100', TALENTS.length === 32 && new Set(TALENTS.map(meta => meta.id)).size === 32 && TALENT_TIERS.reduce((sum, tier) => sum + tier.weight, 0) === 100)
+  ok('天赋库包含40条有效固定身份，品级权重总计100', TALENTS.length === 40 && new Set(TALENTS.map(meta => meta.id)).size === 40 && TALENT_TIERS.reduce((sum, tier) => sum + tier.weight, 0) === 100)
   for (const [roll, count] of [[0, 0], [0.699999, 0], [0.7, 1], [0.949999, 1], [0.95, 2], [0.999999, 2]]) {
     ok(`先天天赋数量边界${roll}`, birthTalents(sequence([roll])).length === count)
   }
@@ -21,8 +21,8 @@ export function runTalentChecks(E, ok, close) {
   const full = [{ id: 'cultivation_huang', level: 1 }, { id: 'breakthrough_huang', level: 1 }, { id: 'job_miner_huang', level: 1 }]
   let draws = 0
   ok('满三条不抽取、不扰动序列', !rollTalent(full, () => { draws++; return 0 }) && !gainBreakthroughTalent({}, { talents: full }, () => { draws++; return 0 }) && draws === 0)
-  const last = rollTalent(full.slice(0, 2), sequence([0.9999, 0]))
-  ok('已占成长和突破类别时只抽岗位专长，天级岗位词条已入池', TALENT_MAP[last.id].category === 'job' &&
+  const last = rollTalent(full.slice(0, 2), sequence([0.9999, 0.5]))
+  ok('已占成长和突破类别时抽岗位或猎杀词条，天级岗位词条已入池', TALENT_MAP[last.id].category === 'job' &&
     TALENT_MAP[last.id].tier === 'tian' && !!TALENT_MAP[last.id].jobId && TALENT_MAP[last.id].values.length === 3)
   const normalized = normalizeTalents([{ id: 'constructor', level: 1 }, { id: '__proto__', level: 1 }, { id: 'unknown', level: 1 }, { id: 'cultivation_xuan', level: 999 },
     { id: 'cultivation_tian', level: 1 }, ...full])

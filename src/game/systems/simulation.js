@@ -3,7 +3,7 @@ import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute, canReuseEconomy } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
-import { runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
+import { prepareModules, runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
 import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
@@ -12,7 +12,7 @@ import { BUILDINGS } from '@/data/buildings'
 import { ALL_UPGRADES } from '@/data/upgrades'
 import { runAutoCraft, runAutoCondense, runAutoCraftTimers, runIndustrialCraftBatch, runAutoCondenseBatch } from './crafting'
 import { CALENDAR } from '@/data/calendar'
-import { recruitArrivals, autoAssignTalentJobs } from './disciples'
+import { recruitArrivals, autoAssignTalentJobs, autoBreakthroughStep, discipleBreakthroughPreview } from './disciples'
 import { isLongOffline, offlineSegments, offlineSegmentCount, averageSeasonRatio, BUFF_BOUNDARY_EPS_MS } from './offlinePlan'
 import { MONEY_INFINITY, ZERO, moneyMax, moneyToRatio, requireFiniteMoney } from '../decimal'
 
@@ -64,6 +64,7 @@ function createTickRunner(state, derived, seconds, opts) {
   if (opts.finalEconomyDetails === false) {
     withGameContext(state, { economyDetails: false }, () => recompute(state, derived))
   } else recompute(state, derived)
+  if (prepareModules(state, derived)) recompute(state, derived)
   const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
     !(state.resources.qiEnergy ?? ZERO).gt(0) && !(derived.rates.qiEnergy ?? ZERO).gt(0) &&
     !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
@@ -121,6 +122,8 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   const assignmentsChanged = autoAssignTalentJobs(state)
   if (!reuseEconomy || assignmentsChanged || !canReuseEconomy(state, derived, cap)) recompute(state, derived, cap)
   for (const member of state.disciples.members) cultivateDisciple(member, cap, derived.trainingActive)
+  // 自动突破（§2.2.3）：仅在线结算——在线追赶与 ≤60 秒后台窗口走逐秒路径、照常触发；离线结算（opts.offline）不触发。
+  if (!offline && derived.autoDiscipleBreakthroughUnlocked) autoBreakthroughStep(state, derived)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
 
   // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。
@@ -307,6 +310,9 @@ function offlineSummary(state, before, disciplesBefore, cap, stats = null) {
     if (diff.gt(0.01)) gains[r.id] = diff
   }
   const summary = { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
+  // 离线不自动突破：修满待突破的人选汇总进摘要与纪事（§2.2.3），不依赖自动突破开关。
+  const readyToBreak = state.disciples.members.filter(member => discipleBreakthroughPreview(state, member).ready).length
+  if (readyToBreak > 0) summary.readyToBreak = readyToBreak
   // 有界近似额外报告实际工作量，便于基准与回归断言「计算量没有换到内部循环」。
   if (stats) {
     summary.approximate = true
@@ -367,6 +373,11 @@ export async function simulateOfflineAsync(state, derived, seconds, opts = {}) {
  */
 export function createOfflineSegmentRunner(state, derived, seconds, opts = {}) {
   const startAt = opts.startAt ?? gameNow(state)
+  // 工具直接调用离线引擎也必须在第一段生产前完成旧档迁移。
+  withGameContext(state, { now: () => startAt }, () => {
+    recompute(state, derived)
+    if (prepareModules(state, derived)) recompute(state, derived)
+  })
   const endAt = startAt + seconds * 1000
   const plan = offlineSegments(state, seconds, startAt)
   const stats = {

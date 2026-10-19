@@ -10,6 +10,7 @@ import { ZERO, moneyIsPositive, moneyMax } from './decimal'
 import { D7_RULESET, createFaithProgression, normalizeFaithProgression } from '@/data/faith'
 import { decodeMoneyFields } from './moneyFields'
 import { createAnalyticsState } from './analyticsState'
+import { WAREHOUSE_CAPACITY_VERSION } from '@/data/buildings'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -66,6 +67,8 @@ export function createInitialState(now = Date.now()) {
     scriptureArchiveVersion: 1,
     beastRetirementVersion: 1,
     uncappedCraftVersion: 1,
+    warehouseCapacityVersion: WAREHOUSE_CAPACITY_VERSION,
+    legacyWarehouseCounts: { depot: 0, mysticVault: 0 },
 
     buildings: {},
     // 兼容旧档免费首屋的拆除记录；新建首屋同样支付木料。
@@ -131,6 +134,18 @@ export function createInitialState(now = Date.now()) {
       autoTalentJobs: true,
       // 招募模式：'auto' 弟子自动前来（默认）／'manual' 主动招募（需《招贤纳士》解锁）
       recruitMode: 'auto',
+      // 培养预算（需《传功授业》）：传功与自动突破不得击穿「upkeep × N 秒」的灵气底线（0 关闭，可调 0–300）
+      trainingQiFloorSeconds: 30,
+      // 宗门破境材料保留：开启时批量突破与自动突破不得动用宗门下一境破境材料（单人手动不受限）
+      sectBreakthroughReserve: true,
+      // 传功人数上限：setMentored 开关时校验，达上限拒绝本次开启，不自动补位
+      mentorLimit: 20,
+      // 自动突破（需《因材施教》）：仅在线结算，离线不突破；旧档默认关闭
+      autoBreakthrough: false,
+      // 目标境界上限：'sect' 不高于当前宗门境界（默认），或具体境界下标（止步该境）
+      autoBreakthroughCap: 'sect',
+      // 适用人选：'focus' 仅重点名单（默认）／'all' 全部弟子
+      autoBreakthroughScope: 'focus',
       autoCraftSpeeds: {},
       craftWeights: {},
       processingModes: {},
@@ -221,6 +236,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.craftTimers = {}
   state.craftOrders = {}
   state.industryVersion = 1
+  state.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
+  state.legacyWarehouseCounts = { depot: 0, mysticVault: 0 }
   state.alchemyProgressionVersion = 1
   state.legacyNineTurnPill = false
   state.scriptureArchiveVersion = 1

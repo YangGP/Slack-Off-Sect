@@ -48,6 +48,15 @@ export function rehydrateModules(state) {
   }
 }
 
+/** 正式加载／推进前处理已付款旧状态，停用模块也需要迁移；调用方先重算仓容。 */
+export function prepareModules(state, derived) {
+  let changed = false
+  for (const module of MODULE_DESCRIPTORS) {
+    if (module.prepare?.(state, derived)) changed = true
+  }
+  return changed
+}
+
 /** 转世/飞升时重置模块切片为本世初始值 */
 export function resetModules(state, fresh) {
   for (const m of MODULE_DESCRIPTORS) state[m.saveKey] = fresh[m.saveKey]

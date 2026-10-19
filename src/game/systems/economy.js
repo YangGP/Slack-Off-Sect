@@ -1,6 +1,6 @@
 import { RESOURCES } from '@/data/resources'
 import { CONFIG } from '@/data/config'
-import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
+import { BUILDINGS, BUILDING_MAP, LEGACY_WAREHOUSE_IDS, LEGACY_STORAGE_DELTA } from '@/data/buildings'
 import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { treasureMult, habitabilityEffects, jobOutputs, karmaMultipliers, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
@@ -16,6 +16,19 @@ import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
 import { faithRatioBonus, faithStorageRatio, realmProductionMultiplier, ritualLevel } from './faith'
 import { registerStaticMoneyCache } from '../staticMoneyCache'
+
+/** 两类仓库的有效定额：新容量×N + 旧制差额×min(N,旧数量)。 */
+export function effectiveBuildingStorage(state, id) {
+  const meta = BUILDING_MAP[id]
+  if (!meta?.effects?.storage) return {}
+  const count = Math.max(0, Math.floor(state.buildings?.[id]?.count || 0))
+  const legacy = LEGACY_WAREHOUSE_IDS.includes(id)
+    ? Math.min(count, Math.max(0, Math.floor(state.legacyWarehouseCounts?.[id] || 0)))
+    : 0
+  const delta = LEGACY_STORAGE_DELTA[id] || {}
+  return Object.fromEntries(Object.entries(meta.effects.storage).map(([res, amount]) => [res,
+    money(amount).times(count).plus(delta[res] ? money(delta[res]).times(legacy) : ZERO)]))
+}
 
 /**
  * 湮灭炉增产（变更 6）不作用的资源：粒子链（灵气分子／正负灵子／灵能）。
@@ -153,6 +166,7 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.discipleTraining) acc.discipleTrainingUnlocked = true
   if (ef.autoTalentJobs) acc.autoTalentJobsUnlocked = true
   if (ef.recruitMode) acc.recruitModeUnlocked = true
+  if (ef.autoDiscipleBreakthrough) acc.autoDiscipleBreakthroughUnlocked = true
   for (const field of ['processingPowerCapacity', 'processingCoolingRatio']) {
     if (ef[field]) acc[field] = (acc[field] || 0) + ef[field] * mult
   }
@@ -194,7 +208,7 @@ export function applyEffects(ef, mult, targets, src) {
   }
   if (ef.huntSuccessBonus) acc.huntSuccessBonus += ef.huntSuccessBonus * mult
   if (ef.huntYieldBonus) acc.huntYieldBonus += ef.huntYieldBonus * mult
-  if (ef.huntDurationReduction) acc.huntDurationReduction += ef.huntDurationReduction * mult
+  if (ef.huntCostReduction) acc.huntCostReduction += ef.huntCostReduction * mult
 }
 
 /**
@@ -256,11 +270,12 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     discipleTrainingUnlocked: false,
     autoTalentJobsUnlocked: false,
     recruitModeUnlocked: false,
+    autoDiscipleBreakthroughUnlocked: false,
     ratioAll: 0,
     reactorRatio: 0,
     huntSuccessBonus: 0,
     huntYieldBonus: 0,
-    huntDurationReduction: 0,
+    huntCostReduction: 0,
   }
   // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目], reactorRatio: [条目] }
   const bonus = { ratio: {}, ratioAll: [], reactorRatio: [] }
@@ -282,7 +297,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const counted = !!(meta.upkeep || power)
     const powMult = power ? power.mult : 1
     const countOnly = {}
-    if (ef.storage) countOnly.storage = ef.storage
+    if (ef.storage) {
+      if (LEGACY_WAREHOUSE_IDS.includes(meta.id)) applyEffects({ storage: effectiveBuildingStorage(state, meta.id) }, 1, targets)
+      else countOnly.storage = ef.storage
+    }
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
     if (ef.buildingStorageRatio) countOnly.buildingStorageRatio = ef.buildingStorageRatio
     if (ef.storageAll) countOnly.storageAll = ef.storageAll
@@ -563,9 +581,11 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       if (money(cost).gt(0)) { raw = raw.plus(cost); count++ }
     }
     // 可用灵气按本段时长折算；金额精确比较，不再用相对容差放行「差一点点」的支付。
+    // 灵气底线：预留 upkeep × trainingQiFloorSeconds 的口粮库存，传功不得击穿（0 关闭，设置见 docs/DISCIPLE-PROGRESSION.md §2.2.2）。
+    const qiFloor = money(upkeep).times(state.settings?.trainingQiFloorSeconds || 0)
     const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(seconds)
       .plus(rates.qi ?? ZERO).plus(expense.qi ?? ZERO))
-    if (acc.discipleTrainingUnlocked && raw.gt(0) && available.gte(raw)) {
+    if (acc.discipleTrainingUnlocked && raw.gt(0) && available.gte(raw.plus(qiFloor.div(seconds)))) {
       trainingCost = raw
       if (!expenseList.qi) expenseList.qi = []
       expenseList.qi.push({ kind: 'upkeep', id: 'training', label: '传功', count, value: raw.negated() })
@@ -585,9 +605,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   for (const [id, value] of Object.entries(acc.buildingStorageRatio || {})) {
     const meta = BUILDING_MAP[id]
     if (!meta || !isEntryEnabled(state, meta)) continue
-    const count = state.buildings[id]?.count || 0
-    for (const [res, amount] of Object.entries(meta.effects?.storage || {})) {
-      max[res] = (max[res] ?? ZERO).plus(money(amount).times(count).times(value))
+    const storage = effectiveBuildingStorage(state, id)
+    for (const [res, amount] of Object.entries(storage)) {
+      max[res] = (max[res] ?? ZERO).plus(amount.times(value))
     }
   }
   for (const r of RESOURCES) {
@@ -682,7 +702,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     + coolingArrays * 2 * (1 + (acc.processingCoolingRatio || 0))
   derived.huntSuccessBonus = acc.huntSuccessBonus
   derived.huntYieldBonus = acc.huntYieldBonus
-  derived.huntDurationReduction = acc.huntDurationReduction
+  derived.huntCostReduction = acc.huntCostReduction
   derived.disasterGuard = Math.min(CONFIG.DISASTER_GUARD_CAP, acc.disasterGuard)
   derived.disasterGuardByResource = acc.disasterGuardByResource
   derived.ascendBonus = acc.ascendBonus
@@ -703,6 +723,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.discipleTrainingUnlocked = !!acc.discipleTrainingUnlocked
   derived.autoTalentJobsUnlocked = !!acc.autoTalentJobsUnlocked
   derived.recruitModeUnlocked = !!acc.recruitModeUnlocked
+  derived.autoDiscipleBreakthroughUnlocked = !!acc.autoDiscipleBreakthroughUnlocked
   // 满仓凝液与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
   derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseLiquidUnlocked
   derived.ratio = ratio
@@ -763,10 +784,11 @@ export function canReuseEconomy(state, derived, seconds) {
   if (derived.discipleTrainingUnlocked) {
     let training = ZERO
     for (const member of state.disciples.members) training = training.plus(discipleTrainingCost(member, state.realm))
-    // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功。
+    // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功；底线口径与重算门控保持一致。
     const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(dt)
       .plus(derived.rates.qi ?? ZERO).plus(derived.expense.qi ?? ZERO).plus(derived.trainingCost))
-    const cost = training.gt(0) && available.gte(training) ? training : ZERO
+    const qiFloor = money(derived.upkeep).times(state.settings?.trainingQiFloorSeconds || 0)
+    const cost = training.gt(0) && available.gte(training.plus(qiFloor.div(dt))) ? training : ZERO
     if (!cost.eq(derived.trainingCost)) return false
   }
   return true

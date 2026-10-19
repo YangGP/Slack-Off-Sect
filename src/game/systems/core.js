@@ -134,7 +134,7 @@ export function createDerived() {
     ratioAll: 0,
     huntSuccessBonus: 0,
     huntYieldBonus: 0,
-    huntDurationReduction: 0,
+    huntCostReduction: 0,
   }
 }
 

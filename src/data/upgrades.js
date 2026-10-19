@@ -316,7 +316,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['herbGarden'] },
     note: '解锁建筑：药圃',
     effectDesc: '因此敢开圃种药：有了稳定的灵草来源。',
-    needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['qiGazing'], building: { id: 'library', count: 1 } },
   },
   // 自技艺页迁入（工艺）：木料链第二环，开放刨木成板
   {
@@ -574,7 +574,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['depot'] },
     note: '解锁建筑：材料库',
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['earthArt'] },
+    needs: { upgrades: ['earthArt', 'woodworking'], building: { id: 'warehouse', count: 1 } },
   },
   {
     id: 'buildingCode',
@@ -666,6 +666,17 @@ const CORE_CULTIVATION = [
     effects: { discipleTraining: true },
     // 造价含香火，而香火要「香火愿 → 山门 → 香使」才产得出：列进前置，避免先露面却找不到来源。
     needs: { upgrades: ['preachArt', 'oralTeaching', 'incenseVow'] },
+  },
+  {
+    id: 'adaptiveTeaching',
+    name: '因材施教',
+    glyph: '教',
+    cost: { insight: 4800, faith: 600 },
+    desc: '因材施教，各随其器。学会后可在弟子页开启「自动突破」，由长老公断何人可冲关。',
+    effectDesc: '修满且无调息的弟子可自动发起突破：重点名单优先、缺料跳过等待，培养预算与宗门材料保留优先；仅在线结算，离线不突破。',
+    effects: { autoDiscipleBreakthrough: true },
+    // 前置《传功授业》与《知人善任》：自动突破属于培养策略，须先掌握手动培养与识人之明。
+    needs: { upgrades: ['mentorship', 'talentAssignment'] },
   },
   {
     id: 'intuition',
@@ -817,7 +828,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 30, rock: 120, wood: 220 },
     desc: '顺纹下凿、量山取料，整块石料运下山也不碎一角。矿石产出 +30%。',
     effects: { ratio: { rock: 0.3 } },
-    needs: { upgrades: ['qiOrigin'], building: { id: 'quarry', count: 1 } },
+    needs: { upgrades: ['homePlanning'], building: { id: 'quarry', count: 1 } },
   },
   {
     id: 'homePlanning',
@@ -1028,6 +1039,7 @@ export const CULTIVATION_STAGES = [
       'recruitDrive',
       'seekTalents',
       'mentorship',
+      'adaptiveTeaching',
       'intuition',
       'craftTempo',
       'longBreath',

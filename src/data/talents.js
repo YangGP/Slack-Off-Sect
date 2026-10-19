@@ -2,7 +2,7 @@
 export const TALENT_RULES = {
   maxCount: 3, maxLevel: 3, breakthroughChance: 0.1, upgradeChance: 0.4,
   birthCounts: [{ count: 0, weight: 70 }, { count: 1, weight: 25 }, { count: 2, weight: 5 }],
-  caps: { cultivation: 0.9, job: 0.9, breakthrough: 0.14 },
+  caps: { cultivation: 0.9, job: 0.9, breakthrough: 0.14, huntSuccess: 0.14, huntYield: 0.9 },
 }
 export const TALENT_TIERS = [
   { id: 'huang', name: '黄', weight: 60 }, { id: 'xuan', name: '玄', weight: 30 },
@@ -16,8 +16,17 @@ const CULTIVATION_VALUES = {
 const BREAKTHROUGH_VALUES = {
   huang: [0.02, 0.03, 0.04], xuan: [0.04, 0.06, 0.07], di: [0.06, 0.09, 0.11], tian: [0.08, 0.12, 0.14],
 }
+// 猎杀个人天赋（v0.421）：成功率按百分点（口径同突破天赋），收获按比例（口径同修炼/岗位天赋）。
+const HUNT_SUCCESS_VALUES = {
+  huang: [0.02, 0.03, 0.04], xuan: [0.04, 0.06, 0.07], di: [0.06, 0.09, 0.11], tian: [0.08, 0.12, 0.14],
+}
+const HUNT_YIELD_VALUES = {
+  huang: [0.1, 0.15, 0.18], xuan: [0.2, 0.3, 0.36], di: [0.35, 0.52, 0.63], tian: [0.5, 0.75, 0.9],
+}
 const cultivationNames = ['勤修不辍', '修炼奇才', '道心澄明', '天道眷顾']
 const breakthroughNames = ['心气沉稳', '行气通畅', '道基稳固', '破境通明']
+const huntSuccessNames = ['耳聪目明', '识兽有方', '兽性通明', '天生猎瞳']
+const huntYieldNames = ['手快眼疾', '剥取利落', '庖丁之术', '解牛神技']
 const jobs = [
   ['farmer', '阵徒', ['引气熟手', '聚气通窍', '气脉亲和', '御气通玄']],
   ['woodcutter', '樵夫', ['识木', '顺纹巧手', '灵木亲和', '木德天成']],
@@ -31,6 +40,10 @@ export const TALENTS = TALENT_TIERS.flatMap((tier, index) => [
     values: CULTIVATION_VALUES[tier.id] },
   { id: `breakthrough_${tier.id}`, name: breakthroughNames[index], tier: tier.id, category: 'breakthrough',
     values: BREAKTHROUGH_VALUES[tier.id] },
+  { id: `huntSuccess_${tier.id}`, name: huntSuccessNames[index], tier: tier.id, category: 'huntSuccess',
+    module: 'hunting', values: HUNT_SUCCESS_VALUES[tier.id] },
+  { id: `huntYield_${tier.id}`, name: huntYieldNames[index], tier: tier.id, category: 'huntYield',
+    module: 'hunting', values: HUNT_YIELD_VALUES[tier.id] },
   ...jobs.map(([jobId, jobName, names]) => ({
     id: `job_${jobId}_${tier.id}`, name: names[index], tier: tier.id, category: 'job', jobId, jobName,
     values: CULTIVATION_VALUES[tier.id],
@@ -49,6 +62,8 @@ export function talentDescription(meta, level = 1) {
   const value = Math.round(talentValue(meta, level) * 100)
   if (meta.category === 'breakthrough') return `个人突破成功率 +${value} 个百分点`
   if (meta.category === 'job') return `本人担任${meta.jobName}时岗位产出 +${value}%`
+  if (meta.category === 'huntSuccess') return `本人猎杀成功率 +${value} 个百分点`
+  if (meta.category === 'huntYield') return `本人猎杀收获 +${value}%`
   return `个人修炼速度 +${value}%`
 }
 
@@ -87,10 +102,11 @@ export function talentBonus(member, category, jobId = member.roleId) {
   return Math.min(TALENT_RULES.caps[category] || 0, bonus)
 }
 
-export function rollTalent(talents, random, tierWeights = null) {
+export function rollTalent(talents, random, tierWeights = null, options = {}) {
   if (talents.length >= TALENT_RULES.maxCount) return null
   const owned = new Set(talents.map(entry => TALENT_MAP[entry.id]?.category))
-  const candidates = TALENTS.filter(meta => !owned.has(meta.category))
+  const includeHunting = options.includeHunting !== false
+  const candidates = TALENTS.filter(meta => !owned.has(meta.category) && (includeHunting || meta.module !== 'hunting'))
   if (!candidates.length) return null
   // 招募礼聘等场景可传入替代品级权重，使高品级更容易出现；未传时沿用基础权重。
   const tiers = TALENT_TIERS.filter(tier => candidates.some(meta => meta.tier === tier.id))
@@ -104,14 +120,14 @@ export function rollTalent(talents, random, tierWeights = null) {
 }
 
 /** 入宗天赋；quality 可传 { tierWeights, countWeights } 调整品级与条数分布（主动招募）。 */
-export function birthTalents(random, quality = null) {
+export function birthTalents(random, quality = null, options = {}) {
   const counts = quality?.countWeights
     ? TALENT_RULES.birthCounts.map((entry, index) => ({ ...entry, weight: quality.countWeights[index] ?? 0 }))
     : TALENT_RULES.birthCounts
   const count = weighted(counts, random).count
   const talents = []
   for (let index = 0; index < count; index++) {
-    const talent = rollTalent(talents, random, quality?.tierWeights || null)
+    const talent = rollTalent(talents, random, quality?.tierWeights || null, options)
     if (talent) talents.push(talent)
   }
   return talents
@@ -122,10 +138,10 @@ export function talentRandom(data) {
   return data.talentSeed / 4294967296
 }
 
-export function gainBreakthroughTalent(data, member, random = () => talentRandom(data)) {
+export function gainBreakthroughTalent(data, member, random = () => talentRandom(data), options = {}) {
   member.talents ||= []
   if (member.talents.length >= TALENT_RULES.maxCount || random() >= TALENT_RULES.breakthroughChance) return null
-  const talent = rollTalent(member.talents, random)
+  const talent = rollTalent(member.talents, random, null, options)
   if (talent) member.talents.push(talent)
   return talent
 }
@@ -146,5 +162,13 @@ export function talentMatches(member, filter) {
   return (member.talents || []).some(entry => {
     const meta = TALENT_MAP[entry.id]
     return meta && (meta.category === filter || `job:${meta.jobId}` === filter)
+  })
+}
+
+/** 是否持有猎杀天赋（huntSuccess／huntYield 任一），供猎杀自动组队识别「天生猎手」优先人选。 */
+export function hasHuntTalent(member) {
+  return (member?.talents || []).some(entry => {
+    const meta = TALENT_MAP[entry?.id]
+    return meta && (meta.category === 'huntSuccess' || meta.category === 'huntYield')
   })
 }

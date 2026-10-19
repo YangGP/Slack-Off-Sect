@@ -23,7 +23,12 @@ export const HUNT = {
   SUCCESS_FLOOR: 0.35,
   SUCCESS_CAP: 0.99,
   YIELD_BONUS_CAP: 1.0,
-  DURATION_REDUCTION_CAP: 0.4,
+  /** 自动猎杀间隔（秒）：建议默认 60，可调 30～3600。 */
+  AUTO_INTERVAL_DEFAULT: 60,
+  AUTO_INTERVAL_MIN: 30,
+  AUTO_INTERVAL_MAX: 3600,
+  /** 猎杀信符减耗上限（只用于猎杀，不影响外交）。 */
+  COST_REDUCTION_CAP: 0.9,
 }
 
 /**
@@ -42,9 +47,9 @@ export const HUNT_FIELDS = [
     entryRealm: 3,
     minDiscipleRealm: 0,
     recommendRealm: 3,
-    baseDuration: 120,
+    baseDuration: 60,
     successBase: 0.9,
-    baseYield: { beastHide: 0.12, beastBone: 0.08 },
+    baseYield: { beastHide: 0.24, beastBone: 0.16 },
     advancedYield: null,
   },
 ]
@@ -201,8 +206,8 @@ export const HUNT_TECHNIQUES = [
     name: '踏山步',
     glyph: '踏',
     cost: { insight: 200, stone: 20 },
-    desc: '踏石无声，翻山如履平地。猎杀时长 −10%。',
-    effects: { huntDurationReduction: 0.1 },
+    desc: '踏石无声，翻山如履平地。猎杀信符消耗 −10%，不改变外交费用。',
+    effects: { huntCostReduction: 0.1 },
     needs: { upgrades: ['wildHunting'] },
     module: 'hunting',
   },

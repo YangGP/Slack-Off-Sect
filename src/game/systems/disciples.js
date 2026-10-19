@@ -1,12 +1,18 @@
 import { JOBS } from '@/data/jobs'
-import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval, isManualRecruit } from './core'
+import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval, isManualRecruit, realmCost } from './core'
 import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, DISCIPLE_AIDS, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP, RECRUIT_TIER_MAP, recruitCost, recruitRealmRange, rollRecruitRealm, rootBreakthroughBonus } from '@/data/disciples'
 import { talentBonus, gainBreakthroughTalent, upgradeTalent, TALENT_MAP } from '@/data/talents'
 import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
-import { ONE, ZERO, ceilMoney, money, moneyEq, moneyMax, moneySum } from '../decimal'
+import { isModuleEnabled } from '@/data/modules'
+import { ONE, ZERO, ceilMoney, money, moneyEq, moneyLt, moneyMax, moneySubtract, moneySum } from '../decimal'
+
+/** 资源和培养名额有限时，手动批量与自动操作均优先重点弟子。 */
+function trainingOrder(members) {
+  return [...members].sort((a, b) => (b.focus === true ? 1 : 0) - (a.focus === true ? 1 : 0) || a.id - b.id)
+}
 
 /** 自动分工属于动作结算，不能放在只读重算中；只改有岗位专长且未出征的弟子。 */
 export function autoAssignTalentJobs(state) {
@@ -104,37 +110,93 @@ export function discipleBreakthroughPreview(state, member) {
   return { target, required, cost, chance, status, ready: status === '待突破', affordable: canAfford(state, cost) }
 }
 
-/** 首版只损失本境修为与材料，不引入个人死亡或永久停滞。 */
+/** 单次突破结算：预览与实付同一入口；手动批量与自动突破共用，保证两处行为一致。返回是否成功。 */
+function settleDiscipleBreakthrough(state, member, preview, random) {
+  payCost(state, preview.cost)
+  // 累计灵气消耗是金额：逐次精确累加，不做安全整数截断。
+  member.totalQiConsumed = money(member.totalQiConsumed ?? ZERO).plus(preview.cost.qi ?? ZERO)
+  // 本次尝试已结算，消耗待生效的个人护道（无论成败）。
+  member.aidBonus = 0
+  if (random() < preview.chance) {
+    member.realm++
+    member.cultivation = 0
+    const talent = gainBreakthroughTalent(state.disciples, member, undefined, { includeHunting: isModuleEnabled(state, 'hunting') })
+    if (talent) pushLog(state, `${member.name}突破后领悟天赋【${TALENT_MAP[talent.id].name}】`, 'good')
+    const upgraded = upgradeTalent(state.disciples, member)
+    if (upgraded) pushLog(state, `${member.name}突破后天赋【${TALENT_MAP[upgraded.id].name}】提升至 Lv.${upgraded.level}`, 'good')
+    return true
+  }
+  // 首版只损失本境修为与材料，不引入个人死亡或永久停滞；20% 重修损失是自动重试的天然节流。
+  member.cultivation *= 1 - DISCIPLE_GROWTH.failureLoss
+  member.cooldown = DISCIPLE_GROWTH.cooldown
+  return false
+}
+
+/**
+ * 手动突破（单人或批量）：批量逐人扣料，缺料或触宗门材料保留即停止、不超支；单人手动不受保留限制。
+ * 首版只损失本境修为与材料，不引入个人死亡或永久停滞。
+ */
 export function breakthroughDisciples(state, derived, ids, random = () => gameRandom(state)) {
   const selected = new Set(ids)
-  const result = { success: 0, failed: 0, skipped: 0, insufficient: false }
-  for (const member of state.disciples.members) {
+  // 宗门破境材料保留：批量突破不得动用「当前宗门下一境破境材料」——扣完本次费用后，
+  // 共享资源仍须 ≥ 宗门下一境该项（只检查本次费用实际包含的资源，已低于保留量时不在本动作修复）。
+  // 单人手动突破不受限（玩家显式操作）；关闭开关后批量也不受限。
+  const reserve = derived.discipleTrainingUnlocked && ids.length > 1 && state.settings?.sectBreakthroughReserve !== false
+    ? realmCost(state, derived, state.realm + 1) || {} : {}
+  const result = { success: 0, failed: 0, skipped: 0, insufficient: false, reserved: 0 }
+  for (const member of trainingOrder(state.disciples.members)) {
     if (!selected.has(member.id)) continue
     const preview = discipleBreakthroughPreview(state, member)
     if (!preview.ready) { result.skipped++; continue }
     if (!preview.affordable) { result.insufficient = true; break }
-    payCost(state, preview.cost)
-    // 累计灵气消耗是金额：逐次精确累加，不做安全整数截断。
-    member.totalQiConsumed = money(member.totalQiConsumed ?? ZERO).plus(preview.cost.qi ?? ZERO)
-    // 本次尝试已结算，消耗待生效的个人护道（无论成败）。
-    member.aidBonus = 0
-    if (random() < preview.chance) {
-      member.realm++
-      member.cultivation = 0
-      result.success++
-      const talent = gainBreakthroughTalent(state.disciples, member)
-      if (talent) pushLog(state, `${member.name}突破后领悟天赋【${TALENT_MAP[talent.id].name}】`, 'good')
-      const upgraded = upgradeTalent(state.disciples, member)
-      if (upgraded) pushLog(state, `${member.name}突破后天赋【${TALENT_MAP[upgraded.id].name}】提升至 Lv.${upgraded.level}`, 'good')
-    } else {
-      member.cultivation *= 1 - DISCIPLE_GROWTH.failureLoss
-      member.cooldown = DISCIPLE_GROWTH.cooldown
-      result.failed++
-    }
+    if (Object.entries(reserve).some(([id, amount]) => Object.hasOwn(preview.cost, id) &&
+      moneyLt(moneySubtract(state.resources[id] ?? ZERO, preview.cost[id]), money(amount)))) { result.reserved++; break }
+    if (settleDiscipleBreakthrough(state, member, preview, random)) result.success++
+    else result.failed++
   }
   autoAssignTalentJobs(state)
-  if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}`, result.failed ? 'info' : 'good')
+  if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}${result.reserved ? '，已保留宗门破境材料' : ''}`, result.failed ? 'info' : 'good')
   recompute(state, derived)
+  return result
+}
+
+/**
+ * 自动突破（§2.2.3）：仅在线 tick 调用；离线结算（含 ≤60 秒精确路径）不触发，
+ * 「离线不自动突破、修为满即暂停传功」的现行描述与回归断言原样保留。
+ * 默认关闭、经《因材施教》解锁；重点名单优先、按个体记录顺序结算，保证可复现。
+ * 缺料、触宗门材料保留或击穿灵气底线即跳过并等待（不停止后续人选），不超支、不进负债、不自动降级目标；
+ * 预留规则优先于自动突破。不主动使用个人护道；已预付的护道随共用结算入口自然生效。
+ */
+export function autoBreakthroughStep(state, derived, random = () => gameRandom(state)) {
+  if (state.settings?.autoBreakthrough !== true) return { success: 0, failed: 0, skipped: 0 }
+  const capSetting = state.settings.autoBreakthroughCap
+  const cap = capSetting === 'sect' || !Number.isInteger(capSetting)
+    ? state.realm : Math.max(0, Math.min(state.realm, capSetting))
+  const scopeAll = state.settings.autoBreakthroughScope === 'all'
+  const reserve = state.settings.sectBreakthroughReserve !== false
+    ? realmCost(state, derived, state.realm + 1) || {} : {}
+  const qiFloor = money(derived.upkeep).times(state.settings?.trainingQiFloorSeconds || 0)
+  const result = { success: 0, failed: 0, skipped: 0 }
+  // 执行顺序：先重点名单，再按个体记录顺序（§2.2.1）。
+  const candidates = trainingOrder(state.disciples.members)
+  for (const member of candidates) {
+    if (!scopeAll && member.focus !== true) continue
+    if (member.realm + 1 > cap) continue
+    const preview = discipleBreakthroughPreview(state, member)
+    if (!preview.ready) continue
+    if (!preview.affordable) { result.skipped++; continue }
+    if (Object.entries(reserve).some(([id, amount]) => Object.hasOwn(preview.cost, id) &&
+      moneyLt(moneySubtract(state.resources[id] ?? ZERO, preview.cost[id]), money(amount)))) { result.skipped++; continue }
+    // 突破费用中的灵气不得击穿培养预算的灵气底线（§2.2.2）。
+    if (preview.cost.qi && moneyLt(moneySubtract(state.resources.qi ?? ZERO, preview.cost.qi), qiFloor)) { result.skipped++; continue }
+    if (settleDiscipleBreakthrough(state, member, preview, random)) result.success++
+    else result.failed++
+  }
+  if (result.success || result.failed) {
+    autoAssignTalentJobs(state)
+    pushLog(state, `自动突破：成功 ${result.success} 人，失败 ${result.failed} 人`, result.failed ? 'info' : 'good')
+    recompute(state, derived)
+  }
   return result
 }
 
@@ -165,7 +227,7 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   const arrived = Math.max(0, Math.min(Math.floor(timer / interval), room))
   state.arrivalTimer = timer - arrived * interval
   for (let i = 1; i <= arrived; i++) {
-    const member = newDisciple(state.disciples)
+    const member = newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') })
     cultivateDisciple(member, Math.min(dt, timer - i * interval))
     state.disciples.members.push(member)
   }
@@ -212,7 +274,7 @@ export function recruitDisciple(state, derived, tierId) {
   if (!preview.affordable) return { recruited: 0, reason: 'insufficient' }
   payCost(state, preview.cost)
   const realm = rollRecruitRealm(state.disciples, preview.tier, state.realm)
-  const member = newDisciple(state.disciples, null, { realm, quality: preview.tier })
+  const member = newDisciple(state.disciples, null, { realm, quality: preview.tier, includeHunting: isModuleEnabled(state, 'hunting') })
   state.disciples.members.push(member)
   autoAssignTalentJobs(state)
   recountDisciples(state.disciples)
@@ -258,14 +320,38 @@ export function applyDiscipleAid(state, derived, ids) {
   return result
 }
 
-/** 开关传功：只记录在个体上，速率与灵气开销在重算时按境界结算。 */
+/**
+ * 开关传功：只记录在个体上，速率与灵气开销在重算时按境界结算。
+ * 人数上限在开关时校验（setMentored 是唯一开启入口）：达上限后本次及后续开启被拒绝，
+ * 批量操作到上限即停；人数仅因逐出／流失减少，不自动补位、不擅自改动玩家分配。
+ */
 export function setMentored(state, derived, ids, value) {
+  const selected = new Set(ids)
+  const on = value === true
+  const limit = Number.isFinite(state.settings?.mentorLimit) ? Math.max(0, state.settings.mentorLimit) : 20
+  let current = state.disciples.members.reduce((sum, member) => sum + (member.mentored === true ? 1 : 0), 0)
+  let changed = 0
+  for (const member of trainingOrder(state.disciples.members)) {
+    if (!selected.has(member.id) || (member.mentored === true) === on) continue
+    if (on && current >= limit) break
+    member.mentored = on
+    changed++
+    if (on) current++
+  }
+  recompute(state, derived)
+  return changed
+}
+
+/**
+ * 重点名单：仅作排序与执行依据（自动突破优先结算重点人选），不改变产出、口粮、概率或费用。
+ * 纯组织性标记，无经济影响，不需重算经济；随保存、导出与离线副本保留，旧档默认非重点。
+ */
+export function setDiscipleFocus(state, derived, ids, value) {
   const selected = new Set(ids)
   const on = value === true
   let changed = 0
   for (const member of state.disciples.members) {
-    if (selected.has(member.id) && (member.mentored === true) !== on) { member.mentored = on; changed++ }
+    if (selected.has(member.id) && (member.focus === true) !== on) { member.focus = on; changed++ }
   }
-  recompute(state, derived)
   return changed
 }

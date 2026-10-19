@@ -80,7 +80,7 @@ const effects = (e) => {
   if (e.craftCostReduction) for (const [id, value] of Object.entries(e.craftCostReduction)) out.push(`${CRAFTS.find(c => c.id === id)?.name || id}每份耗料 −${pct(value)}（整枚向上取整）`)
   if (e.huntSuccessBonus) out.push(`猎杀成功率 +${Math.round(e.huntSuccessBonus * 100)} 个百分点`)
   if (e.huntYieldBonus) out.push(`猎杀收获 +${pct(e.huntYieldBonus)}`)
-  if (e.huntDurationReduction) out.push(`猎杀时长 −${pct(e.huntDurationReduction)}`)
+  if (e.huntCostReduction) out.push(`猎杀信符消耗 −${pct(e.huntCostReduction)}`)
   if (e.disasterGuard) out.push(`灾损 −${pct(e.disasterGuard)}`)
   if (e.disasterGuardByResource) for (const [id, value] of Object.entries(e.disasterGuardByResource)) out.push(`${res(id)}灾损额外减免 ${pct(value)}（合计上限80%）`)
   if (e.ascendBonus) out.push(`转世／飞升仙缘 +${pct(e.ascendBonus)}`)

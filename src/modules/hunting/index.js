@@ -14,8 +14,9 @@ export default {
   createState: system.createHuntingState,
   normalizeState: system.normalizeHuntingState,
   rehydrate: system.rehydrateHuntOccupancy,
+  prepare: system.migrateLegacyHunts,
   advance: system.advanceHunt,
-  /** 长离线的有界快进：已有任务按剩余时长推进，自动重复按可完成趟数批量估算。 */
+  /** 长离线按自动周期与实际信符封顶批量估算。 */
   advanceOffline: system.advanceOfflineHunt,
   nextDeadline: system.nextHuntDeadline,
   deactivate: system.deactivateHunting,

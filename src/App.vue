@@ -71,7 +71,7 @@ const offlinePercent = computed(() => Math.floor(ui.offlineProgress.percent))
 const analyticsDialogOpen = computed(() => !ui.rulesetBlock && !ui.offlineLoading && !ui.offlineReport && !ui.saveLoadError
   && (ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen))
 
-// 事件提示只在“真实操作完成后的安全时机”打开；其他高优先级弹窗优先。
+// 可信操作开启活跃窗口，窗口内随机延迟展示事件，点击本身不直接触发弹窗。
 const externalBlocked = computed(() => !!ui.rulesetBlock || !!ui.saveLoadError || ui.offlineLoading
   || !!ui.offlineReport || ui.analyticsConsent === 'unknown' || ui.analyticsFailureOpen || ui.changelogOpen)
 const promptShown = new Set()
@@ -82,6 +82,11 @@ let lastConfirmAt = 0
 let restoreConfirm = null
 let promptRevision = 0
 let composing = false
+let lastActivityAt = 0
+const PROMPT_ACTIVE_MS = 30000
+const PROMPT_DELAY_MIN_MS = 4000
+const PROMPT_DELAY_MAX_MS = 12000
+const PROMPT_MIN_INTERVAL_MS = 90000
 function cancelPrompt() {
   globalThis.clearTimeout(promptTimer)
   promptTimer = null
@@ -93,14 +98,23 @@ function isEditing(target) {
   return !!target.closest?.('label')?.control
 }
 function choiceKey(pending) { return pending ? 'choice:' + pending.id + ':' + pending.at : '' }
-function promptContextOk() {
+function promptContextOk(ignoreMute = false) {
   return typeof document !== 'undefined' && document.visibilityState === 'visible'
     && document.hasFocus() && !externalBlocked.value && !ui.eventModal
     && !composing && !isEditing(document.activeElement)
-    && confirmDepth === 0 && Date.now() - lastConfirmAt >= 300 && Date.now() >= promptMuteUntil
+    && confirmDepth === 0 && Date.now() - lastConfirmAt >= 300 && (ignoreMute || Date.now() >= promptMuteUntil)
+}
+function promptActivityOk() {
+  return lastActivityAt > 0 && Date.now() - lastActivityAt < PROMPT_ACTIVE_MS
+}
+function hasPromptCandidate() {
+  const pending = state.pendingChoice
+  if (pending && !promptShown.has(choiceKey(pending))) return true
+  const notice = ui.eventNotice
+  return !!notice && Date.now() - notice.receivedAt <= 60000 && !promptShown.has(notice.instanceId)
 }
 function tryOpenPrompt() {
-  if (!promptContextOk()) return
+  if (!promptActivityOk() || !promptContextOk()) return
   const pending = state.pendingChoice
   const key = choiceKey(pending)
   if (pending && !promptShown.has(key)) {
@@ -121,32 +135,40 @@ function tryOpenPrompt() {
     level: notice.level, title: notice.title, text: notice.summary || notice.text,
   })
 }
-function schedulePrompt(event) {
-  if (!event?.isTrusted) return
-  cancelPrompt()
-  if (event.type === 'keyup' && (event.isComposing || event.repeat)) return
-  // 点击、滚轮及键盘操作编辑区都不弹框；label 同样可能把焦点送入输入控件。
-  if (isEditing(event.target)) return
-  if (event.target?.closest?.('[role="dialog"], .mask')) return
-  if (!promptContextOk()) return
+function armPrompt() {
+  // 连续操作只延长活跃窗口，不反复重置随机计时，也不增加展示次数。
+  if (promptTimer !== null || !promptActivityOk() || !hasPromptCandidate() || !promptContextOk(true)) return
   const revision = promptRevision
+  const delay = PROMPT_DELAY_MIN_MS + Math.random() * (PROMPT_DELAY_MAX_MS - PROMPT_DELAY_MIN_MS)
   promptTimer = globalThis.setTimeout(() => {
     promptTimer = null
     if (revision === promptRevision) tryOpenPrompt()
-  }, 80)
+  }, Math.max(0, promptMuteUntil - Date.now()) + delay)
+}
+function schedulePrompt(event) {
+  if (!event?.isTrusted) return
+  if (event.type === 'keyup' && (event.isComposing || event.repeat)) return
+  if (event.target?.closest?.('[role="dialog"], .mask') || externalBlocked.value || ui.eventModal) return
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return
+  lastActivityAt = Date.now()
+  // 输入也算活跃，但编辑、组合输入期间不抢焦点。
+  if (isEditing(event.target)) { cancelPrompt(); return }
+  armPrompt()
 }
 function hidePrompt() {
+  lastActivityAt = 0
   cancelPrompt()
   if (ui.eventModal) actions.closeEventModal()
 }
 function onFocusIn(event) {
   if (isEditing(event.target)) cancelPrompt()
+  else armPrompt()
 }
 function onCompositionStart() {
   composing = true
   cancelPrompt()
 }
-function onCompositionEnd() { composing = false }
+function onCompositionEnd() { composing = false; armPrompt() }
 function onVisibilityChange() {
   if (document.visibilityState !== 'visible') hidePrompt()
 }
@@ -190,25 +212,40 @@ onBeforeUnmount(() => {
 })
 watch(externalBlocked, (blocked) => { if (blocked) hidePrompt() }, { flush: 'sync' })
 watch(() => ui.eventPromptEpoch, () => {
+  lastActivityAt = 0
   cancelPrompt()
   promptShown.clear()
 }, { flush: 'sync' })
-watch(() => ui.eventPromptRevision, cancelPrompt, { flush: 'sync' })
+watch(() => ui.eventPromptRevision, () => {
+  lastActivityAt = 0
+  cancelPrompt()
+}, { flush: 'sync' })
 // 身死重开也是换世：清掉旧局提示资格与已排队通知。
 watch(() => state.stats.breakthroughDeaths || 0, (next, prev) => {
   if (next === prev) return
   promptShown.clear()
   actions.clearEventPrompt()
 })
-// 关闭弹窗后的同一次按键／手势不立即串出下一条提示。
-watch(() => ui.eventModal, (value, oldValue) => { if (!value && oldValue) promptMuteUntil = Date.now() + 300 })
+// 从展示时刻计算最小间隔；关闭弹窗不重新开始计时。
+watch(() => ui.eventModal, (value, oldValue) => {
+  if (value) {
+    cancelPrompt()
+    promptMuteUntil = Date.now() + PROMPT_MIN_INTERVAL_MS
+  }
+  else if (oldValue) {
+    armPrompt()
+  }
+})
+// 事件在活跃操作期间出现时自行排入随机计时，不必等下一次点击“领取”弹窗。
+watch(() => ui.eventNotice, armPrompt)
 watch(() => choiceKey(state.pendingChoice), (key) => {
   if (!key) {
     if (ui.eventModal?.kind === 'choice') actions.closeEventModal()
     return
   }
-  // 待决选择优先于普通事件提示：收起普通提示，下一次独立操作再弹选择。
+  // 待决选择优先于普通提示，仍经过随机等待及关闭冷却。
   if (ui.eventModal && (ui.eventModal.kind !== 'choice' || ui.eventModal.instanceId !== key)) actions.closeEventModal()
+  armPrompt()
 })
 
 /** D7 大版本提示：导出的是旧键原始载荷，不是内存里的空白新状态。 */

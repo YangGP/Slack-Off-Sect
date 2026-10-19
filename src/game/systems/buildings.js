@@ -40,6 +40,7 @@ export function sellBuilding(state, derived, id, count = 1) {
     refund[k] = RESOURCE_MAP[k]?.integer ? floorMoney(half) : half
   }
   e.count -= n
+  if (state.legacyWarehouseCounts?.[id] != null) state.legacyWarehouseCounts[id] = Math.min(state.legacyWarehouseCounts[id], e.count)
   state.stats.buildingsBuilt = Math.max(0, state.stats.buildingsBuilt - n)
   for (const k in refund) {
     const before = state.resources[k] ?? ZERO
