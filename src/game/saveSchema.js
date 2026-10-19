@@ -150,7 +150,7 @@ export function validateState(state, fresh) {
   }
   result.log = result.log.filter(entry => isRecord(entry) && typeof entry.text === 'string')
     .map(entry => ({ ...entry, id: safeNumber(entry.id), at: safeNumber(entry.at) }))
-  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress', 'analyticsEnabled']) {
+  for (const key of ['autosave', 'autoCraftOn', 'autoTalentJobs', 'offlineProgress', 'analyticsEnabled', 'sectBreakthroughReserve', 'autoBreakthrough']) {
     result.settings[key] = typeof result.settings[key] === 'boolean' ? result.settings[key] : fresh.settings[key]
   }
   result.settings = Object.fromEntries(Object.keys(fresh.settings).map(key => [key, result.settings[key] ?? fresh.settings[key]]))
@@ -159,6 +159,13 @@ export function validateState(state, fresh) {
   result.settings.recruitMode = result.settings.recruitMode === 'manual' ? 'manual' : 'auto'
   result.settings.modules = moduleFlags
   result.settings.craftReservePercent = safeNumber(result.settings.craftReservePercent, 20, 100)
+  result.settings.trainingQiFloorSeconds = safeNumber(result.settings.trainingQiFloorSeconds, 30, 300)
+  result.settings.mentorLimit = Math.floor(safeNumber(result.settings.mentorLimit, 20, 999))
+  // 自动突破的目标上限与适用人选：非法值回默认（'sect'／'focus'），开关本身随布尔清单归一化。
+  result.settings.autoBreakthroughCap = Number.isInteger(result.settings.autoBreakthroughCap) &&
+    result.settings.autoBreakthroughCap >= 1 && result.settings.autoBreakthroughCap < REALMS.length
+    ? result.settings.autoBreakthroughCap : 'sect'
+  result.settings.autoBreakthroughScope = result.settings.autoBreakthroughScope === 'all' ? 'all' : 'focus'
   result.settings.autoCraftPriority = Object.hasOwn(CRAFT_MAP, result.settings.autoCraftPriority) ? result.settings.autoCraftPriority : fresh.settings.autoCraftPriority
   result.ui = { ...fresh.ui, ...Object.fromEntries(Object.keys(fresh.ui).map(key => [key, result.ui[key] ?? fresh.ui[key]])) }
   result.ui.collapsedResourceGroups = flags(

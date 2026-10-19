@@ -36,6 +36,7 @@ const realmFilter = ref('all')
 const rootFilter = ref('all')
 const talentFilter = ref('all')
 const trainFilter = ref('all')
+const focusFilter = ref('all')
 const sortOrder = ref('arrival')
 const page = ref(0)
 const selected = ref([])
@@ -45,6 +46,7 @@ const filtered = computed(() => sortDisciples(state.disciples.members.filter(mem
   (realmFilter.value === 'all' || member.realm === Number(realmFilter.value)) &&
   (rootFilter.value === 'all' || member.spiritualRoot === rootFilter.value) &&
   (trainFilter.value === 'all' || (trainFilter.value === 'mentored' ? member.mentored === true : (member.aidBonus || 0) > 0)) &&
+  (focusFilter.value === 'all' || member.focus === true) &&
   talentMatches(member, talentFilter.value)), sortOrder.value, derived.trainingActive))
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 30)))
 const visible = computed(() => filtered.value.slice(Math.min(page.value, pages.value - 1) * 30, (Math.min(page.value, pages.value - 1) + 1) * 30))
@@ -58,13 +60,26 @@ const talentOptions = [{ value: 'all', label: '全部天赋' }, { value: 'none',
   { value: 'cultivation', label: '修炼天赋' }, { value: 'breakthrough', label: '突破天赋' },
   { value: 'job', label: '岗位专长' }, ...JOBS.map(job => ({ value: `job:${job.id}`, label: `${job.name}专长` }))]
 const trainOptions = [{ value: 'all', label: '全部培养' }, { value: 'mentored', label: '传功中' }, { value: 'aid', label: '已护道' }]
+const focusOptions = [{ value: 'all', label: '全部重点' }, { value: 'focus', label: '仅重点' }]
+// 培养预算（需《传功授业》）：灵气底线为「upkeep × N 秒」的口粮库存，0 为关闭。
+const floorOptions = [
+  { value: 0, label: '关闭' },
+  { value: 30, label: '30 秒口粮' },
+  { value: 60, label: '1 分钟口粮' },
+  { value: 120, label: '2 分钟口粮' },
+  { value: 180, label: '3 分钟口粮' },
+  { value: 300, label: '5 分钟口粮' },
+]
+// 自动突破（需《因材施教》）：目标上限默认「不高于宗门」，可下调为止步具体境界。
+const capOptions = [{ value: 'sect', label: '不高于宗门' },
+  ...REALMS.slice(1).map((realm, index) => ({ value: index + 1, label: `止步${realm.name}` }))]
 const sortOptions = [{ value: 'arrival', label: '入门先后' }, { value: 'progress', label: '进度优先' }, { value: 'rate', label: '速度优先' }]
 const roleOptions = computed(previous => {
   const options = [{ value: 'idle', label: '闲散' }, ...JOBS.filter(job => derived.unlockedJobs.includes(job.id)).map(job => ({ value: job.id, label: job.name }))]
   // 派生数据每帧重新计算，但实际可用岗位未变时保留选项数组身份。
   return previous?.length === options.length && options.every((option, index) => option.value === previous[index].value) ? previous : options
 })
-watch([realmFilter, rootFilter, talentFilter, trainFilter], () => { page.value = 0; selected.value = [] })
+watch([realmFilter, rootFilter, talentFilter, trainFilter, focusFilter], () => { page.value = 0; selected.value = [] })
 watch(sortOrder, () => { page.value = 0 })
 
 /** 每名弟子的平均口粮：金额 ÷ 人数（人数是有界控制量） */
@@ -172,6 +187,7 @@ function commitJob(jobId, event) {
       <HoverTip v-else label="弟子管理"><template #tip>
           <p>工作时也自动修炼，灵根影响修炼速度与突破成功率，修满后等待突破；目标境界不能超过宗门。</p>
           <p>天赋类型固定，修炼、岗位专长和突破效果只作用于本人。宗门每高于突破目标一境，成功率增加10个百分点，最高99%。</p>
+          <p>可将弟子标为重点：名单在任一排序下置顶、可单独筛选，批量与自动操作优先结算重点人选；不改变产出、口粮、概率或费用。</p>
           <p>掌握《传功授业》后可对弟子传功：持续耗灵气加速本人修炼、不停岗；也可预付个人护道材料，加成其下一次突破。</p>
           <p>突破失败消耗材料，损失20%本境修为并调息60秒。批量突破逐人扣料，材料不足即停止。</p>
           <p>宗门退境保留弟子境界，岗位加成与口粮暂按较低的宗门境界计算；宗门恢复后加成恢复。</p>
@@ -305,6 +321,36 @@ function commitJob(jobId, event) {
 
       </div>
       <div v-if="managementOpen" id="disciple-management" ref="managementPanel" class="management-surface" role="region" aria-label="弟子管理" tabindex="-1">
+      <div v-if="derived.discipleTrainingUnlocked" class="training-budget" role="group" aria-label="培养预算">
+        <HoverTip title="培养预算" description="灵气底线：传功不得使灵气跌破「口粮 × N 秒」的库存，不足整批暂停、不欠账，离线同样生效。保留宗门破境材料：批量突破不得动用宗门下一境破境材料，单人手动不受限，想动用请先关闭。传功上限：同时受传功的人数上限，开启时校验，不自动补位。">
+          <span class="small dim">培养预算</span>
+        </HoverTip>
+        <label class="training-field"><span class="small dim">灵气底线</span>
+          <select :aria-label="'传功灵气底线'" :value="state.settings.trainingQiFloorSeconds" @change="actions.setSetting('trainingQiFloorSeconds', Number($event.target.value))">
+            <option v-for="option in floorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
+        <label class="sw"><input type="checkbox" aria-label="保留宗门破境材料" :checked="state.settings.sectBreakthroughReserve" @change="actions.setSetting('sectBreakthroughReserve', $event.target.checked)" />保留宗门破境材料</label>
+        <label class="training-field"><span class="small dim">传功上限</span>
+          <input class="qty" type="number" min="0" max="999" step="1" :aria-label="'传功人数上限'" :value="state.settings.mentorLimit" @change="actions.setSetting('mentorLimit', Number($event.target.value))" />
+        </label>
+      </div>
+      <div v-if="derived.autoDiscipleBreakthroughUnlocked" class="training-budget" role="group" aria-label="自动突破">
+        <HoverTip title="自动突破" description="仅在线结算：修满、无调息且目标在宗门之内的弟子自动尝试突破；离线不突破，归来在离线摘要查看修满人数。重点名单优先；缺料、触宗门材料保留或灵气底线即跳过等待。失败沿用现行规则：全额扣料、损失20%本境修为并调息60秒。">
+          <label class="sw"><input type="checkbox" aria-label="自动突破" :checked="state.settings.autoBreakthrough" @change="actions.setSetting('autoBreakthrough', $event.target.checked)" />自动突破</label>
+        </HoverTip>
+        <label class="training-field"><span class="small dim">人选</span>
+          <select :aria-label="'自动突破适用人选'" :value="state.settings.autoBreakthroughScope" @change="actions.setSetting('autoBreakthroughScope', $event.target.value)">
+            <option value="focus">仅重点名单</option>
+            <option value="all">全部弟子</option>
+          </select>
+        </label>
+        <label class="training-field"><span class="small dim">止步</span>
+          <select :aria-label="'自动突破目标上限'" :value="state.settings.autoBreakthroughCap" @change="actions.setSetting('autoBreakthroughCap', $event.target.value === 'sect' ? 'sect' : Number($event.target.value))">
+            <option v-for="option in capOptions" :key="String(option.value)" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
+      </div>
       <div class="management-filters" role="group" aria-label="弟子筛选与排序">
         <label class="management-field"><span>境界</span>
           <StableSelect v-model="realmFilter" label="弟子境界筛选" :options="realmOptions" />
@@ -317,6 +363,9 @@ function commitJob(jobId, event) {
         </label>
         <label v-if="derived.discipleTrainingUnlocked" class="management-field"><span>培养</span>
           <StableSelect v-model="trainFilter" label="弟子培养筛选" :options="trainOptions" />
+        </label>
+        <label class="management-field"><span>重点</span>
+          <StableSelect v-model="focusFilter" label="弟子重点筛选" :options="focusOptions" />
         </label>
         <label class="management-field"><span>排序</span>
           <StableSelect v-model="sortOrder" label="弟子排序" :options="sortOptions" />
@@ -338,6 +387,8 @@ function commitJob(jobId, event) {
           <button class="btn" :disabled="!selectedIds.length" @click="assignSelected">分配所选弟子</button>
         </div>
         <div class="management-selection-actions">
+          <button class="btn" :disabled="!selectedIds.length" @click="actions.setDiscipleFocus(selectedIds, true)">所选标为重点</button>
+          <button class="btn" :disabled="!selectedIds.length" @click="actions.setDiscipleFocus(selectedIds, false)">所选取消重点</button>
           <button class="btn" :disabled="!canBatchBreakthrough" @click="actions.breakthroughDisciples(selectedIds)">所选弟子突破</button>
           <template v-if="derived.discipleTrainingUnlocked">
             <button class="btn" :disabled="!selectedIds.length" @click="actions.setMentored(selectedIds, true)">所选传功</button>
@@ -362,7 +413,7 @@ function commitJob(jobId, event) {
               <td><input v-model="selected" type="checkbox" :value="member.id" :aria-label="`选择弟子${member.id}`" /></td>
               <td class="nowrap">
                 <HoverTip :width="360" anchor="tr">
-                  <span class="disciple-name" tabindex="0" :aria-label="`${member.name}（弟子${member.id}）详情`">{{ member.name }}</span>
+                  <span class="disciple-name" tabindex="0" :aria-label="`${member.name}（弟子${member.id}）详情`">{{ member.name }}</span><span v-if="member.focus" class="focus-flag" aria-label="重点弟子">重点</span>
                   <template #heading>{{ member.name }}<span class="tip-right">#{{ member.id }} · {{ REALMS[member.realm].name }}</span></template>
                   <template #tip>
                     <div class="tip-row"><span class="k">在宗门停留</span><span class="v">已满 {{ member.residenceYears }} 年 · {{ fmtTime(member.residenceSeconds) }}</span></div>
@@ -412,6 +463,7 @@ function commitJob(jobId, event) {
                 <span v-else>圆满</span>
               </td>
               <td>
+                <button class="btn" :aria-pressed="member.focus" @click="actions.setDiscipleFocus([member.id], !member.focus)">{{ member.focus ? '取消重点' : '标为重点' }}</button>
                 <template v-if="derived.discipleTrainingUnlocked">
                   <button class="btn" :aria-pressed="member.mentored" @click="actions.setMentored([member.id], !member.mentored)">{{ member.mentored ? '停功' : '传功' }}</button>
                   <button v-if="member.realm < REALMS.length - 1" class="btn" :disabled="member.aid.pending || !member.aid.affordable" @click="actions.applyDiscipleAid([member.id])">{{ member.aid.pending ? '已护道' : '护道' }}</button>
@@ -585,6 +637,25 @@ function commitJob(jobId, event) {
 .management-surface .btn-row {
   flex-wrap: wrap;
 }
+.training-budget {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 10px;
+}
+.training-budget .training-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.training-budget select,
+.training-budget input {
+  height: 28px;
+  margin: 0;
+}
 .management-filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -651,5 +722,16 @@ function commitJob(jobId, event) {
   cursor: help;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+.focus-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 3px;
+  vertical-align: 1px;
 }
 </style>

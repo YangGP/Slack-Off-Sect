@@ -213,11 +213,12 @@ function applyOfflineProgress() {
       estimated: result.approximate === true,
       gains,
       disciples: result.disciples || 0,
+      readyToBreak: result.readyToBreak || 0,
     }
     if (gains.length) {
       state.stats.offlineGains = moneySum(gains.map(gain => gain.amount), state.stats.offlineGains)
     }
-    const extra = result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''
+    const extra = `${result.disciples > 0 ? `，另有 ${result.disciples} 名弟子慕名而来` : ''}${result.readyToBreak > 0 ? `，${result.readyToBreak} 名弟子修满待突破` : ''}`
     E.pushLog(
       state,
       `闭关 ${E.clamp(Math.floor(elapsed / 60), 0, 999999)} 分钟，弟子们替你干活${
@@ -472,12 +473,22 @@ export const actions = {
   },
   breakthroughDisciples(ids) {
     const result = E.breakthroughDisciples(state, derived, ids)
-    afterAction(`突破成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient ? 'bad' : 'info')
+    afterAction(`突破成功 ${result.success} 人，失败 ${result.failed} 人${result.reserved ? '；已保留宗门破境材料，停止' : result.insufficient ? '；材料不足，已停止' : ''}`, result.insufficient || result.reserved ? 'bad' : 'info')
     return result
   },
   setMentored(ids, value) {
+    const limit = state.settings.mentorLimit ?? 20
+    const existing = new Set(state.disciples.members.map(member => member.id))
+    // 传功人数上限在开关时校验：统计本次真正需要开启的人数，与实际改动数对比即可识别「到上限被拦」。
+    const wanted = value === true ? ids.filter(id => existing.has(id) && state.disciples.members.find(member => member.id === id).mentored !== true).length : 0
     const changed = E.setMentored(state, derived, ids, value)
     if (changed) afterAction(value ? `已开始传功 ${changed} 人` : `已停止传功 ${changed} 人`, 'info')
+    if (value === true && changed < wanted) toast(`已达传功人数上限（${limit}），本次开启 ${changed} 人`, 'bad')
+    return changed
+  },
+  setDiscipleFocus(ids, value) {
+    const changed = E.setDiscipleFocus(state, derived, ids, value)
+    if (changed) afterAction(value ? `已标为重点 ${changed} 人` : `已取消重点 ${changed} 人`, 'info')
     return changed
   },
   applyDiscipleAid(ids) {
@@ -810,6 +821,37 @@ export const actions = {
       state.settings.autoTalentJobs = value
       if (value) E.autoAssignTalentJobs(state)
       E.recompute(state, derived)
+      saveNow()
+      return true
+    }
+    if (key === 'autoBreakthrough' || key === 'autoBreakthroughCap' || key === 'autoBreakthroughScope') {
+      // 自动突破（需《因材施教》）：纯开关与口径，在线 tick 在下一步自行拾取，不需立即重算经济。
+      if (!derived.autoDiscipleBreakthroughUnlocked) return false
+      if (key === 'autoBreakthrough') {
+        if (typeof value !== 'boolean') return false
+        state.settings.autoBreakthrough = value
+      } else if (key === 'autoBreakthroughCap') {
+        state.settings.autoBreakthroughCap = value === 'sect' ||
+          (Number.isInteger(value) && value >= 1 && value < REALMS.length) ? value : 'sect'
+      } else {
+        state.settings.autoBreakthroughScope = value === 'all' ? 'all' : 'focus'
+      }
+      saveNow()
+      return true
+    }
+    if (key === 'trainingQiFloorSeconds' || key === 'sectBreakthroughReserve' || key === 'mentorLimit') {
+      // 培养预算（需《传功授业》）：灵气底线影响传功门控，改动后立即重算；上限与材料保留只影响动作结算。
+      if (!derived.discipleTrainingUnlocked) return false
+      if (key === 'trainingQiFloorSeconds') {
+        const seconds = Number.isFinite(Number(value)) ? Math.max(0, Math.min(300, Math.floor(Number(value)))) : 30
+        state.settings.trainingQiFloorSeconds = seconds
+        E.recompute(state, derived)
+      } else if (key === 'sectBreakthroughReserve') {
+        state.settings.sectBreakthroughReserve = value === true
+      } else {
+        const limit = Number.isFinite(Number(value)) ? Math.max(0, Math.min(999, Math.floor(Number(value)))) : 20
+        state.settings.mentorLimit = limit
+      }
       saveNow()
       return true
     }

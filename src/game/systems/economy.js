@@ -153,6 +153,7 @@ export function applyEffects(ef, mult, targets, src) {
   if (ef.discipleTraining) acc.discipleTrainingUnlocked = true
   if (ef.autoTalentJobs) acc.autoTalentJobsUnlocked = true
   if (ef.recruitMode) acc.recruitModeUnlocked = true
+  if (ef.autoDiscipleBreakthrough) acc.autoDiscipleBreakthroughUnlocked = true
   for (const field of ['processingPowerCapacity', 'processingCoolingRatio']) {
     if (ef[field]) acc[field] = (acc[field] || 0) + ef[field] * mult
   }
@@ -256,6 +257,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     discipleTrainingUnlocked: false,
     autoTalentJobsUnlocked: false,
     recruitModeUnlocked: false,
+    autoDiscipleBreakthroughUnlocked: false,
     ratioAll: 0,
     reactorRatio: 0,
     huntSuccessBonus: 0,
@@ -563,9 +565,11 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       if (money(cost).gt(0)) { raw = raw.plus(cost); count++ }
     }
     // 可用灵气按本段时长折算；金额精确比较，不再用相对容差放行「差一点点」的支付。
+    // 灵气底线：预留 upkeep × trainingQiFloorSeconds 的口粮库存，传功不得击穿（0 关闭，设置见 docs/DISCIPLE-PROGRESSION.md §2.2.2）。
+    const qiFloor = money(upkeep).times(state.settings?.trainingQiFloorSeconds || 0)
     const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(seconds)
       .plus(rates.qi ?? ZERO).plus(expense.qi ?? ZERO))
-    if (acc.discipleTrainingUnlocked && raw.gt(0) && available.gte(raw)) {
+    if (acc.discipleTrainingUnlocked && raw.gt(0) && available.gte(raw.plus(qiFloor.div(seconds)))) {
       trainingCost = raw
       if (!expenseList.qi) expenseList.qi = []
       expenseList.qi.push({ kind: 'upkeep', id: 'training', label: '传功', count, value: raw.negated() })
@@ -703,6 +707,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.discipleTrainingUnlocked = !!acc.discipleTrainingUnlocked
   derived.autoTalentJobsUnlocked = !!acc.autoTalentJobsUnlocked
   derived.recruitModeUnlocked = !!acc.recruitModeUnlocked
+  derived.autoDiscipleBreakthroughUnlocked = !!acc.autoDiscipleBreakthroughUnlocked
   // 满仓凝液与常驻自动都需要库存目标，避免前期没有控制成品库存的入口。
   derived.craftTargetsUnlocked = derived.autoCraftUnlocked || derived.autoCondenseLiquidUnlocked
   derived.ratio = ratio
@@ -763,10 +768,11 @@ export function canReuseEconomy(state, derived, seconds) {
   if (derived.discipleTrainingUnlocked) {
     let training = ZERO
     for (const member of state.disciples.members) training = training.plus(discipleTrainingCost(member, state.realm))
-    // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功。
+    // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功；底线口径与重算门控保持一致。
     const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(dt)
       .plus(derived.rates.qi ?? ZERO).plus(derived.expense.qi ?? ZERO).plus(derived.trainingCost))
-    const cost = training.gt(0) && available.gte(training) ? training : ZERO
+    const qiFloor = money(derived.upkeep).times(state.settings?.trainingQiFloorSeconds || 0)
+    const cost = training.gt(0) && available.gte(training.plus(qiFloor.div(dt))) ? training : ZERO
     if (!cost.eq(derived.trainingCost)) return false
   }
   return true

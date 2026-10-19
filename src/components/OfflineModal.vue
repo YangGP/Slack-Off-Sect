@@ -1,5 +1,5 @@
 <script setup>
-import { ui, actions } from '@/game/store'
+import { ui, actions, state } from '@/game/store'
 import { fmt, fmtAmount, fmtTime } from '@/game/format'
 </script>
 
@@ -21,6 +21,10 @@ import { fmt, fmtAmount, fmtTime } from '@/game/format'
 
         <div v-if="ui.offlineReport.disciples > 0" class="small good" style="padding-top: 4px">
           另有 {{ ui.offlineReport.disciples }} 名弟子慕名而来。
+        </div>
+
+        <div v-if="ui.offlineReport.readyToBreak > 0" class="small" style="padding-top: 4px">
+          {{ ui.offlineReport.readyToBreak }} 名弟子修满待突破<template v-if="state.settings.autoBreakthrough">——离线不自动突破，可回游戏处理</template>。
         </div>
 
         <table class="grid" v-if="ui.offlineReport.gains.length" style="margin-top: 6px">

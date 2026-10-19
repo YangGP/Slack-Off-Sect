@@ -668,6 +668,17 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['preachArt', 'oralTeaching', 'incenseVow'] },
   },
   {
+    id: 'adaptiveTeaching',
+    name: '因材施教',
+    glyph: '教',
+    cost: { insight: 4800, faith: 600 },
+    desc: '因材施教，各随其器。学会后可在弟子页开启「自动突破」，由长老公断何人可冲关。',
+    effectDesc: '修满且无调息的弟子可自动发起突破：重点名单优先、缺料跳过等待，培养预算与宗门材料保留优先；仅在线结算，离线不突破。',
+    effects: { autoDiscipleBreakthrough: true },
+    // 前置《传功授业》与《知人善任》：自动突破属于培养策略，须先掌握手动培养与识人之明。
+    needs: { upgrades: ['mentorship', 'talentAssignment'] },
+  },
+  {
     id: 'intuition',
     name: '心有灵犀',
     glyph: '犀',
@@ -1028,6 +1039,7 @@ export const CULTIVATION_STAGES = [
       'recruitDrive',
       'seekTalents',
       'mentorship',
+      'adaptiveTeaching',
       'intuition',
       'craftTempo',
       'longBreath',

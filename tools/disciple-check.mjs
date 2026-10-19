@@ -98,6 +98,8 @@ export function runDiscipleChecks(E, ok, close) {
   const loadedAgain = normalizeState(JSON.parse(JSON.stringify(loaded)))
   ok('个体身份、姓名、成长与岗位重复读档不变', JSON.stringify(loaded.disciples) === JSON.stringify(loadedAgain.disciples))
   const [batch, bd] = setup(3, 1)
+  // 本例隔离「缺料停止」语义：宗门材料保留默认开启，开启时的批量行为在下方培养预算小节单独测。
+  batch.settings.sectBreakthroughReserve = false
   for (const m of batch.disciples.members) m.cultivation = cultivationRequired(0)
   const cost = E.discipleBreakthroughPreview(batch, batch.disciples.members[0]).cost
   for (const [id, amount] of Object.entries(cost)) batch.resources[id] = amount
@@ -174,6 +176,17 @@ export function runDiscipleChecks(E, ok, close) {
   const sorted = [{ id: 2, realm: 1, cultivation: 3000, spiritualRoot: 'heaven' }, { id: 1, realm: 0, cultivation: 1800, spiritualRoot: 'five' }]
   ok('进度排序按本境比例而非修为绝对值', sortDisciples(sorted, 'progress')[0].id === 1)
   ok('速度排序和入门排序稳定且不改存档顺序', sortDisciples(sorted, 'rate')[0].id === 2 && sortDisciples(sorted, 'arrival')[0].id === 1 && sorted[0].id === 2)
+  const focusSorted = [{ id: 2, realm: 1, cultivation: 3000, spiritualRoot: 'heaven' }, { id: 1, realm: 0, cultivation: 1800, spiritualRoot: 'five', focus: true }]
+  ok('重点名单在任一排序下置顶', sortDisciples(focusSorted, 'progress')[0].id === 1 && sortDisciples(focusSorted, 'rate')[0].id === 1 && sortDisciples(focusSorted, 'arrival')[0].id === 1)
+  const [marked, markedD] = setup(3, 1)
+  ok('新弟子默认非重点', marked.disciples.members.every(m => m.focus === false))
+  const [ma, mb] = marked.disciples.members
+  E.setDiscipleFocus(marked, markedD, [ma.id], true)
+  ok('标记重点只作用于所选个体且重复标记不叠加', ma.focus === true && !mb.focus && E.setDiscipleFocus(marked, markedD, [ma.id], true) === 0)
+  const focusSaved = normalizeState(JSON.parse(JSON.stringify(marked)))
+  ok('重点标记随存档保留', focusSaved.disciples.members.every(m => m.focus === (m.id === ma.id)))
+  const legacyFocus = normalizeState({ disciples: { total: 1, jobs: {}, rootSeed: 12345 } })
+  ok('旧档弟子默认非重点', legacyFocus.disciples.members.every(m => m.focus === false))
   const [training, td] = setup(2, 1)
   for (const member of training.disciples.members) member.cultivation = cultivationRequired(0)
   training.resources.insight = E.money(80)
@@ -257,6 +270,8 @@ export function runDiscipleChecks(E, ok, close) {
   ok('本境修为已满时传功不收费不生效', E.moneyIsZero(discipleTrainingCost(m1, ment.realm)) && E.moneyIsZero(mentD.trainingCost) && !mentD.trainingActive && trainingBonus(m1, true) === 0)
   const [dry, dd] = setup(1, 0)
   dry.upgrades.mentorship = true
+  // 门控边界以底线关闭为口径（默认 30 秒底线的行为在下方「培养预算」小节单独测）。
+  dry.settings.trainingQiFloorSeconds = 0
   dry.disciples.jobs.farmer = 0
   dry.disciples.members[0].mentored = true
   dry.resources.qi = E.money(0)
@@ -289,6 +304,195 @@ export function runDiscipleChecks(E, ok, close) {
   E.simulateOffline(mentOffline, mentOfflineD, 10)
   ok('传功在线与离线修炼一致且按 +75% 生效', close(mentEq.disciples.members[0].cultivation, mentOffline.disciples.members[0].cultivation) &&
     close(mentEq.disciples.members[0].cultivation, 10 * cultivationRate(mentEq.disciples.members[0], true)))
+
+  // ============ 培养预算：灵气底线、宗门破境材料保留与传功上限（§2.2.2） ============
+  const [floorOn, floorOnD] = setup(1, 0)
+  floorOn.upgrades.mentorship = true
+  floorOn.disciples.jobs.farmer = 0
+  const floorMember = floorOn.disciples.members[0]
+  floorMember.mentored = true
+  floorMember.cultivation = 0
+  E.recompute(floorOn, floorOnD, 1)
+  const floorFood = E.money(floorOnD.upkeep)
+  const floorTrain = E.money(discipleTrainingCost(floorMember, floorOn.realm))
+  floorOn.resources.qi = floorFood.plus(floorTrain)
+  E.recompute(floorOn, floorOnD, 1)
+  ok('默认灵气底线拦截只够口粮与传功的库存', !floorOnD.trainingActive)
+  floorOn.settings.trainingQiFloorSeconds = 0
+  E.recompute(floorOn, floorOnD, 1)
+  ok('底线为 0 时恢复原门控口径', floorOnD.trainingActive)
+  floorOn.settings.trainingQiFloorSeconds = 30
+  floorOn.resources.qi = floorFood.plus(floorTrain).plus(floorFood.times(30))
+  E.recompute(floorOn, floorOnD, 1)
+  ok('库存覆盖底线与传功开销时生效', floorOnD.trainingActive)
+  floorOn.resources.qi = floorFood.plus(floorTrain).plus(floorFood.times(30)).minus(E.money(0.001))
+  E.recompute(floorOn, floorOnD, 1)
+  ok('击穿底线的传功整批暂停、不欠账', !floorOnD.trainingActive)
+
+  const [limitState, limitD] = setup(3, 1)
+  limitState.upgrades.mentorship = true
+  limitState.settings.mentorLimit = 2
+  const [l1, l2, l3] = limitState.disciples.members
+  ok('传功人数上限在开关时校验：达上限后拒绝开启', E.setMentored(limitState, limitD, [l1.id, l2.id], true) === 2 &&
+    E.setMentored(limitState, limitD, [l3.id], true) === 0 && l3.mentored === false)
+  ok('停功不受上限影响并空出名额', E.setMentored(limitState, limitD, [l1.id], false) === 1 &&
+    E.setMentored(limitState, limitD, [l3.id], true) === 1)
+  const [batchLimit, batchLimitD] = setup(3, 1)
+  batchLimit.upgrades.mentorship = true
+  batchLimit.settings.mentorLimit = 2
+  E.setMentored(batchLimit, batchLimitD, batchLimit.disciples.members.map(member => member.id), true)
+  ok('批量传功到上限即停', batchLimit.disciples.members.filter(member => member.mentored === true).length === 2)
+
+  const [reserveState, reserveD] = setup(2, 1)
+  for (const member of reserveState.disciples.members) { member.realm = 0; member.cultivation = cultivationRequired(0) }
+  const sectNext = E.realmCost(reserveState, reserveD, reserveState.realm + 1) || {}
+  const fee = E.discipleBreakthroughPreview(reserveState, reserveState.disciples.members[0]).cost
+  for (const [id, amount] of Object.entries(sectNext)) reserveState.resources[id] = E.money(amount).plus(fee[id] ?? E.ZERO)
+  for (const [id, amount] of Object.entries(fee)) if (reserveState.resources[id] === undefined) reserveState.resources[id] = E.money(amount)
+  const reserveResult = E.breakthroughDisciples(reserveState, reserveD, reserveState.disciples.members.map(member => member.id), () => 0)
+  ok('批量突破保留宗门下一境材料并在余量不足时停止', reserveResult.success === 1 && reserveResult.reserved === 1 &&
+    Object.entries(sectNext).every(([id, amount]) => E.moneyGte(reserveState.resources[id], amount)))
+  const [singleReserve, singleReserveD] = setup(2, 1)
+  for (const member of singleReserve.disciples.members) { member.realm = 0; member.cultivation = cultivationRequired(0) }
+  const singleFee = E.discipleBreakthroughPreview(singleReserve, singleReserve.disciples.members[0]).cost
+  for (const [id, amount] of Object.entries(singleFee)) singleReserve.resources[id] = E.money(amount)
+  const singleResult = E.breakthroughDisciples(singleReserve, singleReserveD, [singleReserve.disciples.members[0].id], () => 0)
+  ok('单人手动突破不受材料保留限制', singleResult.success === 1 && singleResult.reserved === 0)
+  reserveState.settings.sectBreakthroughReserve = false
+  for (const [id, amount] of Object.entries(fee)) reserveState.resources[id] = E.money(reserveState.resources[id] ?? E.ZERO).plus(amount)
+  const afterOff = E.breakthroughDisciples(reserveState, reserveD, reserveState.disciples.members.map(member => member.id), () => 0)
+  ok('关闭材料保留后批量不再受限', afterOff.reserved === 0 && afterOff.success === 1)
+
+  const legacyBudget = normalizeState({ disciples: { total: 1, jobs: {}, rootSeed: 12345 } })
+  ok('旧档培养预算补默认值', legacyBudget.settings.trainingQiFloorSeconds === 30 &&
+    legacyBudget.settings.sectBreakthroughReserve === true && legacyBudget.settings.mentorLimit === 20)
+  const badBudget = JSON.parse(JSON.stringify(legacyBudget))
+  badBudget.settings.trainingQiFloorSeconds = 9999
+  badBudget.settings.mentorLimit = -5
+  badBudget.settings.sectBreakthroughReserve = 'yes'
+  const fixedBudget = normalizeState(badBudget)
+  ok('培养预算越界值归一化', fixedBudget.settings.trainingQiFloorSeconds === 300 &&
+    fixedBudget.settings.mentorLimit === 0 && fixedBudget.settings.sectBreakthroughReserve === true)
+
+  // ============ 自动突破（§2.2.3）：仅在线、重点优先、缺料跳过、预留优先 ============
+  const [autoUnlocked, autoUnlockedD] = setup(2, 1)
+  autoUnlocked.upgrades.adaptiveTeaching = true
+  E.recompute(autoUnlocked, autoUnlockedD)
+  ok('掌握《因材施教》后开放自动突破入口', autoUnlockedD.autoDiscipleBreakthroughUnlocked)
+  for (const member of autoUnlocked.disciples.members) member.cultivation = cultivationRequired(0)
+  E.tick(autoUnlocked, autoUnlockedD, 1, { events: false })
+  ok('自动突破默认关闭：掌握研究后仍不自动突破', autoUnlocked.disciples.members.every(member => member.realm === 0 && member.cooldown === 0))
+
+  const [autoFocus, autoFocusD] = setup(2, 1)
+  autoFocus.upgrades.adaptiveTeaching = true
+  autoFocus.settings.autoBreakthrough = true
+  // 隔离人选口径：关闭保留与底线，只看「重点优先、在线触发」本身。
+  autoFocus.settings.sectBreakthroughReserve = false
+  autoFocus.settings.trainingQiFloorSeconds = 0
+  const [af1, af2] = autoFocus.disciples.members
+  for (const member of autoFocus.disciples.members) member.cultivation = cultivationRequired(0)
+  const autoFee = E.discipleBreakthroughPreview(autoFocus, af1).cost
+  for (const [id, amount] of Object.entries(autoFee)) autoFocus.resources[id] = E.money(amount).times(2)
+  E.recompute(autoFocus, autoFocusD)
+  E.tick(autoFocus, autoFocusD, 1, { events: false })
+  ok('默认仅重点名单：无人标记时不自动突破', af1.realm === 0 && af1.cooldown === 0 && af2.realm === 0 && af2.cooldown === 0)
+  E.setDiscipleFocus(autoFocus, autoFocusD, [af1.id], true)
+  E.tick(autoFocus, autoFocusD, 1, { events: false })
+  ok('重点弟子由在线 tick 自动突破', (af1.realm === 1 || af1.cooldown > 0) && af2.realm === 0 && af2.cooldown === 0)
+  autoFocus.settings.autoBreakthroughScope = 'all'
+  E.tick(autoFocus, autoFocusD, 1, { events: false })
+  ok('改为全部弟子后其余弟子也尝试自动突破', (af2.realm === 1 || af2.cooldown > 0))
+
+  const [autoSkip, autoSkipD] = setup(3, 4)
+  autoSkip.upgrades.adaptiveTeaching = true
+  autoSkip.settings.autoBreakthrough = true
+  autoSkip.settings.autoBreakthroughScope = 'all'
+  autoSkip.settings.sectBreakthroughReserve = false
+  autoSkip.settings.trainingQiFloorSeconds = 0
+  const [sk1, sk2, sk3] = autoSkip.disciples.members
+  // 中间那位目标是元婴：金丹以上费用含早期目标没有的材料，故意不备——验证缺料跳过、不停止后续人选。
+  sk2.realm = 3
+  for (const member of autoSkip.disciples.members) member.cultivation = cultivationRequired(member.realm)
+  const skipFee = E.discipleBreakthroughPreview(autoSkip, sk1).cost
+  for (const [id, amount] of Object.entries(skipFee)) autoSkip.resources[id] = E.money(amount).times(2)
+  E.recompute(autoSkip, autoSkipD)
+  const skipResult = E.autoBreakthroughStep(autoSkip, autoSkipD, () => 0)
+  ok('自动突破缺料跳过并继续后续人选', skipResult.success === 2 && skipResult.skipped === 1 &&
+    sk1.realm === 1 && sk2.realm === 3 && sk3.realm === 1)
+
+  const [autoReserve, autoReserveD] = setup(2, 1)
+  autoReserve.upgrades.adaptiveTeaching = true
+  autoReserve.settings.autoBreakthrough = true
+  autoReserve.settings.autoBreakthroughScope = 'all'
+  autoReserve.settings.trainingQiFloorSeconds = 0
+  for (const member of autoReserve.disciples.members) member.cultivation = cultivationRequired(0)
+  const autoReserveCost = E.realmCost(autoReserve, autoReserveD, autoReserve.realm + 1) || {}
+  const autoReserveFee = E.discipleBreakthroughPreview(autoReserve, autoReserve.disciples.members[0]).cost
+  for (const [id, amount] of Object.entries(autoReserveCost)) autoReserve.resources[id] = E.money(amount).plus(autoReserveFee[id] ?? E.ZERO)
+  for (const [id, amount] of Object.entries(autoReserveFee)) if (autoReserve.resources[id] === undefined) autoReserve.resources[id] = E.money(amount)
+  E.recompute(autoReserve, autoReserveD)
+  const autoReserveResult = E.autoBreakthroughStep(autoReserve, autoReserveD, () => 0)
+  ok('自动突破遵守宗门材料保留并跳过余量不足者', autoReserveResult.success === 1 && autoReserveResult.skipped === 1 &&
+    Object.entries(autoReserveCost).every(([id, amount]) => E.moneyGte(autoReserve.resources[id], amount)))
+
+  const [autoFloor, autoFloorD] = setup(1, 4)
+  autoFloor.upgrades.adaptiveTeaching = true
+  autoFloor.settings.autoBreakthrough = true
+  autoFloor.settings.sectBreakthroughReserve = false
+  const floorTarget = autoFloor.disciples.members[0]
+  E.setDiscipleFocus(autoFloor, autoFloorD, [floorTarget.id], true)
+  floorTarget.realm = 3
+  floorTarget.cultivation = cultivationRequired(3)
+  E.recompute(autoFloor, autoFloorD)
+  const autoFloorFee = E.discipleBreakthroughPreview(autoFloor, floorTarget).cost
+  const autoFloorReserve = E.money(autoFloorD.upkeep).times(30)
+  autoFloor.resources.qi = E.money(autoFloorFee.qi).plus(autoFloorReserve).minus(E.money(0.001))
+  for (const [id, amount] of Object.entries(autoFloorFee)) if (id !== 'qi') autoFloor.resources[id] = E.money(amount)
+  const floorBlocked = E.autoBreakthroughStep(autoFloor, autoFloorD, () => 0)
+  ok('自动突破的灵气支出不得击穿底线', floorBlocked.success === 0 && floorBlocked.skipped === 1 && floorTarget.realm === 3)
+  autoFloor.settings.trainingQiFloorSeconds = 0
+  const floorAllowed = E.autoBreakthroughStep(autoFloor, autoFloorD, () => 0)
+  ok('底线关闭后同一库存允许自动突破', floorAllowed.success === 1 && floorTarget.realm === 4)
+
+  const [autoCap, autoCapD] = setup(1, 4)
+  autoCap.upgrades.adaptiveTeaching = true
+  autoCap.settings.autoBreakthrough = true
+  autoCap.settings.sectBreakthroughReserve = false
+  autoCap.settings.trainingQiFloorSeconds = 0
+  autoCap.settings.autoBreakthroughCap = 1
+  const capMember = autoCap.disciples.members[0]
+  E.setDiscipleFocus(autoCap, autoCapD, [capMember.id], true)
+  capMember.realm = 2
+  capMember.cultivation = cultivationRequired(2)
+  const capResult = E.autoBreakthroughStep(autoCap, autoCapD, () => 0)
+  ok('目标超过止步境界的弟子不自动突破', capResult.success === 0 && capMember.realm === 2)
+
+  const [autoOffline, autoOfflineD] = setup(2, 1)
+  autoOffline.upgrades.adaptiveTeaching = true
+  autoOffline.settings.autoBreakthrough = true
+  autoOffline.settings.autoBreakthroughScope = 'all'
+  autoOffline.settings.sectBreakthroughReserve = false
+  autoOffline.settings.trainingQiFloorSeconds = 0
+  for (const member of autoOffline.disciples.members) member.cultivation = cultivationRequired(0)
+  const offFee = E.discipleBreakthroughPreview(autoOffline, autoOffline.disciples.members[0]).cost
+  for (const [id, amount] of Object.entries(offFee)) autoOffline.resources[id] = E.money(amount).times(2)
+  E.recompute(autoOffline, autoOfflineD)
+  const offSummary = E.simulateOffline(autoOffline, autoOfflineD, 30)
+  ok('离线（含 60 秒内精确路径）不自动突破并汇总修满人数', autoOffline.disciples.members.every(member => member.realm === 0) &&
+    offSummary.readyToBreak === 2)
+
+  const legacyAuto = normalizeState({ disciples: { total: 1, jobs: {}, rootSeed: 12345 } })
+  ok('旧档自动突破默认关闭且口径为默认值', legacyAuto.settings.autoBreakthrough === false &&
+    legacyAuto.settings.autoBreakthroughCap === 'sect' && legacyAuto.settings.autoBreakthroughScope === 'focus')
+  const badAuto = JSON.parse(JSON.stringify(legacyAuto))
+  badAuto.settings.autoBreakthrough = true
+  badAuto.settings.autoBreakthroughCap = 99
+  badAuto.settings.autoBreakthroughScope = 'everyone'
+  const fixedAuto = normalizeState(badAuto)
+  ok('自动突破越界设置归一化但保留开关', fixedAuto.settings.autoBreakthrough === true &&
+    fixedAuto.settings.autoBreakthroughCap === 'sect' && fixedAuto.settings.autoBreakthroughScope === 'focus')
+
+
 
   const [aid, aidD] = setup(1, 4)
   const am = aid.disciples.members[0]

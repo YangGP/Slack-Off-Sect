@@ -166,6 +166,9 @@ export function cultivationRate(member, trainingActive = false) {
 
 export function sortDisciples(members, order, trainingActive = false) {
   return [...members].sort((a, b) => {
+    // 重点名单置顶：先按重点分组，组内沿用现有排序，最后按记录顺序保证可复现。
+    const focusFirst = (b.focus === true ? 1 : 0) - (a.focus === true ? 1 : 0)
+    if (focusFirst) return focusFirst
     if (order === 'progress') {
       const progress = member => cultivationRequired(member.realm) > 0 ? member.cultivation / cultivationRequired(member.realm) : 1
       return progress(b) - progress(a) || a.id - b.id
@@ -196,7 +199,7 @@ export function newDisciple(data, spiritualRoot = null, { legacy = false, realm 
   const names = ['清禾', '云舟', '知秋', '明尘', '望舒', '青岚', '怀瑾', '听雨', '景行', '若水', '星河', '长宁', '松雪']
   return { id, name: surnames[(id * 7) % surnames.length] + names[(id * 11) % names.length],
     realm: clampRealm(realm | 0), cultivation: 0, roleId: null, cooldown: 0,
-    residenceSeconds: 0, totalQiConsumed: ZERO, mentored: false, aidBonus: 0,
+    residenceSeconds: 0, totalQiConsumed: ZERO, mentored: false, aidBonus: 0, focus: false,
     spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)),
     talents: legacy ? [] : birthTalents(() => talentRandom(data), quality) }
 }
@@ -248,6 +251,7 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
         spiritualRoot: Object.hasOwn(SPIRITUAL_ROOT_MAP, member.spiritualRoot) ? member.spiritualRoot : 'triple',
         mentored: member.mentored === true,
         aidBonus: Number.isFinite(member.aidBonus) ? Math.max(0, Math.min(0.2, member.aidBonus)) : 0,
+        focus: member.focus === true,
         talents: normalizeTalents(member.talents) }
     })
   data.nextId = data.members.reduce((next, member) => Math.max(next, member.id + 1),
