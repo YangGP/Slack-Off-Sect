@@ -316,7 +316,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['herbGarden'] },
     note: '解锁建筑：药圃',
     effectDesc: '因此敢开圃种药：有了稳定的灵草来源。',
-    needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['qiGazing'], building: { id: 'library', count: 1 } },
   },
   // 自技艺页迁入（工艺）：木料链第二环，开放刨木成板
   {
@@ -574,7 +574,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['depot'] },
     note: '解锁建筑：材料库',
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['earthArt'] },
+    needs: { upgrades: ['earthArt', 'woodworking'], building: { id: 'warehouse', count: 1 } },
   },
   {
     id: 'buildingCode',
@@ -828,7 +828,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 30, rock: 120, wood: 220 },
     desc: '顺纹下凿、量山取料，整块石料运下山也不碎一角。矿石产出 +30%。',
     effects: { ratio: { rock: 0.3 } },
-    needs: { upgrades: ['qiOrigin'], building: { id: 'quarry', count: 1 } },
+    needs: { upgrades: ['homePlanning'], building: { id: 'quarry', count: 1 } },
   },
   {
     id: 'homePlanning',

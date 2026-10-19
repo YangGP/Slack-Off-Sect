@@ -2,7 +2,7 @@
 
 用 Vue 3 + Vite（纯 JavaScript）实现的修仙宗门挂机放置游戏，参考猫国的资源池、劳动力、叠加建筑与研究加工体系。
 
-**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.422 · 即时猎杀、加成人选与活跃期间随机事件提示**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
+**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.423 · 渐进解锁、仓储调整与伐木增产**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
 
 ## 开发与检查
 

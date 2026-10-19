@@ -311,7 +311,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 9, wood: 260 },
     desc: '顺纹下斧，省力三成。灵木产出 +20%。',
     effects: { ratio: { wood: 0.2 } },
-    needs: { upgrades: ['woodworking'], building: { id: 'lumberYard', count: 1 } },
+    needs: { upgrades: ['qiArt'], building: { id: 'lumberYard', count: 1 } },
   },
   {
     id: 'prospectArt',
@@ -340,7 +340,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 90, wood: 900, ore: 120 },
     desc: '用玄铁加固斧柄锯条，伐木快得不像话。灵木产出 +25%。',
     effects: { ratio: { wood: 0.25 } },
-    needs: { upgrades: ['forestryArt'], building: { id: 'ironFurnace', count: 1 } },
+    needs: { upgrades: ['forestryArt', 'woodworking'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'mountainChant',
@@ -349,7 +349,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 70, wood: 450 },
     desc: '樵夫的号子顺着山势走，一唱一和，斧子就轻了三分。樵夫产出 +30%。',
     effects: { jobRatio: { woodcutter: 0.3 } },
-    needs: { upgrades: ['forestryArt'], building: { id: 'lumberYard', count: 1 } },
+    needs: { upgrades: ['forestryArt'], buildings: [{ id: 'lumberYard', count: 1 }, { id: 'logHouse', count: 1 }] },
   },
   {
     id: 'deepShaft',
@@ -457,7 +457,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 35, wood: 400 },
     desc: '当面讲解、抄录归档。灵机产出 +10%，典籍库自身提供的灵机与道札仓容 +40%。',
     effects: { ratio: { insight: 0.1 }, buildingStorageRatio: { scriptureArchive: 0.4 } },
-    needs: { upgrades: ['qiOrigin'], building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['qiMeasure'], building: { id: 'scriptureArchive', count: 1 } },
   },
   {
     id: 'starReading',
@@ -511,7 +511,7 @@ const CORE_TECHNIQUES = [
     desc: '按灵源考的图样缝成的幡，为气田与药圃引来灵气。基础效果：灵气产出 +25%，灵草产出 +10%。',
     // 原「聚灵幡」的灵气 +15% 并入此处（法宝收窄，效果不丢）
     effects: { ratio: { qi: 0.25, herb: 0.1 } },
-    needs: { upgrades: ['qiOrigin'] },
+    needs: { upgrades: ['qiArt'], building: { id: 'logHouse', count: 1 } },
   },
   {
     id: 'alchemyCauldron',

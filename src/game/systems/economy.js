@@ -1,6 +1,6 @@
 import { RESOURCES } from '@/data/resources'
 import { CONFIG } from '@/data/config'
-import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
+import { BUILDINGS, BUILDING_MAP, LEGACY_WAREHOUSE_IDS, LEGACY_STORAGE_DELTA } from '@/data/buildings'
 import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { treasureMult, habitabilityEffects, jobOutputs, karmaMultipliers, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
@@ -16,6 +16,19 @@ import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
 import { faithRatioBonus, faithStorageRatio, realmProductionMultiplier, ritualLevel } from './faith'
 import { registerStaticMoneyCache } from '../staticMoneyCache'
+
+/** 两类仓库的有效定额：新容量×N + 旧制差额×min(N,旧数量)。 */
+export function effectiveBuildingStorage(state, id) {
+  const meta = BUILDING_MAP[id]
+  if (!meta?.effects?.storage) return {}
+  const count = Math.max(0, Math.floor(state.buildings?.[id]?.count || 0))
+  const legacy = LEGACY_WAREHOUSE_IDS.includes(id)
+    ? Math.min(count, Math.max(0, Math.floor(state.legacyWarehouseCounts?.[id] || 0)))
+    : 0
+  const delta = LEGACY_STORAGE_DELTA[id] || {}
+  return Object.fromEntries(Object.entries(meta.effects.storage).map(([res, amount]) => [res,
+    money(amount).times(count).plus(delta[res] ? money(delta[res]).times(legacy) : ZERO)]))
+}
 
 /**
  * 湮灭炉增产（变更 6）不作用的资源：粒子链（灵气分子／正负灵子／灵能）。
@@ -284,7 +297,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const counted = !!(meta.upkeep || power)
     const powMult = power ? power.mult : 1
     const countOnly = {}
-    if (ef.storage) countOnly.storage = ef.storage
+    if (ef.storage) {
+      if (LEGACY_WAREHOUSE_IDS.includes(meta.id)) applyEffects({ storage: effectiveBuildingStorage(state, meta.id) }, 1, targets)
+      else countOnly.storage = ef.storage
+    }
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
     if (ef.buildingStorageRatio) countOnly.buildingStorageRatio = ef.buildingStorageRatio
     if (ef.storageAll) countOnly.storageAll = ef.storageAll
@@ -589,9 +605,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   for (const [id, value] of Object.entries(acc.buildingStorageRatio || {})) {
     const meta = BUILDING_MAP[id]
     if (!meta || !isEntryEnabled(state, meta)) continue
-    const count = state.buildings[id]?.count || 0
-    for (const [res, amount] of Object.entries(meta.effects?.storage || {})) {
-      max[res] = (max[res] ?? ZERO).plus(money(amount).times(count).times(value))
+    const storage = effectiveBuildingStorage(state, id)
+    for (const [res, amount] of Object.entries(storage)) {
+      max[res] = (max[res] ?? ZERO).plus(amount.times(value))
     }
   }
   for (const r of RESOURCES) {

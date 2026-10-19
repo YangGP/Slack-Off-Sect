@@ -45,8 +45,8 @@ const CORE_BUILDINGS = [
     group: 'produce',
     cost: { qi: 150, wood: 60 },
     priceRatio: 1.15,
-    desc: '木架与料场齐备，樵夫采回的灵木在此归整，伐木更有章法。',
-    effects: { ratio: { wood: 0.05 } },
+    desc: '木架与料场齐备，樵夫采回的灵木在此归整，伐木更有章法。每座灵木产出 +10%，多座相加。',
+    effects: { ratio: { wood: 0.1 } },
     needs: { building: { id: 'hut', count: 1 } },
   },
   {
@@ -90,7 +90,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.55,
     desc: '岩层里嵌着天然灵石。每座启用的矿井，让每名矿工额外采出 0.0015 灵石/秒，多座相加；无人采矿时不产出。',
     effects: {},
-    needs: { upgrades: ['prospectStudy'] },
+    needs: { upgrades: ['prospectStudy'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'herbGarden',
@@ -284,7 +284,7 @@ const CORE_BUILDINGS = [
     cost: { plank: 12, ore: 700, steel: 4 },
     priceRatio: 1.25,
     desc: '石殿分设料架与阵材格，专存灵木、灵石、矿石与玄铁；木板、玄钢等加工品无需仓容。',
-    effects: { storage: { wood: 10000, stone: 8000, rock: 6000, ore: 6000 } },
+    effects: { storage: { wood: 5000, stone: 3000, rock: 3000, ore: 3000 } },
     needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['earthEssence'] },
   },
   {
@@ -298,7 +298,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.3,
     desc: '混灵土固基、铁箍封边，专存大宗营造原料，兼收灵气 —— 洞天之前的主力仓。',
     effects: {
-      storage: { qi: 15000, wood: 15000, rock: 15000, stone: 15000, ore: 15000, herb: 8000 },
+      storage: { qi: 15000, wood: 10000, rock: 10000, stone: 10000, ore: 10000, herb: 8000 },
     },
     needs: { realm: 5, upgrades: ['earthEssence'] },
   },
@@ -730,6 +730,13 @@ const CORE_BUILDINGS = [
 ]
 
 /** 核心建筑 + 可选模块（猎杀）贡献的建筑 */
+export const WAREHOUSE_CAPACITY_VERSION = 1
+export const LEGACY_WAREHOUSE_IDS = ['depot', 'mysticVault']
+export const LEGACY_STORAGE_DELTA = {
+  depot: { wood: 5000, stone: 5000, rock: 3000, ore: 3000 },
+  mysticVault: { wood: 5000, stone: 5000, rock: 5000, ore: 5000 },
+}
+
 export const BUILDINGS = [...CORE_BUILDINGS, ...HUNT_BUILDINGS]
 
 export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))

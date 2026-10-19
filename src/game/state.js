@@ -10,6 +10,7 @@ import { ZERO, moneyIsPositive, moneyMax } from './decimal'
 import { D7_RULESET, createFaithProgression, normalizeFaithProgression } from '@/data/faith'
 import { decodeMoneyFields } from './moneyFields'
 import { createAnalyticsState } from './analyticsState'
+import { WAREHOUSE_CAPACITY_VERSION } from '@/data/buildings'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -66,6 +67,8 @@ export function createInitialState(now = Date.now()) {
     scriptureArchiveVersion: 1,
     beastRetirementVersion: 1,
     uncappedCraftVersion: 1,
+    warehouseCapacityVersion: WAREHOUSE_CAPACITY_VERSION,
+    legacyWarehouseCounts: { depot: 0, mysticVault: 0 },
 
     buildings: {},
     // 兼容旧档免费首屋的拆除记录；新建首屋同样支付木料。
@@ -233,6 +236,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
   state.craftTimers = {}
   state.craftOrders = {}
   state.industryVersion = 1
+  state.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
+  state.legacyWarehouseCounts = { depot: 0, mysticVault: 0 }
   state.alchemyProgressionVersion = 1
   state.legacyNineTurnPill = false
   state.scriptureArchiveVersion = 1
