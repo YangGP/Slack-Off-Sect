@@ -8,6 +8,11 @@ import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
 import { ONE, ZERO, ceilMoney, money, moneyEq, moneyLt, moneyMax, moneySubtract, moneySum } from '../decimal'
 
+/** 资源和培养名额有限时，手动批量与自动操作均优先重点弟子。 */
+function trainingOrder(members) {
+  return [...members].sort((a, b) => (b.focus === true ? 1 : 0) - (a.focus === true ? 1 : 0) || a.id - b.id)
+}
+
 /** 自动分工属于动作结算，不能放在只读重算中；只改有岗位专长且未出征的弟子。 */
 export function autoAssignTalentJobs(state) {
   if (!state.upgrades.talentAssignment || state.settings.autoTalentJobs === false) return 0
@@ -135,10 +140,10 @@ export function breakthroughDisciples(state, derived, ids, random = () => gameRa
   // 宗门破境材料保留：批量突破不得动用「当前宗门下一境破境材料」——扣完本次费用后，
   // 共享资源仍须 ≥ 宗门下一境该项（只检查本次费用实际包含的资源，已低于保留量时不在本动作修复）。
   // 单人手动突破不受限（玩家显式操作）；关闭开关后批量也不受限。
-  const reserve = ids.length > 1 && state.settings?.sectBreakthroughReserve !== false
+  const reserve = derived.discipleTrainingUnlocked && ids.length > 1 && state.settings?.sectBreakthroughReserve !== false
     ? realmCost(state, derived, state.realm + 1) || {} : {}
   const result = { success: 0, failed: 0, skipped: 0, insufficient: false, reserved: 0 }
-  for (const member of state.disciples.members) {
+  for (const member of trainingOrder(state.disciples.members)) {
     if (!selected.has(member.id)) continue
     const preview = discipleBreakthroughPreview(state, member)
     if (!preview.ready) { result.skipped++; continue }
@@ -172,8 +177,7 @@ export function autoBreakthroughStep(state, derived, random = () => gameRandom(s
   const qiFloor = money(derived.upkeep).times(state.settings?.trainingQiFloorSeconds || 0)
   const result = { success: 0, failed: 0, skipped: 0 }
   // 执行顺序：先重点名单，再按个体记录顺序（§2.2.1）。
-  const candidates = [...state.disciples.members]
-    .sort((a, b) => (b.focus === true ? 1 : 0) - (a.focus === true ? 1 : 0) || a.id - b.id)
+  const candidates = trainingOrder(state.disciples.members)
   for (const member of candidates) {
     if (!scopeAll && member.focus !== true) continue
     if (member.realm + 1 > cap) continue
@@ -326,7 +330,7 @@ export function setMentored(state, derived, ids, value) {
   const limit = Number.isFinite(state.settings?.mentorLimit) ? Math.max(0, state.settings.mentorLimit) : 20
   let current = state.disciples.members.reduce((sum, member) => sum + (member.mentored === true ? 1 : 0), 0)
   let changed = 0
-  for (const member of state.disciples.members) {
+  for (const member of trainingOrder(state.disciples.members)) {
     if (!selected.has(member.id) || (member.mentored === true) === on) continue
     if (on && current >= limit) break
     member.mentored = on

@@ -6,6 +6,73 @@ import { CRAFT_MAP } from '../../src/data/crafts.js'
 import { EVENT_MAP } from '../../src/data/events.js'
 import { newGame, newGameRunning } from './fixtures.mjs'
 
+/** 独立回归入口：真实 v1 在途结构连续读档后仍按旧规则归队，不重复收费或丢失岗位。 */
+export function legacyMissionRegression({ ok }) {
+  const { state, derived } = newGameRunning()
+  state.realm = 3
+  state.upgrades.wildHunting = true
+  state.buildings.huntingCamp = { count: 1, on: true }
+  state.resources.warrant = E.money(300)
+  E.recompute(state, derived)
+  const member = state.disciples.members[0]
+  E.assignDisciples(state, derived, [member.id], 'farmer')
+  const role = member.roleId
+  const { mission } = E.departHunt(state, derived, { fieldId: 'foothills', teamIds: [member.id] })
+  mission.formulaVersion = 1
+  mission.baseDuration = 120
+  mission.actualDuration = 120
+  mission.progressSeconds = 70
+  mission.baseYield = { beastHide: E.money(0.12), beastBone: E.money(0.08) }
+  delete mission.snapshots[0].y
+  state.hunting.schemaVersion = 1
+  const loaded = normalizeState(JSON.parse(JSON.stringify(state)))
+  const again = normalizeState(JSON.parse(JSON.stringify(loaded)))
+  const saved = E.activeMission(again)
+  const retained = saved?.formulaVersion === 1 && saved.actualDuration === 120 && saved.progressSeconds === 70 &&
+    E.moneyEq(saved.baseYield.beastHide, 0.12) && saved.snapshots[0].y === 1 && again.disciples.members[0].onMission
+  const before = E.money(again.resources.beastHide).plus(again.hunting.yieldRemainders.beastHide || 0)
+  const expected = E.money(0.12).times(120).times(saved?.support || 0).times(saved?.snapshots[0].A || 0).times(saved?.yieldBonus || 0)
+  const ad = E.createDerived()
+  E.recompute(again, ad)
+  // 独立序列第一抽必成功，直接推进猎杀以隔离生产和其他系统的影响。
+  again.hunting.randomSeed = 1
+  E.advanceHunt(again, ad, 50)
+  const earned = E.money(again.resources.beastHide).plus(again.hunting.yieldRemainders.beastHide || 0).minus(before)
+  const completed = role === 'farmer' && !E.activeMission(again) && again.disciples.members[0].roleId === role && !again.disciples.members[0].onMission &&
+    E.moneyEq(again.resources.warrant, 200) && earned.eq(expected)
+  const reloaded = normalizeState(JSON.parse(JSON.stringify(again)))
+  E.recompute(reloaded, ad)
+  const next = E.departHunt(reloaded, ad, { fieldId: 'foothills', teamIds: [member.id] })
+  ok('v1任务保留进度与旧收益、恢复岗位，完成后仅新任务使用v2', retained && completed &&
+    reloaded.hunting.statistics.completedMissions === 1 && next.ok && next.mission.formulaVersion === 2 &&
+    next.mission.actualDuration === 60 && E.moneyEq(reloaded.resources.warrant, 100))
+}
+
+/** 独立回归入口：旧档无天赋钉选可见且可取消，取消后人数上限生效。 */
+export async function pinnedTeamRegression({ ok }) {
+  const { createSSRApp } = await import('vue')
+  const { renderToString } = await import('@vue/server-renderer')
+  const { default: HuntPanel } = await import('../../src/modules/hunting/HuntPanel.vue')
+  const store = await import('../../src/game/store.js')
+  const { state } = newGameRunning()
+  state.realm = 3
+  state.upgrades.wildHunting = true
+  state.buildings.huntingCamp = { count: 1, on: true }
+  for (const member of state.disciples.members) member.talents = []
+  const ids = state.disciples.members.map(member => member.id)
+  state.hunting.settings.teamIds = [...ids, 99999]
+  state.hunting.settings.autoTeamSize = 1
+  Object.assign(store.state, normalizeState(JSON.parse(JSON.stringify(state))))
+  E.recompute(store.state, store.derived)
+  const html = await renderToString(createSSRApp(HuntPanel))
+  const checkboxes = html.match(/<input type="checkbox" checked/g) || []
+  const visible = checkboxes.length === ids.length && store.state.hunting.settings.teamIds.length === ids.length
+  E.setHuntTeam(store.state, [])
+  const picked = E.autoPickTeam(store.state, store.derived, 'foothills')
+  ok('无猎杀天赋的旧钉选均可操作，失效ID清理，取消后人数上限恢复', visible &&
+    picked.length === 1 && store.state.hunting.settings.teamIds.length === 0)
+}
+
 export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓闭环）')
   {
     const { state: hs, derived: hd } = newGameRunning()

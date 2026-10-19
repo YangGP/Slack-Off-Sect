@@ -344,6 +344,8 @@ export function runDiscipleChecks(E, ok, close) {
   ok('批量传功到上限即停', batchLimit.disciples.members.filter(member => member.mentored === true).length === 2)
 
   const [reserveState, reserveD] = setup(2, 1)
+  reserveState.upgrades.mentorship = true
+  E.recompute(reserveState, reserveD)
   for (const member of reserveState.disciples.members) { member.realm = 0; member.cultivation = cultivationRequired(0) }
   const sectNext = E.realmCost(reserveState, reserveD, reserveState.realm + 1) || {}
   const fee = E.discipleBreakthroughPreview(reserveState, reserveState.disciples.members[0]).cost
@@ -531,4 +533,49 @@ export function runDiscipleChecks(E, ok, close) {
   ok('掌握《传功授业》后开通培养', lockedD.discipleTrainingUnlocked)
   const legacyTraining = normalizeState({ disciples: { total: 1, jobs: {}, rootSeed: 12345 } })
   ok('旧档弟子默认未传功、无护道', legacyTraining.disciples.members.every(member => member.mentored === false && member.aidBonus === 0))
+}
+
+/** 独立回归入口：研究前后的材料保留门槛，不运行整套弟子检查。 */
+export function budgetUnlockRegression(E, { ok }) {
+  const state = createInitialState()
+  state.realm = 1
+  state.disciples.total = 2
+  const derived = E.createDerived()
+  E.recompute(state, derived)
+  for (const member of state.disciples.members) member.cultivation = cultivationRequired(0)
+  const ids = state.disciples.members.map(member => member.id)
+  const fee = E.discipleBreakthroughPreview(state, state.disciples.members[0]).cost
+  for (const [id, amount] of Object.entries(fee)) state.resources[id] = amount.times(2)
+  const raw = JSON.stringify(state)
+  const before = E.breakthroughDisciples(state, derived, ids, () => 0)
+  const learned = normalizeState(JSON.parse(raw))
+  learned.upgrades.mentorship = true
+  E.recompute(learned, derived)
+  const blocked = E.breakthroughDisciples(learned, derived, ids, () => 0)
+  learned.settings.sectBreakthroughReserve = false
+  const allowed = E.breakthroughDisciples(learned, derived, ids, () => 0)
+  ok('材料保留在研究后才生效，关闭后恢复批量突破', before.success === 2 && !before.reserved &&
+    blocked.success === 0 && blocked.reserved === 1 && allowed.success === 2)
+}
+
+/** 独立回归入口：重点弟子优先取得唯一一份突破材料与传功名额。 */
+export function focusPriorityRegression(E, { ok }) {
+  const state = createInitialState()
+  state.realm = 1
+  state.disciples.total = 2
+  state.settings.sectBreakthroughReserve = false
+  state.settings.mentorLimit = 1
+  state.upgrades.mentorship = true
+  const derived = E.createDerived()
+  E.recompute(state, derived)
+  const [ordinary, focused] = state.disciples.members
+  focused.focus = true
+  for (const member of state.disciples.members) member.cultivation = cultivationRequired(0)
+  const fee = E.discipleBreakthroughPreview(state, ordinary).cost
+  for (const [id, amount] of Object.entries(fee)) state.resources[id] = amount
+  const ids = [ordinary.id, focused.id]
+  const result = E.breakthroughDisciples(state, derived, ids, () => 0)
+  E.setMentored(state, derived, ids, true)
+  ok('重点后入门弟子优先突破及传功，原名单顺序不变', result.success === 1 && focused.realm === 1 &&
+    ordinary.realm === 0 && focused.mentored && !ordinary.mentored && state.disciples.members[0] === ordinary)
 }

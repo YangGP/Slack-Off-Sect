@@ -21,7 +21,7 @@ import { gameNow, withGameContext } from '@/game/context'
 
 /**
  * v2：山麓时长 120→60 且基准秒产翻倍（单次收益口径不变）、快照新增个人收获倍率 y、
- * 组队改为自动选队。时长与公式变化使在途任务作废（读档即按既有设计过滤）。
+ * 组队改为自动选队。合法 v1 在途任务保留旧时长与收益快照，完成后新任务使用 v2。
  */
 export const HUNT_SCHEMA_VERSION = 2
 
@@ -130,10 +130,14 @@ function sanitizeMissions(value) {
   for (const [id, mission] of Object.entries(value)) {
     if (!mission || typeof mission !== 'object') continue
     const field = Object.hasOwn(HUNT_FIELD_MAP, mission.fieldId) ? HUNT_FIELD_MAP[mission.fieldId] : null
-    if (!field || mission.status !== 'active' || mission.formulaVersion !== HUNT_SCHEMA_VERSION) continue
+    const legacy = mission.formulaVersion === 1 && mission.fieldId === 'foothills'
+    if (!field || mission.status !== 'active' || (!legacy && mission.formulaVersion !== HUNT_SCHEMA_VERSION)) continue
+    // v1 只开放山麓；使用已知旧规则重建，不能信任存档自带的掉落数值。
+    const baseDuration = legacy ? 120 : field.baseDuration
+    const baseYield = legacy ? { beastHide: 0.12, beastBone: 0.08 } : field.baseYield
     if (!Number.isSafeInteger(mission.id) || mission.id <= 0 || mission.id >= Number.MAX_SAFE_INTEGER || String(mission.id) !== id) continue
     if (!Number.isFinite(mission.startedAt) || mission.startedAt < 0 ||
-        !Number.isFinite(mission.actualDuration) || mission.actualDuration < 1 || mission.actualDuration > field.baseDuration ||
+        !Number.isFinite(mission.actualDuration) || mission.actualDuration < 1 || mission.actualDuration > baseDuration ||
         !Number.isFinite(mission.progressSeconds) || mission.progressSeconds < 0 ||
         !Number.isFinite(mission.support) || mission.support < 1 || mission.support > 1.4 ||
         !Number.isFinite(mission.yieldBonus) || mission.yieldBonus < 1 || mission.yieldBonus > 1 + HUNT.YIELD_BONUS_CAP) continue
@@ -151,14 +155,14 @@ function sanitizeMissions(value) {
     out[id] = {
       id: mission.id, fieldId: field.id, status: 'active', startedAt: mission.startedAt,
       progressSeconds: Math.min(mission.progressSeconds, mission.actualDuration),
-      baseDuration: field.baseDuration, actualDuration: mission.actualDuration,
-      formulaVersion: HUNT_SCHEMA_VERSION, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
+      baseDuration, actualDuration: mission.actualDuration,
+      formulaVersion: legacy ? 1 : HUNT_SCHEMA_VERSION, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
       support: mission.support, successBonus: Number.isFinite(mission.successBonus) ? Math.max(0, mission.successBonus) : 0,
-      yieldBonus: mission.yieldBonus, baseYield: moneyYieldMap(field.baseYield), advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
+      yieldBonus: mission.yieldBonus, baseYield: moneyYieldMap(baseYield), advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
       preparationPaid: WARRANT_COST,
       snapshots: mission.snapshots.map(snap => ({ id: snap.id, name: typeof snap.name === 'string' ? snap.name.slice(0, 40) : `弟子${snap.id}`,
         realm: snap.realm, e: snap.e, A: snap.A, p: snap.p,
-        y: Number.isFinite(snap.y) && snap.y >= 1 && snap.y <= 1 + TALENT_YIELD_CAP ? snap.y : 1,
+        y: !legacy && Number.isFinite(snap.y) && snap.y >= 1 && snap.y <= 1 + TALENT_YIELD_CAP ? snap.y : 1,
         roleId: JOBS.some(j => j.id === snap.roleId) ? snap.roleId : null })),
     }
     if (Object.keys(out).length >= HUNT.MAX_ACTIVE_MISSIONS) break
@@ -215,6 +219,7 @@ export function rehydrateHuntOccupancy(state) {
   if (!state?.hunting) return
   const hunting = state.hunting
   const byId = new Map((state.disciples?.members || []).map(m => [m.id, m]))
+  hunting.settings.teamIds = hunting.settings.teamIds.filter(id => byId.has(id))
   for (const member of state.disciples?.members || []) member.onMission = false
   for (const mission of Object.values(hunting.missions || {})) {
     mission.snapshots = mission.snapshots.filter(snap => byId.has(snap.id))
@@ -682,7 +687,8 @@ export function setHuntField(state, fieldId) {
 }
 
 export function setHuntTeam(state, teamIds) {
-  state.hunting.settings.teamIds = sanitizeSettings({ selectedFieldId: state.hunting.settings.selectedFieldId, teamIds, autoRepeat: state.hunting.settings.autoRepeat }).teamIds
+  const existing = new Set((state.disciples?.members || []).map(member => member.id))
+  state.hunting.settings.teamIds = sanitizeSettings({ ...state.hunting.settings, teamIds }).teamIds.filter(id => existing.has(id))
   return true
 }
 

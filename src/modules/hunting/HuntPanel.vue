@@ -25,7 +25,10 @@ const unlocked = computed(() => state.upgrades.wildHunting && state.buildings.hu
 const mission = computed(() => view.huntMission.value)
 
 /** 钉选名单（优先人选）：自动组队时必入。 */
-const pinnedIds = computed(() => state.hunting.settings.teamIds || [])
+const pinnedIds = computed(() => {
+  const existing = new Set(state.disciples.members.map(member => member.id))
+  return (state.hunting.settings.teamIds || []).filter(id => existing.has(id))
+})
 const pinnedSet = computed(() => new Set(pinnedIds.value))
 const autoSize = computed(() => state.hunting.settings.autoTeamSize ?? HUNT.TEAM_MAX)
 
@@ -35,9 +38,9 @@ const preview = computed(() => huntPreview(state, derived, fieldId.value, autoId
 const previewRows = computed(() => preview.value?.rows || [])
 const departCheck = computed(() => canDepart(state, derived, fieldId.value, autoIds.value))
 
-/** 猎杀天赋弟子（准头/收获任一）：单列出来供钉选。 */
-const talentedMembers = computed(() => (state.disciples?.members || [])
-  .filter(m => hasHuntTalent(m))
+/** 猎杀天赋及所有已钉选弟子均可管理，兼容旧档中无猎杀天赋的名单。 */
+const priorityMembers = computed(() => (state.disciples?.members || [])
+  .filter(m => hasHuntTalent(m) || pinnedSet.value.has(m.id))
   .map(m => ({
     ...m,
     huntText: (m.talents || [])
@@ -129,18 +132,18 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
         </div>
 
         <!-- 优先人选：猎杀天赋弟子 -->
-        <div class="box-sub">优先人选（猎杀天赋弟子，勾选即钉选必入）</div>
-        <div v-if="!talentedMembers.length" class="small dim" style="padding: 4px 0">
+        <div class="box-sub">优先人选（猎杀天赋及已钉选弟子，勾选即钉选必入）</div>
+        <div v-if="!priorityMembers.length" class="small dim" style="padding: 4px 0">
           门中暂无猎杀天赋弟子：出征时按期望贡献自动选队。
         </div>
         <div v-else class="hunt-members">
           <label
-            v-for="m in talentedMembers"
+            v-for="m in priorityMembers"
             :key="m.id"
             class="hunt-member"
             :class="{ on: pinnedSet.has(m.id), dim: m.onMission }"
           >
-            <input type="checkbox" :checked="pinnedSet.has(m.id)" :disabled="m.onMission" @change="togglePin(m.id)">
+            <input type="checkbox" :checked="pinnedSet.has(m.id)" @change="togglePin(m.id)">
             <span>{{ m.name }}</span>
             <span class="dim">{{ REALMS[m.realm]?.name || '凡体' }}</span>
             <span class="talent">{{ m.huntText }}</span>
