@@ -13,7 +13,7 @@ export { eventResourceRate, eventEffect, eventOutcome, fireEvent, resolveChoice,
 export { checkAchievements, tick, simulateOffline, simulateOfflineAsync } from './systems/simulation'
 export { isLongOffline, offlineSegmentCount, offlineSegments, averageSeasonRatio } from './systems/offlinePlan'
 export { termCrossings } from '@/data/calendar'
-export { createHuntingState, normalizeHuntingState, rehydrateHuntOccupancy, activeMission, isHuntUnlocked, huntableMembers, huntField, huntPreview, huntBatchGainEstimate, evaluateTeam as huntEvaluation, autoPickTeam, huntDuration, canDepart, departHunt, cancelHunt, advanceHunt, advanceOfflineHunt, setHuntField, setHuntTeam, setHuntAutoRepeat, setHuntAutoTeamSize, warrantBalance } from '@/modules/hunting/system'
+export { createHuntingState, normalizeHuntingState, rehydrateHuntOccupancy, activeMission, migrateLegacyHunts, isHuntUnlocked, huntableMembers, huntField, huntPreview, huntBatchGainEstimate, evaluateTeam as huntEvaluation, autoPickTeam, resolveHuntTeam, recommendHuntTeam, huntDuration, canDepart, departHunt, cancelHunt, advanceHunt, advanceOfflineHunt, setHuntField, setHuntTeam, setHuntAutoRepeat, setHuntAutoInterval, warrantBalance, huntCost, warrantCost } from '@/modules/hunting/system'
 export { createDiplomacyState, normalizeDiplomacyState, isDiplomacyUnlocked, tradePreview, tradeWithSect, fortuneChance, tradeAvailable } from '@/modules/diplomacy/system'
 export { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 export { JOBS } from '@/data/jobs'

@@ -5,6 +5,7 @@ import { createSaveRepository, restoreSave } from './save'
 import { cloneRuntime } from './clone'
 import { CONFIG } from '@/data/config'
 import { throwIfSimulationCancelled } from './systems/simulation'
+import { prepareModules } from './moduleRegistry'
 
 /**
  * 创建无 Vue/DOM 依赖的游戏实例。
@@ -16,6 +17,7 @@ export function createGame({ state, derived = engine.createDerived(), snapshotSt
   let stateRevision = 0
   setGameContext(state, { now, random, live: true, onEvent })
   engine.recompute(state, derived)
+  if (prepareModules(state, derived)) engine.recompute(state, derived)
 
   function replaceState(next) {
     stateRevision++
@@ -23,6 +25,7 @@ export function createGame({ state, derived = engine.createDerived(), snapshotSt
     Object.assign(state, next)
     resetRuntimeCounters(state)
     engine.recompute(state, derived)
+    if (prepareModules(state, derived)) engine.recompute(state, derived)
   }
 
   // 界面实例可提供普通数据副本：逐秒推演不触发响应式读写，完成后一次同步。

@@ -131,7 +131,7 @@ export function describeEffects(ef) {
   }
   if (ef.huntSuccessBonus) push('猎杀成功率', `+${Math.round(ef.huntSuccessBonus * 100)} 个百分点`, 'good')
   if (ef.huntYieldBonus) push('猎杀收获', `+${fmtPercent(ef.huntYieldBonus)}`, 'good')
-  if (ef.huntDurationReduction) push('猎杀时长', `-${fmtPercent(ef.huntDurationReduction)}`, 'good')
+  if (ef.huntCostReduction) push('猎杀信符消耗', `-${fmtPercent(ef.huntCostReduction)}`, 'good')
   if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
   if (ef.disasterGuardByResource) {
     for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {

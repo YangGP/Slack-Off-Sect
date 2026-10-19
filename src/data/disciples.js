@@ -193,7 +193,7 @@ export function discipleFactor(member, sectRealm) {
   return REALMS[Math.min(member.realm, sectRealm)]?.mult ?? 1
 }
 
-export function newDisciple(data, spiritualRoot = null, { legacy = false, realm = 0, quality = null } = {}) {
+export function newDisciple(data, spiritualRoot = null, { legacy = false, realm = 0, quality = null, includeHunting = true } = {}) {
   const id = data.nextId++
   const surnames = ['林', '陈', '沈', '陆', '叶', '苏', '顾', '白', '许', '孟', '谢', '江']
   const names = ['清禾', '云舟', '知秋', '明尘', '望舒', '青岚', '怀瑾', '听雨', '景行', '若水', '星河', '长宁', '松雪']
@@ -201,7 +201,7 @@ export function newDisciple(data, spiritualRoot = null, { legacy = false, realm 
     realm: clampRealm(realm | 0), cultivation: 0, roleId: null, cooldown: 0,
     residenceSeconds: 0, totalQiConsumed: ZERO, mentored: false, aidBonus: 0, focus: false,
     spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)),
-    talents: legacy ? [] : birthTalents(() => talentRandom(data), quality) }
+    talents: legacy ? [] : birthTalents(() => talentRandom(data), quality, { includeHunting }) }
 }
 
 /** 保留旧的人数接口，个体记录跟随总人口与岗位数量调整。 */

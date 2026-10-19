@@ -60,7 +60,7 @@ export function dataIntegrity({ ok, section }) {
     // ---- 两层（修真 / 技艺·法宝）的分工与链式前置 ----
     ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
     const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
-    const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntDurationReduction', 'tribulationSafety']
+    const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntCostReduction', 'tribulationSafety']
     // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
     const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
     ok(

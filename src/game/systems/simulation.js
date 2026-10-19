@@ -3,7 +3,7 @@ import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute, canReuseEconomy } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
-import { runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
+import { prepareModules, runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
 import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
@@ -64,6 +64,7 @@ function createTickRunner(state, derived, seconds, opts) {
   if (opts.finalEconomyDetails === false) {
     withGameContext(state, { economyDetails: false }, () => recompute(state, derived))
   } else recompute(state, derived)
+  if (prepareModules(state, derived)) recompute(state, derived)
   const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
     !(state.resources.qiEnergy ?? ZERO).gt(0) && !(derived.rates.qiEnergy ?? ZERO).gt(0) &&
     !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
@@ -372,6 +373,11 @@ export async function simulateOfflineAsync(state, derived, seconds, opts = {}) {
  */
 export function createOfflineSegmentRunner(state, derived, seconds, opts = {}) {
   const startAt = opts.startAt ?? gameNow(state)
+  // 工具直接调用离线引擎也必须在第一段生产前完成旧档迁移。
+  withGameContext(state, { now: () => startAt }, () => {
+    recompute(state, derived)
+    if (prepareModules(state, derived)) recompute(state, derived)
+  })
   const endAt = startAt + seconds * 1000
   const plan = offlineSegments(state, seconds, startAt)
   const stats = {

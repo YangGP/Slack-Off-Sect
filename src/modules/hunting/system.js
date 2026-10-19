@@ -5,25 +5,23 @@ import { REALMS } from '@/data/realms'
 import { isModuleEnabled } from '@/data/modules'
 import { talentBonus, hasHuntTalent, TALENT_RULES } from '@/data/talents'
 import { clamp, pushLog, addResource, activeOf } from '@/game/systems/core'
-import { MONEY_INFINITY, ZERO, floorMoney, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
+import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
 import { atLeast } from '@/game/numbers'
-import { gameNow, withGameContext } from '@/game/context'
+import { gameNow } from '@/game/context'
 
 /**
  * 妖兽猎杀系统（首轮：山麓）。
  *
- * 一次出征 = 消耗信符 → 派 1~5 名弟子 → 按实际时间推进 → 归队一次性结算兽材。
- * 成员属于「占用状态」：出征期间停止原岗位工作，但仍修炼、累计停留与普通口粮，
- * 也不能被转岗、逐出或再次派往其他任务。规则见 docs/BEAST-SYSTEM.md。
+ * 一次猎杀即时支付信符并结算兽材，成员照常生产。自动执行按独立周期推进。
+ * 只有旧档迁移保留已付款任务快照。规则见 docs/BEAST-SYSTEM.md。
  *
  * 生态关联（警戒/抑制/来袭权重）首轮全部关闭，只保留 fieldState 结构。
  */
 
 /**
- * v2：山麓时长 120→60 且基准秒产翻倍（单次收益口径不变）、快照新增个人收获倍率 y、
- * 组队改为自动选队。合法 v1 在途任务保留旧时长与收益快照，完成后新任务使用 v2。
+ * v3：即时结算与周期自动执行；v1／v2 已付款任务在正式加载时按旧快照结算一次。
  */
-export const HUNT_SCHEMA_VERSION = 2
+export const HUNT_SCHEMA_VERSION = 3
 
 /** 出征信符单价（金额域）：静态表里的字面值是 Number，进入金额运算前构造为 Decimal。 */
 const WARRANT_COST = money(HUNT.WARRANT_COST)
@@ -60,11 +58,13 @@ export function createHuntingState() {
     },
     settings: {
       selectedFieldId: DEFAULT_HUNT_FIELD,
-      /** 钉选名单：自动组队时必入的优先人选 */
+      /** 玩家勾选的加成弟子；手动和定时猎杀共用，普通弟子自动补位。 */
       teamIds: [],
-      /** 自动组队人数上限（钉选可少量超出） */
-      autoTeamSize: HUNT.TEAM_MAX,
       autoRepeat: false,
+      /** 两次自动猎杀之间的间隔秒数；不是弟子占用时长。 */
+      autoIntervalSeconds: HUNT.AUTO_INTERVAL_DEFAULT,
+      /** 当前间隔内已累计的秒数，始终保持在 [0, interval)。 */
+      elapsedSeconds: 0,
     },
   }
 }
@@ -105,22 +105,27 @@ function sanitizeStats(value) {
   return out
 }
 
-/** 自动组队人数上限：非法值回默认 5，范围内夹取取整。 */
-function normalizeAutoTeamSize(value) {
+/** 自动间隔：非法值回默认 60；允许范围 30～3600 秒的整数。 */
+function normalizeAutoInterval(value) {
   return Number.isFinite(value)
-    ? Math.max(HUNT.TEAM_MIN, Math.min(HUNT.TEAM_MAX, Math.floor(value)))
-    : HUNT.TEAM_MAX
+    ? Math.max(HUNT.AUTO_INTERVAL_MIN, Math.min(HUNT.AUTO_INTERVAL_MAX, Math.floor(value)))
+    : HUNT.AUTO_INTERVAL_DEFAULT
 }
 
 function sanitizeSettings(value) {
   const fieldId = Object.hasOwn(HUNT_FIELD_MAP, value?.selectedFieldId) ? value.selectedFieldId : DEFAULT_HUNT_FIELD
   const teamIds = (Array.isArray(value?.teamIds) ? value.teamIds : [])
     .filter(id => Number.isSafeInteger(id) && id > 0).slice(0, HUNT.TEAM_MAX)
+  const autoIntervalSeconds = normalizeAutoInterval(value?.autoIntervalSeconds)
+  const elapsedSeconds = Number.isFinite(value?.elapsedSeconds)
+    ? Math.max(0, Math.min(autoIntervalSeconds - 1e-9, value.elapsedSeconds))
+    : 0
   return {
     selectedFieldId: fieldId,
     teamIds: [...new Set(teamIds)],
-    autoTeamSize: normalizeAutoTeamSize(value?.autoTeamSize),
     autoRepeat: value?.autoRepeat === true,
+    autoIntervalSeconds,
+    elapsedSeconds: value?.autoRepeat === true ? elapsedSeconds : 0,
   }
 }
 
@@ -131,7 +136,7 @@ function sanitizeMissions(value) {
     if (!mission || typeof mission !== 'object') continue
     const field = Object.hasOwn(HUNT_FIELD_MAP, mission.fieldId) ? HUNT_FIELD_MAP[mission.fieldId] : null
     const legacy = mission.formulaVersion === 1 && mission.fieldId === 'foothills'
-    if (!field || mission.status !== 'active' || (!legacy && mission.formulaVersion !== HUNT_SCHEMA_VERSION)) continue
+    if (!field || mission.status !== 'active' || (!legacy && mission.formulaVersion !== 2)) continue
     // v1 只开放山麓；使用已知旧规则重建，不能信任存档自带的掉落数值。
     const baseDuration = legacy ? 120 : field.baseDuration
     const baseYield = legacy ? { beastHide: 0.12, beastBone: 0.08 } : field.baseYield
@@ -156,7 +161,7 @@ function sanitizeMissions(value) {
       id: mission.id, fieldId: field.id, status: 'active', startedAt: mission.startedAt,
       progressSeconds: Math.min(mission.progressSeconds, mission.actualDuration),
       baseDuration, actualDuration: mission.actualDuration,
-      formulaVersion: legacy ? 1 : HUNT_SCHEMA_VERSION, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
+      formulaVersion: mission.formulaVersion, sectRealm: finiteCount(mission.sectRealm, REALMS.length - 1),
       support: mission.support, successBonus: Number.isFinite(mission.successBonus) ? Math.max(0, mission.successBonus) : 0,
       yieldBonus: mission.yieldBonus, baseYield: moneyYieldMap(baseYield), advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
       preparationPaid: WARRANT_COST,
@@ -220,18 +225,12 @@ export function rehydrateHuntOccupancy(state) {
   const hunting = state.hunting
   const byId = new Map((state.disciples?.members || []).map(m => [m.id, m]))
   hunting.settings.teamIds = hunting.settings.teamIds.filter(id => byId.has(id))
+  // 只清洗成员关联，不发奖、不抽随机数；正式加载或推进前再迁移。
   for (const member of state.disciples?.members || []) member.onMission = false
-  for (const mission of Object.values(hunting.missions || {})) {
+  for (const mission of Object.values(hunting.missions)) {
     mission.snapshots = mission.snapshots.filter(snap => byId.has(snap.id))
-    if (!mission.snapshots.length) { delete hunting.missions[mission.id]; continue }
-    for (const snap of mission.snapshots || []) {
-      const member = byId.get(snap.id)
-      if (!member) continue
-      member.onMission = true
-      member.roleId = null
-    }
+    if (!mission.snapshots.length) delete hunting.missions[mission.id]
   }
-  recount(state)
 }
 
 /** 独立线性同余随机（与收徒/突破/事件互不干扰），序列存于 state.hunting.randomSeed。 */
@@ -244,10 +243,35 @@ export function huntField(fieldId) {
   return HUNT_FIELD_MAP[fieldId] || null
 }
 
-/** 当前活动任务（首轮同时至多一个） */
+/** 当前活动任务（仅旧档迁移读取；新规则不再创建任务）。 */
 export function activeMission(state) {
   const missions = state?.hunting?.missions || {}
   return Object.values(missions).find(m => m.status === 'active') || null
+}
+
+/**
+ * 旧档已付款任务迁移：按原快照立即结算一次，恢复岗位并删除任务。
+ * 反复调用时 missions 已为空，不会重复发奖；normalize 只保留任务，不调用本函数。
+ */
+export function migrateLegacyHunts(state, derived = null) {
+  const hunting = state?.hunting
+  if (!hunting) return false
+  const missions = Object.values(hunting.missions || {}).filter(m => m?.status === 'active')
+  if (!missions.length) return false
+  if (!derived?.max) throw new Error('旧猎杀任务迁移需要有效仓容')
+  for (const mission of missions) {
+    // 旧档任务可能尚未重挂占用；结算前标记，确保按快照恢复原岗位。
+    const byId = new Map((state.disciples?.members || []).map(m => [m.id, m]))
+    for (const snap of mission.snapshots || []) {
+      const member = byId.get(snap.id)
+      if (member) member.onMission = true
+    }
+    settleMission(state, derived, mission, { autoRepeat: false })
+  }
+  hunting.missions = {}
+  hunting.settings.elapsedSeconds = 0
+  if (!isModuleEnabled(state, 'hunting')) deactivateHunting(state)
+  return true
 }
 
 export function isHuntUnlocked(state, fieldId) {
@@ -263,13 +287,23 @@ export function warrantBalance(state) {
   return money(state.resources.warrant ?? ZERO)
 }
 
+/** 猎杀专属减耗后的单次费用（金额取整、至少 1）；不影响外交。 */
+export function huntCost(derived) {
+  const reduction = Math.min(HUNT.COST_REDUCTION_CAP, Math.max(0, derived?.huntCostReduction || 0))
+  return Math.max(1, moneyToCount(ceilMoney(money(HUNT.WARRANT_COST).times(1 - reduction))))
+}
+
+export function warrantCost(derived) {
+  return money(huntCost(derived))
+}
+
 export function huntTeamMax(state) {
   return HUNT.TEAM_MAX
 }
 
-/** 可选出征成员：存在且未在出征中 */
+/** 可选出征成员：即时猎杀不占用岗位，所有存在弟子都可被选。 */
 export function huntableMembers(state) {
-  return (state.disciples?.members || []).filter(m => !m.onMission)
+  return state.disciples?.members || []
 }
 
 /** 每名成员的战场快照与效率/成功率（公式见 BEAST-SYSTEM.md §4）。 */
@@ -284,7 +318,7 @@ export function evaluateTeam(state, derived, fieldId, teamIds) {
   const rows = []
   for (const id of teamIds || []) {
     const member = byId.get(id)
-    if (!member || seen.has(id) || member.onMission) continue
+    if (!member || seen.has(id) || member.realm < (field.minDiscipleRealm || 0)) continue
     seen.add(id)
     const e = Math.min(member.realm, sect)
     const A = 2 ** clamp((e - field.recommendRealm) / 2, -2, 1)
@@ -302,38 +336,39 @@ export function evaluateTeam(state, derived, fieldId, teamIds) {
 }
 
 /**
- * 自动组队（v0.421 起出征默认流程）：不再逐人手选。
- * 分层必入/优先：钉选（settings.teamIds）可用者必入 → 持猎杀天赋者 → 闲散（无岗位）→ 在岗；
- * 层内按期望贡献 A×p×y 降序、同分按 id 升序，最多 autoTeamSize 人（钉选数可顶破上限，仍受 TEAM_MAX 约束）。
- * 返回成员 id 列表；无可用弟子时返回空数组，由 canDepart 统一给出失败原因。
+ * 推荐阵容：按真实期望贡献 A×y×(p+0.2(1-p)) 降序、同分按 ID 升序，最多 5 人。
+ * 只返回推荐结果，不写入玩家名单；玩家点击“推荐阵容”后才改名单。
  */
 export function autoPickTeam(state, derived, fieldId) {
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field) return []
-  const settings = state.hunting?.settings || {}
-  const size = normalizeAutoTeamSize(settings.autoTeamSize)
-  const pinned = new Set(settings.teamIds || [])
-  const byId = new Map((state.disciples?.members || []).map(m => [m.id, m]))
   const candidates = huntableMembers(state).filter(m => m.realm >= (field.minDiscipleRealm || 0))
   const rows = evaluateTeam(state, derived, fieldId, candidates.map(m => m.id))
-  const tierOf = (row) => {
-    if (pinned.has(row.id)) return 0
-    const member = byId.get(row.id)
-    if (hasHuntTalent(member)) return 1
-    return member?.roleId ? 3 : 2
-  }
-  rows.sort((a, b) => tierOf(a) - tierOf(b) || b.A * b.p * b.y - a.A * a.p * a.y || a.id - b.id)
-  const pinnedCount = rows.filter(row => pinned.has(row.id)).length
-  return rows.slice(0, Math.min(HUNT.TEAM_MAX, Math.max(size, pinnedCount))).map(row => row.id)
+  rows.sort((a, b) =>
+    b.A * b.y * (b.p + 0.2 * (1 - b.p)) - a.A * a.y * (a.p + 0.2 * (1 - a.p)) || a.id - b.id)
+  return rows.slice(0, HUNT.TEAM_MAX).map(row => row.id)
+}
+
+/** 所选加成弟子优先，普通弟子按期望贡献补足；未勾选的加成弟子不自动加入。 */
+export function resolveHuntTeam(state, derived, fieldId) {
+  const field = HUNT_FIELD_MAP[fieldId]
+  if (!field) return []
+  const members = new Map(huntableMembers(state).filter(member => member.realm >= (field.minDiscipleRealm || 0))
+    .map(member => [member.id, member]))
+  const selected = [...new Set(state.hunting?.settings?.teamIds || [])]
+    .filter(id => members.has(id) && hasHuntTalent(members.get(id))).slice(0, HUNT.TEAM_MAX)
+  const ordinary = autoPickTeam({ ...state, disciples: { ...state.disciples,
+    members: [...members.values()].filter(member => !hasHuntTalent(member)) } }, derived, fieldId)
+  return [...selected, ...ordinary].slice(0, HUNT.TEAM_MAX)
 }
 
 /** 出征预览：预计成功人数与期望兽材（不消耗随机数）。 */
 export function huntPreview(state, derived, fieldId, teamIds) {
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field) return null
-  const rows = evaluateTeam(state, derived, fieldId, teamIds)
+  const rows = evaluateTeam(state, derived, fieldId, teamIds ?? resolveHuntTeam(state, derived, fieldId))
   const support = rows[0]?.support ?? (1 + 0.1 * clamp(state.realm - field.entryRealm, 0, 4))
-  const duration = huntDuration(field, derived?.huntDurationReduction || 0)
+  const duration = huntDuration(field)
   const gain = 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0)
   const expectedZ = rows.reduce((sum, row) => sum + row.A * row.y * (row.p + 0.2 * (1 - row.p)), 0)
   const expectedSuccess = rows.reduce((sum, row) => sum + row.p, 0)
@@ -342,12 +377,12 @@ export function huntPreview(state, derived, fieldId, teamIds) {
     // base 是金额，duration / support / expectedZ / gain 是 Number：乘法在 Decimal 域完成。
     expectedGains[res] = money(base).times(field.baseDuration).times(support).times(expectedZ).times(gain)
   }
-  return { field, rows, duration, expectedSuccess, expectedGains, prepEnough: atLeast(warrantBalance(state), WARRANT_COST) }
+  return { field, rows, duration, expectedSuccess, expectedGains, prepEnough: atLeast(warrantBalance(state), warrantCost(derived)) }
 }
 
-export function huntDuration(field, durationReduction = 0) {
-  const reduction = Math.min(HUNT.DURATION_REDUCTION_CAP, Math.max(0, durationReduction))
-  return Math.max(1, Math.ceil(field.baseDuration * (1 - reduction)))
+/** 旧档/工具兼容：即时猎杀不再有时长，保留单次基准时长。 */
+export function huntDuration(field) {
+  return field.baseDuration
 }
 
 /** 出征前校验：猎场/设施/境界/成员/信符都满足才允许出发。 */
@@ -358,24 +393,21 @@ export function canDepart(state, derived, fieldId, teamIds) {
   if (!state.upgrades?.wildHunting) return { ok: false, reason: '尚未掌握《山野猎法》' }
   if (activeOf(state, 'huntingCamp') <= 0) return { ok: false, reason: '需要启用中的执符堂' }
   if (state.realm < field.entryRealm) return { ok: false, reason: '宗门境界不足' }
-  if (activeMission(state)) return { ok: false, reason: '已有出征任务在进行' }
-  const rows = evaluateTeam(state, derived, fieldId, teamIds)
+  const rows = evaluateTeam(state, derived, fieldId, teamIds ?? resolveHuntTeam(state, derived, fieldId))
   if (rows.length < HUNT.TEAM_MIN) return { ok: false, reason: '没有可出征的弟子' }
   if (rows.length > HUNT.TEAM_MAX) return { ok: false, reason: `每队最多 ${HUNT.TEAM_MAX} 人` }
-  if (!atLeast(warrantBalance(state), WARRANT_COST)) return { ok: false, reason: `信符不足 ${HUNT.WARRANT_COST}` }
+  if (!atLeast(warrantBalance(state), warrantCost(derived))) return { ok: false, reason: `信符不足 ${huntCost(derived)}` }
   return { ok: true }
 }
 
 /**
- * 出发：原子扣信符、占用成员、保存快照。
- * 未显式传 teamIds 时走自动组队（钉选必入、天赋与闲散优先）；
- * 显式传入则完全按传入名单（测试与旧入口兼容）。
- * 连续点击不会重复支付或派出（同一成员已带 onMission 会被 evaluateTeam 过滤）。
+ * 即时猎杀：校验、扣信符、逐人判定、掉落入库、统计更新一次完成。
+ * 不占用成员、不清空 roleId、不创建任务；手动成功会重置自动计时。
  */
-export function departHunt(state, derived, { fieldId, teamIds } = {}) {
+export function departHunt(state, derived, { fieldId, teamIds, resetTimer = true } = {}) {
   const hunting = state.hunting
   const fid = fieldId || hunting.settings.selectedFieldId
-  const ids = teamIds || autoPickTeam(state, derived, fid)
+  const ids = teamIds ?? resolveHuntTeam(state, derived, fid)
   const check = canDepart(state, derived, fid, ids)
   if (!check.ok) return { ok: false, reason: check.reason }
 
@@ -392,17 +424,20 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
     y: row.y,
     roleId: byId.get(row.id)?.roleId || null,
   }))
+  const cost = warrantCost(derived)
+  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, cost)
+  hunting.statistics.departures += 1
+  hunting.settings.selectedFieldId = fid
+  if (resetTimer) hunting.settings.elapsedSeconds = 0
 
-  const id = hunting.nextMissionId++
-  const startedAt = gameNow(state)
   const mission = {
-    id,
+    id: hunting.nextMissionId++,
     fieldId: fid,
     status: 'active',
-    startedAt,
+    startedAt: gameNow(state),
     progressSeconds: 0,
     baseDuration: field.baseDuration,
-    actualDuration: huntDuration(field, derived?.huntDurationReduction || 0),
+    actualDuration: 0,
     formulaVersion: HUNT_SCHEMA_VERSION,
     sectRealm: state.realm,
     support: 1 + 0.1 * clamp(state.realm - field.entryRealm, 0, 4),
@@ -411,43 +446,23 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
     baseYield: moneyYieldMap(field.baseYield),
     advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
     snapshots,
-    preparationPaid: WARRANT_COST,
+    preparationPaid: cost,
   }
-
-  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, WARRANT_COST)
-  for (const snap of snapshots) {
-    const member = byId.get(snap.id)
-    if (!member) continue
-    member.onMission = true
-    member.roleId = null
-  }
+  const outcome = settleMission(state, derived, mission, { autoRepeat: false })
   recount(state)
-  hunting.missions[id] = mission
-  hunting.statistics.departures += 1
-  hunting.settings.selectedFieldId = fid
-  // 钉选名单是玩家的长期偏好，不被本次出征结果覆写（v0.421 前曾以实际出征名单回写）。
-  pushLog(state, `出征${field.name}：${snapshots.length} 名弟子持 ${HUNT.WARRANT_COST} 枚信符入山`, 'event')
-  return { ok: true, mission }
+  return { ok: true, mission, outcome }
 }
 
-/** 取消：立即归队，不发半程兽材、不退信符、不回滚已发生的猎场活动。 */
-export function cancelHunt(state, derived, missionId = null) {
-  const mission = missionId ? state.hunting.missions[missionId] : activeMission(state)
-  if (!mission || mission.status !== 'active') return { ok: false }
-  releaseMembers(state, mission)
-  delete state.hunting.missions[mission.id]
-  state.hunting.statistics.cancelledMissions += 1
-  state.hunting.lastOutcome = { fieldId: mission.fieldId, at: gameNow(state), cancelled: true, gains: {} }
-  recount(state)
-  pushLog(state, `猎杀任务取消，弟子归队（不退信符）`, 'bad')
-  return { ok: true }
+/** 取消已不存在；保留空入口兼容旧调用。 */
+export function cancelHunt() {
+  return { ok: false, reason: '即时猎杀无需召回' }
 }
 
 function releaseMembers(state, mission) {
   const byId = new Map(state.disciples.members.map(m => [m.id, m]))
   for (const snap of mission.snapshots || []) {
     const member = byId.get(snap.id)
-    if (!member) continue
+    if (!member || !member.onMission) continue
     member.onMission = false
     const jobValid = snap.roleId && JOBS.some(j => j.id === snap.roleId)
     member.roleId = jobValid ? snap.roleId : null
@@ -462,18 +477,23 @@ function recount(state) {
   }
 }
 
-/** 推进活动任务；到达时长即结算。返回是否有结算发生。 */
+/** 在线周期执行；旧档任务已在正式加载／推进入口结算。 */
 export function advanceHunt(state, derived, dt) {
   if (!(dt > 0) || !state.hunting) return false
+  const settings = state.hunting.settings
+  if (!settings.autoRepeat) return false
+  const interval = normalizeAutoInterval(settings.autoIntervalSeconds)
+  settings.autoIntervalSeconds = interval
+  settings.elapsedSeconds = Math.max(0, Math.min(interval - 1e-9, Number(settings.elapsedSeconds) || 0)) + dt
   let changed = false
-  for (const mission of Object.values(state.hunting.missions)) {
-    if (mission.status !== 'active') continue
-    mission.progressSeconds += dt
-    if (mission.progressSeconds + 1e-9 >= mission.actualDuration) {
-      const completedAt = gameNow(state) + dt * 1000
-      withGameContext(state, { now: () => completedAt }, () => settleMission(state, derived, mission))
-      changed = true
-    }
+  while (settings.elapsedSeconds + 1e-9 >= interval) {
+    settings.elapsedSeconds = Math.max(0, settings.elapsedSeconds - interval)
+    const result = departHunt(state, derived, {
+      fieldId: settings.selectedFieldId,
+      resetTimer: false,
+    })
+    if (!result.ok) break
+    changed = true
   }
   return changed
 }
@@ -548,19 +568,11 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
     .join('、')
   pushLog(
     state,
-    `猎杀归队（${field?.name || mission.fieldId}）：${rows.length} 人成功 ${successCount} 人${gainText ? '，猎获 ' + gainText : '，暂无整数入库'}`,
+    `猎杀（${field?.name || mission.fieldId}）：${rows.length} 人成功 ${successCount} 人${gainText ? '，猎获 ' + gainText : '，暂无整数入库'}`,
     successCount > 0 ? 'good' : 'bad',
   )
 
-  // 自动重复：归队、恢复岗位、下一次扣点与占用在同一结算边界处理。
-  // 离线的有界快进自己负责后续批次与末趟，因此显式关掉这里的副作用（见 advanceOfflineHunt）。
-  if (autoRepeat && hunting.settings.autoRepeat) autoRepeatDepart(state, derived, mission.fieldId)
   return { gains, successCount, teamSize: rows.length }
-}
-
-function autoRepeatDepart(state, derived, fieldId) {
-  // 自动重复每趟重新选队：归队后闲散/天赋/钉选优先级可能已变，不吃上一趟的名单。
-  return departHunt(state, derived, { fieldId }).ok
 }
 
 /**
@@ -607,76 +619,49 @@ export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
  */
 export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
   if (!(dt > 0) || !state.hunting) return false
-  let now = Number.isFinite(ctx.startAt) ? ctx.startAt : gameNow(state)
-  let remaining = dt
-  let changed = false
-
-  const mission = activeMission(state)
-  if (mission) {
-    const left = Math.max(0, mission.actualDuration - mission.progressSeconds)
-    if (left > remaining) {
-      mission.progressSeconds += remaining
-      return false
-    }
-    remaining = Math.max(0, remaining - left)
-    now += left * 1000
-    // 已付费的这一趟允许按原规则完成；即时再出发交给下面的统一批次处理。
-    withGameContext(state, { now: () => now }, () => settleMission(state, derived, mission, { autoRepeat: false }))
-    changed = true
-  }
-
+  const changed = false
   const hunting = state.hunting
-  if (!hunting.settings.autoRepeat) return changed
-  const fieldId = mission?.fieldId || hunting.settings.selectedFieldId
+  const settings = hunting.settings
+  if (!settings.autoRepeat) return false
+  const interval = normalizeAutoInterval(settings.autoIntervalSeconds)
+  settings.autoIntervalSeconds = interval
+  const total = Math.max(0, Number(settings.elapsedSeconds) || 0) + dt
+  const periods = Math.floor((total + 1e-9) / interval)
+  settings.elapsedSeconds = total - periods * interval
+  if (periods <= 0) return changed
+
+  const fieldId = HUNT_FIELD_MAP[settings.selectedFieldId] ? settings.selectedFieldId : DEFAULT_HUNT_FIELD
   const field = HUNT_FIELD_MAP[fieldId]
-  if (!field) return changed
-  // 与在线口径一致：自动重复的每一趟都重新自动组队（钉选必入、天赋与闲散优先）。
-  const ids = autoPickTeam(state, derived, fieldId)
-  // 批量出征与末趟共用在线出征条件：研究、执符堂、境界、队伍、占用与信符都先过一遍。
-  if (!canDepart(state, derived, fieldId, ids).ok) return changed
+  const ids = resolveHuntTeam(state, derived, fieldId)
+  if (!field || !canDepart(state, derived, fieldId, ids).ok) return changed
+  const cost = warrantCost(derived)
+  const affordable = moneyToCount(warrantBalance(state).div(cost))
+  const trips = Math.max(0, Math.min(periods, affordable))
+  if (trips <= 0) return changed
+
   const rows = evaluateTeam(state, derived, fieldId, ids)
-
-  const duration = huntDuration(field, derived?.huntDurationReduction || 0)
-  // 趟数同时受剩余时长与信符存量封顶：存量换算成整枚趟数是循环/批量数量，走 moneyToCount。
-  const affordable = moneyToCount(warrantBalance(state).div(WARRANT_COST))
-  const trips = Math.max(0, Math.min(Math.floor((remaining + 1e-9) / duration), affordable))
-  if (trips > 0) {
-    const estimate = huntBatchGainEstimate(field, rows, derived, trips)
-    for (const [res, y] of Object.entries(estimate.expected)) {
-      const total = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
-      const whole = floorMoney(total)
-      hunting.yieldRemainders[res] = total.minus(whole)
-      if (whole.gt(0)) addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
-    }
-    state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, WARRANT_COST.times(trips))
-    const hunters = rows.length * trips
-    const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
-    hunting.statistics.departures += trips
-    hunting.statistics.completedMissions += trips
-    hunting.statistics.successfulHunters += successes
-    hunting.statistics.failedHunters += hunters - successes
-    const fieldState = hunting.fieldState[field.id] || {}
-    fieldState.lastHuntAt = now + trips * duration * 1000
-    fieldState.completedMissions = (fieldState.completedMissions || 0) + trips
-    fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successes
-    fieldState.failedHunters = (fieldState.failedHunters || 0) + hunters - successes
-    hunting.fieldState[field.id] = fieldState
-    remaining -= trips * duration
-    now += trips * duration * 1000
-    changed = true
-    if (ctx.stats) ctx.stats.huntBatches += 1
+  const estimate = huntBatchGainEstimate(field, rows, derived, trips)
+  for (const [res, y] of Object.entries(estimate.expected)) {
+    const sum = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
+    const whole = floorMoney(sum)
+    hunting.yieldRemainders[res] = sum.minus(whole)
+    if (whole.gt(0)) addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
   }
-
-  // 尾段：不足一趟的时长落成**一次已扣费的活动任务**（恰好用完时按 0 进度出发），
-  // 与在线的即时再出发一致，不把批量趟数变成下次在线的待补算队列。
-  if (atLeast(warrantBalance(state), WARRANT_COST)) {
-    const departed = withGameContext(state, { now: () => now }, () => departHunt(state, derived, { fieldId: field.id, teamIds: ids }))
-    if (departed.ok) {
-      if (remaining > 1e-9) departed.mission.progressSeconds = remaining
-      changed = true
-    }
-  }
-  return changed
+  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, cost.times(trips))
+  const hunters = rows.length * trips
+  const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
+  hunting.statistics.departures += trips
+  hunting.statistics.completedMissions += trips
+  hunting.statistics.successfulHunters += successes
+  hunting.statistics.failedHunters += hunters - successes
+  const fieldState = hunting.fieldState[field.id] || {}
+  fieldState.lastHuntAt = gameNow(state) + dt * 1000
+  fieldState.completedMissions = (fieldState.completedMissions || 0) + trips
+  fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successes
+  fieldState.failedHunters = (fieldState.failedHunters || 0) + hunters - successes
+  hunting.fieldState[field.id] = fieldState
+  if (ctx.stats) ctx.stats.huntBatches += 1
+  return true
 }
 
 /** 设置：猎场 / 名单 / 自动重复（立即保存由调用方负责）。 */
@@ -693,40 +678,46 @@ export function setHuntTeam(state, teamIds) {
 }
 
 export function setHuntAutoRepeat(state, value) {
-  state.hunting.settings.autoRepeat = value === true
+  const next = value === true
+  if (next !== state.hunting.settings.autoRepeat) state.hunting.settings.elapsedSeconds = 0
+  state.hunting.settings.autoRepeat = next
   return true
 }
 
-/** 设置自动组队人数上限（1~5，钉选可顶破上限但仍受每队上限约束）。 */
-export function setHuntAutoTeamSize(state, value) {
-  state.hunting.settings.autoTeamSize = normalizeAutoTeamSize(value)
+/** 设置自动间隔；改间隔后从 0 计时，不立即执行。 */
+export function setHuntAutoInterval(state, value) {
+  state.hunting.settings.autoIntervalSeconds = normalizeAutoInterval(value)
+  state.hunting.settings.elapsedSeconds = 0
   return true
 }
 
-/** 任务期限由剩余进度计算，兼容读档后重新开始的现实时间轴。 */
+/** 推荐阵容只返回候选，不写玩家名单。 */
+export function recommendHuntTeam(state, derived) {
+  return autoPickTeam(state, derived, state.hunting.settings.selectedFieldId)
+}
+
+/** 下一次自动猎杀的期限；关闭、没有弟子或旧档待迁移时返回 Infinity。 */
 export function nextHuntDeadline(state, now) {
-  let earliest = Infinity
-  for (const mission of Object.values(state?.hunting?.missions || {})) {
-    if (mission.status !== 'active') continue
-    const remaining = Math.max(0, mission.actualDuration - mission.progressSeconds)
-    const endAt = now + remaining * 1000
-    if (endAt > now && endAt < earliest) earliest = endAt
-  }
-  return earliest
+  const hunting = state?.hunting
+  if (!hunting?.settings?.autoRepeat) return Infinity
+  if (!huntableMembers(state).length) return Infinity
+  if (Object.values(hunting.missions || {}).some(m => m.status === 'active')) return Infinity
+  const interval = normalizeAutoInterval(hunting.settings.autoIntervalSeconds)
+  const elapsed = Math.max(0, Math.min(interval - 1e-9, Number(hunting.settings.elapsedSeconds) || 0))
+  return now + (interval - elapsed) * 1000
 }
 
-/** 停用只取消活动任务、释放占用，保留历史、余量、随机序列与队伍偏好。 */
+/** 停用不结算旧任务；保留已付款快照供正式加载迁移，清除定时与占用。 */
 export function deactivateHunting(state) {
   const hunting = state.hunting
   if (!hunting) return
-  for (const mission of Object.values(hunting.missions || {})) {
-    if (mission.status === 'active') releaseMembers(state, mission)
-  }
-  hunting.missions = {}
+  hunting.settings.autoRepeat = false
+  hunting.settings.elapsedSeconds = 0
   for (const member of state.disciples?.members || []) {
     member.onMission = false
     // 执符使为猎杀与外交共用：外交仍启用时保留岗位，避免读档清空共享供给。
     if (member.roleId === 'huntPlanner' && !isModuleEnabled(state, 'diplomacy')) member.roleId = null
   }
   recount(state)
+  rehydrateHuntOccupancy(state)
 }

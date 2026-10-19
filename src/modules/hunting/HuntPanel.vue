@@ -1,20 +1,16 @@
 <script setup>
 /**
- * 猎杀页：执符使开符 → 选猎场 → 自动组队出征 → 归队取兽材。
- * 信符与宗门外交共用同一池子（见外交页）：备猎与互市抢同一份凭信。
- * v0.421 起不再逐人手选：出征按「钉选必入 → 猎杀天赋 → 闲散 → 在岗」自动选队，
- * 猎杀天赋弟子单列「优先人选」供钉选；自动重复每趟重新选队。
- * 首轮只开放山麓；妖兽来袭关联与生态字段关闭（仅记统计）。
- * 本组件属于「妖兽猎杀」可选模块，由 src/modules/hunting/ui.js 导出。
+ * 猎杀页：只选择有猎杀加成的弟子，普通弟子自动补位；点击后立即结算，不占用岗位。
+ * 自动重复按固定间隔执行；间隔是猎杀频率，不是弟子占用时长。
  */
 import { computed } from 'vue'
-import { state, derived, view, actions } from '@/game/store'
+import { state, derived, actions } from '@/game/store'
 import { HUNT, HUNT_FIELDS, HUNT_FIELD_MAP } from './data.js'
 import { DIPLOMACY } from '@/modules/diplomacy/data.js'
 import { REALMS } from '@/data/realms'
 import { resourceName } from '@/data/resources'
-import { canDepart, huntPreview, autoPickTeam } from '@/game/engine'
-import { TALENT_MAP, talentValue, hasHuntTalent } from '@/data/talents'
+import { canDepart, huntPreview, resolveHuntTeam, huntCost } from '@/game/engine'
+import { hasHuntTalent, talentBonus, TALENT_MAP } from '@/data/talents'
 import { ZERO, moneyGt } from '@/game/decimal'
 import { fmtAmount, fmtFixed, fmtPercent, fmtTime } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
@@ -22,40 +18,47 @@ import HoverTip from '@/components/HoverTip.vue'
 const fieldId = computed(() => state.hunting.settings.selectedFieldId)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])
 const unlocked = computed(() => state.upgrades.wildHunting && state.buildings.huntingCamp?.on)
-const mission = computed(() => view.huntMission.value)
-
-/** 钉选名单（优先人选）：自动组队时必入。 */
-const pinnedIds = computed(() => {
-  const existing = new Set(state.disciples.members.map(member => member.id))
-  return (state.hunting.settings.teamIds || []).filter(id => existing.has(id))
+const settings = computed(() => state.hunting.settings)
+const bonusMembers = computed(() => state.disciples.members
+  .filter(member => member.realm >= (field.value.minDiscipleRealm || 0) && hasHuntTalent(member)))
+const selectedIds = computed(() => {
+  const eligible = new Set(bonusMembers.value.map(member => member.id))
+  return [...new Set(settings.value.teamIds || [])].filter(id => eligible.has(id)).slice(0, HUNT.TEAM_MAX)
 })
-const pinnedSet = computed(() => new Set(pinnedIds.value))
-const autoSize = computed(() => state.hunting.settings.autoTeamSize ?? HUNT.TEAM_MAX)
-
-/** 本次出征的自动选队结果与预览（钉选必入、天赋与闲散优先）。 */
-const autoIds = computed(() => (mission.value ? [] : autoPickTeam(state, derived, fieldId.value)))
-const preview = computed(() => huntPreview(state, derived, fieldId.value, autoIds.value))
-const previewRows = computed(() => preview.value?.rows || [])
-const departCheck = computed(() => canDepart(state, derived, fieldId.value, autoIds.value))
-
-/** 猎杀天赋及所有已钉选弟子均可管理，兼容旧档中无猎杀天赋的名单。 */
-const priorityMembers = computed(() => (state.disciples?.members || [])
-  .filter(m => hasHuntTalent(m) || pinnedSet.value.has(m.id))
-  .map(m => ({
-    ...m,
-    huntText: (m.talents || [])
-      .map(entry => {
-        const meta = TALENT_MAP[entry?.id]
-        if (!meta || (meta.category !== 'huntSuccess' && meta.category !== 'huntYield')) return null
-        const value = Math.round(talentValue(meta, entry.level || 1) * 100)
-        return `${meta.name}（${meta.category === 'huntSuccess' ? `准头 +${value}` : `收获 +${value}%`}）`
-      })
-      .filter(Boolean)
-      .join('、'),
+const selectedSet = computed(() => new Set(selectedIds.value))
+const members = computed(() => bonusMembers.value.map(member => ({ ...member,
+  selected: selectedSet.value.has(member.id),
+  successBonus: talentBonus(member, 'huntSuccess'),
+  yieldBonus: talentBonus(member, 'huntYield'),
+})))
+const teamIds = computed(() => resolveHuntTeam(state, derived, fieldId.value))
+const preview = computed(() => huntPreview(state, derived, fieldId.value, teamIds.value))
+const selectedRows = computed(() => (preview.value?.rows || []).filter(row => selectedSet.value.has(row.id)))
+// 与同一阵容不计猎杀天赋时比较，包含成功率封顶，避免把人数或境界变化算作天赋加成。
+const baselinePreview = computed(() => {
+  const ids = new Set(teamIds.value)
+  const baseline = { ...state, disciples: { ...state.disciples,
+    members: state.disciples.members.filter(member => ids.has(member.id)).map(member => ({ ...member,
+      talents: (member.talents || []).filter(entry => !['huntSuccess', 'huntYield'].includes(TALENT_MAP[entry.id]?.category)),
+    })),
+  } }
+  return huntPreview(baseline, derived, fieldId.value, teamIds.value)
+})
+const departCheck = computed(() => canDepart(state, derived, fieldId.value, teamIds.value))
+const cost = computed(() => huntCost(derived))
+const lastOutcome = computed(() => state.hunting.lastOutcome)
+const interval = computed(() => settings.value.autoIntervalSeconds || HUNT.AUTO_INTERVAL_DEFAULT)
+const remain = computed(() => Math.max(0, interval.value - (settings.value.elapsedSeconds || 0)))
+const expectedGainRows = computed(() => Object.entries(preview.value?.expectedGains || {})
+  .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtFixed(amount),
+    bonus: fmtFixed(amount.minus(baselinePreview.value?.expectedGains?.[res] ?? ZERO)),
   })))
+const lastGainRows = computed(() => Object.entries(lastOutcome.value?.gains || {})
+  .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtAmount(amount), positive: moneyGt(amount, ZERO) })))
+const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
 
-function togglePin(id) {
-  const cur = new Set(pinnedIds.value)
+function toggleMember(id) {
+  const cur = new Set(selectedIds.value)
   if (cur.has(id)) cur.delete(id)
   else if (cur.size < HUNT.TEAM_MAX) cur.add(id)
   actions.huntSetTeam([...cur])
@@ -65,36 +68,19 @@ function selectField(id) {
   actions.huntSetField(id)
 }
 
-const missionPct = computed(() => {
-  const m = mission.value
-  return m ? Math.min(1, m.progressSeconds / Math.max(1, m.actualDuration)) : 0
-})
-const missionRemain = computed(() => {
-  const m = mission.value
-  return m ? Math.max(0, m.actualDuration - m.progressSeconds) : 0
-})
-const lastOutcome = computed(() => state.hunting.lastOutcome)
-
-/**
- * 期望兽材与战报猎获都是金额（Decimal），模板里不能直接做算术/比较：
- * 在这里算好展示文案与「是否有整数入库」再暴露给模板。
- */
-const expectedGainRows = computed(() => Object.entries(preview.value?.expectedGains || {})
-  .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtFixed(amount) })))
-const lastGainRows = computed(() => Object.entries(lastOutcome.value?.gains || {})
-  .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtAmount(amount), positive: moneyGt(amount, ZERO) })))
-const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
+function setInterval(value) {
+  actions.huntSetAutoInterval(Number(value))
+}
 </script>
 
 <template>
   <div class="box">
     <div class="box-head">
       <HoverTip label="妖兽猎杀"><template #tip>
-          <p>执符使在执符堂开具信符，每趟出征消耗 {{ HUNT.WARRANT_COST }} 枚。选定猎场后自动组队入山，归队后获得兽材。</p>
-          <p>自动选队：钉选必入，持猎杀天赋与闲散弟子优先，最多按人数上限挑选。</p>
-          <p>信符与宗门外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚，两边抢同一份凭信。</p>
-          <p>出征期间弟子停止原岗位，但仍修炼、消耗口粮；不能被转岗、逐出或再次派出。</p>
-          <p>兽材按整数入库，不足 1 的部分跨任务累计，不丢失。</p>
+          <p>可选择有猎杀天赋的弟子参与，普通弟子自动补足至多 {{ HUNT.TEAM_MAX }} 人；每次消耗 {{ cost }} 枚信符，不占用岗位、不改变生产。</p>
+          <p>自动重复按固定间隔执行；间隔只改变频率，不改变单次奖励。</p>
+          <p>信符与外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚。</p>
+          <p>兽材按整数入库，不足 1 的部分跨次累计。</p>
         </template></HoverTip>
       <span class="hint">首轮只开放山麓；来袭关联尚未启用</span>
     </div>
@@ -103,7 +89,6 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
         尚未开放猎杀：需掌握《山野猎法》，并启用执符堂（筑基期）。
       </div>
       <template v-else>
-        <!-- 猎场选择 -->
         <div class="box-sub">猎场</div>
         <div class="hunt-fields">
           <button
@@ -120,57 +105,34 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
         </div>
         <div class="small dim" style="padding: 4px 0">{{ field.desc }}</div>
 
-        <!-- 自动组队配置 -->
-        <div class="box-sub">自动组队（钉选必入 · 天赋与闲散优先）</div>
-        <div class="hunt-autocfg">
-          <label class="small">人数上限
-            <select aria-label="自动组队人数上限" :value="autoSize" @change="actions.huntSetAutoTeamSize(Number($event.target.value))">
-              <option v-for="n in HUNT.TEAM_MAX" :key="n" :value="n">{{ n }} 人</option>
-            </select>
-          </label>
-          <span class="small dim">每趟出征自动挑选，无需手选；钉选人数可顶破上限。</span>
-        </div>
-
-        <!-- 优先人选：猎杀天赋弟子 -->
-        <div class="box-sub">优先人选（猎杀天赋及已钉选弟子，勾选即钉选必入）</div>
-        <div v-if="!priorityMembers.length" class="small dim" style="padding: 4px 0">
-          门中暂无猎杀天赋弟子：出征时按期望贡献自动选队。
-        </div>
+        <div class="box-sub">猎杀加成（已选 {{ selectedIds.length }} / {{ HUNT.TEAM_MAX }}）</div>
+        <p class="small dim">仅列出有猎杀天赋的弟子。普通弟子自动补位，未勾选的加成弟子不参与。</p>
+        <div v-if="!members.length" class="small dim">暂无有猎杀加成的弟子，仍可由普通弟子猎杀。</div>
         <div v-else class="hunt-members">
-          <label
-            v-for="m in priorityMembers"
-            :key="m.id"
-            class="hunt-member"
-            :class="{ on: pinnedSet.has(m.id), dim: m.onMission }"
-          >
-            <input type="checkbox" :checked="pinnedSet.has(m.id)" @change="togglePin(m.id)">
+          <label v-for="m in members" :key="m.id" class="hunt-member" :class="{ on: m.selected }">
+            <input type="checkbox" :checked="m.selected" :disabled="!m.selected && selectedIds.length >= HUNT.TEAM_MAX" @change="toggleMember(m.id)">
             <span>{{ m.name }}</span>
             <span class="dim">{{ REALMS[m.realm]?.name || '凡体' }}</span>
-            <span class="talent">{{ m.huntText }}</span>
-            <span v-if="m.onMission" class="dim">出征中</span>
+            <span v-if="m.successBonus > 0">准头 +{{ fmtFixed(m.successBonus * 100, 0) }} 个百分点</span>
+            <span v-if="m.yieldBonus > 0">收获 +{{ fmtPercent(m.yieldBonus) }}</span>
           </label>
         </div>
 
-        <!-- 自动选队预览 -->
-        <div class="box-sub">本次自动选队（{{ previewRows.length }} 人）</div>
-        <div v-if="!previewRows.length" class="small warn">没有可出征的弟子（全员已在出征中）。</div>
-        <div v-else class="hunt-members">
-          <span v-for="r in previewRows" :key="r.id" class="hunt-member on">
-            <span>{{ r.name }}</span>
-            <span class="dim">{{ REALMS[r.realm]?.name || '凡体' }}</span>
-            <span class="dim">效率 ×{{ r.A.toFixed(2) }}</span>
-            <span class="dim">成功率 {{ fmtPercent(r.p) }}</span>
-            <span v-if="r.y > 1" class="dim">收获 ×{{ r.y.toFixed(2) }}</span>
-            <span v-if="pinnedSet.has(r.id)" class="pin-mark">钉</span>
-          </span>
+        <div v-if="selectedRows.length" class="hunt-bonus-results">
+          <div v-for="row in selectedRows" :key="row.id" class="small">
+            {{ row.name }}：实际成功率 {{ fmtPercent(row.p, 1) }} · 收获倍率 ×{{ fmtFixed(row.y) }}
+          </div>
         </div>
 
-        <!-- 预览 -->
         <table v-if="preview" class="grid">
           <tbody>
             <tr>
-              <td class="dim nowrap">行程</td>
-              <td class="num">{{ fmtTime(preview.duration) }}</td>
+              <td class="dim nowrap">参与人数</td>
+              <td class="num" colspan="3">{{ teamIds.length }} 人（加成弟子 {{ selectedIds.length }} 人，普通弟子 {{ teamIds.length - selectedIds.length }} 人）</td>
+            </tr>
+            <tr>
+              <td class="dim nowrap">单次费用</td>
+              <td class="num">{{ cost }} 信符</td>
               <td class="dim nowrap">预计成功</td>
               <td class="num">{{ preview.expectedSuccess.toFixed(2) }} 人</td>
             </tr>
@@ -183,40 +145,47 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
                 <span v-if="!expectedGainRows.length" class="dim">—</span>
               </td>
             </tr>
+            <tr v-if="selectedRows.length">
+              <td class="dim nowrap">
+                <HoverTip label="天赋额外收获"><template #tip>与相同阵容不计个人猎杀天赋时比较，已计入成功率上限。</template></HoverTip>
+              </td>
+              <td class="num" colspan="3">
+                <span v-for="row in expectedGainRows" :key="row.res" style="margin-right: 12px">{{ row.name }} +{{ row.bonus }}</span>
+              </td>
+            </tr>
           </tbody>
         </table>
 
-        <!-- 操作 -->
-        <div v-if="!mission" class="hunt-actions">
+        <div class="hunt-actions">
           <button class="btn primary" :disabled="!departCheck.ok" @click="actions.huntDepart(fieldId)">
-            出征 {{ field.name }}
+            猎杀一次
           </button>
           <span v-if="!departCheck.ok" class="bad small">{{ departCheck.reason }}</span>
           <label class="small" style="margin-left: auto">
-            <input type="checkbox" :checked="state.hunting.settings.autoRepeat" @change="actions.huntSetAutoRepeat($event.target.checked)">
+            <input type="checkbox" :checked="settings.autoRepeat" @change="actions.huntSetAutoRepeat($event.target.checked)">
             自动重复
           </label>
         </div>
-        <div v-else class="hunt-actions">
-          <div style="flex: 1">
-            <div class="small">
-              出征中：{{ field.name }} · 队伍 {{ mission.snapshots.length }} 人
-              <span class="dim">· 剩余 {{ fmtTime(missionRemain) }}</span>
-            </div>
-            <div class="hunt-bar"><span :style="{ width: (missionPct * 100) + '%' }" /></div>
-          </div>
-          <button class="btn" @click="actions.huntCancel()">召回</button>
+        <div v-if="settings.autoRepeat" class="hunt-autocfg">
+          <label class="small">每
+            <select :value="interval" @change="setInterval($event.target.value)">
+              <option v-for="n in [60, 120, 300, 600]" :key="n" :value="n">{{ n }} 秒</option>
+            </select>
+            <input type="number" min="30" max="3600" step="30" :value="interval" style="width: 5.5em" @change="setInterval($event.target.value)">
+            猎杀一次
+          </label>
+          <span class="small dim">下次约 {{ fmtTime(remain) }} 后；失败周期跳过，不补发。</span>
         </div>
       </template>
     </div>
   </div>
 
   <div class="box" v-if="unlocked">
-    <div class="box-head">上次归队</div>
+    <div class="box-head">上次猎杀</div>
     <div class="box-body">
-      <div v-if="!lastOutcome" class="empty">还没有出征记录。</div>
+      <div v-if="!lastOutcome" class="empty">还没有猎杀记录。</div>
       <template v-else-if="lastOutcome.cancelled">
-        <div class="small dim">已取消，弟子归队（不退信符）。</div>
+        <div class="small dim">旧任务已迁移结算。</div>
       </template>
       <template v-else>
         <div class="small">
@@ -239,7 +208,8 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
         </table>
       </template>
       <div class="small dim" style="padding-top: 6px">
-        累计出征 {{ state.hunting.statistics.departures }} 次 · 完成 {{ state.hunting.statistics.completedMissions }} 次 ·
+        累计猎杀 {{ state.hunting.statistics.departures }} 次 ·
+        完成 {{ state.hunting.statistics.completedMissions }} 次 ·
         猎杀成功 {{ state.hunting.statistics.successfulHunters }} 人次
       </div>
     </div>
@@ -247,64 +217,11 @@ const lastGainAny = computed(() => lastGainRows.value.some(row => row.positive))
 </template>
 
 <style scoped>
-.hunt-bar {
-  height: 6px;
-  margin-top: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.hunt-bar > span {
-  display: block;
-  height: 100%;
-  background: #d8b98a;
-  transition: width 0.2s linear;
-}
-.hunt-fields {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 4px 0;
-}
-.hunt-autocfg {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 4px 0;
-}
-.hunt-members {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  padding: 4px 0;
-}
-.hunt-member {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-.hunt-member.on {
-  color: #d8b98a;
-}
-.hunt-member.dim {
-  opacity: 0.55;
-}
-.hunt-member .talent {
-  color: #9fc28a;
-}
-.hunt-member .pin-mark {
-  border: 1px solid #d8b98a;
-  border-radius: 3px;
-  padding: 0 3px;
-  font-size: 10px;
-  line-height: 14px;
-}
-.hunt-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-}
+.hunt-fields { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.hunt-autocfg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
+.hunt-members { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 0; }
+.hunt-member { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.hunt-member.on { color: #d8b98a; }
+.hunt-bonus-results { display: grid; gap: 4px; padding: 8px 0; }
+.hunt-actions { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 </style>

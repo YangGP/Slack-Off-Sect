@@ -6,6 +6,7 @@ import { recompute } from './economy'
 import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
+import { isModuleEnabled } from '@/data/modules'
 import { ONE, ZERO, ceilMoney, money, moneyEq, moneyLt, moneyMax, moneySubtract, moneySum } from '../decimal'
 
 /** 资源和培养名额有限时，手动批量与自动操作均优先重点弟子。 */
@@ -119,7 +120,7 @@ function settleDiscipleBreakthrough(state, member, preview, random) {
   if (random() < preview.chance) {
     member.realm++
     member.cultivation = 0
-    const talent = gainBreakthroughTalent(state.disciples, member)
+    const talent = gainBreakthroughTalent(state.disciples, member, undefined, { includeHunting: isModuleEnabled(state, 'hunting') })
     if (talent) pushLog(state, `${member.name}突破后领悟天赋【${TALENT_MAP[talent.id].name}】`, 'good')
     const upgraded = upgradeTalent(state.disciples, member)
     if (upgraded) pushLog(state, `${member.name}突破后天赋【${TALENT_MAP[upgraded.id].name}】提升至 Lv.${upgraded.level}`, 'good')
@@ -226,7 +227,7 @@ export function recruitArrivals(state, derived, dt, { silent = false } = {}) {
   const arrived = Math.max(0, Math.min(Math.floor(timer / interval), room))
   state.arrivalTimer = timer - arrived * interval
   for (let i = 1; i <= arrived; i++) {
-    const member = newDisciple(state.disciples)
+    const member = newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') })
     cultivateDisciple(member, Math.min(dt, timer - i * interval))
     state.disciples.members.push(member)
   }
@@ -273,7 +274,7 @@ export function recruitDisciple(state, derived, tierId) {
   if (!preview.affordable) return { recruited: 0, reason: 'insufficient' }
   payCost(state, preview.cost)
   const realm = rollRecruitRealm(state.disciples, preview.tier, state.realm)
-  const member = newDisciple(state.disciples, null, { realm, quality: preview.tier })
+  const member = newDisciple(state.disciples, null, { realm, quality: preview.tier, includeHunting: isModuleEnabled(state, 'hunting') })
   state.disciples.members.push(member)
   autoAssignTalentJobs(state)
   recountDisciples(state.disciples)

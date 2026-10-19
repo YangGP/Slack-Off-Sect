@@ -195,7 +195,7 @@ export function applyEffects(ef, mult, targets, src) {
   }
   if (ef.huntSuccessBonus) acc.huntSuccessBonus += ef.huntSuccessBonus * mult
   if (ef.huntYieldBonus) acc.huntYieldBonus += ef.huntYieldBonus * mult
-  if (ef.huntDurationReduction) acc.huntDurationReduction += ef.huntDurationReduction * mult
+  if (ef.huntCostReduction) acc.huntCostReduction += ef.huntCostReduction * mult
 }
 
 /**
@@ -262,7 +262,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     reactorRatio: 0,
     huntSuccessBonus: 0,
     huntYieldBonus: 0,
-    huntDurationReduction: 0,
+    huntCostReduction: 0,
   }
   // bonus 是加成倍率的「逐项拆分账」：{ ratio: {res:[条目]}, ratioAll: [条目], reactorRatio: [条目] }
   const bonus = { ratio: {}, ratioAll: [], reactorRatio: [] }
@@ -686,7 +686,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     + coolingArrays * 2 * (1 + (acc.processingCoolingRatio || 0))
   derived.huntSuccessBonus = acc.huntSuccessBonus
   derived.huntYieldBonus = acc.huntYieldBonus
-  derived.huntDurationReduction = acc.huntDurationReduction
+  derived.huntCostReduction = acc.huntCostReduction
   derived.disasterGuard = Math.min(CONFIG.DISASTER_GUARD_CAP, acc.disasterGuard)
   derived.disasterGuardByResource = acc.disasterGuardByResource
   derived.ascendBonus = acc.ascendBonus

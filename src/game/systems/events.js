@@ -8,6 +8,7 @@ import { RESOURCE_MAP } from '@/data/resources'
 import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyClamp, moneyGt, moneyMax, moneyMin, moneyToNumber } from '../decimal'
 import { CONFIG } from '@/data/config'
 import { newDisciple, recountDisciples, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
+import { isModuleEnabled } from '@/data/modules'
 
 export function eventEligible(state, event) {
   if (!isEventInRealm(event, state.realm)) return false
@@ -155,7 +156,7 @@ export function settleEventOutcome(state, derived, spec, text, kind, source) {
     }
   }
   if (outcome.recruits > 0) {
-    for (let i = 0; i < outcome.recruits; i++) state.disciples.members.push(newDisciple(state.disciples))
+    for (let i = 0; i < outcome.recruits; i++) state.disciples.members.push(newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') }))
     recountDisciples(state.disciples)
     state.stats.recruits += outcome.recruits
     parts.push(`弟子 +${outcome.recruits}`)

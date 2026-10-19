@@ -41,9 +41,9 @@ export const TALENTS = TALENT_TIERS.flatMap((tier, index) => [
   { id: `breakthrough_${tier.id}`, name: breakthroughNames[index], tier: tier.id, category: 'breakthrough',
     values: BREAKTHROUGH_VALUES[tier.id] },
   { id: `huntSuccess_${tier.id}`, name: huntSuccessNames[index], tier: tier.id, category: 'huntSuccess',
-    values: HUNT_SUCCESS_VALUES[tier.id] },
+    module: 'hunting', values: HUNT_SUCCESS_VALUES[tier.id] },
   { id: `huntYield_${tier.id}`, name: huntYieldNames[index], tier: tier.id, category: 'huntYield',
-    values: HUNT_YIELD_VALUES[tier.id] },
+    module: 'hunting', values: HUNT_YIELD_VALUES[tier.id] },
   ...jobs.map(([jobId, jobName, names]) => ({
     id: `job_${jobId}_${tier.id}`, name: names[index], tier: tier.id, category: 'job', jobId, jobName,
     values: CULTIVATION_VALUES[tier.id],
@@ -102,10 +102,11 @@ export function talentBonus(member, category, jobId = member.roleId) {
   return Math.min(TALENT_RULES.caps[category] || 0, bonus)
 }
 
-export function rollTalent(talents, random, tierWeights = null) {
+export function rollTalent(talents, random, tierWeights = null, options = {}) {
   if (talents.length >= TALENT_RULES.maxCount) return null
   const owned = new Set(talents.map(entry => TALENT_MAP[entry.id]?.category))
-  const candidates = TALENTS.filter(meta => !owned.has(meta.category))
+  const includeHunting = options.includeHunting !== false
+  const candidates = TALENTS.filter(meta => !owned.has(meta.category) && (includeHunting || meta.module !== 'hunting'))
   if (!candidates.length) return null
   // 招募礼聘等场景可传入替代品级权重，使高品级更容易出现；未传时沿用基础权重。
   const tiers = TALENT_TIERS.filter(tier => candidates.some(meta => meta.tier === tier.id))
@@ -119,14 +120,14 @@ export function rollTalent(talents, random, tierWeights = null) {
 }
 
 /** 入宗天赋；quality 可传 { tierWeights, countWeights } 调整品级与条数分布（主动招募）。 */
-export function birthTalents(random, quality = null) {
+export function birthTalents(random, quality = null, options = {}) {
   const counts = quality?.countWeights
     ? TALENT_RULES.birthCounts.map((entry, index) => ({ ...entry, weight: quality.countWeights[index] ?? 0 }))
     : TALENT_RULES.birthCounts
   const count = weighted(counts, random).count
   const talents = []
   for (let index = 0; index < count; index++) {
-    const talent = rollTalent(talents, random, quality?.tierWeights || null)
+    const talent = rollTalent(talents, random, quality?.tierWeights || null, options)
     if (talent) talents.push(talent)
   }
   return talents
@@ -137,10 +138,10 @@ export function talentRandom(data) {
   return data.talentSeed / 4294967296
 }
 
-export function gainBreakthroughTalent(data, member, random = () => talentRandom(data)) {
+export function gainBreakthroughTalent(data, member, random = () => talentRandom(data), options = {}) {
   member.talents ||= []
   if (member.talents.length >= TALENT_RULES.maxCount || random() >= TALENT_RULES.breakthroughChance) return null
-  const talent = rollTalent(member.talents, random)
+  const talent = rollTalent(member.talents, random, null, options)
   if (talent) member.talents.push(talent)
   return talent
 }
