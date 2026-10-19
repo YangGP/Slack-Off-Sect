@@ -172,7 +172,7 @@ export function huntingLoop(harness) {
     state.hunting.settings.teamIds.length === 0 && state.hunting.settings.elapsedSeconds === 0 && !state.hunting.settings.autoRepeat)
 }
 
-export async function legacyMissionRegression({ ok }) {
+export async function legacyMissionRegression({ ok, close }) {
   for (const version of [1, 2]) {
     for (const disabled of [false, true]) {
       const raw = legacySave(version, disabled)
@@ -186,9 +186,10 @@ export async function legacyMissionRegression({ ok }) {
       const expected = E.money(14.4).times(snap.A).times(version === 1 ? 1 : 1.5)
       const game = createGame({ state: again })
       const total = E.money(game.state.resources.beastHide).plus(game.state.hunting.yieldRemainders.beastHide || 0)
+      // 实际贡献先以Number计算A×y，期望值逐项以Decimal相乘，允许倍率的浮点尾差。
       ok(`v${version}模块${disabled ? '关闭' : '开启'}首次生产前按旧收益结算并恢复岗位`,
         game.state.disciples.members[0].roleId === 'farmer' && !E.activeMission(game.state) &&
-        game.state.hunting.statistics.completedMissions === 1 && E.moneyEq(total, expected) &&
+        game.state.hunting.statistics.completedMissions === 1 && close(total, expected, 1e-12) &&
         E.moneyEq(game.state.resources.warrant, 200) && game.state.hunting.settings.elapsedSeconds === 0)
       const seed = game.state.hunting.randomSeed
       const gained = game.state.resources.beastHide

@@ -135,12 +135,21 @@ export function dataIntegrity({ ok, section }) {
       treasures.length >= 10 && plainSkills.length >= 10,
       `${treasures.length} 件法宝 / ${plainSkills.length} 条技艺`,
     )
+    // 法宝可经技艺承接修真成果（如聚灵幡 → 引气诀 → 灵源考），整条前置链仍须有效。
+    const cultivationIds = new Set(CULTIVATION.map(c => c.id))
+    const hasCultivationSource = (id, seen = new Set()) => {
+      if (cultivationIds.has(id)) return true
+      if (seen.has(id)) return false
+      const nextSeen = new Set([...seen, id])
+      const needs = TECHNIQUES.find(t => t.id === id)?.needs?.upgrades || []
+      return needs.length > 0 && needs.every(parent => hasCultivationSource(parent, nextSeen))
+    }
     const badTreasure = treasures.find(
       (t) =>
         !(t.needs?.upgrades || []).length ||
-        !(t.needs.upgrades || []).every((id) => CULTIVATION.some((c) => c.id === id)),
+        !(t.needs.upgrades || []).every((id) => hasCultivationSource(id)),
     )
-    ok('每件法宝都由修真节点解锁', !badTreasure, badTreasure ? badTreasure.id : '')
+    ok('每件法宝的前置链都源于修真节点', !badTreasure, badTreasure ? badTreasure.id : '')
     // 数值型研究来自材料工艺、主线成果、金丹增产及聚气纹。
     // 清单用于避免无意把通用技艺迁入修真页，符文原理见 docs/CRAFT-PROGRESSION.md。
     const MIGRATED_NUMERIC_IDS = [

@@ -102,6 +102,8 @@ export function goldenCoreProduction({ ok, close, section }) {
     for (const id of ['qiOrigin', 'qiGazing', 'qiMeasure', 'qiLiquid', 'condenseArt', 'liquidArt', 'earthArt', 'woodworking', 'herbStudy', 'talismanArt', 'forgeArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
     s.buildings.talismanHall = { count: 1, on: true }
     s.buildings.forge = { count: 1, on: true }
+    // 土木精要现要求先建库房，夹具须具备实际研究前置。
+    s.buildings.warehouse = { count: 1, on: true }
     Object.assign(s.resources, { insight: E.money(50000), qi: E.money(8000), spiritLiquid: E.money(300), talisman: E.money(1900), ore: E.money(2000), plank: E.money(640), artifact: E.money(10), stone: E.money(1000), wood: E.money(2000) })
     E.recompute(s, d)
     ok('已掌握凝液仍须先纯化才能参悟凝晶', !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory))

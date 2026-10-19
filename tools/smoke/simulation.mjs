@@ -45,6 +45,8 @@ export function playerBot({ ok, section }) {
     s.realm = 7
     s.upgrades.earthEssence = true
     s.buildings.depot = { count: 1, on: true }
+    // 材料库缩容后，需玄库才能容纳广储库所需的8000灵石。
+    s.buildings.mysticVault = { count: 1, on: true }
     E.recompute(s, d)
     for (const res of RESOURCES) s.resources[res.id] = d.max[res.id].isFinite() ? d.max[res.id] : E.money(UNCAPPED_CRAFTED_RESOURCES.has(res.id) ? 10000 : 0)
     E.recompute(s, d)
