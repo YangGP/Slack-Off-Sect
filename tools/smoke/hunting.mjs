@@ -76,7 +76,7 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     for (const value of [huntOnline, huntOffline]) {
       const mission = Object.values(value.hunting.missions)[0]
       mission.startedAt = clockStart
-      value.resources.warrant = E.money(300)
+      value.resources.warrant = E.money(700)
       value.hunting.settings.autoRepeat = true
     }
     const hod = E.createDerived(), hfd = E.createDerived()
@@ -93,13 +93,13 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     const tail = Object.values(huntOffline.hunting.missions)
     const teamRows = tail.length
       ? tail[0].snapshots.map(snap => ({ ...snap, support: tail[0].support }))
-      : E.huntEvaluation(huntOffline, hfd, field.id, huntOffline.hunting.settings.teamIds)
+      : E.huntEvaluation(huntOffline, hfd, field.id, E.autoPickTeam(huntOffline, hfd, field.id))
     const estimate = E.huntBatchGainEstimate(field, teamRows, hfd, trips)
-    // 370 秒 = 3 趟整（120 秒）＋10 秒尾段：既有首趟每 120 秒完成一趟，末趟保留已扣费任务。
-    ok('长离线自动重复在 370 秒内正好完成 3 趟并留下 10 秒尾段',
-      offlineReport.approximate === true && trips === 3 &&
-      huntOffline.hunting.statistics.departures - baseStats.departures === 3 &&
-      E.money(huntOffline.resources.warrant).abs().lt(1e-9) && tail.length === 1 &&
+    // 370 秒 = 6 趟整（60 秒）＋10 秒尾段：v0.421 起每趟 60 秒，末趟保留已扣费任务（700 信符够 6 趟）。
+    ok('长离线自动重复在 370 秒内正好完成 6 趟并留下 10 秒尾段',
+      offlineReport.approximate === true && trips === 6 &&
+      huntOffline.hunting.statistics.departures - baseStats.departures === 6 &&
+      E.moneyEq(huntOffline.resources.warrant, E.money(100)) && tail.length === 1 &&
       Math.abs(tail[0].progressSeconds - 10) < 0.05)
     ok('批量猎杀收益不超过可完成趟数的奖励上界', teamRows.length === 0 ||
       Object.entries(estimate.maximum).every(([res, maximum]) =>
@@ -122,7 +122,7 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
       tailReloaded !== null && tailReloaded.id === tail[0].id && tailReloaded.startedAt === tail[0].startedAt &&
       tailReloaded.progressSeconds === tail[0].progressSeconds)
 
-    // 单次快进 610 秒（跨越 5 趟）：走批量分支，必须一次算清多趟而不是每段只做一趟。
+    // 单次快进 610 秒（跨越 10 趟）：走批量分支，必须一次算清多趟而不是每段只做一趟。
     {
       const bulk = normalizeState(JSON.parse(JSON.stringify(hs)))
       bulk.resources.warrant = E.money(10000)
@@ -136,9 +136,9 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
       const stats = { huntBatches: 0 }
       const bulkChanged = E.advanceOfflineHunt(bulk, bd, 610, { startAt: clockStart, stats })
       const bulkTail = Object.values(bulk.hunting.missions)
-      ok('已有首趟归队后由快进统一批量：610 秒完成 5 趟并留下 10 秒尾段',
-        bulkChanged === true && bulk.hunting.statistics.completedMissions - beforeCompleted === 5 &&
-        stats.huntBatches === 1 && E.moneyEq(bulk.resources.warrant, E.money(10000).minus(500)) && bulkTail.length === 1 &&
+      ok('已有首趟归队后由快进统一批量：610 秒完成 10 趟并留下 10 秒尾段',
+        bulkChanged === true && bulk.hunting.statistics.completedMissions - beforeCompleted === 10 &&
+        stats.huntBatches === 1 && E.moneyEq(bulk.resources.warrant, E.money(10000).minus(1000)) && bulkTail.length === 1 &&
         Math.abs(bulkTail[0].progressSeconds - 10) < 1e-9 &&
         bulk.disciples.members.filter(m => m.onMission).length === bulkTail[0].snapshots.length)
       const bulkReloaded = normalizeState(JSON.parse(JSON.stringify(bulk)))
@@ -159,7 +159,7 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
       const hideBefore = E.money(blocked.resources.beastHide)
       const cd = E.createDerived()
       E.recompute(blocked, cd)
-      const allowed = E.canDepart(blocked, cd, 'foothills', blocked.hunting.settings.teamIds)
+      const allowed = E.canDepart(blocked, cd, 'foothills', E.autoPickTeam(blocked, cd, 'foothills'))
       E.advanceOfflineHunt(blocked, cd, 600, { startAt: clockStart, stats: { huntBatches: 0 } })
       ok('停用营地后离线不再出征、不扣费也不发奖励', !allowed.ok &&
         blocked.hunting.statistics.completedMissions === campBefore.completedMissions &&
@@ -181,5 +181,91 @@ export function huntingLoop({ ok, close, section }) {  section('猎杀（山麓�
     reloaded.karma = E.money(500)
     E.recompute(reloaded, rd)
     ok('信符仓容独立于仙缘仓储倍率', E.moneyGt(rd.karmaStorageMult, 1) && E.moneyEq(rd.max.warrant, 400))
+  }
+
+  section('猎杀（自动组队与猎杀天赋）')
+  {
+    const { state: as, derived: ad } = newGameRunning()
+    as.realm = 3
+    as.upgrades.wildHunting = true
+    as.buildings.huntingCamp = { count: 1, on: true }
+    as.resources.warrant = E.money(2000)
+    const members = as.disciples.members
+    // 场景可控：只在指定成员身上挂猎杀天赋（夹具成员默认无天赋）。
+    for (const m of members) m.talents = []
+    members[1].talents = [{ id: 'huntYield_tian', level: 1 }]
+    E.recompute(as, ad)
+
+    // v0.421 口径：时长减半、基准秒产翻倍，单次收益不变（基准秒产 × 时长恒等于旧值）。
+    const field = E.huntField('foothills')
+    ok('山麓时长减半、基准秒产翻倍（单次收益口径不变）',
+      field.baseDuration === 60 && field.baseYield.beastHide === 0.24 && field.baseYield.beastBone === 0.16 &&
+      field.baseDuration * field.baseYield.beastHide === 120 * 0.12)
+
+    // 个人天赋：huntYield 抬个人收获倍率 y，huntSuccess 按百分点加成功率。
+    const rows = E.huntEvaluation(as, ad, 'foothills', [members[0].id, members[1].id])
+    const rowPlain = rows.find(r => r.id === members[0].id)
+    const rowGifted = rows.find(r => r.id === members[1].id)
+    ok('猎杀收获天赋抬高个人收获倍率', rowGifted.y === 1.5 && rowPlain.y === 1)
+    members[0].talents = [{ id: 'huntSuccess_tian', level: 1 }]
+    const boosted = E.huntEvaluation(as, ad, 'foothills', [members[0].id]).find(r => r.id === members[0].id)
+    ok('猎杀准头天赋按百分点提高成功率', Math.abs(boosted.p - (rowPlain.p + 0.08)) < 1e-12)
+    members[0].talents = []
+
+    const pvGifted = E.huntPreview(as, ad, 'foothills', [members[1].id])
+    members[1].talents = []
+    const pvPlain = E.huntPreview(as, ad, 'foothills', [members[1].id])
+    members[1].talents = [{ id: 'huntYield_tian', level: 1 }]
+    ok('收获天赋按 1.5 倍放大期望兽材', Math.abs(
+      E.moneyToNumber(pvGifted.expectedGains.beastHide) / E.moneyToNumber(pvPlain.expectedGains.beastHide) - 1.5) < 1e-9)
+
+    // 人数上限归一到 1~5。
+    E.setHuntAutoTeamSize(as, 0)
+    ok('自动组队人数上限归一：低于下限回 1', as.hunting.settings.autoTeamSize === 1)
+    E.setHuntAutoTeamSize(as, 99)
+    ok('自动组队人数上限归一：高于上限夹 5', as.hunting.settings.autoTeamSize === 5)
+
+    // 钉选必入、天赋优先、人数上限生效。
+    E.setHuntAutoTeamSize(as, 2)
+    E.setHuntTeam(as, [members[3].id])
+    const picked = E.autoPickTeam(as, ad, 'foothills')
+    ok('自动选队：钉选必入且猎杀天赋优先', picked.length === 2 &&
+      picked[0] === members[3].id && picked[1] === members[1].id)
+
+    // 钉选数可顶破人数上限。
+    E.setHuntTeam(as, [members[0].id, members[2].id, members[3].id])
+    const pickedPinned = E.autoPickTeam(as, ad, 'foothills')
+    ok('自动选队：钉选可顶破人数上限', pickedPinned.length === 3 &&
+      [members[0].id, members[2].id, members[3].id].every(id => pickedPinned.includes(id)))
+    E.setHuntTeam(as, [])
+    E.setHuntAutoTeamSize(as, 5)
+
+    // 闲散优先于在岗：把阵徒岗位压给第一名弟子后，他应排在队尾。
+    as.disciples.jobs.farmer = 1
+    E.recompute(as, ad)
+    const farmer = members.find(m => m.roleId === 'farmer')
+    const pickedJobs = E.autoPickTeam(as, ad, 'foothills')
+    ok('自动选队：闲散优先于在岗', farmer && pickedJobs.length === 4 && pickedJobs[3] === farmer.id)
+    as.disciples.jobs.farmer = 0
+    E.recompute(as, ad)
+
+    // 未传名单 → 自动组队出征；钉选名单不再被出征结果覆写。
+    const dep = E.departHunt(as, ad, { fieldId: 'foothills' })
+    ok('未传名单时自动组队出征', dep.ok && dep.mission.snapshots.length === 4)
+    ok('出征不覆写钉选名单', as.hunting.settings.teamIds.length === 0)
+    ok('快照记录个人收获倍率', dep.mission.snapshots.find(s => s.id === members[1].id)?.y === 1.5)
+    E.tick(as, ad, dep.mission.actualDuration + 1)
+
+    // 单人整额结算：y = 1.5 直接放大单趟收益（randomSeed = 1 首抽 0.236 必成功）。
+    // 期望：兽皮 0.24×60×2^-1.5×1.5 = 7.636… 整数 7；兽骨 0.16×60×0.530… = 5.091… 整数 5。
+    E.setHuntAutoTeamSize(as, 1)
+    as.resources.beastHide = E.money(0)
+    as.resources.beastBone = E.money(0)
+    as.hunting.yieldRemainders = {}
+    as.hunting.randomSeed = 1
+    const solo = E.departHunt(as, ad, { fieldId: 'foothills' })
+    E.tick(as, ad, solo.mission.actualDuration + 1)
+    ok('收获天赋倍率进入归队结算', solo.ok && solo.mission.snapshots.length === 1 &&
+      E.moneyEq(as.resources.beastHide, E.money(7)) && E.moneyEq(as.resources.beastBone, E.money(5)))
   }
 }

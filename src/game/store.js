@@ -968,6 +968,12 @@ export const actions = {
     saveNow()
     return true
   },
+  huntSetAutoTeamSize(value) {
+    E.setHuntAutoTeamSize(state, value)
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
   diplomacyTrade(sectId) {
     const result = E.tradeWithSect(state, derived, sectId)
     if (!result.ok) { toast(result.reason || '无法交易', 'bad'); return false }
@@ -1017,6 +1023,7 @@ export const view = {
   idle: computed(() => E.idleDisciples(state)),
   huntMission: computed(() => isModuleEnabled(state, 'hunting') ? E.activeMission(state) : null),
   huntTeamIds: computed(() => isModuleEnabled(state, 'hunting') ? (state.hunting?.settings?.teamIds || []) : []),
+  huntAutoTeamSize: computed(() => isModuleEnabled(state, 'hunting') ? (state.hunting?.settings?.autoTeamSize ?? 5) : 5),
   // 注意：这几个 computed 统一返回 **id 数组**，与 derived.unlockedBuildings 等保持一致，
   // 避免出现「拿 id 去 includes 一个对象数组」这类判断永远为假的坑。
   assignableJobs: computed(() =>

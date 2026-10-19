@@ -42,9 +42,9 @@ export const HUNT_FIELDS = [
     entryRealm: 3,
     minDiscipleRealm: 0,
     recommendRealm: 3,
-    baseDuration: 120,
+    baseDuration: 60,
     successBase: 0.9,
-    baseYield: { beastHide: 0.12, beastBone: 0.08 },
+    baseYield: { beastHide: 0.24, beastBone: 0.16 },
     advancedYield: null,
   },
 ]

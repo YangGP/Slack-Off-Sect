@@ -58,6 +58,7 @@ const realmOptions = [{ value: 'all', label: '全部境界' }, ...REALMS.map((re
 const rootOptions = [{ value: 'all', label: '全部灵根' }, ...SPIRITUAL_ROOTS.map(root => ({ value: root.id, label: root.name }))]
 const talentOptions = [{ value: 'all', label: '全部天赋' }, { value: 'none', label: '无天赋' },
   { value: 'cultivation', label: '修炼天赋' }, { value: 'breakthrough', label: '突破天赋' },
+  { value: 'huntSuccess', label: '猎杀·准头' }, { value: 'huntYield', label: '猎杀·收获' },
   { value: 'job', label: '岗位专长' }, ...JOBS.map(job => ({ value: `job:${job.id}`, label: `${job.name}专长` }))]
 const trainOptions = [{ value: 'all', label: '全部培养' }, { value: 'mentored', label: '传功中' }, { value: 'aid', label: '已护道' }]
 const focusOptions = [{ value: 'all', label: '全部重点' }, { value: 'focus', label: '仅重点' }]

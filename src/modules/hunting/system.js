@@ -3,6 +3,7 @@ import { JOBS } from '@/data/jobs'
 import { RESOURCE_MAP } from '@/data/resources'
 import { REALMS } from '@/data/realms'
 import { isModuleEnabled } from '@/data/modules'
+import { talentBonus, hasHuntTalent, TALENT_RULES } from '@/data/talents'
 import { clamp, pushLog, addResource, activeOf } from '@/game/systems/core'
 import { MONEY_INFINITY, ZERO, floorMoney, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
 import { atLeast } from '@/game/numbers'
@@ -18,10 +19,17 @@ import { gameNow, withGameContext } from '@/game/context'
  * 生态关联（警戒/抑制/来袭权重）首轮全部关闭，只保留 fieldState 结构。
  */
 
-export const HUNT_SCHEMA_VERSION = 1
+/**
+ * v2：山麓时长 120→60 且基准秒产翻倍（单次收益口径不变）、快照新增个人收获倍率 y、
+ * 组队改为自动选队。时长与公式变化使在途任务作废（读档即按既有设计过滤）。
+ */
+export const HUNT_SCHEMA_VERSION = 2
 
 /** 出征信符单价（金额域）：静态表里的字面值是 Number，进入金额运算前构造为 Decimal。 */
 const WARRANT_COST = money(HUNT.WARRANT_COST)
+
+/** 猎杀收获天赋的个人倍率上限：y = 1 + 天赋加成，封顶 1 + caps.huntYield。 */
+const TALENT_YIELD_CAP = TALENT_RULES.caps.huntYield
 
 /** 兽材小数余量的存档上限：不足一件的部分只保留 [0, 1)。 */
 const REMAINDER_CAP = money(0.999999)
@@ -52,7 +60,10 @@ export function createHuntingState() {
     },
     settings: {
       selectedFieldId: DEFAULT_HUNT_FIELD,
+      /** 钉选名单：自动组队时必入的优先人选 */
       teamIds: [],
+      /** 自动组队人数上限（钉选可少量超出） */
+      autoTeamSize: HUNT.TEAM_MAX,
       autoRepeat: false,
     },
   }
@@ -94,11 +105,23 @@ function sanitizeStats(value) {
   return out
 }
 
+/** 自动组队人数上限：非法值回默认 5，范围内夹取取整。 */
+function normalizeAutoTeamSize(value) {
+  return Number.isFinite(value)
+    ? Math.max(HUNT.TEAM_MIN, Math.min(HUNT.TEAM_MAX, Math.floor(value)))
+    : HUNT.TEAM_MAX
+}
+
 function sanitizeSettings(value) {
   const fieldId = Object.hasOwn(HUNT_FIELD_MAP, value?.selectedFieldId) ? value.selectedFieldId : DEFAULT_HUNT_FIELD
   const teamIds = (Array.isArray(value?.teamIds) ? value.teamIds : [])
     .filter(id => Number.isSafeInteger(id) && id > 0).slice(0, HUNT.TEAM_MAX)
-  return { selectedFieldId: fieldId, teamIds: [...new Set(teamIds)], autoRepeat: value?.autoRepeat === true }
+  return {
+    selectedFieldId: fieldId,
+    teamIds: [...new Set(teamIds)],
+    autoTeamSize: normalizeAutoTeamSize(value?.autoTeamSize),
+    autoRepeat: value?.autoRepeat === true,
+  }
 }
 
 function sanitizeMissions(value) {
@@ -134,7 +157,9 @@ function sanitizeMissions(value) {
       yieldBonus: mission.yieldBonus, baseYield: moneyYieldMap(field.baseYield), advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
       preparationPaid: WARRANT_COST,
       snapshots: mission.snapshots.map(snap => ({ id: snap.id, name: typeof snap.name === 'string' ? snap.name.slice(0, 40) : `弟子${snap.id}`,
-        realm: snap.realm, e: snap.e, A: snap.A, p: snap.p, roleId: JOBS.some(j => j.id === snap.roleId) ? snap.roleId : null })),
+        realm: snap.realm, e: snap.e, A: snap.A, p: snap.p,
+        y: Number.isFinite(snap.y) && snap.y >= 1 && snap.y <= 1 + TALENT_YIELD_CAP ? snap.y : 1,
+        roleId: JOBS.some(j => j.id === snap.roleId) ? snap.roleId : null })),
     }
     if (Object.keys(out).length >= HUNT.MAX_ACTIVE_MISSIONS) break
   }
@@ -258,14 +283,43 @@ export function evaluateTeam(state, derived, fieldId, teamIds) {
     seen.add(id)
     const e = Math.min(member.realm, sect)
     const A = 2 ** clamp((e - field.recommendRealm) / 2, -2, 1)
+    // 个人猎杀天赋：huntSuccess 加成功率百分点，huntYield 加个人收获倍率 y。
     const p = clamp(
-      field.successBase + 0.06 * (e - field.recommendRealm) + 0.02 * clamp(sect - field.entryRealm, 0, 3) + successBonus,
+      field.successBase + 0.06 * (e - field.recommendRealm) + 0.02 * clamp(sect - field.entryRealm, 0, 3) + successBonus
+        + talentBonus(member, 'huntSuccess'),
       HUNT.SUCCESS_FLOOR,
       HUNT.SUCCESS_CAP,
     )
-    rows.push({ id: member.id, name: member.name, realm: member.realm, e, A, p, support })
+    const y = 1 + talentBonus(member, 'huntYield')
+    rows.push({ id: member.id, name: member.name, realm: member.realm, e, A, p, y, support })
   }
   return rows
+}
+
+/**
+ * 自动组队（v0.421 起出征默认流程）：不再逐人手选。
+ * 分层必入/优先：钉选（settings.teamIds）可用者必入 → 持猎杀天赋者 → 闲散（无岗位）→ 在岗；
+ * 层内按期望贡献 A×p×y 降序、同分按 id 升序，最多 autoTeamSize 人（钉选数可顶破上限，仍受 TEAM_MAX 约束）。
+ * 返回成员 id 列表；无可用弟子时返回空数组，由 canDepart 统一给出失败原因。
+ */
+export function autoPickTeam(state, derived, fieldId) {
+  const field = HUNT_FIELD_MAP[fieldId]
+  if (!field) return []
+  const settings = state.hunting?.settings || {}
+  const size = normalizeAutoTeamSize(settings.autoTeamSize)
+  const pinned = new Set(settings.teamIds || [])
+  const byId = new Map((state.disciples?.members || []).map(m => [m.id, m]))
+  const candidates = huntableMembers(state).filter(m => m.realm >= (field.minDiscipleRealm || 0))
+  const rows = evaluateTeam(state, derived, fieldId, candidates.map(m => m.id))
+  const tierOf = (row) => {
+    if (pinned.has(row.id)) return 0
+    const member = byId.get(row.id)
+    if (hasHuntTalent(member)) return 1
+    return member?.roleId ? 3 : 2
+  }
+  rows.sort((a, b) => tierOf(a) - tierOf(b) || b.A * b.p * b.y - a.A * a.p * a.y || a.id - b.id)
+  const pinnedCount = rows.filter(row => pinned.has(row.id)).length
+  return rows.slice(0, Math.min(HUNT.TEAM_MAX, Math.max(size, pinnedCount))).map(row => row.id)
 }
 
 /** 出征预览：预计成功人数与期望兽材（不消耗随机数）。 */
@@ -276,7 +330,7 @@ export function huntPreview(state, derived, fieldId, teamIds) {
   const support = rows[0]?.support ?? (1 + 0.1 * clamp(state.realm - field.entryRealm, 0, 4))
   const duration = huntDuration(field, derived?.huntDurationReduction || 0)
   const gain = 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0)
-  const expectedZ = rows.reduce((sum, row) => sum + row.A * (row.p + 0.2 * (1 - row.p)), 0)
+  const expectedZ = rows.reduce((sum, row) => sum + row.A * row.y * (row.p + 0.2 * (1 - row.p)), 0)
   const expectedSuccess = rows.reduce((sum, row) => sum + row.p, 0)
   const expectedGains = {}
   for (const [res, base] of Object.entries(field.baseYield || {})) {
@@ -301,7 +355,7 @@ export function canDepart(state, derived, fieldId, teamIds) {
   if (state.realm < field.entryRealm) return { ok: false, reason: '宗门境界不足' }
   if (activeMission(state)) return { ok: false, reason: '已有出征任务在进行' }
   const rows = evaluateTeam(state, derived, fieldId, teamIds)
-  if (rows.length < HUNT.TEAM_MIN) return { ok: false, reason: '请选择至少 1 名弟子' }
+  if (rows.length < HUNT.TEAM_MIN) return { ok: false, reason: '没有可出征的弟子' }
   if (rows.length > HUNT.TEAM_MAX) return { ok: false, reason: `每队最多 ${HUNT.TEAM_MAX} 人` }
   if (!atLeast(warrantBalance(state), WARRANT_COST)) return { ok: false, reason: `信符不足 ${HUNT.WARRANT_COST}` }
   return { ok: true }
@@ -309,12 +363,14 @@ export function canDepart(state, derived, fieldId, teamIds) {
 
 /**
  * 出发：原子扣信符、占用成员、保存快照。
+ * 未显式传 teamIds 时走自动组队（钉选必入、天赋与闲散优先）；
+ * 显式传入则完全按传入名单（测试与旧入口兼容）。
  * 连续点击不会重复支付或派出（同一成员已带 onMission 会被 evaluateTeam 过滤）。
  */
 export function departHunt(state, derived, { fieldId, teamIds } = {}) {
   const hunting = state.hunting
   const fid = fieldId || hunting.settings.selectedFieldId
-  const ids = teamIds || hunting.settings.teamIds
+  const ids = teamIds || autoPickTeam(state, derived, fid)
   const check = canDepart(state, derived, fid, ids)
   if (!check.ok) return { ok: false, reason: check.reason }
 
@@ -328,6 +384,7 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
     e: row.e,
     A: row.A,
     p: row.p,
+    y: row.y,
     roleId: byId.get(row.id)?.roleId || null,
   }))
 
@@ -363,8 +420,8 @@ export function departHunt(state, derived, { fieldId, teamIds } = {}) {
   hunting.missions[id] = mission
   hunting.statistics.departures += 1
   hunting.settings.selectedFieldId = fid
-  hunting.settings.teamIds = snapshots.map(s => s.id)
-  pushLog(state, `出征山麓：${snapshots.length} 名弟子持 ${HUNT.WARRANT_COST} 枚信符入山`, 'event')
+  // 钉选名单是玩家的长期偏好，不被本次出征结果覆写（v0.421 前曾以实际出征名单回写）。
+  pushLog(state, `出征${field.name}：${snapshots.length} 名弟子持 ${HUNT.WARRANT_COST} 枚信符入山`, 'event')
   return { ok: true, mission }
 }
 
@@ -429,10 +486,10 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
   for (const snap of mission.snapshots) {
     const success = huntRandom(hunting) < snap.p
     if (success) successCount++
-    // 山麓无进阶档：全部计入普通档；失败保底 0.20。
+    // 山麓无进阶档：全部计入普通档；失败保底 0.20。y 为个人收获天赋倍率（旧档快照缺失时按 1）。
     const Z = success ? 1 : 0.2
     rows.push({ id: snap.id, name: snap.name, success })
-    effectiveContribution += snap.A * Z
+    effectiveContribution += snap.A * (snap.y ?? 1) * Z
   }
   const gains = {}
   const remainders = {}
@@ -497,10 +554,8 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
 }
 
 function autoRepeatDepart(state, derived, fieldId) {
-  const ids = state.hunting.settings.teamIds || []
-  const check = canDepart(state, derived, fieldId, ids)
-  if (!check.ok) return false
-  return departHunt(state, derived, { fieldId, teamIds: ids }).ok
+  // 自动重复每趟重新选队：归队后闲散/天赋/钉选优先级可能已变，不吃上一趟的名单。
+  return departHunt(state, derived, { fieldId }).ok
 }
 
 /**
@@ -513,8 +568,8 @@ function autoRepeatDepart(state, derived, fieldId) {
 export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
   const support = rows[0]?.support ?? 1
   const yieldBonus = 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0)
-  const expectedZ = rows.reduce((sum, row) => sum + row.A * (row.p + 0.2 * (1 - row.p)), 0)
-  const maximumZ = rows.reduce((sum, row) => sum + row.A, 0)
+  const expectedZ = rows.reduce((sum, row) => sum + row.A * row.y * (row.p + 0.2 * (1 - row.p)), 0)
+  const maximumZ = rows.reduce((sum, row) => sum + row.A * row.y, 0)
   const scale = trips * support * yieldBonus * field.baseDuration
   // base 是金额；scale 与 factor（期望/上限贡献）是 Number，逐项在 Decimal 域相乘。
   const scaleBy = factor => Object.fromEntries(Object.entries(field.baseYield || {})
@@ -570,7 +625,8 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
   const fieldId = mission?.fieldId || hunting.settings.selectedFieldId
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field) return changed
-  const ids = hunting.settings.teamIds || []
+  // 与在线口径一致：自动重复的每一趟都重新自动组队（钉选必入、天赋与闲散优先）。
+  const ids = autoPickTeam(state, derived, fieldId)
   // 批量出征与末趟共用在线出征条件：研究、执符堂、境界、队伍、占用与信符都先过一遍。
   if (!canDepart(state, derived, fieldId, ids).ok) return changed
   const rows = evaluateTeam(state, derived, fieldId, ids)
@@ -632,6 +688,12 @@ export function setHuntTeam(state, teamIds) {
 
 export function setHuntAutoRepeat(state, value) {
   state.hunting.settings.autoRepeat = value === true
+  return true
+}
+
+/** 设置自动组队人数上限（1~5，钉选可顶破上限但仍受每队上限约束）。 */
+export function setHuntAutoTeamSize(state, value) {
+  state.hunting.settings.autoTeamSize = normalizeAutoTeamSize(value)
   return true
 }
 

@@ -22,7 +22,7 @@
 | --- | --- |
 | [ROADMAP](ROADMAP.md) | 全部待办与阶段排期：P0上线收尾→P1节奏经济→P2弟子减负→P3誓约→P4猎场→P5事务→P6评审；D5＋D9首版已完成，D3在P1末复评 |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
-| [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现，深山、禁地与生态来袭联动待扩展 |
+| [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现；P4 交付计划已定（复评→深山→禁地→生态），待实施 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |
 
 ## 测量与对照参考
