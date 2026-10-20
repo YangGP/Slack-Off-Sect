@@ -1,3 +1,4 @@
+import { setResourceValue } from '../resourceObservation'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { BUILDING_MAP } from '@/data/buildings'
@@ -10,6 +11,7 @@ import { gameNow } from '../context'
 import { getEventLevel } from '@/data/events'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { isEntryEnabled } from '@/data/modules'
+import { karmaShopBonuses } from './karmaShop'
 
 export function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v
@@ -52,7 +54,7 @@ export function karmaMultipliers(amount) {
   const karma = moneyMax(ZERO, amount ?? ZERO)
   return {
     karmaMult: ONE.plus(softCap(karma.times(CONFIG.KARMA_BONUS_PER_POINT), CONFIG.KARMA_BONUS_CAP)),
-    karmaStorageMult: ONE.plus(karma.times(CONFIG.KARMA_STORAGE_PER_POINT)),
+    karmaStorageMult: ONE.plus(softCap(karma.times(CONFIG.KARMA_STORAGE_PER_POINT), CONFIG.KARMA_STORAGE_CAP)),
   }
 }
 
@@ -285,7 +287,8 @@ export function canAfford(state, cost, times = 1) {
 export function payCost(state, cost, times = 1) {
   trackPeak(state)
   for (const k in cost) {
-    state.resources[k] = moneyAvailable(state.resources[k] ?? ZERO, money(cost[k]).times(times))
+    setResourceValue(state, k, moneyAvailable(state.resources[k] ?? ZERO, money(cost[k]).times(times)),
+      () => ({ source: 'systems/core.js:payCost', requested: money(cost[k]).times(times).toString() }))
   }
 }
 
@@ -305,8 +308,12 @@ export function addResource(state, id, amount, capacity = MONEY_INFINITY) {
   }
   if (next.isNegative()) next = ZERO
   // 整枚计数的资源（灵石/丹药/符箓/法器）不留小数：事件按百分比增减、旧存档都可能带小数
+  const beforeIntegerRounding = next
   if (meta?.integer) next = next.floor()
-  state.resources[id] = next
+  setResourceValue(state, id, next, () => ({ source: 'systems/core.js:addResource', requested: gain.toString(),
+    capacity: cap.isFinite() ? cap.toString() : 'unlimited',
+    netClipped: gain.gt(0) ? gain.minus(beforeIntegerRounding.minus(before)).toString() : '0',
+    roundingLoss: beforeIntegerRounding.minus(next).toString() }))
   if (next.gt(0)) state.seen[id] = true
   trackPeak(state)
   return next.minus(before)
@@ -335,18 +342,22 @@ export function scaleCost(cost, factor) {
   return roundCost(out)
 }
 
-/** 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。 */
-export function buildingPriceAt(meta, index) {
-  const factor = money(meta.priceRatio || 1.15).pow(index)
+/**
+ * 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。
+ * discount 是仙缘修持「道基共鸣」的造价折扣（0~1，取自 karmaShopBonuses），乘 (1−discount)；
+ * 拆除退款等名义价场景不传折扣，保持原价（买入打折、退款不打折，往返净亏损，无套利）。
+ */
+export function buildingPriceAt(meta, index, discount = 0) {
+  const factor = money(meta.priceRatio || 1.15).pow(index).times(ONE.minus(money(discount)))
   const cost = scaleCost(meta.cost, factor)
   return cost
 }
 
 /** 购买 count 座建筑从 from 开始的总价：逐座取整后再求和，不用几何总和代替。 */
-export function buildingCostFrom(meta, from, count) {
+export function buildingCostFrom(meta, from, count, discount = 0) {
   const total = {}
   for (let i = 0; i < count; i++) {
-    const price = buildingPriceAt(meta, from + i)
+    const price = buildingPriceAt(meta, from + i, discount)
     for (const k in price) total[k] = (total[k] ?? ZERO).plus(price[k])
   }
   return total
@@ -355,7 +366,7 @@ export function buildingCostFrom(meta, from, count) {
 export function buildingCost(state, id, count = 1) {
   const meta = BUILDING_MAP[id]
   if (!meta) return {}
-  return buildingCostFrom(meta, countOf(state, id), count)
+  return buildingCostFrom(meta, countOf(state, id), count, karmaShopBonuses(state).buildingDiscount)
 }
 
 /** 在现有资源下最多能买几座（上限 cap 防止死循环） */
@@ -363,10 +374,11 @@ export function maxAffordable(state, id, cap = 500) {
   const meta = BUILDING_MAP[id]
   if (!meta) return 0
   const from = countOf(state, id)
+  const discount = karmaShopBonuses(state).buildingDiscount
   const running = {}
   let n = 0
   for (; n < cap; n++) {
-    const price = buildingPriceAt(meta, from + n)
+    const price = buildingPriceAt(meta, from + n, discount)
     let ok = true
     for (const k in price) {
       const have = state.resources[k] ?? ZERO

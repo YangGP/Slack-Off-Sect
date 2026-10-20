@@ -18,6 +18,7 @@ import * as power from './power.mjs'
 import * as materials from './materials.mjs'
 import * as money from './money.mjs'
 import * as extensions from './extensions.mjs'
+import * as karmashop from './karmashop.mjs'
 
 export const smokeChecks = [
   catalog.dataIntegrity,

@@ -1,5 +1,7 @@
 # 工具维护说明
 
+完整资源流水、检查点恢复与报告重建见 [资源测定记录](RESOURCE-RECORDING.md)。
+
 日常使用 `package.json` 中的 npm 命令。`node tools/run.mjs --list` 列出需要 Vite SSR 构建的入口；运行器统一构建、转发参数和退出码，并用独立进程隔离临时数值修改。不要复制新的 `vite build && node` 命令。
 
 ## 检查
@@ -41,6 +43,7 @@
 | `npm run audit:review -- 72 12345 natural on` | 综合进度报告；小时数、种子、guaranteed/natural、自动分工 on/off |
 | `npm run balance:events -- 24 0` | 事件种子与应对策略对照 |
 | `npm run balance:visits -- 24` | 固定开局及随机流，不同上线频率对照 |
+| `npm run balance:track -- 0 12345` | 完整飞升测定：复用P1模拟器和资源记录器，实际飞升后输出阶段收支、阻塞、损失、节奏与检查点，见[说明](BALANCE-TRACKING.md) |
 | `npm run bench:craft` | Vue 响应式状态下批量制作性能及扣料一致性 |
 | `npm run bench:offline -- "存档路径.txt" 28800 .smoke-offline-benchmark/result.json async` | 离线基准；首个参数可换成 `--fixture` 使用长离线专项夹具（72 名弟子、多配方工业、凝灵诀与自动猎杀，刻意让工业与自动重复在每个分段都有活干）。模式 optimized/reference/async，输出快照可选，禁止覆盖输入存档 |
 | `npm run docs:tables` | 从数据源码重新生成 TABLES |
@@ -68,6 +71,8 @@ v7可指定`--details=decisions`，仅在5秒等待批次中省略悬停来源�
 
 经济边际报价只读副本，区分已学研究贡献和下一座设施增量。各资源分别列回收自身投入的秒数，null代表没有该资源直接净增产；不相加异种资源，也不把瞬发手动加工解释为效率专精收益。净额包含当前自动加工耗料，仍受当前人口、库存、供给和季节限制，不能替代实际长期回本测量。
 
+完整飞升测定（`balance:track`）现统一复用 `pacing-scenario.mjs` 与 `resource-recorder.mjs`，默认自然突破概率、满配可用护道、持续在线、关闭事件及香火投资；实际执行飞升并核对仙缘／道果／计数／重置状态后才算完成。兼容位置参数 `[hours] [seed]`，0或省略时观察上限为3024游戏小时，累计计算预算最多7200秒。资源记录强制开启，按世次与境界访问导出阶段收支、支出去向、加工产量、截断／逸散／重置损失、缺料／仓容／加工状态时长、关键快照及节奏；金额保留十进制字符串。数据与检查点同存 `.resource-records/<runId>/`，支持原bundle恢复与只读重建。`--mode=reincarnate` 可在实际炼虚转世后结束。旧遥测报告与新策略不可直接混比，全部参数和输出边界见[完整飞升测定](BALANCE-TRACKING.md)。
+
 ## 公共实现
 
 - `lib/checks.mjs`：smoke、SSR、DOM 共用断言统计和控制台捕获。
@@ -80,6 +85,8 @@ v7可指定`--details=decisions`，仅在5秒等待批次中省略悬停来源�
 - `dom-entry.js` / `vite.domcheck.config.js`、`startup-entry.js`：分别提供客户端 DOM 与真实 main 启动夹具，保留不同构建方式。
 
 新增脚本应先明确属于检查、报告还是基准，优先扩展现有入口。SSR 入口在 `run.mjs` 白名单登记，再添加 npm 命令。构建不清空报告目录，避免重跑时丢失旧测量；产物由 `clean` 显式统一清除。历史审计文档中的旧命令仅记录当时的测量方式。
+
+完整测定以已落盘资源变动和独立期初／期末对账为基础；连续生产与维护的毛收支仍是模型，阻塞与满仓时长仍按观察区间采样，不能仅凭低库存认定破境卡点。详见 [资源记录](RESOURCE-RECORDING.md)。
 
 ### P1 无上限加工基线（2026-10-18）
 

@@ -14,7 +14,9 @@ export const commands = {
   'breakthrough-time-audit': '.smoke-breakthrough-time', 'breakthrough-risk-model': '.smoke-breakthrough-risk',
   'event-balance': '.smoke-event-balance', playstyles: '.smoke-visits',
   'balance-review': '.smoke-balance-review', 'craft-performance': '.smoke-craft-performance',
-  'offline-benchmark': '.smoke-offline-benchmark',
+  'offline-benchmark': '.smoke-offline-benchmark', 'diagnostics-check': '.smoke-diagnostics', 'recording-check': '.smoke-recording',
+  'resource-report': '.smoke-resource-report',
+  'balance-telemetry': '.smoke-balance-track',
 }
 
 const [name, ...args] = process.argv.slice(2)
@@ -24,7 +26,8 @@ else {
   const root = fileURLToPath(new URL('../', import.meta.url))
   // 报告和基准结果与构建产物同目录，重跑时保留既有测量，统一由 clean 清理。
   await build({ root, build: { ssr: resolve(root, 'tools', `${name}.mjs`), outDir: commands[name], emptyOutDir: false } })
-  const result = spawnSync(process.execPath, [resolve(root, commands[name], `${name}.js`), ...args], { cwd: root, stdio: 'inherit' })
+  const result = spawnSync(process.execPath, [resolve(root, commands[name], `${name}.js`), ...args], {
+    cwd: root, stdio: 'inherit', timeout: ['recording-check', 'diagnostics-check'].includes(name) ? 5000 : undefined })
   if (result.error) throw result.error
   process.exitCode = result.status ?? 1
 }

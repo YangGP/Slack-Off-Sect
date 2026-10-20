@@ -1,3 +1,5 @@
+import { withResourceAction } from '../../game/resourceObservation'
+import { setResourceValue } from '../../game/resourceObservation'
 import { HUNT, HUNT_FIELD_MAP, DEFAULT_HUNT_FIELD } from './data.js'
 import { JOBS } from '@/data/jobs'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -405,52 +407,55 @@ export function canDepart(state, derived, fieldId, teamIds) {
  * 不占用成员、不清空 roleId、不创建任务；手动成功会重置自动计时。
  */
 export function departHunt(state, derived, { fieldId, teamIds, resetTimer = true } = {}) {
-  const hunting = state.hunting
-  const fid = fieldId || hunting.settings.selectedFieldId
-  const ids = teamIds ?? resolveHuntTeam(state, derived, fid)
-  const check = canDepart(state, derived, fid, ids)
-  if (!check.ok) return { ok: false, reason: check.reason }
+  return withResourceAction(state, { type: 'departHunt', id: fieldId }, () => {
+    const hunting = state.hunting
+    const fid = fieldId || hunting.settings.selectedFieldId
+    const ids = teamIds ?? resolveHuntTeam(state, derived, fid)
+    const check = canDepart(state, derived, fid, ids)
+    if (!check.ok) return { ok: false, reason: check.reason }
 
-  const field = HUNT_FIELD_MAP[fid]
-  const rows = evaluateTeam(state, derived, fid, ids)
-  const byId = new Map(state.disciples.members.map(m => [m.id, m]))
-  const snapshots = rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    realm: row.realm,
-    e: row.e,
-    A: row.A,
-    p: row.p,
-    y: row.y,
-    roleId: byId.get(row.id)?.roleId || null,
-  }))
-  const cost = warrantCost(derived)
-  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, cost)
-  hunting.statistics.departures += 1
-  hunting.settings.selectedFieldId = fid
-  if (resetTimer) hunting.settings.elapsedSeconds = 0
+    const field = HUNT_FIELD_MAP[fid]
+    const rows = evaluateTeam(state, derived, fid, ids)
+    const byId = new Map(state.disciples.members.map(m => [m.id, m]))
+    const snapshots = rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      realm: row.realm,
+      e: row.e,
+      A: row.A,
+      p: row.p,
+      y: row.y,
+      roleId: byId.get(row.id)?.roleId || null,
+    }))
+    const cost = warrantCost(derived)
+    setResourceValue(state, "warrant", moneyAvailable(state.resources.warrant ?? ZERO, cost), { source: 'hunting/system.js:departHunt' })
+    hunting.statistics.departures += 1
+    hunting.settings.selectedFieldId = fid
+    if (resetTimer) hunting.settings.elapsedSeconds = 0
 
-  const mission = {
-    id: hunting.nextMissionId++,
-    fieldId: fid,
-    status: 'active',
-    startedAt: gameNow(state),
-    progressSeconds: 0,
-    baseDuration: field.baseDuration,
-    actualDuration: 0,
-    formulaVersion: HUNT_SCHEMA_VERSION,
-    sectRealm: state.realm,
-    support: 1 + 0.1 * clamp(state.realm - field.entryRealm, 0, 4),
-    successBonus: derived?.huntSuccessBonus || 0,
-    yieldBonus: 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0),
-    baseYield: moneyYieldMap(field.baseYield),
-    advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
-    snapshots,
-    preparationPaid: cost,
-  }
-  const outcome = settleMission(state, derived, mission, { autoRepeat: false })
-  recount(state)
-  return { ok: true, mission, outcome }
+    const mission = {
+      id: hunting.nextMissionId++,
+      fieldId: fid,
+      status: 'active',
+      startedAt: gameNow(state),
+      progressSeconds: 0,
+      baseDuration: field.baseDuration,
+      actualDuration: 0,
+      formulaVersion: HUNT_SCHEMA_VERSION,
+      sectRealm: state.realm,
+      support: 1 + 0.1 * clamp(state.realm - field.entryRealm, 0, 4),
+      successBonus: derived?.huntSuccessBonus || 0,
+      yieldBonus: 1 + Math.min(HUNT.YIELD_BONUS_CAP, derived?.huntYieldBonus || 0),
+      baseYield: moneyYieldMap(field.baseYield),
+      advancedYield: field.advancedYield ? moneyYieldMap(field.advancedYield) : null,
+      snapshots,
+      preparationPaid: cost,
+    }
+    const outcome = settleMission(state, derived, mission, { autoRepeat: false })
+    recount(state)
+    return { ok: true, mission, outcome }
+
+  })
 }
 
 /** 取消已不存在；保留空入口兼容旧调用。 */
@@ -504,75 +509,78 @@ export function advanceHunt(state, derived, dt) {
  * 否则这里的「立即再出发」会把队员再次标记为出征，让快进拿不到队伍与剩余时长。
  */
 export function settleMission(state, derived, mission, { autoRepeat = true } = {}) {
-  const hunting = state.hunting
-  const rows = []
-  let successCount = 0
-  let effectiveContribution = 0
-  for (const snap of mission.snapshots) {
-    const success = huntRandom(hunting) < snap.p
-    if (success) successCount++
-    // 山麓无进阶档：全部计入普通档；失败保底 0.20。y 为个人收获天赋倍率（旧档快照缺失时按 1）。
-    const Z = success ? 1 : 0.2
-    rows.push({ id: snap.id, name: snap.name, success })
-    effectiveContribution += snap.A * (snap.y ?? 1) * Z
-  }
-  const gains = {}
-  const remainders = {}
-  for (const [res, base] of Object.entries(mission.baseYield || {})) {
-    // base 与余量是金额，baseDuration / support / contribution / yieldBonus 是 Number。
-    const y = money(base)
-      .times(mission.baseDuration)
-      .times(mission.support)
-      .times(effectiveContribution)
-      .times(mission.yieldBonus)
-    const total = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
-    const whole = floorMoney(total)
-    hunting.yieldRemainders[res] = total.minus(whole)
-    remainders[res] = hunting.yieldRemainders[res]
-    if (whole.gt(0)) {
-      gains[res] = addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
-    } else {
-      gains[res] = ZERO
+  return withResourceAction(state, { type: 'settleMission', id: mission?.fieldId }, () => {
+    const hunting = state.hunting
+    const rows = []
+    let successCount = 0
+    let effectiveContribution = 0
+    for (const snap of mission.snapshots) {
+      const success = huntRandom(hunting) < snap.p
+      if (success) successCount++
+      // 山麓无进阶档：全部计入普通档；失败保底 0.20。y 为个人收获天赋倍率（旧档快照缺失时按 1）。
+      const Z = success ? 1 : 0.2
+      rows.push({ id: snap.id, name: snap.name, success })
+      effectiveContribution += snap.A * (snap.y ?? 1) * Z
     }
-  }
+    const gains = {}
+    const remainders = {}
+    for (const [res, base] of Object.entries(mission.baseYield || {})) {
+      // base 与余量是金额，baseDuration / support / contribution / yieldBonus 是 Number。
+      const y = money(base)
+        .times(mission.baseDuration)
+        .times(mission.support)
+        .times(effectiveContribution)
+        .times(mission.yieldBonus)
+      const total = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
+      const whole = floorMoney(total)
+      hunting.yieldRemainders[res] = total.minus(whole)
+      remainders[res] = hunting.yieldRemainders[res]
+      if (whole.gt(0)) {
+        gains[res] = addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
+      } else {
+        gains[res] = ZERO
+      }
+    }
 
-  hunting.statistics.completedMissions += 1
-  hunting.statistics.successfulHunters += successCount
-  hunting.statistics.failedHunters += rows.length - successCount
+    hunting.statistics.completedMissions += 1
+    hunting.statistics.successfulHunters += successCount
+    hunting.statistics.failedHunters += rows.length - successCount
 
-  const field = HUNT_FIELD_MAP[mission.fieldId]
-  const fieldState = hunting.fieldState[mission.fieldId] || {}
-  fieldState.lastHuntAt = gameNow(state)
-  fieldState.completedMissions = (fieldState.completedMissions || 0) + 1
-  fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successCount
-  fieldState.failedHunters = (fieldState.failedHunters || 0) + (rows.length - successCount)
-  hunting.fieldState[mission.fieldId] = fieldState
+    const field = HUNT_FIELD_MAP[mission.fieldId]
+    const fieldState = hunting.fieldState[mission.fieldId] || {}
+    fieldState.lastHuntAt = gameNow(state)
+    fieldState.completedMissions = (fieldState.completedMissions || 0) + 1
+    fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successCount
+    fieldState.failedHunters = (fieldState.failedHunters || 0) + (rows.length - successCount)
+    hunting.fieldState[mission.fieldId] = fieldState
 
-  releaseMembers(state, mission)
-  delete hunting.missions[mission.id]
-  hunting.lastOutcome = {
-    fieldId: mission.fieldId,
-    at: gameNow(state),
-    cancelled: false,
-    successCount,
-    teamSize: rows.length,
-    rows,
-    gains,
-    remainders,
-  }
-  recount(state)
+    releaseMembers(state, mission)
+    delete hunting.missions[mission.id]
+    hunting.lastOutcome = {
+      fieldId: mission.fieldId,
+      at: gameNow(state),
+      cancelled: false,
+      successCount,
+      teamSize: rows.length,
+      rows,
+      gains,
+      remainders,
+    }
+    recount(state)
 
-  const gainText = Object.entries(gains)
-    .filter(([, amount]) => amount.gt(0))
-    .map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`)
-    .join('、')
-  pushLog(
-    state,
-    `猎杀（${field?.name || mission.fieldId}）：${rows.length} 人成功 ${successCount} 人${gainText ? '，猎获 ' + gainText : '，暂无整数入库'}`,
-    successCount > 0 ? 'good' : 'bad',
-  )
+    const gainText = Object.entries(gains)
+      .filter(([, amount]) => amount.gt(0))
+      .map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`)
+      .join('、')
+    pushLog(
+      state,
+      `猎杀（${field?.name || mission.fieldId}）：${rows.length} 人成功 ${successCount} 人${gainText ? '，猎获 ' + gainText : '，暂无整数入库'}`,
+      successCount > 0 ? 'good' : 'bad',
+    )
 
-  return { gains, successCount, teamSize: rows.length }
+    return { gains, successCount, teamSize: rows.length }
+
+  })
 }
 
 /**
@@ -618,50 +626,53 @@ export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
  * 批量批次不写 lastOutcome：它是单趟战报的结构，多趟汇总会与存档校验口径冲突。
  */
 export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
-  if (!(dt > 0) || !state.hunting) return false
-  const changed = false
-  const hunting = state.hunting
-  const settings = hunting.settings
-  if (!settings.autoRepeat) return false
-  const interval = normalizeAutoInterval(settings.autoIntervalSeconds)
-  settings.autoIntervalSeconds = interval
-  const total = Math.max(0, Number(settings.elapsedSeconds) || 0) + dt
-  const periods = Math.floor((total + 1e-9) / interval)
-  settings.elapsedSeconds = total - periods * interval
-  if (periods <= 0) return changed
+  return withResourceAction(state, { type: 'advanceOfflineHunt', id: state.hunting?.fieldId }, () => {
+    if (!(dt > 0) || !state.hunting) return false
+    const changed = false
+    const hunting = state.hunting
+    const settings = hunting.settings
+    if (!settings.autoRepeat) return false
+    const interval = normalizeAutoInterval(settings.autoIntervalSeconds)
+    settings.autoIntervalSeconds = interval
+    const total = Math.max(0, Number(settings.elapsedSeconds) || 0) + dt
+    const periods = Math.floor((total + 1e-9) / interval)
+    settings.elapsedSeconds = total - periods * interval
+    if (periods <= 0) return changed
 
-  const fieldId = HUNT_FIELD_MAP[settings.selectedFieldId] ? settings.selectedFieldId : DEFAULT_HUNT_FIELD
-  const field = HUNT_FIELD_MAP[fieldId]
-  const ids = resolveHuntTeam(state, derived, fieldId)
-  if (!field || !canDepart(state, derived, fieldId, ids).ok) return changed
-  const cost = warrantCost(derived)
-  const affordable = moneyToCount(warrantBalance(state).div(cost))
-  const trips = Math.max(0, Math.min(periods, affordable))
-  if (trips <= 0) return changed
+    const fieldId = HUNT_FIELD_MAP[settings.selectedFieldId] ? settings.selectedFieldId : DEFAULT_HUNT_FIELD
+    const field = HUNT_FIELD_MAP[fieldId]
+    const ids = resolveHuntTeam(state, derived, fieldId)
+    if (!field || !canDepart(state, derived, fieldId, ids).ok) return changed
+    const cost = warrantCost(derived)
+    const affordable = moneyToCount(warrantBalance(state).div(cost))
+    const trips = Math.max(0, Math.min(periods, affordable))
+    if (trips <= 0) return changed
 
-  const rows = evaluateTeam(state, derived, fieldId, ids)
-  const estimate = huntBatchGainEstimate(field, rows, derived, trips)
-  for (const [res, y] of Object.entries(estimate.expected)) {
-    const sum = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
-    const whole = floorMoney(sum)
-    hunting.yieldRemainders[res] = sum.minus(whole)
-    if (whole.gt(0)) addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
-  }
-  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, cost.times(trips))
-  const hunters = rows.length * trips
-  const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
-  hunting.statistics.departures += trips
-  hunting.statistics.completedMissions += trips
-  hunting.statistics.successfulHunters += successes
-  hunting.statistics.failedHunters += hunters - successes
-  const fieldState = hunting.fieldState[field.id] || {}
-  fieldState.lastHuntAt = gameNow(state) + dt * 1000
-  fieldState.completedMissions = (fieldState.completedMissions || 0) + trips
-  fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successes
-  fieldState.failedHunters = (fieldState.failedHunters || 0) + hunters - successes
-  hunting.fieldState[field.id] = fieldState
-  if (ctx.stats) ctx.stats.huntBatches += 1
-  return true
+    const rows = evaluateTeam(state, derived, fieldId, ids)
+    const estimate = huntBatchGainEstimate(field, rows, derived, trips)
+    for (const [res, y] of Object.entries(estimate.expected)) {
+      const sum = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
+      const whole = floorMoney(sum)
+      hunting.yieldRemainders[res] = sum.minus(whole)
+      if (whole.gt(0)) addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
+    }
+    setResourceValue(state, "warrant", moneyAvailable(state.resources.warrant ?? ZERO, cost.times(trips)), { source: 'hunting/system.js:advanceOfflineHunt' })
+    const hunters = rows.length * trips
+    const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
+    hunting.statistics.departures += trips
+    hunting.statistics.completedMissions += trips
+    hunting.statistics.successfulHunters += successes
+    hunting.statistics.failedHunters += hunters - successes
+    const fieldState = hunting.fieldState[field.id] || {}
+    fieldState.lastHuntAt = gameNow(state) + dt * 1000
+    fieldState.completedMissions = (fieldState.completedMissions || 0) + trips
+    fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successes
+    fieldState.failedHunters = (fieldState.failedHunters || 0) + hunters - successes
+    hunting.fieldState[field.id] = fieldState
+    if (ctx.stats) ctx.stats.huntBatches += 1
+    return true
+
+  })
 }
 
 /** 设置：猎场 / 名单 / 自动重复（立即保存由调用方负责）。 */

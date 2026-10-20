@@ -2,6 +2,7 @@ node_modules
 dist
 dist-ssr
 .smoke*
+.resource-records/
 .bundle-review/
 *.local
 .DS_Store

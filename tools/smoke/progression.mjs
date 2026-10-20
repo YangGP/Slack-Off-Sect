@@ -204,7 +204,7 @@ export function reincarnation({ ok, close, section }) {
     const effectPreview = E.karmaMultipliers(E.money(10).plus(gain))
     ok('仙缘预览与重修后真实生产／仓储乘区一致', dv.karmaMult.eq(effectPreview.karmaMult) && dv.karmaStorageMult.eq(effectPreview.karmaStorageMult))
     const hugePreview = E.karmaMultipliers('1e1000')
-    ok('仙缘生产保持软上限且仓储线性无上限', hugePreview.karmaMult.isFinite() && hugePreview.karmaMult.lte(1 + CONFIG.KARMA_BONUS_CAP) && hugePreview.karmaStorageMult.isFinite() && hugePreview.karmaStorageMult.eq(E.money('1e1000').times(CONFIG.KARMA_STORAGE_PER_POINT).plus(1)))
+    ok('仙缘生产与仓储均保持软上限', hugePreview.karmaMult.isFinite() && hugePreview.karmaMult.lte(1 + CONFIG.KARMA_BONUS_CAP) && hugePreview.karmaStorageMult.isFinite() && hugePreview.karmaStorageMult.lte(1 + CONFIG.KARMA_STORAGE_CAP))
     ok('转世后修真 / 技艺·法宝清空（与飞升一致）', Object.keys(st.upgrades).length === 0, Object.keys(st.upgrades).join(','))
     ok('转世后法宝等级清空', Object.keys(st.treasureLevels).length === 0)
     ok('转世后建筑 / 弟子 / 资源清空', Object.keys(st.buildings).length === 0 && st.disciples.total === 0 && E.moneyIsZero(st.resources.qi))

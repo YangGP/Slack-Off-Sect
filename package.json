@@ -31,6 +31,7 @@
     "audit:breakthrough-risk": "node tools/run.mjs breakthrough-risk-model",
     "balance:events": "node tools/run.mjs event-balance",
     "balance:visits": "node tools/run.mjs playstyles",
+    "balance:track": "node tools/run.mjs balance-telemetry",
     "docs:tables": "node tools/dump-tables.mjs",
     "audit:save": "node tools/run.mjs economy-audit --save",
     "audit:review": "node tools/run.mjs balance-review",

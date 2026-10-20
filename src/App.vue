@@ -20,6 +20,7 @@ import SkillPanel from './components/SkillPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
 import FaithPanel from './components/FaithPanel.vue'
+import KarmaPanel from './components/KarmaPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugPanel from './components/DebugPanel.vue'
@@ -41,6 +42,7 @@ const corePanels = {
   skills: SkillPanel,
   craft: CraftPanel,
   faith: FaithPanel,
+  karma: KarmaPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,

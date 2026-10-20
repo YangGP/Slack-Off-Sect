@@ -10,6 +10,7 @@ import { moduleSaveKeys, normalizeModuleSlices } from '@/game/moduleRegistry'
 import { ZERO, floorMoney, moneyNonNegative } from '@/game/decimal'
 import { normalizeAnalytics } from '@/game/analyticsState'
 import { D7_RULESET, normalizeFaithProgression } from '@/data/faith'
+import { normalizeKarmaProgression } from '@/data/karmaShop'
 
 /** 存档结构版本：v3 起金额字段以十进制字符串保存（v1/v2 为 JSON number）。 */
 export const SAVE_VERSION = 3
@@ -21,7 +22,7 @@ const CORE_SAVE_FIELDS = [
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'analytics', 'ui',
-  'ruleset', 'faithProgression',
+  'ruleset', 'faithProgression', 'karmaProgression',
 ]
 export const SAVE_FIELDS = [...CORE_SAVE_FIELDS, ...moduleSaveKeys()]
 
@@ -61,7 +62,7 @@ export function assertSaveShape(data) {
   }
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
     'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
-    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', 'legacyWarehouseCounts', ...moduleSaveKeys()]) {
+    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', 'karmaProgression', 'legacyWarehouseCounts', ...moduleSaveKeys()]) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
   for (const key of ['jobs']) {
@@ -71,6 +72,11 @@ export function assertSaveShape(data) {
   for (const key of ['rituals', 'cultivation']) {
     if (data.faithProgression?.[key] != null && !isRecord(data.faithProgression[key])) {
       throw new Error(`存档结构冲突：faithProgression.${key}`)
+    }
+  }
+  for (const key of ['levels']) {
+    if (data.karmaProgression?.[key] != null && !isRecord(data.karmaProgression[key])) {
+      throw new Error(`存档结构冲突：karmaProgression.${key}`)
     }
   }
   // 防止损坏的人数导致读档生成海量个体；不影响已有成员的正常存取。
@@ -97,6 +103,7 @@ export function validateState(state, fresh) {
   result.analytics = normalizeAnalytics(result.analytics)
   result.ruleset = D7_RULESET
   result.faithProgression = normalizeFaithProgression(result.faithProgression)
+  result.karmaProgression = normalizeKarmaProgression(result.karmaProgression)
   // 先定下模块开关：模块切片归一化要据此判断「关闭时丢弃活动状态」
   const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {

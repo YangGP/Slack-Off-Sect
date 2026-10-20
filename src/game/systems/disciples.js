@@ -1,3 +1,4 @@
+import { withResourceAction } from '../resourceObservation'
 import { JOBS } from '@/data/jobs'
 import { isJobUnlocked, pushLog, idleDisciples, canAfford, payCost, arrivalInterval, isManualRecruit, realmCost } from './core'
 import { syncDisciples, recountDisciples, discipleDismissalCost, cultivationRequired, DISCIPLE_GROWTH, DISCIPLE_AIDS, realmBaseChance, newDisciple, cultivateDisciple, SPIRITUAL_ROOT_MAP, RECRUIT_TIER_MAP, recruitCost, recruitRealmRange, rollRecruitRealm, rootBreakthroughBonus } from '@/data/disciples'
@@ -83,17 +84,20 @@ export function discipleDismissalPreview(state, ids) {
 
 /** 逐出整批支付，费用或人口变化时要求重新确认，不部分执行。 */
 export function dismissDisciples(state, derived, ids, quote = null) {
-  const preview = discipleDismissalPreview(state, ids)
-  if (quote && (!moneyEq(preview.cost.qi, quote.cost.qi) || preview.count !== quote.count)) return { dismissed: 0, reason: 'changed' }
-  if (!preview.count) return { dismissed: 0, reason: 'empty' }
-  if (!preview.affordable) return { dismissed: 0, reason: 'insufficient' }
-  payCost(state, preview.cost)
-  const selected = new Set(preview.ids)
-  state.disciples.members = state.disciples.members.filter(member => !selected.has(member.id))
-  recountDisciples(state.disciples)
-  pushLog(state, `逐出师门 ${preview.count} 人，支付灵气 ${preview.cost.qi}`, 'info')
-  recompute(state, derived)
-  return { dismissed: preview.count, cost: preview.cost }
+  return withResourceAction(state, { type: 'dismissDisciples', id: null }, () => {
+    const preview = discipleDismissalPreview(state, ids)
+    if (quote && (!moneyEq(preview.cost.qi, quote.cost.qi) || preview.count !== quote.count)) return { dismissed: 0, reason: 'changed' }
+    if (!preview.count) return { dismissed: 0, reason: 'empty' }
+    if (!preview.affordable) return { dismissed: 0, reason: 'insufficient' }
+    payCost(state, preview.cost)
+    const selected = new Set(preview.ids)
+    state.disciples.members = state.disciples.members.filter(member => !selected.has(member.id))
+    recountDisciples(state.disciples)
+    pushLog(state, `逐出师门 ${preview.count} 人，支付灵气 ${preview.cost.qi}`, 'info')
+    recompute(state, derived)
+    return { dismissed: preview.count, cost: preview.cost }
+
+  })
 }
 
 export function discipleBreakthroughPreview(state, member) {
@@ -137,27 +141,30 @@ function settleDiscipleBreakthrough(state, member, preview, random) {
  * 首版只损失本境修为与材料，不引入个人死亡或永久停滞。
  */
 export function breakthroughDisciples(state, derived, ids, random = () => gameRandom(state)) {
-  const selected = new Set(ids)
-  // 宗门破境材料保留：批量突破不得动用「当前宗门下一境破境材料」——扣完本次费用后，
-  // 共享资源仍须 ≥ 宗门下一境该项（只检查本次费用实际包含的资源，已低于保留量时不在本动作修复）。
-  // 单人手动突破不受限（玩家显式操作）；关闭开关后批量也不受限。
-  const reserve = derived.discipleTrainingUnlocked && ids.length > 1 && state.settings?.sectBreakthroughReserve !== false
-    ? realmCost(state, derived, state.realm + 1) || {} : {}
-  const result = { success: 0, failed: 0, skipped: 0, insufficient: false, reserved: 0 }
-  for (const member of trainingOrder(state.disciples.members)) {
-    if (!selected.has(member.id)) continue
-    const preview = discipleBreakthroughPreview(state, member)
-    if (!preview.ready) { result.skipped++; continue }
-    if (!preview.affordable) { result.insufficient = true; break }
-    if (Object.entries(reserve).some(([id, amount]) => Object.hasOwn(preview.cost, id) &&
-      moneyLt(moneySubtract(state.resources[id] ?? ZERO, preview.cost[id]), money(amount)))) { result.reserved++; break }
-    if (settleDiscipleBreakthrough(state, member, preview, random)) result.success++
-    else result.failed++
-  }
-  autoAssignTalentJobs(state)
-  if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}${result.reserved ? '，已保留宗门破境材料' : ''}`, result.failed ? 'info' : 'good')
-  recompute(state, derived)
-  return result
+  return withResourceAction(state, { type: 'breakthroughDisciples', id: null }, () => {
+    const selected = new Set(ids)
+    // 宗门破境材料保留：批量突破不得动用「当前宗门下一境破境材料」——扣完本次费用后，
+    // 共享资源仍须 ≥ 宗门下一境该项（只检查本次费用实际包含的资源，已低于保留量时不在本动作修复）。
+    // 单人手动突破不受限（玩家显式操作）；关闭开关后批量也不受限。
+    const reserve = derived.discipleTrainingUnlocked && ids.length > 1 && state.settings?.sectBreakthroughReserve !== false
+      ? realmCost(state, derived, state.realm + 1) || {} : {}
+    const result = { success: 0, failed: 0, skipped: 0, insufficient: false, reserved: 0 }
+    for (const member of trainingOrder(state.disciples.members)) {
+      if (!selected.has(member.id)) continue
+      const preview = discipleBreakthroughPreview(state, member)
+      if (!preview.ready) { result.skipped++; continue }
+      if (!preview.affordable) { result.insufficient = true; break }
+      if (Object.entries(reserve).some(([id, amount]) => Object.hasOwn(preview.cost, id) &&
+        moneyLt(moneySubtract(state.resources[id] ?? ZERO, preview.cost[id]), money(amount)))) { result.reserved++; break }
+      if (settleDiscipleBreakthrough(state, member, preview, random)) result.success++
+      else result.failed++
+    }
+    autoAssignTalentJobs(state)
+    if (result.success || result.failed) pushLog(state, `弟子突破：成功 ${result.success} 人，失败 ${result.failed} 人${result.insufficient ? '，材料不足，已停止' : ''}${result.reserved ? '，已保留宗门破境材料' : ''}`, result.failed ? 'info' : 'good')
+    recompute(state, derived)
+    return result
+
+  })
 }
 
 /**
@@ -267,21 +274,24 @@ export function recruitPreview(state, derived, tierId) {
 
 /** 主动招募一名弟子：满员／离开风险／未解锁或付不起则不执行、不扣料。 */
 export function recruitDisciple(state, derived, tierId) {
-  if (!isManualRecruit(state, derived)) return { recruited: 0, reason: 'locked' }
-  const preview = recruitPreview(state, derived, tierId)
-  if (!preview) return { recruited: 0, reason: 'unknown' }
-  if (preview.blockReason) return { recruited: 0, reason: preview.blockReason }
-  if (!preview.affordable) return { recruited: 0, reason: 'insufficient' }
-  payCost(state, preview.cost)
-  const realm = rollRecruitRealm(state.disciples, preview.tier, state.realm)
-  const member = newDisciple(state.disciples, null, { realm, quality: preview.tier, includeHunting: isModuleEnabled(state, 'hunting') })
-  state.disciples.members.push(member)
-  autoAssignTalentJobs(state)
-  recountDisciples(state.disciples)
-  state.stats.recruits += 1
-  pushLog(state, `礼聘${preview.tier.name}：${member.name}入我山门（${REALMS[member.realm].name}·${SPIRITUAL_ROOT_MAP[member.spiritualRoot].name}）`, 'good')
-  recompute(state, derived)
-  return { recruited: 1, member, cost: preview.cost }
+  return withResourceAction(state, { type: 'recruitDisciple', id: tierId }, () => {
+    if (!isManualRecruit(state, derived)) return { recruited: 0, reason: 'locked' }
+    const preview = recruitPreview(state, derived, tierId)
+    if (!preview) return { recruited: 0, reason: 'unknown' }
+    if (preview.blockReason) return { recruited: 0, reason: preview.blockReason }
+    if (!preview.affordable) return { recruited: 0, reason: 'insufficient' }
+    payCost(state, preview.cost)
+    const realm = rollRecruitRealm(state.disciples, preview.tier, state.realm)
+    const member = newDisciple(state.disciples, null, { realm, quality: preview.tier, includeHunting: isModuleEnabled(state, 'hunting') })
+    state.disciples.members.push(member)
+    autoAssignTalentJobs(state)
+    recountDisciples(state.disciples)
+    state.stats.recruits += 1
+    pushLog(state, `礼聘${preview.tier.name}：${member.name}入我山门（${REALMS[member.realm].name}·${SPIRITUAL_ROOT_MAP[member.spiritualRoot].name}）`, 'good')
+    recompute(state, derived)
+    return { recruited: 1, member, cost: preview.cost }
+
+  })
 }
 
 export function clearJobs(state, derived) {
@@ -304,20 +314,23 @@ export function discipleAidPreview(state, member) {
 
 /** 为指定弟子预付个人护道材料；已护道或到顶者跳过，材料不足即停止、不超支。 */
 export function applyDiscipleAid(state, derived, ids) {
-  const selected = new Set(ids)
-  const result = { applied: 0, skipped: 0, insufficient: false }
-  for (const member of state.disciples.members) {
-    if (!selected.has(member.id)) continue
-    if (member.aidBonus > 0) { result.skipped++; continue }
-    const preview = discipleAidPreview(state, member)
-    if (!preview.available) { result.skipped++; continue }
-    if (!preview.affordable) { result.insufficient = true; break }
-    payCost(state, preview.cost)
-    member.aidBonus = preview.bonus
-    result.applied++
-  }
-  recompute(state, derived)
-  return result
+  return withResourceAction(state, { type: 'applyDiscipleAid', id: null }, () => {
+    const selected = new Set(ids)
+    const result = { applied: 0, skipped: 0, insufficient: false }
+    for (const member of state.disciples.members) {
+      if (!selected.has(member.id)) continue
+      if (member.aidBonus > 0) { result.skipped++; continue }
+      const preview = discipleAidPreview(state, member)
+      if (!preview.available) { result.skipped++; continue }
+      if (!preview.affordable) { result.insufficient = true; break }
+      payCost(state, preview.cost)
+      member.aidBonus = preview.bonus
+      result.applied++
+    }
+    recompute(state, derived)
+    return result
+
+  })
 }
 
 /**

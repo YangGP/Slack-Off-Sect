@@ -81,10 +81,10 @@ export function moneyDomain({ ok, section }) {
 
     // 逐座报价：整枚资源的每座单价先向上取整，再逐座求和（不是几何总和）。
     const meta = BUILDING_MAP.warehouse
-    const units = Array.from({ length: 6 }, (_, index) => E.buildingPriceAt(meta, index, false))
+    const units = Array.from({ length: 6 }, (_, index) => E.buildingPriceAt(meta, index))
     ok('每座报价里的整枚资源已取整', units.every(price => Object.entries(price).every(([res, amount]) =>
       !RESOURCE_MAP[res]?.integer || amount.isInteger())))
-    const total = E.buildingCostFrom(meta, 0, 6, false)
+    const total = E.buildingCostFrom(meta, 0, 6)
     ok('总价等于逐座报价之和', Object.keys(total).every(res =>
       total[res].eq(E.moneySum(units.map(price => price[res] ?? ZERO)))))
     ok('整枚资源仓容是整数（比例加仓后仍取整）', (() => {

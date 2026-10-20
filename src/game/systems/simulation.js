@@ -1,3 +1,4 @@
+import { setResourceValue, observeResourceModel } from '../resourceObservation'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute, canReuseEconomy } from './economy'
@@ -145,14 +146,22 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
     let rate = derived.rates[r.id] ?? ZERO
     // 出项：弟子的灵气口粮 + 带维护费建筑的持续消耗（停用即停费）
     if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id]) // expense 里是负数
-    if (rate.isZero()) continue
+    if (rate.isZero()) {
+      observeResourceModel(state, r.id, () => ({ source: 'systems/simulation.js:tickStep', duration: cap,
+        precision: 'exact', modelGross: (derived.rates[r.id] ?? ZERO).times(cap).toString(),
+        modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(cap).toString() }))
+      continue
+    }
     const before = state.resources[r.id] ?? ZERO
     let next = before.plus(rate.times(cap))
     const max = derived.max[r.id] ?? MONEY_INFINITY
     // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
     if (next.gt(max) && rate.gt(0)) next = moneyMax(before, max)
     if (next.isNegative()) next = ZERO
-    state.resources[r.id] = requireFiniteMoney(next, `${r.id} 库存`)
+    setResourceValue(state, r.id, requireFiniteMoney(next, `${r.id} 库存`), () => ({ source: 'systems/simulation.js:tickStep',
+      duration: cap, precision: 'exact', modelGross: (derived.rates[r.id] ?? ZERO).times(cap).toString(),
+      modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(cap).toString(),
+      netClipped: rate.gt(0) ? before.plus(rate.times(cap)).minus(next).toString() : '0' }))
     if (next.gt(0)) state.seen[r.id] = true
     const gained = next.minus(before)
     if (r.id === 'qi' && gained.gt(0)) state.stats.totalQi = state.stats.totalQi.plus(gained)
@@ -173,8 +182,10 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   // 于是存量有稳态 —— 稳态 ≈ 产出 ÷ 逸散率（一台湮灭炉 0.06/秒 → 12 灵能）。
   // 衰减系数只与时间有关，保留 Number，随后参与 Decimal 金额乘法。
   if ((state.resources.qiEnergy ?? ZERO).gt(0)) {
+    const beforeDecay = state.resources.qiEnergy
     const left = state.resources.qiEnergy.times(Math.pow(1 - CONFIG.QI_ENERGY_DECAY, cap))
-    state.resources.qiEnergy = left.lt(1e-9) ? ZERO : left
+    setResourceValue(state, "qiEnergy", left.lt(1e-9) ? ZERO : left, () => ({ source: 'systems/simulation.js:energy-decay',
+      duration: cap, precision: 'exact', decayLoss: beforeDecay.minus(left.lt(1e-9) ? ZERO : left).toString() }))
   }
 
   // 2) 宜居度：灵气断供则下滑，供应正常则回升
@@ -466,14 +477,22 @@ function approximateSegment(state, derived, segment, opts) {
       if (r.noProduction || r.id === 'qiEnergy') continue
       let rate = derived.rates[r.id] ?? ZERO
       if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id])
-      if (rate.isZero()) continue
+      if (rate.isZero()) {
+        observeResourceModel(state, r.id, () => ({ source: 'systems/simulation.js:approximateSegment', duration: dt,
+          precision: 'approximate', modelGross: (derived.rates[r.id] ?? ZERO).times(dt).toString(),
+          modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(dt).toString() }))
+        continue
+      }
       const before = state.resources[r.id] ?? ZERO
       let next = before.plus(rate.times(dt))
       const max = derived.max[r.id] ?? MONEY_INFINITY
       // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
       if (next.gt(max) && rate.gt(0)) next = moneyMax(before, max)
       if (next.isNegative()) next = ZERO
-      state.resources[r.id] = requireFiniteMoney(next, `${r.id} 库存`)
+      setResourceValue(state, r.id, requireFiniteMoney(next, `${r.id} 库存`), () => ({ source: 'systems/simulation.js:approximateSegment',
+        duration: dt, precision: 'approximate', modelGross: (derived.rates[r.id] ?? ZERO).times(dt).toString(),
+        modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(dt).toString(),
+        netClipped: rate.gt(0) ? before.plus(rate.times(dt)).minus(next).toString() : '0' }))
       if (next.gt(0)) state.seen[r.id] = true
       const gained = next.minus(before)
       if (gained.gt(0)) {
@@ -500,7 +519,10 @@ function approximateSegment(state, derived, segment, opts) {
       const max = derived.max.qiEnergy ?? MONEY_INFINITY
       if (next.gt(max) && net.gt(0)) next = moneyMax(before, max)
       if (next.isNegative()) next = ZERO
-      state.resources.qiEnergy = requireFiniteMoney(next, '灵能库存')
+      setResourceValue(state, "qiEnergy", requireFiniteMoney(next, '灵能库存'), () => ({ source: 'systems/simulation.js:energy-combined',
+        duration: dt, precision: 'approximate', modelGross: (derived.rates.qiEnergy ?? ZERO).times(dt).toString(),
+        modelExpense: (derived.expense?.qiEnergy ?? ZERO).neg().times(dt).toString(),
+        decayAndClippingLoss: before.plus(net.times(dt)).minus(next).toString() }))
       if (next.gt(0)) state.seen.qiEnergy = true
     }
     trackPeak(state)

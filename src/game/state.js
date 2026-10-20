@@ -1,3 +1,4 @@
+import { withResourceAction, replaceResourceValues, setResourceValue } from './resourceObservation'
 import { SAVE_VERSION, assertSaveShape, validateState } from './saveSchema'
 import { gameNow, resetRuntimeCounters } from './context'
 import { RESOURCES } from '@/data/resources'
@@ -6,8 +7,9 @@ import { DEFAULT_QUICK_CRAFTS } from '@/data/crafts'
 import { defaultModules } from '@/data/modules'
 import { migrateState } from './migrations'
 import { initialModuleState, rehydrateModules, resetModules } from './moduleRegistry'
-import { ZERO, moneyIsPositive, moneyMax } from './decimal'
+import { ZERO, money, moneyIsPositive, moneyMax } from './decimal'
 import { D7_RULESET, createFaithProgression, normalizeFaithProgression } from '@/data/faith'
+import { KARMA_PERK_MAP, createKarmaProgression, normalizeKarmaProgression } from '@/data/karmaShop'
 import { decodeMoneyFields } from './moneyFields'
 import { createAnalyticsState } from './analyticsState'
 import { WAREHOUSE_CAPACITY_VERSION } from '@/data/buildings'
@@ -100,6 +102,7 @@ export function createInitialState(now = Date.now()) {
     analytics: createAnalyticsState(),
     // D7 香火修持：本世仪轨等级、永久道心修持等级与累计道心。
     faithProgression: createFaithProgression(),
+    karmaProgression: createKarmaProgression(),
 
     log: [],
     logSeq: 0,
@@ -192,8 +195,7 @@ export function normalizeState(state, { now = Date.now(), preferMembers = false 
 /**
  * 飞升：重置本世进度，把本世积累折算成仙缘带走。
  *
- * 有意不给「资源礼包」——开局仓储上限只有灵气 500 / 灵木 200，
- * 发再多资源也会被上限吃掉；飞升的收益体现在永久产出与仓储加成（仙缘）及保留的成就上。
+ * 默认从空资源重修；购买「随身遗物」后按等级携带固定灵气与灵机。
  */
 /** 转世：与飞升清空的东西完全一样，只记在转世计数上 */
 export function resetForReincarnation(state, karmaGain) {
@@ -212,58 +214,74 @@ export function resetForAscension(state, karmaGain) {
  * 区别只有两处：门槛（化神期 vs 渡劫期）与统计里记哪一个计数。
  */
 export function resetForRebirth(state, karmaGain, kind = 'ascension') {
-  const fresh = createInitialState(gameNow(state))
-  resetRuntimeCounters(state)
+  return withResourceAction(state, { type: 'resetForRebirth', id: null }, () => {
+    const fresh = createInitialState(gameNow(state))
+    resetRuntimeCounters(state)
 
-  // 道心与永久修持跨轮回保留；愿力、仪轨与一次性专属研究随本世清空。
-  const keptFaith = normalizeFaithProgression(state.faithProgression)
-  const keptDaoHeart = moneyMax(ZERO, state.resources?.daoHeart ?? ZERO)
-  const keptPeakDaoHeart = moneyMax(keptDaoHeart, state.peak?.daoHeart ?? ZERO)
-  state.resources = { ...fresh.resources, daoHeart: keptDaoHeart }
-  // 飞升是「转世重修」：连开局那点家底也没有，跟第一次开山一样从点击起步（§3.4）
-  state.seen = { qi: true, ...(moneyIsPositive(keptDaoHeart) ? { daoHeart: true } : {}) }
-  state.peak = moneyIsPositive(keptPeakDaoHeart) ? { daoHeart: keptPeakDaoHeart } : {}
-  state.faithProgression = { ...createFaithProgression(), cultivation: { ...keptFaith.cultivation }, totalDaoHeart: keptFaith.totalDaoHeart }
-  state.disciples = { ...fresh.disciples, jobs: { ...fresh.disciples.jobs }, members: [] }
-  state.arrivalTimer = 0
-  state.buildings = {}
-  state.starterHutBuilt = false
-  state.starterHutStanding = false
-  state.upgrades = {}
-  state.upgradeEnabled = {}
-  state.treasureLevels = {}
-  state.craftProgress = {}
-  state.craftTimers = {}
-  state.craftOrders = {}
-  state.industryVersion = 1
-  state.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
-  state.legacyWarehouseCounts = { depot: 0, mysticVault: 0 }
-  state.alchemyProgressionVersion = 1
-  state.legacyNineTurnPill = false
-  state.scriptureArchiveVersion = 1
-  state.autoCraft = {}
-  state.craftTargets = {}
-  state.realm = 0
-  // 仙缘与道果是金额：加法走 Decimal，不能原生相加（会把数值拼成字符串）。
-  state.karma = moneyMax(ZERO, state.karma ?? ZERO).plus(karmaGain ?? ZERO)
-  // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
-  if (kind === 'ascension') state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(1).floor()
-  // 永久货币镜像立即同步：转世/飞升后 resources.karma/dao 必须与顶层字段同值，
-  // 否则界面与下一次写档会出现两套金额（旧实现只在读档校验里补镜像）。
-  state.resources.karma = state.karma
-  state.resources.dao = state.dao
-  state.habitabilityPenalty = 0
-  state.starvationTimer = 0
-  state.leaveTimer = 0
-  state.buffs = []
-  state.pendingChoice = null
-  state.affairs = { ...fresh.affairs }
-  resetModules(state, fresh)
-  state.stats.lifeInsight = ZERO
-  if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
-  else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1
-  else state.stats.ascensions += 1
-  state.nextEventAt = gameNow(state) + 90000
-  state.lastTickAt = gameNow(state)
-  return state
+    // 道心与永久修持跨轮回保留；愿力、仪轨与一次性专属研究随本世清空。
+    const keptFaith = normalizeFaithProgression(state.faithProgression)
+    const keptDaoHeart = moneyMax(ZERO, state.resources?.daoHeart ?? ZERO)
+    const keptPeakDaoHeart = moneyMax(keptDaoHeart, state.peak?.daoHeart ?? ZERO)
+    replaceResourceValues(state, { ...fresh.resources, daoHeart: keptDaoHeart }, { source: 'resetForRebirth' })
+    // 先恢复空资源的可见状态，再发放永久修持携带的遗物。
+    state.seen = { qi: true, ...(moneyIsPositive(keptDaoHeart) ? { daoHeart: true } : {}) }
+    state.peak = moneyIsPositive(keptPeakDaoHeart) ? { daoHeart: keptPeakDaoHeart } : {}
+    state.faithProgression = { ...createFaithProgression(), cultivation: { ...keptFaith.cultivation }, totalDaoHeart: keptFaith.totalDaoHeart }
+    state.karmaProgression = normalizeKarmaProgression(state.karmaProgression)
+    for (const [id, level] of Object.entries(state.karmaProgression.levels)) {
+      const kit = KARMA_PERK_MAP[id]?.effect?.startKit
+      if (!kit || level <= 0) continue
+      for (const res of ['qi', 'insight']) {
+        const amount = money(kit[res] ?? 0).times(level)
+        if (!moneyIsPositive(amount)) continue
+        const value = (state.resources[res] ?? ZERO).plus(amount)
+        setResourceValue(state, res, value, { source: 'karmaShop:startKit' })
+        state.seen[res] = true
+        state.peak[res] = moneyMax(state.peak[res] ?? ZERO, value)
+      }
+    }
+    state.disciples = { ...fresh.disciples, jobs: { ...fresh.disciples.jobs }, members: [] }
+    state.arrivalTimer = 0
+    state.buildings = {}
+    state.starterHutBuilt = false
+    state.starterHutStanding = false
+    state.upgrades = {}
+    state.upgradeEnabled = {}
+    state.treasureLevels = {}
+    state.craftProgress = {}
+    state.craftTimers = {}
+    state.craftOrders = {}
+    state.industryVersion = 1
+    state.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
+    state.legacyWarehouseCounts = { depot: 0, mysticVault: 0 }
+    state.alchemyProgressionVersion = 1
+    state.legacyNineTurnPill = false
+    state.scriptureArchiveVersion = 1
+    state.autoCraft = {}
+    state.craftTargets = {}
+    state.realm = 0
+    // 仙缘与道果是金额：加法走 Decimal，不能原生相加（会把数值拼成字符串）。
+    state.karma = moneyMax(ZERO, state.karma ?? ZERO).plus(karmaGain ?? ZERO)
+    // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
+    if (kind === 'ascension') state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(1).floor()
+    // 永久货币镜像立即同步：转世/飞升后 resources.karma/dao 必须与顶层字段同值，
+    // 否则界面与下一次写档会出现两套金额（旧实现只在读档校验里补镜像）。
+    setResourceValue(state, "karma", state.karma, { source: 'game/state.js:resetForRebirth' })
+    setResourceValue(state, "dao", state.dao, { source: 'game/state.js:resetForRebirth' })
+    state.habitabilityPenalty = 0
+    state.starvationTimer = 0
+    state.leaveTimer = 0
+    state.buffs = []
+    state.pendingChoice = null
+    state.affairs = { ...fresh.affairs }
+    resetModules(state, fresh)
+    state.stats.lifeInsight = ZERO
+    if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
+    else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1
+    else state.stats.ascensions += 1
+    state.nextEventAt = gameNow(state) + 90000
+    state.lastTickAt = gameNow(state)
+    return state
+
+  })
 }

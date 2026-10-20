@@ -1,3 +1,4 @@
+import { withResourceAction, setResourceValue } from '../../game/resourceObservation'
 import { DIPLOMACY, DIPLOMACY_SECT_MAP } from './data.js'
 import { RESOURCE_MAP } from '@/data/resources'
 import { isModuleEnabled } from '@/data/modules'
@@ -161,48 +162,51 @@ export function tradePreview(state, derived, sectId) {
  * 连续点击不会重复结算（先扣资源再入账，原子性由调用顺序保证）。
  */
 export function tradeWithSect(state, derived, sectId) {
-  const sect = DIPLOMACY_SECT_MAP[sectId]
-  if (!sect) return { ok: false, reason: '未知宗门' }
-  if (!isDiplomacyUnlocked(state)) return { ok: false, reason: '尚未与邻宗建立往来' }
-  if (!atLeast(state.resources.warrant ?? ZERO, WARRANT_COST)) return { ok: false, reason: `信符不足 ${DIPLOMACY.WARRANT_COST}` }
-  if (!canAfford(state, sect.pays)) return { ok: false, reason: '材料不足' }
-  if (!hasRoomForGains(state, derived, sect.gains)) return { ok: false, reason: '仓储已满' }
+  return withResourceAction(state, { type: 'tradeWithSect', id: sectId }, () => {
+    const sect = DIPLOMACY_SECT_MAP[sectId]
+    if (!sect) return { ok: false, reason: '未知宗门' }
+    if (!isDiplomacyUnlocked(state)) return { ok: false, reason: '尚未与邻宗建立往来' }
+    if (!atLeast(state.resources.warrant ?? ZERO, WARRANT_COST)) return { ok: false, reason: `信符不足 ${DIPLOMACY.WARRANT_COST}` }
+    if (!canAfford(state, sect.pays)) return { ok: false, reason: '材料不足' }
+    if (!hasRoomForGains(state, derived, sect.gains)) return { ok: false, reason: '仓储已满' }
 
-  state.resources.warrant = moneyAvailable(state.resources.warrant ?? ZERO, WARRANT_COST)
-  payCost(state, sect.pays)
-  const gains = {}
-  for (const [res, amount] of Object.entries(sect.gains)) {
-    gains[res] = addResource(state, res, amount, capacityOf(derived, res))
-  }
+    setResourceValue(state, "warrant", moneyAvailable(state.resources.warrant ?? ZERO, WARRANT_COST), { source: 'diplomacy/system.js:tradeWithSect' })
+    payCost(state, sect.pays)
+    const gains = {}
+    for (const [res, amount] of Object.entries(sect.gains)) {
+      gains[res] = addResource(state, res, amount, capacityOf(derived, res))
+    }
 
-  // 机缘骰：命中则在候选里随机选一档（独立随机序列）。
-  let fortune = null
-  const options = sect.fortune || []
-  if (options.length && diplomacyRandom(state.diplomacy) < fortuneChance(state)) {
-    const option = options[Math.floor(diplomacyRandom(state.diplomacy) * options.length) % options.length]
-    const picked = fortuneOptionRewards(state, derived, option)
-    for (const [res, amount] of Object.entries(picked)) {
-      const added = addResource(state, res, amount, capacityOf(derived, res))
-      if (added.gt(0)) {
-        fortune = fortune || {}
-        fortune[res] = (fortune[res] ?? ZERO).plus(added)
+    // 机缘骰：命中则在候选里随机选一档（独立随机序列）。
+    let fortune = null
+    const options = sect.fortune || []
+    if (options.length && diplomacyRandom(state.diplomacy) < fortuneChance(state)) {
+      const option = options[Math.floor(diplomacyRandom(state.diplomacy) * options.length) % options.length]
+      const picked = fortuneOptionRewards(state, derived, option)
+      for (const [res, amount] of Object.entries(picked)) {
+        const added = addResource(state, res, amount, capacityOf(derived, res))
+        if (added.gt(0)) {
+          fortune = fortune || {}
+          fortune[res] = (fortune[res] ?? ZERO).plus(added)
+        }
       }
     }
-  }
 
-  state.diplomacy.statistics.trades += 1
-  if (fortune) state.diplomacy.statistics.fortunes += 1
+    state.diplomacy.statistics.trades += 1
+    if (fortune) state.diplomacy.statistics.fortunes += 1
 
-  const gainText = Object.entries(gains)
-    .filter(([, amount]) => amount.gt(0))
-    .map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`)
-    .join('、')
-  const fortuneText = fortune
-    ? Object.entries(fortune).map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`).join('、')
-    : ''
-  pushLog(state, `与${sect.name}互市：付出${Object.keys(sect.pays).map(r => RESOURCE_MAP[r]?.name || r).join('、')}与信符 ${DIPLOMACY.WARRANT_COST} 枚，得 ${gainText}${fortuneText ? `；机缘得 ${fortuneText}` : ''}`, 'good')
+    const gainText = Object.entries(gains)
+      .filter(([, amount]) => amount.gt(0))
+      .map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`)
+      .join('、')
+    const fortuneText = fortune
+      ? Object.entries(fortune).map(([res, amount]) => `${RESOURCE_MAP[res]?.name || res} ×${amount}`).join('、')
+      : ''
+    pushLog(state, `与${sect.name}互市：付出${Object.keys(sect.pays).map(r => RESOURCE_MAP[r]?.name || r).join('、')}与信符 ${DIPLOMACY.WARRANT_COST} 枚，得 ${gainText}${fortuneText ? `；机缘得 ${fortuneText}` : ''}`, 'good')
 
-  return { ok: true, gains, fortune }
+    return { ok: true, gains, fortune }
+
+  })
 }
 
 /**

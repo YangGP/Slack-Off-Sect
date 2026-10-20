@@ -1,3 +1,4 @@
+import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { isEventInRealm, EVENTS, EVENT_MAP, getEventLevel } from '@/data/events'
 import { gameNow, gameRandom, notifyGameEvent } from '../context'
 import { CRAFTS, craftTime, craftCost } from '@/data/crafts'
@@ -130,39 +131,42 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
 }
 
 export function settleEventOutcome(state, derived, spec, text, kind, source) {
-  const range = spec.disaster?.lossPercent || [0, 0]
-  const pct = range[0] + gameRandom(state) * (range[1] - range[0])
-  const outcome = eventOutcome(state, derived, spec, pct)
-  const parts = []
-  // 纪事文案里的金额：到显示边界才转 Number 四舍五入，不参与结算。
-  const logAmount = (value) => Math.round(moneyToNumber(value))
-  for (const row of outcome.rows) {
-    // 损失在 eventOutcome 里已按库存夹过；扣减仍走金额助手的「不足归零」，库存不会变负。
-    state.resources[row.res] = moneyAvailable(state.resources[row.res] ?? ZERO, row.lost)
-    if (moneyGt(row.lost, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} -${logAmount(row.lost)}`)
-    const gained = addResource(state, row.res, row.gained, derived.max[row.res])
-    if (moneyGt(gained, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} +${logAmount(gained)}`)
-    if (moneyGt(row.overflow, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} ${logAmount(row.overflow)} 装不下`)
-  }
-  if (spec.disaster || spec.boundedLoss) {
-    state.stats.disasters += 1
-    if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
+  return withResourceAction(state, { type: 'settleEventOutcome', id: kind }, () => {
+    const range = spec.disaster?.lossPercent || [0, 0]
+    const pct = range[0] + gameRandom(state) * (range[1] - range[0])
+    const outcome = eventOutcome(state, derived, spec, pct)
+    const parts = []
+    // 纪事文案里的金额：到显示边界才转 Number 四舍五入，不参与结算。
+    const logAmount = (value) => Math.round(moneyToNumber(value))
     for (const row of outcome.rows) {
-      const extra = derived.disasterGuardByResource?.[row.res] || 0
-      if (extra > 0 && (spec.disaster?.resources.includes(row.res) || spec.boundedLoss?.[row.res])) {
-        const total = clamp((derived.disasterGuard || 0) + extra, 0, 0.8)
-        parts.push(`${RESOURCE_MAP[row.res].name}符阵护持合计 ${Math.round(total * 100)}%`)
+      // 损失在 eventOutcome 里已按库存夹过；扣减仍走金额助手的「不足归零」，库存不会变负。
+      setResourceValue(state, row.res, moneyAvailable(state.resources[row.res] ?? ZERO, row.lost), { source: 'systems/events.js:settleEventOutcome' })
+      if (moneyGt(row.lost, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} -${logAmount(row.lost)}`)
+      const gained = addResource(state, row.res, row.gained, derived.max[row.res])
+      if (moneyGt(gained, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} +${logAmount(gained)}`)
+      if (moneyGt(row.overflow, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} ${logAmount(row.overflow)} 装不下`)
+    }
+    if (spec.disaster || spec.boundedLoss) {
+      state.stats.disasters += 1
+      if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
+      for (const row of outcome.rows) {
+        const extra = derived.disasterGuardByResource?.[row.res] || 0
+        if (extra > 0 && (spec.disaster?.resources.includes(row.res) || spec.boundedLoss?.[row.res])) {
+          const total = clamp((derived.disasterGuard || 0) + extra, 0, 0.8)
+          parts.push(`${RESOURCE_MAP[row.res].name}符阵护持合计 ${Math.round(total * 100)}%`)
+        }
       }
     }
-  }
-  if (outcome.recruits > 0) {
-    for (let i = 0; i < outcome.recruits; i++) state.disciples.members.push(newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') }))
-    recountDisciples(state.disciples)
-    state.stats.recruits += outcome.recruits
-    parts.push(`弟子 +${outcome.recruits}`)
-    parts.push(state.disciples.members.slice(-outcome.recruits).map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、'))
-  } else if (spec.recruit) parts.push('居所已满，无法收徒')
-  pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
+    if (outcome.recruits > 0) {
+      for (let i = 0; i < outcome.recruits; i++) state.disciples.members.push(newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') }))
+      recountDisciples(state.disciples)
+      state.stats.recruits += outcome.recruits
+      parts.push(`弟子 +${outcome.recruits}`)
+      parts.push(state.disciples.members.slice(-outcome.recruits).map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、'))
+    } else if (spec.recruit) parts.push('居所已满，无法收徒')
+    pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
+
+  })
 }
 
 export function applyEventEffects(state, derived, spec, text, kind, source) {
@@ -243,26 +247,29 @@ export function fireEvent(state, derived, ev = null) {
  * 选项的 effect 就是一份小事件声明，与普通事件共用同一套机制。
  */
 export function resolveChoice(state, derived, index) {
-  const pending = state.pendingChoice
-  if (!pending) return null
-  const event = EVENT_MAP[pending.id]
-  if (event?.threat && gameNow(state) >= pending.deadline) {
-    return settleExpiredThreat(state, derived)
-  }
-  const opt = event?.options?.[index]
-  if (!event || !opt) return null
-  if (!eventOutcome(state, derived, opt.effect || {}).affordable) return null
-  state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
-  applyEventEffects(
-    state,
-    derived,
-    opt.effect || {},
-    `${event.name}·${opt.label}：${opt.desc}`,
-    'event',
-    event,
-  )
-  state.pendingChoice = null
-  return event
+  return withResourceAction(state, { type: 'resolveChoice', id: null }, () => {
+    const pending = state.pendingChoice
+    if (!pending) return null
+    const event = EVENT_MAP[pending.id]
+    if (event?.threat && gameNow(state) >= pending.deadline) {
+      return settleExpiredThreat(state, derived)
+    }
+    const opt = event?.options?.[index]
+    if (!event || !opt) return null
+    if (!eventOutcome(state, derived, opt.effect || {}).affordable) return null
+    state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
+    applyEventEffects(
+      state,
+      derived,
+      opt.effect || {},
+      `${event.name}·${opt.label}：${opt.desc}`,
+      'event',
+      event,
+    )
+    state.pendingChoice = null
+    return event
+
+  })
 }
 
 /** 已有威胁到期只结算一次；离线期间不抽取新的事务。 */

@@ -1,3 +1,4 @@
+import { withResourceAction } from '../resourceObservation'
 import { ONE, ZERO, money, moneyAvailable, moneyMax } from '../decimal'
 import { addResource, canAfford, countOf, payCost, pushLog } from './core'
 import { BUILDING_MAP } from '@/data/buildings'
@@ -172,79 +173,94 @@ export function canAttest(state) {
 
 /** 凝愿：香火 → 愿力。X 为实际投入，产出 X×(1+C(n))。 */
 export function condenseVow(state, amount) {
-  if (!canCondense(state)) return { ok: false, reason: '需先学会《凝愿法》，且当前境界至少金丹' }
-  let spend
-  try { spend = money(amount) } catch { return { ok: false, reason: '投入金额无效' } }
-  if (!spend.isFinite() || !spend.gt(0)) return { ok: false, reason: '投入金额无效' }
-  const reserve = money(state.settings?.craftReserves?.faith ?? ZERO)
-  const available = moneyAvailable(state.resources.faith ?? ZERO, reserve)
-  if (spend.gt(available)) return { ok: false, reason: '香火不足（已扣除保留量）' }
-  const gain = spend.times(ONE.plus(vowGainFactor(state)))
-  payCost(state, { faith: spend })
-  addResource(state, 'vow', gain)
-  pushLog(state, `凝愿：投入香火 ${spend.toString()}，得愿力 ${gain.toString()}`, 'good')
-  return { ok: true, spent: spend, gained: gain }
+  return withResourceAction(state, { type: 'condenseVow', id: null }, () => {
+    if (!canCondense(state)) return { ok: false, reason: '需先学会《凝愿法》，且当前境界至少金丹' }
+    let spend
+    try { spend = money(amount) } catch { return { ok: false, reason: '投入金额无效' } }
+    if (!spend.isFinite() || !spend.gt(0)) return { ok: false, reason: '投入金额无效' }
+    const reserve = money(state.settings?.craftReserves?.faith ?? ZERO)
+    const available = moneyAvailable(state.resources.faith ?? ZERO, reserve)
+    if (spend.gt(available)) return { ok: false, reason: '香火不足（已扣除保留量）' }
+    const gain = spend.times(ONE.plus(vowGainFactor(state)))
+    payCost(state, { faith: spend })
+    addResource(state, 'vow', gain)
+    pushLog(state, `凝愿：投入香火 ${spend.toString()}，得愿力 ${gain.toString()}`, 'good')
+    return { ok: true, spent: spend, gained: gain }
+
+  })
 }
 
 /** 证心：愿力 → 道心，Y/10000，保留已购仪轨与宗门进度。 */
 export function attestDaoHeart(state, amount) {
-  if (!canAttest(state)) return { ok: false, reason: '需先学会《凝愿法》，且当前境界至少化神' }
-  let spend
-  try { spend = money(amount) } catch { return { ok: false, reason: '投入金额无效' } }
-  if (!spend.isFinite() || !spend.gt(0)) return { ok: false, reason: '投入金额无效' }
-  const available = moneyMax(ZERO, state.resources.vow ?? ZERO)
-  if (spend.gt(available)) return { ok: false, reason: '愿力不足' }
-  const gain = spend.div(DAO_HEART_DIVISOR)
-  payCost(state, { vow: spend })
-  addResource(state, 'daoHeart', gain)
-  const slice = mutableSlice(state)
-  slice.totalDaoHeart = (slice.totalDaoHeart ?? ZERO).plus(gain)
-  state.seen.daoHeart = true
-  pushLog(state, `证心：投入愿力 ${spend.toString()}，得道心 ${gain.toString()}`, 'good')
-  return { ok: true, spent: spend, gained: gain }
+  return withResourceAction(state, { type: 'attestDaoHeart', id: null }, () => {
+    if (!canAttest(state)) return { ok: false, reason: '需先学会《凝愿法》，且当前境界至少化神' }
+    let spend
+    try { spend = money(amount) } catch { return { ok: false, reason: '投入金额无效' } }
+    if (!spend.isFinite() || !spend.gt(0)) return { ok: false, reason: '投入金额无效' }
+    const available = moneyMax(ZERO, state.resources.vow ?? ZERO)
+    if (spend.gt(available)) return { ok: false, reason: '愿力不足' }
+    const gain = spend.div(DAO_HEART_DIVISOR)
+    payCost(state, { vow: spend })
+    addResource(state, 'daoHeart', gain)
+    const slice = mutableSlice(state)
+    slice.totalDaoHeart = (slice.totalDaoHeart ?? ZERO).plus(gain)
+    state.seen.daoHeart = true
+    pushLog(state, `证心：投入愿力 ${spend.toString()}，得道心 ${gain.toString()}`, 'good')
+    return { ok: true, spent: spend, gained: gain }
+
+  })
 }
 
 /** 购买一级本世仪轨（愿力计价）。 */
 export function buyRitual(state, id) {
-  const meta = RITUAL_MAP[id]
-  if (!meta || !faithNeedsMet(state, meta.needs)) return false
-  const slice = mutableSlice(state)
-  const level = slice.rituals[id] | 0
-  if (level >= ritualCap(state, meta)) return false
-  const cost = ritualCost(state, id)
-  if (!canAfford(state, { vow: cost })) return false
-  payCost(state, { vow: cost })
-  slice.rituals[id] = level + 1
-  pushLog(state, `《${meta.name}》升至 ${level + 1} 级`, 'good')
-  return true
+  return withResourceAction(state, { type: 'buyRitual', id: id }, () => {
+    const meta = RITUAL_MAP[id]
+    if (!meta || !faithNeedsMet(state, meta.needs)) return false
+    const slice = mutableSlice(state)
+    const level = slice.rituals[id] | 0
+    if (level >= ritualCap(state, meta)) return false
+    const cost = ritualCost(state, id)
+    if (!canAfford(state, { vow: cost })) return false
+    payCost(state, { vow: cost })
+    slice.rituals[id] = level + 1
+    pushLog(state, `《${meta.name}》升至 ${level + 1} 级`, 'good')
+    return true
+
+  })
 }
 
 /** 购买一级永久道心修持。 */
 export function buyCultivation(state, id) {
-  const meta = CULTIVATION_MAP[id]
-  if (!meta || !faithNeedsMet(state, meta.needs)) return false
-  const slice = mutableSlice(state)
-  const level = slice.cultivation[id] | 0
-  if (level >= meta.max) return false
-  const cost = cultivationCost(state, id)
-  if (!canAfford(state, { daoHeart: cost })) return false
-  payCost(state, { daoHeart: cost })
-  slice.cultivation[id] = level + 1
-  state.seen.daoHeart = true
-  pushLog(state, `《${meta.name}》升至 ${level + 1} 级`, 'good')
-  return true
+  return withResourceAction(state, { type: 'buyCultivation', id: id }, () => {
+    const meta = CULTIVATION_MAP[id]
+    if (!meta || !faithNeedsMet(state, meta.needs)) return false
+    const slice = mutableSlice(state)
+    const level = slice.cultivation[id] | 0
+    if (level >= meta.max) return false
+    const cost = cultivationCost(state, id)
+    if (!canAfford(state, { daoHeart: cost })) return false
+    payCost(state, { daoHeart: cost })
+    slice.cultivation[id] = level + 1
+    state.seen.daoHeart = true
+    pushLog(state, `《${meta.name}》升至 ${level + 1} 级`, 'good')
+    return true
+
+  })
 }
 
 /** 一次性香火专属条目：中央 map 已登记效果，这里只做购买与前置判定。 */
 export function buyFaithUpgrade(state, id) {
-  const meta = FAITH_UPGRADE_MAP[id]
-  if (!meta || learned(state, id)) return false
-  if (!faithNeedsMet(state, meta.needs)) return false
-  if (!canAfford(state, meta.cost)) return false
-  payCost(state, meta.cost)
-  state.upgrades[id] = true
-  pushLog(state, `修持《${meta.name}》`, 'good')
-  return true
+  return withResourceAction(state, { type: 'buyFaithUpgrade', id: id }, () => {
+    const meta = FAITH_UPGRADE_MAP[id]
+    if (!meta || learned(state, id)) return false
+    if (!faithNeedsMet(state, meta.needs)) return false
+    if (!canAfford(state, meta.cost)) return false
+    payCost(state, meta.cost)
+    state.upgrades[id] = true
+    pushLog(state, `修持《${meta.name}》`, 'good')
+    return true
+
+  })
 }
 
 /** 供界面与测试使用的报价快照（全部是金额，不做显示格式化）。 */

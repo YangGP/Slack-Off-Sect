@@ -22,7 +22,7 @@ export function uncappedCrafting({ ok, close, section }) {
   ok('23种稳定加工品无仓容，原料、猎物与粒子仍有限', UNCAPPED_CRAFTED_RESOURCES.size === 23 &&
     [...UNCAPPED_CRAFTED_RESOURCES].every(id => !d.max[id].isFinite()) &&
     ['qi', 'insight', 'faith', 'wood', 'stone', 'beastHide', 'qiParticle', 'qiEnergy', 'immortalForce', 'warrant'].every(id => d.max[id].isFinite()))
-  ok('100仙缘生产4.5倍、有限仓储1.15倍，信符独立', d.karmaMult.eq(4.5) && d.karmaStorageMult.eq(1.15) && d.max.warrant.eq(100))
+  ok('100仙缘生产2倍、有限仓储1.05倍，信符独立', d.karmaMult.eq(2) && d.karmaStorageMult.eq('1.05') && d.max.warrant.eq(100))
   ok('渡劫全局境界5.5倍，个人系数仍10倍', d.realmProductionMult === 5.5 && discipleFactor({ realm: 10 }, 10) === 10)
   s.faithProgression.cultivation.realmDevotion = 10
   E.recompute(s, d)

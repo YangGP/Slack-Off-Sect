@@ -15,6 +15,7 @@ import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
 import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
 import { faithRatioBonus, faithStorageRatio, realmProductionMultiplier, ritualLevel } from './faith'
+import { karmaShopBonuses } from './karmaShop'
 import { registerStaticMoneyCache } from '../staticMoneyCache'
 
 /** 两类仓库的有效定额：新容量×N + 旧制差额×min(N,旧数量)。 */
@@ -449,14 +450,21 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const realmProductionMult = realmProductionMultiplier(state, realmMult)
   derived.craftSpeed = Math.max(1, Math.sqrt(realmMult / CONFIG.CRAFT_SPEED_REALM_BASE))
   /**
-   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +400%）。
+   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
    * 这是通用 idler 的 soft cap 形状：early 不打折、late 不膨胀。
    * 仙缘本身是随进度无界的金额，全程在 Decimal 域计算，不先转 Number。
+   * 仙缘修持在此接入：宿慧/梦息/轮回契并入 acc 累加器（与因果通感同路，L708/L714 的派生
+   * 消费点在后面，天然吃到）；因果田乘在仙缘仓储乘区之上。修持效果只看等级——
+   * 已修持花掉的仙缘不计入余额乘区（karmaMultipliers 只吃余额）。
    */
   const karma = moneyMax(ZERO, state.karma ?? ZERO)
   const permanentKarma = karmaMultipliers(karma)
+  const karmaPerks = karmaShopBonuses(state)
+  acc.karmaRatio += karmaPerks.karmaRatio
+  acc.offlineHours += karmaPerks.offlineHours
+  acc.ascendBonus += karmaPerks.ascendBonus
   const karmaMult = permanentKarma.karmaMult.plus(acc.karmaRatio)
-  const karmaStorageMult = permanentKarma.karmaStorageMult
+  const karmaStorageMult = permanentKarma.karmaStorageMult.times(ONE.plus(karmaPerks.storageRatio))
   /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。道果无上界，倍率走 Decimal。 */
   const daoMult = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_PRODUCTION_BONUS))
   // DEBUG 专属独立乘区；运行时字段不进存档，离线快照仍保留本次会话的开关。

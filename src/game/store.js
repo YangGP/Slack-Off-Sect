@@ -815,6 +815,12 @@ export const actions = {
     saveNow()
     return true
   },
+  buyKarmaPerk(id) {
+    if (!E.buyKarmaPerk(state, id)) return false
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
   setSetting(key, value) {
     if (key === 'autoTalentJobs') {
       if (!derived.autoTalentJobsUnlocked || typeof value !== 'boolean') return false
