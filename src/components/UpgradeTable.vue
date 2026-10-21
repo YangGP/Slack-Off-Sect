@@ -14,7 +14,7 @@ import { fmt, fmtCost } from '@/game/format'
 import { ZERO, money, moneyGte, moneyMax } from '@/game/decimal'
 import { enough as enoughOf, costBlocked } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
-import { CULTIVATION, CULTIVATION_STAGE_OF } from '@/data/upgrades'
+import { CULTIVATION, CULTIVATION_STAGE_OF, compareCultivationOrder } from '@/data/upgrades'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 import CostRows from './CostRows.vue'
@@ -88,8 +88,8 @@ const available = computed(() =>
     .filter(Boolean)
     .filter((u) => isCostRevealed(state, u.cost))
     .filter(capacityReady)
-    // 修真页按研究分组排序，同组保持数据顺序。
-    .sort((a, b) => (stageOf(a.id)?.index ?? 99) - (stageOf(b.id)?.index ?? 99))
+    // 修真页同时遵循分段与段内顺序。
+    .sort(compareCultivationOrder)
     .map((u) => ({
       meta: u,
       stage: stageOf(u.id),
@@ -101,13 +101,14 @@ const locked = computed(() =>
   props.list
     .filter((u) => !state.upgrades[u.id] && !availableIds.value.includes(u.id))
     .filter((u) => isProgressionVisible(state, u.needs, u.cost))
+    .sort(compareCultivationOrder)
     .map((u) => ({
       meta: u,
       needs: describeNeeds(u.needs).join('，') || '条件未知',
     })),
 )
 
-const researched = computed(() => props.list.filter((u) => state.upgrades[u.id] && u.kind !== 'treasure'))
+const researched = computed(() => props.list.filter((u) => state.upgrades[u.id] && u.kind !== 'treasure').sort(compareCultivationOrder))
 
 /** 已炼成、可继续祭炼的法宝（只有法宝能祭炼） */
 const forged = computed(() =>

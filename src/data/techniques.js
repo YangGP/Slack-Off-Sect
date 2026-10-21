@@ -33,7 +33,25 @@ const CORE_TECHNIQUES = [
     cost: { insight: 900, plank: 30, ore: 600 },
     desc: '引山泉推水轮，锯木与拌料共用木作工位。金丹起木作加工容量 +50%，原料不足时停机待料。',
     effects: { processingCapacityRatio: { woodwork: 0.5 } },
-    needs: { upgrades: ['woodworking', 'intuition', 'arrayAssembly'] },
+    needs: { upgrades: ['intuition', 'arrayAssembly'] },
+  },
+  {
+    id: 'paperCraft',
+    name: '造纸技艺',
+    glyph: '纸',
+    cost: { insight: 1200, wood: 700, herb: 200 },
+    desc: '从选料、沤浆到抄帘，把纸坊的手感变成可传授的工序。金丹起抄造灵纸加工效率 +50%，每份灵木用量减少 10%。',
+    effects: { craftSpeedByRecipe: { makePaper: 0.5 }, craftCostReduction: { makePaper: 0.1 } },
+    needs: { upgrades: ['paperWorks'] },
+  },
+  {
+    id: 'stoneCraft',
+    name: '石作技艺',
+    glyph: '石',
+    cost: { insight: 1200, rock: 700, ore: 250 },
+    desc: '按石纹定凿口、以衬垫护边角，石材的成料率不再靠运气。金丹起压制石材加工效率 +50%，每份矿石用量减少 10%。',
+    effects: { craftSpeedByRecipe: { cutStone: 0.5 }, craftCostReduction: { cutStone: 0.1 } },
+    needs: { upgrades: ['stoneWorks'] },
   },
   {
     id: 'spiritSaw',
@@ -43,7 +61,7 @@ const CORE_TECHNIQUES = [
     desc: '以灵纹驱动锯阵。金丹起木作加工容量 +100%，解板加工效率 +50%；每份木板灵木用量减少15%，扩产仍需稳定供料。',
     effects: { processingCapacityRatio: { woodwork: 1 }, craftSpeedByRecipe: { sawPlank: 0.5 }, craftCostReduction: { sawPlank: 0.15 } },
     // 造价含灵晶，而灵晶要「凝晶原理 → 凝晶工艺」才产得出：列进前置，避免先露面却找不到来源。
-    needs: { upgrades: ['timberCraft', 'waterworkshop', 'crystalCraft'] },
+    needs: { upgrades: ['timberCraft', 'waterworkshop', 'crystalPolishing'] },
   },
   {
     id: 'spiritCultivation',
@@ -53,7 +71,7 @@ const CORE_TECHNIQUES = [
     desc: '轮作养地，提纯药性。灵草产出 +95%，丹药制作产出 +50%，仙草制作产出 +30%。',
     effects: { ratio: { herb: 0.95 }, craftBonusByResource: { pill: 0.5, immortalHerb: 0.3 } },
     // 造价含灵晶，而灵晶要「凝晶原理 → 凝晶工艺」才产得出：列进前置，避免先露面却找不到来源。
-    needs: { upgrades: ['herbRotation', 'alchemyFire', 'crystalCraft'] },
+    needs: { upgrades: ['herbRotation', 'alchemyFire', 'crystalPolishing'] },
   },
   {
     id: 'swordFlight',
@@ -63,7 +81,7 @@ const CORE_TECHNIQUES = [
     desc: '御剑运木探矿，剑火淬炼器胚。灵木与玄铁产出 +20%，法器、灵器与灵宝制作产出 +10%。',
     effects: { ratio: { wood: 0.2, ore: 0.2 }, craftBonusByResource: { artifact: 0.1, spiritArtifact: 0.1, spiritTreasure: 0.1 } },
     // 御剑术与灵流要诀分别承接高阶与基础产能投资。
-    needs: { upgrades: ['deepShaft', 'steelWorking', 'infuseTheory'], building: { id: 'forge', count: 1 } },
+    needs: { upgrades: ['deepShaft', 'artifactLore', 'infuseTheory'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'spiritSmelting',
@@ -72,7 +90,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 36000, steel: 25, artifact: 40, crystal: 15 },
     desc: '灵场调节炉温与淬炼节拍。金丹起炼器加工容量 +100%，淬钢加工效率 +50%；玄钢每份耗料减少15%，法器与灵器减少10%。整枚材料向上取整。',
     effects: { processingCapacityRatio: { forge: 1 }, craftSpeedByRecipe: { refineSteel: 0.5 }, craftCostReduction: { refineSteel: 0.15, forgeArtifact: 0.1, forgeSpiritArtifact: 0.1 } },
-    needs: { upgrades: ['deepShaft', 'steelWorking', 'swordFlight', 'temperTheory'] },
+    needs: { upgrades: ['deepShaft', 'artifactLore', 'swordFlight', 'temperTheory'] },
   },
   {
     id: 'alchemyFire',
@@ -92,7 +110,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 8000, herb: 4000, pill: 40 },
     desc: '丹火分段定候，减少开炉波动。采药制丹加工效率 +25%，不改变每份用料与产出。',
     effects: { craftSpeedByRecipe: { refinePill: 0.25 } },
-    needs: { realm: 6, upgrades: ['spiritCultivation'], building: { id: 'alchemyRoom', count: 1 } },
+    needs: { upgrades: ['spiritCultivation'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
     id: 'condensePillBatching',
@@ -101,7 +119,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 16000, condensePill: 12, spiritLiquid: 40 },
     desc: '分炉凝元，火候与投料各走专线。凝元炼丹加工效率 +25%，不改变每份用料与产出。',
     effects: { craftSpeedByRecipe: { condensePill: 0.25 } },
-    needs: { realm: 6, upgrades: ['pillBatching', 'alchemyEssence', 'liquidArt'], building: { id: 'alchemyRoom', count: 1 } },
+    needs: { upgrades: ['pillBatching', 'alchemyEssence', 'liquidArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
     id: 'nineTurnBatching',
@@ -110,7 +128,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 30000, nineTurnPill: 4, crystal: 20 },
     desc: '连炉承接九转火候，减少反复起炉。九转炼丹加工效率 +50%，不改变每份用料与产出。',
     effects: { craftSpeedByRecipe: { refineNineTurnPill: 0.5 } },
-    needs: { realm: 7, upgrades: ['condensePillBatching', 'alchemyEssence', 'crystalCraft'], building: { id: 'pillFurnace', count: 1 } },
+    needs: { upgrades: ['condensePillBatching', 'alchemyEssence', 'crystalPolishing'], building: { id: 'pillFurnace', count: 1 } },
   },
   {
     id: 'flowField',
@@ -120,7 +138,7 @@ const CORE_TECHNIQUES = [
     desc: '把山间灵流理成沟渠，樵夫、采药人与矿工顺着流势干活，原料自己多出一截。灵木、灵草与玄铁产出各 +30%。',
     effects: { ratio: { wood: 0.3, herb: 0.3, ore: 0.3 } },
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['woodworking', 'herbStudy'] },
+    needs: { upgrades: ['forestryArt', 'herbStudy'] },
   },
   {
     id: 'spiritCanal',
@@ -170,7 +188,7 @@ const CORE_TECHNIQUES = [
     desc: '以符纹分隔香火与灵子。香火仓容 +50%，灵气分子、正负灵子仓容各 +25%。',
     effectDesc: '分格禁制扩充香火与三类灵子仓容。',
     effects: { storageRatio: { faith: 0.5, qiParticle: 0.25, yangParticle: 0.25, yinParticle: 0.25 } },
-    needs: { upgrades: ['arrayAssembly'] },
+    needs: { upgrades: ['arrayStandards'] },
   },
   {
     id: 'treasureVault',
@@ -211,7 +229,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 4800, steel: 6, arrayBase: 4, spiritLiquid: 10 },
     desc: '以晶核阵循环冷凝余热。每座运行中的晶核阵提供的冷却容量翻倍；高负荷加工共用冷却回路，散热不足时自动降载。',
     effects: { processingCoolingRatio: 1 },
-    needs: { realm: 6, upgrades: ['liquidReflux', 'crystalCraft'], building: { id: 'crystalArray', count: 1 } },
+    needs: { upgrades: ['liquidReflux', 'crystalPolishing'], building: { id: 'crystalArray', count: 1 } },
   },
   // ---------- 工程技艺：设备容量、加工效率与单位耗料 ----------
   {
@@ -219,14 +237,14 @@ const CORE_TECHNIQUES = [
     cost: { insight: 350, plank: 6, ore: 150 },
     desc: '统一阵基尺寸与导灵接口，减少装配对位时间。阵基加工效率 +50%；不改变每份用料与收益。',
     effects: { craftSpeedByRecipe: { assembleArrayBase: 0.5 } },
-    needs: { realm: 4, upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
+    needs: { upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'liquidReflux', name: '凝液回流', glyph: '回',
     cost: { insight: 1800, steel: 4, arrayBase: 3 },
     desc: '在凝液工位加设回流纹，捕集未凝气流。每份灵液耗气减少15%，手动与自动凝液均适用。',
     effects: { craftCostReduction: { condenseLiquid: 0.15 } },
-    needs: { realm: 5, upgrades: ['liquidArt', 'steelWorking'] },
+    needs: { upgrades: ['liquidArt', 'steelWorking'] },
   },
   {
     id: 'runeStamping', name: '定纹模刻', glyph: '模',
@@ -234,7 +252,7 @@ const CORE_TECHNIQUES = [
     desc: '以预制纹模重复刻制标准构件。符箓与阵基加工效率 +100%；灵符仍需精密刻纹，继续共用符箓堂容量。',
     effects: { craftSpeedByRecipe: { drawTalisman: 1, assembleArrayBase: 1 } },
     // 造价里的灵晶要「凝晶工艺」才产得出：把该工艺列进前置，避免条目先露面却找不到来源。
-    needs: { realm: 5, upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft', 'etchTheory'], building: { id: 'talismanHall', count: 1 } },
+    needs: { upgrades: ['arrayStandards', 'shapeRune', 'crystalCraft', 'etchTheory'], building: { id: 'talismanHall', count: 1 } },
   },
   // ---------- 单族技艺：由「修真应用·原理」资格承接 ----------
   {
@@ -256,7 +274,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 14000, steel: 6, artifact: 10 },
     desc: '灵火助锻、灵场选矿。玄铁产出 +20%，玄钢制作产出 +20%。',
     effects: { ratio: { ore: 0.2 }, craftBonusByResource: { steel: 0.2 } },
-    needs: { upgrades: ['steelWorking', 'spiritSmelting', 'temperTheory'] },
+    needs: { upgrades: ['artifactLore', 'spiritSmelting', 'temperTheory'] },
   },
   // ---------- D5＋D9：炼器效率专精（三项连续） ----------
   {
@@ -266,7 +284,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 8000, ore: 3000, steel: 10 },
     desc: '为淬钢定下炉批节拍。淬玄成钢加工效率 +25%，不改变每份用料与产出。',
     effects: { craftSpeedByRecipe: { refineSteel: 0.25 } },
-    needs: { realm: 6, upgrades: ['forgeApp'], building: { id: 'forge', count: 1 } },
+    needs: { upgrades: ['forgeApp'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'artifactBatching',
@@ -275,7 +293,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 16000, steel: 20, crystal: 8 },
     desc: '器胚连续锻打，减少换炉等待。淬炼法器加工效率 +25%，不改变每份用料与产出。',
     effects: { craftSpeedByRecipe: { forgeArtifact: 0.25 } },
-    needs: { realm: 6, upgrades: ['steelBatching', 'forgeArt', 'crystalCraft'], building: { id: 'forge', count: 1 } },
+    needs: { upgrades: ['steelBatching', 'forgeArt', 'crystalPolishing'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'spiritArtifactBatching',
@@ -284,7 +302,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 30000, spiritArtifact: 4, crystal: 20 },
     desc: '连炉温养，灵器出得更快。铸灵器加工效率 +50%，不改变每份用料与产出。',
     effects: { craftSpeedByRecipe: { forgeSpiritArtifact: 0.5 } },
-    needs: { realm: 7, upgrades: ['artifactBatching', 'compositeRune', 'crystalCraft'], building: { id: 'forge', count: 1 } },
+    needs: { upgrades: ['artifactBatching', 'compositeRune'], building: { id: 'forge', count: 1 } },
   },
   // 自修真页迁入：阵道精通的成果兑现，灵气主线的增益出口
   {
@@ -321,7 +339,7 @@ const CORE_TECHNIQUES = [
     desc: '看石色便知矿脉走向。玄铁产出 +20%。',
     effects: { ratio: { ore: 0.2 } },
     // 修真页另有「探矿术」（开放炼铁炉），这里改名避免同名混淆
-    needs: { building: { id: 'ironFurnace', count: 1 } },
+    needs: { upgrades: ['prospectStudy'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'herbLore',
@@ -330,7 +348,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 45, herb: 150, wood: 300 },
     desc: '识得三百味灵草，采药不再空手而归。灵草产出 +20%。',
     effects: { ratio: { herb: 0.2 } },
-    needs: { building: { id: 'herbGarden', count: 1 } },
+    needs: { upgrades: ['herbStudy'], building: { id: 'herbGarden', count: 1 } },
   },
   // ---------- 四条线的第二层（链式前置） ----------
   {
@@ -340,7 +358,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 90, wood: 900, ore: 120 },
     desc: '用玄铁加固斧柄锯条，伐木快得不像话。灵木产出 +25%。',
     effects: { ratio: { wood: 0.25 } },
-    needs: { upgrades: ['forestryArt', 'woodworking'], building: { id: 'ironFurnace', count: 1 } },
+    needs: { upgrades: ['forestryArt'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'mountainChant',
@@ -412,7 +430,7 @@ const CORE_TECHNIQUES = [
     desc: '横梁加铁箍、立柱下石础，同样一间仓房能多堆两成。灵气与基础物资上限 +20%。',
     effects: { storageRatio: { qi: 0.2, wood: 0.2, rock: 0.2, stone: 0.2, ore: 0.2, herb: 0.2 } },
     // 起点补「库房 ≥ 1」：与《叠匣术》同口径，仓储技艺一律先有仓库再谈加固（见 docs/MATERIAL-RESEARCH.md §3.4）。
-    needs: { realm: 3, building: { id: 'warehouse', count: 1 } },
+    needs: { upgrades: ['earthArt'], building: { id: 'warehouse', count: 1 } },
   },
   {
     id: 'storeStoneArt',
@@ -423,7 +441,7 @@ const CORE_TECHNIQUES = [
     effects: {
       storageRatio: { qi: 0.35, wood: 0.35, rock: 0.35, stone: 0.35, ore: 0.35, herb: 0.35 },
     },
-    needs: { realm: 5, upgrades: ['storeFrameArt'] },
+    needs: { upgrades: ['storeFrameArt'] },
   },
   {
     id: 'storeVoidArt',
@@ -434,7 +452,7 @@ const CORE_TECHNIQUES = [
     effects: {
       storageRatio: { qi: 0.6, wood: 0.6, rock: 0.6, stone: 0.6, ore: 0.6, herb: 0.6, immortalForce: 1 },
     },
-    needs: { realm: 7, upgrades: ['storeStoneArt', 'capacityRune'] },
+    needs: { upgrades: ['storeStoneArt', 'capacityRune'] },
   },
 
   // ---------- 宜居度 ----------
@@ -485,7 +503,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 3000, plank: 20, arrayBase: 4, daoNote: 4 },
     desc: '分席研读、相互诘问，以阵基记录论证中的分歧。悟道者产出 +25%，与坐忘功的岗位加成相加。',
     effects: { jobRatio: { scholar: 0.25 } },
-    needs: { realm: 5, upgrades: ['zuowangArt'], building: { id: 'academy', count: 1 } },
+    needs: { upgrades: ['zuowangArt'], building: { id: 'academy', count: 1 } },
   },
   {
     id: 'celestialDeduction',
@@ -494,7 +512,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 12000, crystal: 20, arrayBase: 8, talisman: 20, daoTreatise: 4 },
     desc: '用灵晶留存星象，以阵基和符箓反复验算，将观测与经义相互印证。悟道者产出 +35%，与已有岗位加成相加。',
     effects: { jobRatio: { scholar: 0.35 } },
-    needs: { realm: 6, upgrades: ['scriptureDebate', 'astrologyArt'], building: { id: 'observatory', count: 1 } },
+    needs: { upgrades: ['scriptureDebate', 'astrologyArt'], building: { id: 'observatory', count: 1 } },
   },
 
   // ============================================================
@@ -593,7 +611,7 @@ const CORE_TECHNIQUES = [
     refine: { insight: 400, materials: { ore: 25 }, materialFromLevel: 1 },
     desc: '玄铁铃铭刻固形纹，引导尘埃沉降，让居所保持洁净。宜居度 +6，祭炼可提高效果。',
     effects: { habitability: 6 },
-    needs: { realm: 4, upgrades: ['forgeArt', 'shapeRune'] },
+    needs: { upgrades: ['forgeArt', 'shapeRune'] },
   },
   {
     id: 'peaceBanner',
@@ -604,7 +622,7 @@ const CORE_TECHNIQUES = [
     refine: { insight: 3000, materials: { spiritTalisman: 1 }, materialFromLevel: 1 },
     desc: '灵木幡杆承载复合符文，灵符调节居所气机，静修与日常起居互不相扰。宜居度 +10，祭炼可提高效果。',
     effects: { habitability: 10 },
-    needs: { realm: 6, upgrades: ['compositeRune', 'calmMind'] },
+    needs: { upgrades: ['compositeRune', 'calmMind'] },
   },
   {
     id: 'mountainPlate',

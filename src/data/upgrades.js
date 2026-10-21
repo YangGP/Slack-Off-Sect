@@ -74,19 +74,19 @@ const CORE_CULTIVATION = [
     id: 'liquidArt',
     name: '凝液法',
     glyph: '液',
-    cost: { insight: 6000, wood: 300, stone: 40 },
+    cost: { insight: 4800, daoNote: 6 },
     desc: '掌握按份化液后，稳定灵压与玉瓶收取，把凝液整理成可持续运转的工艺。',
     effectDesc: '因此开得出基础凝聚工位：金丹起可自动凝液，后续凝晶配方也共用此工位。',
     effects: { unlockBuildings: [] },
     note: '提供基础凝聚工位',
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['qiLiquid'] },
+    needs: { upgrades: ['qiLiquid', 'preachArt'] },
   },
   {
     id: 'qiPurify',
     name: '灵气纯化',
     glyph: '纯',
-    cost: { insight: 3000, stone: 300, plank: 20 },
+    cost: { insight: 2400, daoNote: 3 },
     desc: '凝液制程稳定后，进一步剔去灵气中的浊杂，纯度既高，气机更稳，一份更抵一份。',
     effectDesc: '因此灵气更纯：灵气产出 +20%。',
     effects: { ratio: { qi: 0.2 } },
@@ -96,11 +96,11 @@ const CORE_CULTIVATION = [
     id: 'crystalTheory',
     name: '凝晶原理',
     glyph: '晶',
-    cost: { insight: 8000 },
+    cost: { insight: 6400, daoNote: 8 },
     desc: '气源纯化后，研究用符纹约束稳定灵液，凝成可长期保存的晶核。',
     effectDesc: '开启凝晶工艺与晶核凝炼阵；学会加工灵晶后才能完成建设。',
     effects: { unlockBuildings: ['crystalArray'] },
-    needs: { upgrades: ['qiPurify', 'talismanArt'] },
+    needs: { upgrades: ['qiPurify'] },
   },
 
   // ---------- Ⅲ 调控：怎么引导、约束灵气 ----------
@@ -108,7 +108,7 @@ const CORE_CULTIVATION = [
     id: 'astrologyArt',
     name: '观星术',
     glyph: '星',
-    cost: { insight: 9000, talisman: 6, daoNote: 12 },
+    cost: { insight: 7200, talisman: 6, daoNote: 12 },
     desc: '讲经讲到尽头，就得抬头看天。解锁观星台。',
     effectDesc: '因此搭得起观星台，从星象里读出资源的走势。',
     effects: { unlockBuildings: ['observatory'] },
@@ -118,7 +118,7 @@ const CORE_CULTIVATION = [
     id: 'hourArt',
     name: '候时法',
     glyph: '候',
-    cost: { insight: 24000, stone: 1200, talisman: 5 },
+    cost: { insight: 19200, daoTreatise: 1 },
     desc: '破境要挑时候：灵气潮汐、月相、弟子的心神都有节律。',
     effectDesc: '因此破境再省一成材料 —— 同一炉丹，用在刀刃上。',
     effects: { breakthroughDiscount: 0.1 },
@@ -129,17 +129,17 @@ const CORE_CULTIVATION = [
     id: 'arrayBasics',
     name: '阵法初解',
     glyph: '阵',
-    cost: { insight: 30000, talisman: 12, artifact: 3 },
+    cost: { insight: 24000, talisman: 12, artifact: 3, daoTreatise: 1 },
     desc: '观星知势，方能布阵。解锁护山大阵。',
     effectDesc: '因此布得起护山大阵，天灾来时损失大减。',
     effects: { unlockBuildings: ['mountainArray'] },
-    needs: { upgrades: ['astrologyArt'], building: { id: 'academy', count: 1 } },
+    needs: { upgrades: ['astrologyArt', 'crystalTheory'], building: { id: 'academy', count: 1 } },
   },
   {
     id: 'arrayMastery',
     name: '阵道精通',
     glyph: '精',
-    cost: { insight: 60000, talisman: 25, spiritTalisman: 4 },
+    cost: { insight: 48000, talisman: 25, spiritTalisman: 4, daoTreatise: 3 },
     desc: '一草一木皆可为阵。解锁锁灵阵。',
     effectDesc: '因此锁得住一山之灵：锁灵阵把灵气囤得更紧。',
     effects: { unlockBuildings: ['spiritLockArray'] },
@@ -151,7 +151,7 @@ const CORE_CULTIVATION = [
     id: 'particleTheory',
     name: '灵子论',
     glyph: '子',
-    cost: { insight: 18000, crystal: 40, spiritTalisman: 6, daoTreatise: 4 },
+    cost: { insight: 14400, crystal: 40, daoTreatise: 1 },
     desc: '辨明灵气的分子组成：正负灵子相抱成稳定分子。结丹时内观到的灵荷，如今可以在宗门设施中重复验看、连续离析。',
     effectDesc: '因此布得起分灵阵：把灵气离析成游离的灵气分子，攒着等下一步解离。',
     effects: { unlockBuildings: ['splitArray'] },
@@ -162,7 +162,7 @@ const CORE_CULTIVATION = [
     id: 'yinyangSplit',
     name: '阴阳分灵',
     glyph: '阴',
-    cost: { insight: 36000, stone: 12000, spiritArtifact: 6, daoTreatise: 8 },
+    cost: { insight: 28800, spiritArtifact: 6, daoTreatise: 2 },
     desc: '输入解离之力打开分子束缚，以两极之势维持分流，避免正负灵子重新复合。',
     effectDesc: '因此布得起偏极阵 —— 把灵气分子解离成正灵子与负灵子。',
     effects: { unlockBuildings: ['polarizeArray'] },
@@ -174,7 +174,7 @@ const CORE_CULTIVATION = [
     name: '湮灭法',
     glyph: '湮',
     // 化神首炉由既有观星、试炼与库房承接，不依赖洞天／通天塔。需先有偏极阵、有灵子可烧。
-    cost: { insight: 90000, nineTurnPill: 30, spiritTalisman: 30, arrayDiagram: 3 },
+    cost: { insight: 49000, nineTurnPill: 30, spiritTalisman: 30, arrayDiagram: 1 },
     desc: '控制供料、灵势与阵形，让正负灵子越过湮灭门槛，成对消耗为可回收的灵能，并排出废热。',
     effectDesc: '因此铸得起湮灭炉：寻常相撞未必湮灭，炉心的受控阵形才使转换持续发生。',
     effects: { unlockBuildings: ['annihilationFurnace'] },
@@ -185,7 +185,7 @@ const CORE_CULTIVATION = [
     id: 'energyApplication',
     name: '灵能输配',
     glyph: '用',
-    cost: { insight: 135000, crystal: 60, spiritArtifact: 12, arrayDiagram: 6 },
+    cost: { insight: 94000, crystal: 60, spiritArtifact: 12, arrayDiagram: 1 },
     desc: '湮灭炉里翻出的灵能，不只用来催产 —— 更要定下灵势、输运与负荷之法，才把灵能稳妥接入宗门。',
     effectDesc: '将灵能接入专业工位。启用灵能驱动后，每单位额外加工容量每秒消耗0.1灵能，受灵能枢供能与冷却回路限制。',
     effects: { energyCraft: true },
@@ -197,23 +197,23 @@ const CORE_CULTIVATION = [
     id: 'immortalDiscovery',
     name: '仙灵初探',
     glyph: '仙',
-    cost: { insight: 180000, crystal: 100, spiritArtifact: 16, arrayDiagram: 8 },
-    desc: '炼虚可摄游离灵子，更能托起相激之场：天地间自成的仙灵力，第一次被宗门拢住。',
+    cost: { insight: 139000, crystal: 100, spiritArtifact: 16, arrayDiagram: 1 },
+    desc: '合体可摄游离灵子，更能托起相激之场：天地间自成的仙灵力，第一次被宗门拢住。',
     effectDesc: '因此建得起采仙台：以灵气托起相激之场，采聚自然聚成的仙灵力。',
     effects: { unlockBuildings: ['harvestPlatform'] },
     note: '解锁建筑：采仙台；发现资源：仙灵力',
-    needs: { upgrades: ['energyApplication'] },
+    needs: { realm: 8, upgrades: ['energyApplication'] },
   },
   {
     id: 'immortalIndustry',
     name: '仙灵聚合',
     glyph: '聚',
-    cost: { insight: 300000, nineTurnPill: 40, spiritArtifact: 24, arcaneGold: 8, arrayDiagram: 12 },
+    cost: { insight: 218000, spiritArtifact: 24, arcaneGold: 8, arrayDiagram: 2 },
     desc: '不再只靠天然而成：以分子为料、灵能为力，主动引导吸能聚合，仙灵力方能稳定量产。',
     effectDesc: '因此布得起聚仙阵：料与力齐备，连续凝聚固结仙灵力。',
     effects: { unlockBuildings: ['immortalArray'] },
     note: '解锁建筑：聚仙阵',
-    needs: { upgrades: ['immortalDiscovery', 'energyApplication'] },
+    needs: { realm: 9, upgrades: ['immortalDiscovery'] },
   },
 
   // ---------- Ⅴ 归源：灵气与因果、飞升 ----------
@@ -221,17 +221,17 @@ const CORE_CULTIVATION = [
     id: 'karmaSense',
     name: '因果通感',
     glyph: '感',
-    cost: { insight: 160000, stone: 40000, pill: 100 },
+    cost: { insight: 128000, pill: 100, daoTreatise: 9 },
     desc: '看清因果的人，转世与飞升时都能多带走三成仙缘，并让仙缘乘区获得固定加成。',
     effectDesc: '因此看得见因果：转世／飞升仙缘 +30%；仙缘乘区固定 +0.5%（不随仙缘点数缩放）。',
     effects: { ascendBonus: 0.3, karmaRatio: 0.005 },
-    needs: { upgrades: ['greatVehicleSeal', 'ancestorArt'] },
+    needs: { realm: 8, upgrades: ['greatVehicleSeal', 'ancestorArt'] },
   },
   {
     id: 'towerPlan',
     name: '塔院图',
     glyph: '塔',
-    cost: { insight: 180000, stone: 80000, artifact: 30, plank: 60, steel: 15 },
+    cost: { insight: 139000, stone: 40000, artifact: 30, plank: 30, steel: 8, arrayDiagram: 1 },
     desc: '塔不怕高，怕的是接不住天风。图样定下九重院墙，塔才立得稳。',
     effectDesc: '因此动得了通天塔的工：塔尖直插云海，看得见飞升的路。',
     effects: { unlockBuildings: ['heavenTower'] },
@@ -242,21 +242,13 @@ const CORE_CULTIVATION = [
     id: 'karmaConcord',
     name: '因果参同契',
     glyph: '契',
-    // 进阶品让"最后一步"有了自己的门槛：九转丹与灵符只有后期才炼得出来
-    cost: {
-      insight: 280000,
-      talisman: 200,
-      pill: 300,
-      faith: 20000,
-      nineTurnPill: 40,
-      spiritTalisman: 25,
-      spiritTreasure: 2,
-    },
+    // 因果理论以道论承接，灵宝与香火作为实证投入。
+    cost: { insight: 224000, faith: 20000, spiritTreasure: 2, daoTreatise: 16 },
     desc: '把历世的因果摊开对照，才知道哪些是债、哪些是缘。',
     effectDesc: '因此开得出因果池，也看得清下一次转世／飞升能带走多少仙缘。',
     effects: { unlockBuildings: ['karmaPool'] },
     note: '解锁建筑：因果池',
-    needs: { upgrades: ['karmaSense', 'towerPlan'] },
+    needs: { realm: 9, upgrades: ['karmaSense', 'towerPlan'] },
   },
 
   // ============ 支线 · 心法研究：心印与修持 ============
@@ -275,7 +267,7 @@ const CORE_CULTIVATION = [
     id: 'mindSeal',
     name: '心印法',
     glyph: '印',
-    cost: { insight: 70000, pill: 120, herb: 6000 },
+    cost: { insight: 56000, pill: 120, daoTreatise: 4 },
     desc: '以心印心，不必言语 —— 长老一个念头，弟子便知该如何行气。',
     effectDesc: '因此破境再省一成半材料。',
     effects: { breakthroughDiscount: 0.15 },
@@ -286,7 +278,7 @@ const CORE_CULTIVATION = [
     id: 'greatVehicleSeal',
     name: '大乘心印',
     glyph: '乘',
-    cost: { insight: 140000, artifact: 60, talisman: 120, plank: 40, spiritTreasure: 1 },
+    cost: { insight: 112000, artifact: 60, spiritTreasure: 1, daoTreatise: 8 },
     desc: '统合历世修持的经验，凝成一道可辨识、可传承的心印结构。',
     effectDesc: '因此参悟得出《大乘心经》：灵机与灵草产出提升，仙草、九转丹与灵宝制作同步增强。',
     effects: { unlockBuildings: [] },
@@ -298,7 +290,7 @@ const CORE_CULTIVATION = [
     id: 'mahayanaArt',
     name: '大乘心经',
     glyph: '经',
-    cost: { insight: 160000, artifact: 60, talisman: 60, pill: 60 },
+    cost: { insight: 128000, daoTreatise: 9 },
     desc: '以心养药，以愿证道。灵机产出 +120%，灵草产出 +80%，仙草与九转丹制作产出 +50%，灵宝制作产出 +30%。香火增产改由《大乘愿典》承接。',
     effects: { ratio: { insight: 1.2, herb: 0.8 }, craftBonusByResource: { immortalHerb: 0.5, nineTurnPill: 0.5, spiritTreasure: 0.3 } },
     needs: { upgrades: ['greatVehicleSeal'] },
@@ -339,7 +331,17 @@ const CORE_CULTIVATION = [
     desc: '灵木沤浆、抄帘成纸。有了纸，道理才写得下、符样才起得了稿。开启《抄造灵纸》；道札制作产出 +15%。',
     effectDesc: '因此留得住灵机：道札、符箓、道论、阵图与灵符自此共用一种载体。',
     effects: { craftBonusByResource: { daoNote: 0.15 } },
-    needs: { realm: 3, upgrades: ['herbStudy'] },
+    needs: { upgrades: ['herbStudy'], building: { id: 'herbGarden', count: 1 } },
+  },
+  {
+    id: 'paperWorks',
+    name: '纸坊规制',
+    glyph: '坊',
+    cost: { insight: 2400, wood: 450, herb: 150, daoNote: 3 },
+    desc: '把抄纸从一帘一帘的试手，定成纸坊的成规：灵纸制作产出 +15%，道札制作产出 +10%。',
+    effectDesc: '因此灵纸供给稳定，知识链与符咒共用同一条纸线。',
+    effects: { craftBonusByResource: { paper: 0.15, daoNote: 0.1 } },
+    needs: { upgrades: ['preachArt'] },
   },
 
   // ---------- 金铁族 ----------
@@ -364,7 +366,7 @@ const CORE_CULTIVATION = [
     desc: '丹火既通，转入炉锤。解锁炼器坊与「淬炼法器」。',
     effectDesc: '因此淬得出器，法器不再只是纸上谈兵。',
     effects: { unlockBuildings: ['forge'] },
-    needs: { upgrades: ['alchemyArt', 'woodworking', 'earthArt'], building: { id: 'ironFurnace', count: 1 } },
+    needs: { upgrades: ['earthArt'], building: { id: 'ironFurnace', count: 1 } },
   },
   // 自技艺页迁入（工艺）：开放淬玄成钢
   {
@@ -381,12 +383,12 @@ const CORE_CULTIVATION = [
     id: 'artifactLore',
     name: '器道精微',
     glyph: '器',
-    cost: { insight: 40000, artifact: 25, ore: 4000, plank: 20 },
+    cost: { insight: 32000, artifact: 25, daoTreatise: 2 },
     desc: '一器之成，差在毫厘。懂得器纹如何引气，法器才算真正入门。',
     effectDesc: '因此炼得出护山阵盘：阵纹落在器物上，比刻在山石上更灵。',
     effects: { unlockBuildings: [] },
     note: '开启参悟：护山阵盘',
-    needs: { upgrades: ['steelWorking'] },
+    needs: { upgrades: ['steelWorking', 'crystalTheory'] },
   },
 
   // ---------- 符阵族 ----------
@@ -398,7 +400,7 @@ const CORE_CULTIVATION = [
     desc: '将灵气固定成特定形状的符号，建立符文原理。符文决定效果，灵木与金属载体决定承载能力；解锁符箓堂与刻制符箓。',
     effectDesc: '因此画得出符，镇妖避劫有了凭据。',
     effects: { unlockBuildings: ['talismanHall'] },
-    needs: { upgrades: ['forgeArt', 'qiGazing'], building: { id: 'forge', count: 1 } },
+    needs: { upgrades: ['forgeArt'], building: { id: 'forge', count: 1 } },
   },
   {
     id: 'qiRune',
@@ -425,22 +427,22 @@ const CORE_CULTIVATION = [
     cost: { insight: 2200, ore: 100, qi: 800 },
     desc: '用相连的符文引导灵气流向，使不同材料之间能够传导气机。开启阵基装配、镇守纹与纳灵纹研究。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['qiRune', 'shapeRune'] },
+    needs: { upgrades: ['shapeRune'] },
   },
   {
     id: 'guardRune',
     name: '镇守纹',
     glyph: '纹',
-    cost: { insight: 12000, stone: 200, qi: 1200 },
+    cost: { insight: 9600, stone: 100, qi: 1200, daoNote: 12 },
     desc: '将固形结构向外延伸，抵御外部冲击。为炼虚参悟镇岳符与符法精微建立基础。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['conductionRune'] },
+    needs: { upgrades: ['conductionRune', 'preachArt'] },
   },
   {
     id: 'capacityRune',
     name: '纳灵纹',
     glyph: '纹',
-    cost: { insight: 14000, wood: 250, spiritLiquid: 2 },
+    cost: { insight: 11200, spiritLiquid: 1, daoNote: 14 },
     desc: '以层叠符文在金属载体内容纳更多灵气。解锁铭刻灵符，开启复合符文与须弥纳芥研究。',
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['conductionRune', 'liquidArt', 'steelWorking'] },
@@ -449,27 +451,27 @@ const CORE_CULTIVATION = [
     id: 'compositeRune',
     name: '复合符文',
     glyph: '纹',
-    cost: { insight: 24000, crystal: 10, steel: 5 },
+    cost: { insight: 19200, crystal: 10, steel: 3, daoTreatise: 1 },
     desc: '将导灵与纳灵等符文连接为协作结构，刻入器物内部。解锁铸灵器，为立体符文研究建立基础。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['conductionRune', 'capacityRune'] },
+    needs: { upgrades: ['capacityRune', 'crystalTheory'] },
   },
   // 符文的材料应用：阵基
   {
     id: 'arrayAssembly',
     name: '阵基装配',
     glyph: '基',
-    cost: { insight: 3200, plank: 2, talisman: 2, ore: 40 },
+    cost: { insight: 2600, plank: 1, talisman: 2, ore: 20 },
     desc: '将导灵纹与固形纹直接刻入木板和玄铁，注入灵气组装阵基。用于讲经堂、静心池及阵法营造。',
     effects: { craftBonusByResource: { arrayBase: 0.05 } },
-    needs: { upgrades: ['earthArt', 'woodworking', 'conductionRune'], building: { id: 'talismanHall', count: 1 } },
+    needs: { upgrades: ['conductionRune'], building: { id: 'talismanHall', count: 1 } },
   },
   // 自技艺页迁入（工艺）：开放凝气结晶
   {
     id: 'crystalCraft',
     name: '凝晶工艺',
     glyph: '工',
-    cost: { insight: 10000, talisman: 6, ore: 80 },
+    cost: { insight: 8000, talisman: 6, ore: 40, daoNote: 10 },
     desc: '以固形纹固定结晶边界，将灵液与灵气凝成灵晶。解锁凝气结晶，灵晶制作产出 +5%。',
     effects: { craftBonusByResource: { crystal: 0.05 } },
     needs: { upgrades: ['crystalTheory', 'shapeRune'], building: { id: 'talismanHall', count: 1 } },
@@ -479,16 +481,16 @@ const CORE_CULTIVATION = [
     id: 'crystalPolishing',
     name: '晶纹精修',
     glyph: '琢',
-    cost: { insight: 16000, crystal: 8, talisman: 20 },
+    cost: { insight: 12800, crystal: 8, talisman: 20, daoNote: 16 },
     desc: '精修固形纹排列，减少结晶损耗。凝晶每份耗料减少20%（整枚材料向上取整），金丹起凝晶加工效率 +25%。',
     effects: { craftCostReduction: { condenseCrystal: 0.2 }, craftSpeedByRecipe: { condenseCrystal: 0.25 } },
-    needs: { upgrades: ['crystalCraft', 'precipitateTheory'] },
+    needs: { upgrades: ['precipitateTheory'] },
   },
   {
     id: 'talismanLore',
     name: '符法精微',
     glyph: '符',
-    cost: { insight: 45000, talisman: 120, wood: 6000 },
+    cost: { insight: 36000, talisman: 120, daoTreatise: 2 },
     desc: '将复合符文发展为立体结构，以镇守纹稳定边界，使符文能够承受更强的气机。',
     effectDesc: '因此画得出镇岳符：一笔落下，山岳为之定。',
     effects: { unlockBuildings: [] },
@@ -512,13 +514,13 @@ const CORE_CULTIVATION = [
     id: 'alchemyEssence',
     name: '丹道精微',
     glyph: '精',
-    cost: { insight: 3600, herb: 2400, pill: 40, immortalHerb: 10 }, // 待校准
+    cost: { insight: 2900, herb: 1200, pill: 40, immortalHerb: 10, daoNote: 4 }, // 待校准
     desc: '炼丹成术、火候纯青之后，参透君臣佐使的丹性，方能炼二级灵丹、开丹鼎。',
     effectDesc: '因此炼得出凝元丹，也搭得起丹鼎 —— 高阶丹不再只靠一件法宝。',
     // 解锁建筑仅为注释：建筑解锁实际看其自身 needs（见 buildings.js 的 pillFurnace）。
     effects: { unlockBuildings: ['pillFurnace'] },
     note: '解锁配方：凝元炼丹；解锁建筑：丹鼎',
-    needs: { upgrades: ['alchemyArt', 'alchemyFire'], building: { id: 'alchemyRoom', count: 1 } },
+    needs: { upgrades: ['alchemyFire', 'preachArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
 
   // ---------- 香火族 ----------
@@ -531,7 +533,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['gate'] },
     note: '解锁建筑：山门',
     effectDesc: '因此立得起山门，香客自会寻来。',
-    needs: { upgrades: ['earthArt', 'talismanArt'], building: { id: 'talismanHall', count: 1 } },
+    needs: { upgrades: ['talismanArt'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'incenseStudy',
@@ -557,7 +559,7 @@ const CORE_CULTIVATION = [
     effectDesc: '因此可凝愿积德，并继续参悟香火修持。',
     effects: { unlockBuildings: [] },
     note: '开启：凝愿、证心与香火修持',
-    needs: { upgrades: ['incenseVow'], building: { id: 'gate', count: 1 }, realm: 4 },
+    needs: { upgrades: ['incenseVow'], building: { id: 'gate', count: 1 }, },
   },
 
   // ---------- 土木族 ----------
@@ -573,7 +575,7 @@ const CORE_CULTIVATION = [
     // 先取得矿料并掌握木作器械，再研究石基木架的营造与扩仓。
     // 门槛从 ×3 降到 ×1：炼铁炉按 1.3 涨价，第 3 座要 304 矿石，而这一阶段矿石上限只有
     // 250（要库房才能抬），库房又在本术之下 —— ×3 等于把土木术锁死。
-    needs: { upgrades: ['prospectStudy', 'woodworking'], building: { id: 'ironFurnace', count: 1 } },
+    needs: { upgrades: ['woodworking'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'earthEssence',
@@ -585,19 +587,19 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['depot'] },
     note: '解锁建筑：材料库',
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
-    needs: { upgrades: ['earthArt', 'woodworking'], building: { id: 'warehouse', count: 1 } },
+    needs: { upgrades: ['earthArt'], building: { id: 'warehouse', count: 1 } },
   },
   {
     id: 'buildingCode',
     name: '营造法式',
     glyph: '营',
-    cost: { insight: 20000, plank: 20, steel: 4 },
+    cost: { insight: 16000, plank: 10, steel: 2, daoTreatise: 1 },
     desc: '材有等第、工有次第。一部法式定下来，殿宇才不只靠匠人手感。',
     effectDesc: '因此盖得起精舍：青石铺地、灵纹引气，十名弟子各有静修之处。',
     effects: { unlockBuildings: ['mansion'] },
     note: '解锁建筑：精舍',
     // 造价含玄钢，而玄钢要「炼器术 → 淬玄工艺」才产得出：列进前置，避免先露面却找不到来源。
-    needs: { upgrades: ['earthEssence', 'steelWorking'] },
+    needs: { upgrades: ['steelWorking', 'crystalTheory'] },
   },
   // 土木族工艺节点；暂时只保留混灵土与玄铁混灵土的制作增益。
   {
@@ -608,7 +610,7 @@ const CORE_CULTIVATION = [
     desc: '料有定尺、工有定法，调配与浇筑愈发熟练，同样的原料可制成更多建材。',
     effectDesc: '混灵土与玄铁混灵土制作产出提高。',
     effects: { craftBonusByResource: { spiritMortar: 0.1, ironMortar: 0.1 } },
-    needs: { upgrades: ['earthArt', 'woodworking'], building: { id: 'warehouse', count: 1 } },
+    needs: { upgrades: ['earthArt'], building: { id: 'warehouse', count: 1 } },
   },
 
   // ============ 宗门经营：制度、招募、离线与试炼 ============
@@ -620,7 +622,7 @@ const CORE_CULTIVATION = [
     desc: '识别弟子的岗位专长，依其所长安排分工。学会后自动将有岗位专长的弟子调到对应已开放岗位，弟子页可暂停。',
     effectDesc: '新弟子与新领悟的岗位专长也自动匹配；未开放的岗位等待解锁，出征弟子归队后再调配，无岗位专长者保持分工。',
     effects: { autoTalentJobs: true },
-    needs: { upgrades: ['qiOrigin', 'homePlanning'], building: { id: 'library', count: 1 } },
+    needs: { upgrades: ['homePlanning'], building: { id: 'library', count: 1 } },
   },
   {
     id: 'preachArt',
@@ -630,21 +632,20 @@ const CORE_CULTIVATION = [
     desc: '把玄之又玄的道理，讲成弟子听得懂的人话。解锁讲经堂。',
     effectDesc: '因此长老可以登坛讲经，灵机的来源不再只有藏书。',
     effects: { unlockBuildings: ['academy'] },
-    // 符箓入门经炼器术已含木作器械；讲经堂造价又含阵基（要求木作器械与符箓入门）。
-    // 直接列《木作器械》属跨线重复，去掉后由符阵链与建筑造价卡进度。
-    needs: { building: { id: 'library', count: 1 }, upgrades: ['talismanArt', 'arrayAssembly'] },
+    // 讲经记录依托纸与符文；讲经堂营造仍另需阵基，不反锁道札来源。
+    needs: { building: { id: 'library', count: 1 }, upgrades: ['talismanArt', 'paperArt'] },
   },
   {
     id: 'calmMind',
     name: '静心诀',
     glyph: '静',
-    cost: { insight: 6000, herb: 200 },
+    cost: { insight: 4800, herb: 100, daoNote: 6 },
     desc: '心静则灵气自聚。解锁静心池。',
     effectDesc: '因此弟子坐得住：静心池提供宜居度，让弟子心神更稳。',
     effects: { unlockBuildings: ['meditationPool'] },
     // 静心池造价含阵基与仙草；符箓入门经炼器术已含木作器械，仙草要求凝液与育草产业。
     // 去掉直接列出的跨线《木作器械》，由符阵链与建筑造价卡进度。
-    needs: { building: { id: 'herbGarden', count: 1 }, upgrades: ['talismanArt'] },
+    needs: { building: { id: 'herbGarden', count: 1 }, upgrades: ['preachArt'] },
   },
   {
     id: 'recruitDrive',
@@ -665,7 +666,7 @@ const CORE_CULTIVATION = [
     effectDesc: '档位越高，花费越多、越容易招到高品级天赋的弟子，入宗起点境界也越接近宗门。',
     effects: { recruitMode: true },
     // 金丹即可礼聘人才，不经过阵基装配、讲经法、香火志和广开山门。
-    needs: { realm: 4, upgrades: ['incenseVow', 'talentAssignment'], building: { id: 'gate', count: 1 } },
+    needs: { upgrades: ['incenseVow', 'talentAssignment'], building: { id: 'gate', count: 1 } },
   },
   {
     id: 'mentorship',
@@ -682,7 +683,7 @@ const CORE_CULTIVATION = [
     id: 'adaptiveTeaching',
     name: '因材施教',
     glyph: '教',
-    cost: { insight: 4800, faith: 600 },
+    cost: { insight: 3800, daoNote: 5 },
     desc: '因材施教，各随其器。学会后可在弟子页开启「自动突破」，由长老公断何人可冲关。',
     effectDesc: '修满且无调息的弟子可自动发起突破：重点名单优先、缺料跳过等待，培养预算与宗门材料保留优先；仅在线结算，离线不突破。',
     effects: { autoDiscipleBreakthrough: true },
@@ -698,7 +699,7 @@ const CORE_CULTIVATION = [
     effectDesc: '因此配方可以自动连做，并可逐项保留材料、指定优先配方。',
     effects: { autoCraft: true },
     // 自动制作由基础木作、炼丹与炼器知识承接，不要求购买增产技艺。
-    needs: { upgrades: ['woodworking', 'alchemyArt', 'forgeArt'] },
+    needs: { upgrades: ['forgeArt'] },
   },
   {
     id: 'craftTempo',
@@ -714,17 +715,17 @@ const CORE_CULTIVATION = [
     id: 'ancestorArt',
     name: '祖师遗泽',
     glyph: '泽',
-    cost: { insight: 30000, stone: 900, talisman: 8 },
+    cost: { insight: 24000, stone: 450, talisman: 8, daoTreatise: 1 },
     desc: '翻出祖师手札，字里行间都是捷径。解锁祖师殿。',
     effectDesc: '因此立得起祖师殿：提升灵机产出与宜居度；不直接增加香火产出。',
     effects: { unlockBuildings: ['ancestorHall'] },
-    needs: { upgrades: ['incenseStudy'], building: { id: 'incenseCauldron', count: 1 } },
+    needs: { upgrades: ['incenseStudy', 'crystalTheory'], building: { id: 'incenseCauldron', count: 1 } },
   },
   {
     id: 'grottoArt',
     name: '洞天福地',
     glyph: '福',
-    cost: { insight: 60000, stone: 3500, artifact: 12 },
+    cost: { insight: 48000, stone: 1750, artifact: 12, daoTreatise: 3 },
     desc: '以空间节点锚定与内部折叠，在山上开一方小世界。解锁洞天与洞府。',
     effectDesc: '因此开得出洞天与洞府：一方自成一界，装得下也住得下。',
     effects: { unlockBuildings: ['grotto', 'caveDwelling'] },
@@ -734,7 +735,7 @@ const CORE_CULTIVATION = [
     id: 'longBreath',
     name: '龟息功',
     glyph: '龟',
-    cost: { insight: 6000, stone: 5000, pill: 40 },
+    cost: { insight: 4800, pill: 40, daoNote: 6 },
     desc: '闭门即是深山。离线收益上限 +8 小时。',
     effectDesc: '因此离山也在修行：离线八小时照样积攒。',
     effects: { offlineHours: 8 },
@@ -744,7 +745,7 @@ const CORE_CULTIVATION = [
     id: 'breathArt',
     name: '定息法',
     glyph: '息',
-    cost: { insight: 18000, pill: 40, plank: 20 },
+    cost: { insight: 14400, pill: 40, daoNote: 18 },
     desc: '把呼吸压到极缓，人在与不在，气机不断。',
     effectDesc: '因此离山也在修行：离线时间再多算八小时。',
     effects: { offlineHours: 8 },
@@ -755,7 +756,7 @@ const CORE_CULTIVATION = [
     id: 'trialArt',
     name: '试炼法',
     glyph: '炼',
-    cost: { insight: 18000, pill: 60, herb: 2000 },
+    cost: { insight: 14400, daoTreatise: 1 },
     desc: '以阵纹模拟雷劫，让弟子在安全处先尝一次天威。',
     effectDesc: '因此立得起试炼塔：弟子在塔中磨砺，出塔便是另一番气象。',
     effects: { unlockBuildings: ['trialTower'] },
@@ -766,18 +767,18 @@ const CORE_CULTIVATION = [
     id: 'gateRecord',
     name: '山门志',
     glyph: '志',
-    cost: { insight: 30000, faith: 4000, artifact: 10 },
+    cost: { insight: 24000, faith: 4000, daoNote: 30 },
     desc: '把历年上山的弟子名录刻在石上，山门的名声就有了凭据。',
     effectDesc: '因此愿意上山的弟子更勤，宗门扩张更快。',
     effects: { arrivalBonus: 0.3 },
     note: '效果：弟子前来更快',
-    needs: { upgrades: ['incenseStudy'] },
+    needs: { upgrades: ['recruitDrive'] },
   },
   {
     id: 'spiritMortarArt',
     name: '混灵土工艺',
     glyph: '材',
-    cost: { insight: 10000, stone: 100, spiritLiquid: 2 },
+    cost: { insight: 8000, stone: 50, spiritLiquid: 1, daoNote: 10 },
     desc: '研究灵液与灵石粉末的胶结固化，解锁拌制混灵土。',
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['earthEssence', 'liquidArt'] },
@@ -786,25 +787,25 @@ const CORE_CULTIVATION = [
     id: 'ironMortarArt',
     name: '玄铁骨架',
     glyph: '材',
-    cost: { insight: 18000, spiritMortar: 4, ore: 100 },
+    cost: { insight: 14400, spiritMortar: 4, ore: 50, daoTreatise: 1 },
     desc: '以玄铁骨架增强混灵土，解锁浇筑玄铁混灵土。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['spiritMortarArt', 'steelWorking'] },
+    needs: { upgrades: ['spiritMortarArt', 'steelWorking', 'crystalTheory'] },
   },
   {
     id: 'mithrilArt',
     name: '秘银提炼',
     glyph: '材',
-    cost: { insight: 30000, rock: 1000, qi: 1000 },
+    cost: { insight: 24000, rock: 500, qi: 1000, daoTreatise: 1 },
     desc: '辨识矿石中的储灵金属，解锁提炼秘银，供高级储灵设施使用。',
     effects: { unlockBuildings: [] },
-    needs: { upgrades: ['prospectStudy', 'capacityRune'] },
+    needs: { upgrades: ['capacityRune', 'crystalTheory'] },
   },
   {
     id: 'arcaneGoldArt',
     name: '玄金熔炼',
     glyph: '材',
-    cost: { insight: 60000, mithril: 4, spiritLiquid: 8 },
+    cost: { insight: 48000, mithril: 4, spiritLiquid: 4, daoTreatise: 3 },
     desc: '将秘银与玄铁浸炼为储灵合金，解锁熔炼玄金。',
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['mithrilArt', 'compositeRune'] },
@@ -813,7 +814,7 @@ const CORE_CULTIVATION = [
     id: 'crystalSilverArt',
     name: '晶银复合',
     glyph: '材',
-    cost: { insight: 100000, crystal: 10, mithril: 5 },
+    cost: { insight: 80000, crystal: 10, mithril: 5, daoTreatise: 5 },
     desc: '研究晶体—金属界面的精密灵场之介，稳定灵晶与秘银的复合，解锁复合晶银，用于顶级建筑的阵场控制之枢。',
     effects: { unlockBuildings: [] },
     needs: { upgrades: ['arcaneGoldArt', 'crystalPolishing'] },
@@ -822,7 +823,7 @@ const CORE_CULTIVATION = [
 
   // ============ 修真应用 · 营造 ============
   // 阵法 / 采石 / 营造的方法性条目：自技艺页迁入 5（id 不变）。
-  // 保留境界门槛：境界决定能观察到、能操作的东西。
+  // 应用研究依赖上游产业；建筑与加工配方保留各自条件。
   {
     id: 'fieldTillage',
     name: '阵法精要',
@@ -842,6 +843,16 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['homePlanning'], building: { id: 'quarry', count: 1 } },
   },
   {
+    id: 'stoneWorks',
+    name: '石作规制',
+    glyph: '石',
+    cost: { insight: 2400, rock: 450, ore: 150, daoNote: 3 },
+    desc: '定石作的取料、养护与砌筑成规：石材制作产出 +15%。',
+    effectDesc: '因此砌基、灵纹石与高塔共用一套可计量的石材供给。',
+    effects: { craftBonusByResource: { cutStone: 0.15 } },
+    needs: { upgrades: ['quarryArt', 'masonryArt', 'preachArt'] },
+  },
+  {
     id: 'homePlanning',
     name: '居所营造',
     glyph: '居',
@@ -857,7 +868,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 120, wood: 300, ore: 40 },
     desc: '引泉分流，净水与污水各循其道。宜居度 +6，元婴掌握混灵土后可营造净身灵池。',
     effects: { habitability: 6 },
-    needs: { realm: 3, upgrades: ['homePlanning', 'prospectStudy'] },
+    needs: { upgrades: ['homePlanning', 'prospectStudy'] },
   },
   {
     id: 'gardenDesign',
@@ -866,7 +877,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 1200, spiritMortar: 4, plank: 10, crystal: 4 },
     desc: '顺山势划分静修与劳作区域，配合灵纹隔声。宜居度 +8，掌握玄铁混灵土后可营造清幽园林。',
     effects: { habitability: 8 },
-    needs: { realm: 6, upgrades: ['waterSanitation', 'calmMind'] },
+    needs: { upgrades: ['waterSanitation', 'calmMind'] },
   },
 
   // ============ 修真应用 · 原理：资格 / 解锁型 ============
@@ -876,29 +887,29 @@ const CORE_CULTIVATION = [
     id: 'etchTheory',
     name: '蚀刻原理',
     glyph: '蚀',
-    cost: { insight: 8000, wood: 400, ore: 100 },
+    cost: { insight: 6400, ore: 50, daoNote: 8 },
     desc: '以灵纹在载体上稳定刻蚀，蚀刻台由此立起；后续精修纹路、批量刻纹都以它为前提。',
     effectDesc: '因此刻得稳、刻得准：灵纹器具与定纹模刻可继续精研，并解锁蚀刻台。',
     effects: { unlockBuildings: ['etchTable'] },
     note: '解锁建筑：蚀刻台；作下游前置资格',
-    needs: { upgrades: ['talismanArt', 'shapeRune'] },
+    needs: { upgrades: ['shapeRune', 'preachArt'] },
   },
   {
     id: 'infuseTheory',
     name: '注灵原理',
     glyph: '注',
-    cost: { insight: 10000, stone: 500, qi: 800 },
+    cost: { insight: 8000, stone: 250, qi: 800, daoNote: 10 },
     desc: '把灵气稳定注入器物与金属载体，注灵台由此立起；高阶注灵加工以它为前提。',
     effectDesc: '因此注得进、留得住：御剑术可继续精研，并解锁注灵台。',
     effects: { unlockBuildings: ['infusionAltar'] },
     note: '解锁建筑：注灵台；作下游前置资格',
-    needs: { upgrades: ['talismanArt', 'liquidArt'] },
+    needs: { upgrades: ['liquidArt'] },
   },
   {
     id: 'precipitateTheory',
     name: '凝析原理',
     glyph: '析',
-    cost: { insight: 12000, crystal: 6, spiritLiquid: 6 },
+    cost: { insight: 9600, crystal: 6, spiritLiquid: 3, daoNote: 12 },
     desc: '控制灵液析出与晶核生长，析晶台由此立起；晶纹精修与校准以它为前提。',
     effectDesc: '因此析得出匀净晶核：晶纹精修可继续精研，并解锁析晶台。',
     effects: { unlockBuildings: ['crystalBench'] },
@@ -909,12 +920,12 @@ const CORE_CULTIVATION = [
     id: 'temperTheory',
     name: '回火原理',
     glyph: '回',
-    cost: { insight: 14000, steel: 6, artifact: 8 },
+    cost: { insight: 11200, steel: 3, artifact: 8, daoNote: 14 },
     desc: '以灵火回火调节器胚与钢料，回火炉由此立起；灵火冶炼等以它为前提。',
     effectDesc: '因此锻得出好器：灵火冶炼可继续精研，并解锁回火炉。',
     effects: { unlockBuildings: ['temperFurnace'] },
     note: '解锁建筑：回火炉；作下游前置资格',
-    needs: { upgrades: ['forgeArt', 'steelWorking'] },
+    needs: { upgrades: ['artifactLore'] },
   },
 
   // ============ 宗门外交（可选模块贡献，见 modules/diplomacy） ============
@@ -929,7 +940,7 @@ const CORE_CULTIVATION = [
     effectDesc: '因此开立宗门外交：与各宗互市，以富余资源换取紧缺物资；秘银与灵晶只在少数宗门有售，且定价偏高。',
     effects: { openTrade: true },
     note: '解锁宗门外交页',
-    needs: { realm: 3, building: { id: 'gate', count: 1 } },
+    needs: { upgrades: ['incenseVow'], building: { id: 'gate', count: 1 } },
     module: 'diplomacy',
   },
 
@@ -943,123 +954,74 @@ export const CULTIVATION = [...CORE_CULTIVATION, ...HUNT_UPGRADES]
 export const ALL_UPGRADES = [...CULTIVATION, ...TECHNIQUES, ...FAITH_UPGRADES]
 
 /**
- * 修真页的分组（界面上按它分组显示）：主线五章 + 心法支线 + 材料七族 + 宗门经营。
- * 主线按「灵气的科学史」分章，章节感来自依赖链、灵机仓容与材料产业推进，分组只是导航；
- * 材料研究按族分「原理 → 工艺 → 精研」三层（方案见 docs/RESEARCH.md）。
+ * 按产业进度拆段，同族的基础与高阶研究分开；分段与段内位置只影响导航。
+ * 知识费用按用途与完整生产成本分配：记录用道札、理论用道论、工程用阵图。
+ * 纸/道札/道论/阵图的加工境界仍各自生效，分段不替代真实解锁条件。
  */
 export const CULTIVATION_STAGES = [
   {
-    key: 'qiSense',
-    label: '灵气研究 Ⅰ 观气',
-    hint: '灵气是什么、在哪、怎么聚',
-    ids: ['qiOrigin', 'qiGazing', 'qiMeasure'],
+    key: 'qiSense', label: '观气与计量', hint: '观气、测定与按份化液',
+    ids: ['qiOrigin', 'qiGazing', 'qiMeasure', 'qiLiquid'],
   },
   {
-    key: 'qiCondense',
-    label: '灵气研究 Ⅱ 凝聚',
-    hint: '怎么把灵气存住、存好',
-    ids: ['qiLiquid', 'liquidArt', 'qiPurify', 'crystalTheory'],
+    key: 'foundation', label: '起居与采集', hint: '居所、石作与药圃',
+    ids: ['homePlanning', 'quarryArt', 'herbStudy', 'fieldTillage', 'talentAssignment'],
   },
   {
-    key: 'qiControl',
-    label: '灵气研究 Ⅲ 调控',
-    hint: '怎么引导、约束灵气',
-    ids: ['astrologyArt', 'hourArt', 'arrayBasics', 'arrayMastery'],
+    key: 'basicMaterials', label: '丹火与基础材料', hint: '炼丹 → 探矿 → 木作、土木与炼器',
+    ids: ['alchemyArt', 'prospectStudy', 'woodworking', 'earthArt', 'forgeArt'],
   },
   {
-    key: 'qiSplit',
-    label: '灵气研究 Ⅳ 拆解',
-    hint: '灵气由什么构成',
-    ids: ['particleTheory', 'yinyangSplit', 'annihilationArt', 'energyApplication', 'immortalDiscovery', 'immortalIndustry'],
+    key: 'knowledge', label: '知识载体 · 纸与讲经', hint: '抄纸与符文入门，讲经后可在金丹记录道札',
+    ids: ['paperArt', 'talismanArt', 'preachArt'],
   },
   {
-    key: 'qiSource',
-    label: '灵气研究 Ⅴ 归源',
-    hint: '灵气与因果、飞升',
-    ids: ['karmaSense', 'towerPlan', 'karmaConcord'],
+    key: 'basicRunes', label: '符文与阵基', hint: '聚气 → 固形 → 导灵 → 装配',
+    ids: ['qiRune', 'shapeRune', 'conductionRune', 'arrayAssembly'],
   },
   {
-    key: 'heartCultivation',
-    label: '心法研究 · 心印与修持',
-    hint: '节气凝液、心印承接与修持增益',
-    ids: ['condenseArt', 'mindSeal', 'greatVehicleSeal', 'mahayanaArt'],
+    key: 'sectFoundation', label: '宗门制度与往来', hint: '香火、信符、招募与基础自动加工',
+    ids: ['waterSanitation', 'wildHunting', 'incenseVow', 'vowPower', 'neighborContacts', 'seekTalents', 'intuition'],
   },
   {
-    key: 'matHerb',
-    label: '材料研究 · 草木',
-    hint: '原理 → 工艺 → 精研',
-    ids: ['herbStudy', 'woodworking', 'paperArt'],
+    key: 'materialWorks', label: '工艺与规制', hint: '木石、金铁与兽材的稳定供给',
+    ids: ['earthEssence', 'masonryArt', 'steelWorking', 'paperWorks', 'stoneWorks', 'beastMaterialArt'],
   },
   {
-    key: 'matOre',
-    label: '材料研究 · 金铁',
-    hint: '原理 → 工艺 → 精研',
-    ids: ['prospectStudy', 'forgeArt', 'steelWorking', 'artifactLore', 'mithrilArt', 'arcaneGoldArt', 'crystalSilverArt'],
+    key: 'qiCondense', label: '凝液与凝晶原理', hint: '金丹记录道札，承接凝聚产业与元婴道论',
+    ids: ['liquidArt', 'qiPurify', 'crystalTheory', 'condenseArt'],
   },
   {
-    key: 'matTalisman',
-    label: '符文研究 · 刻纹与载体',
-    hint: '原理 → 工艺 → 精研',
-    ids: ['talismanArt', 'qiRune', 'shapeRune', 'conductionRune', 'arrayAssembly', 'guardRune', 'capacityRune', 'crystalCraft', 'crystalPolishing', 'compositeRune', 'talismanLore'],
+    key: 'sectOps', label: '经营与修习', hint: '教习、招募、静心与离线修持',
+    ids: ['mentorship', 'adaptiveTeaching', 'incenseStudy', 'recruitDrive', 'gateRecord', 'calmMind', 'longBreath', 'breathArt', 'craftTempo', 'ancestorArt'],
   },
   {
-    key: 'matAlchemy',
-    label: '材料研究 · 丹道',
-    hint: '原理 → 工艺 → 精研',
-    ids: ['alchemyArt', 'alchemyEssence'],
+    key: 'matTalisman', label: '符文与凝晶深化', hint: '纳灵、结晶与复合结构',
+    ids: ['guardRune', 'capacityRune', 'crystalCraft', 'precipitateTheory', 'crystalPolishing', 'compositeRune', 'talismanLore'],
   },
   {
-    key: 'matIncense',
-    label: '材料研究 · 香火',
-    hint: '原理 → 工艺 → 精研',
-    // ancestorArt 由「宗门经营」归位至此（见 docs/MATERIAL-RESEARCH.md §2.1），链路在族内连成一条。
-    ids: ['incenseVow', 'incenseStudy', 'ancestorArt', 'vowPower'],
+    key: 'appPrinciple', label: '加工原理与专材', hint: '刻蚀、注灵、器道、丹道与高阶金铁',
+    ids: ['etchTheory', 'infuseTheory', 'artifactLore', 'temperTheory', 'alchemyEssence', 'spiritMortarArt', 'ironMortarArt', 'mithrilArt', 'arcaneGoldArt', 'crystalSilverArt'],
   },
   {
-    key: 'matEarth',
-    label: '材料研究 · 土木',
-    hint: '原理 → 工艺 → 精研',
-    // grottoArt 由「宗门经营」归位至此；masonryArt 为本族自有工艺节点（见 docs/MATERIAL-RESEARCH.md §3.1）。
-    ids: ['earthArt', 'earthEssence', 'masonryArt', 'spiritMortarArt', 'ironMortarArt', 'buildingCode', 'grottoArt'],
+    key: 'qiControl', label: '观星与阵法', hint: '观星知势，阵法承接道论',
+    ids: ['astrologyArt', 'arrayBasics', 'arrayMastery'],
   },
   {
-    key: 'matBeast',
-    label: '材料研究 · 山野',
-    hint: '原理 → 工艺 → 精研',
-    ids: ['wildHunting', 'beastMaterialArt'],
+    key: 'engineering', label: '营造与工程', hint: '法式、试炼与空间，塔院施工需要化神阵图',
+    ids: ['buildingCode', 'hourArt', 'trialArt', 'gardenDesign', 'grottoArt', 'towerPlan'],
   },
   {
-    key: 'appBuild',
-    label: '修真应用 · 营造',
-    hint: '阵法 / 采石 / 营造的方法性条目',
-    ids: ['fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign'],
+    key: 'heartCultivation', label: '心法研究 · 心印与修持', hint: '以道论整理修持经验',
+    ids: ['mindSeal', 'greatVehicleSeal', 'mahayanaArt'],
   },
   {
-    key: 'appPrinciple',
-    label: '修真应用 · 原理',
-    hint: '蚀刻 / 注灵等科技原理（资格型，附带解锁建筑）',
-    ids: ['etchTheory', 'infuseTheory', 'precipitateTheory', 'temperTheory'],
+    key: 'qiSplit', label: '灵子与灵能', hint: '离析 → 分流 → 湮灭 → 输配',
+    ids: ['particleTheory', 'yinyangSplit', 'annihilationArt', 'energyApplication'],
   },
   {
-    key: 'sectOps',
-    label: '宗门经营',
-    hint: '制度、招募、离线与试炼',
-    ids: [
-      'preachArt',
-      'talentAssignment',
-      'calmMind',
-      'recruitDrive',
-      'seekTalents',
-      'mentorship',
-      'adaptiveTeaching',
-      'intuition',
-      'craftTempo',
-      'longBreath',
-      'breathArt',
-      'trialArt',
-      'gateRecord',
-      'neighborContacts',
-    ],
+    key: 'qiSource', label: '仙灵与因果', hint: '合体初探，大乘聚合与因果参同',
+    ids: ['immortalDiscovery', 'immortalIndustry', 'karmaSense', 'karmaConcord'],
   },
 ]
 
@@ -1067,10 +1029,17 @@ export const CULTIVATION_STAGES = [
 export const CULTIVATION_STAGE_OF = (() => {
   const map = {}
   CULTIVATION_STAGES.forEach((s, i) => {
-    for (const id of s.ids) map[id] = { ...s, index: i }
+    s.ids.forEach((id, order) => { map[id] = { ...s, index: i, order } })
   })
   return map
 })()
 
 /** id -> 条目（跨层引用依赖时用，例如修真节点 needs 里写一条技艺） */
 export const UPGRADE_MAP = Object.fromEntries(ALL_UPGRADES.map((u) => [u.id, u]))
+
+/** 各修真列表共用段内次序，不依赖原数组或购买先后顺序。 */
+export function compareCultivationOrder(a, b) {
+  const left = CULTIVATION_STAGE_OF[a.id]
+  const right = CULTIVATION_STAGE_OF[b.id]
+  return (left?.index ?? 99) - (right?.index ?? 99) || (left?.order ?? 99) - (right?.order ?? 99)
+}

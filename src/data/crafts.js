@@ -82,7 +82,7 @@ const CORE_CRAFTS = [
     cost: { herb: 100, qi: 60 },
     time: 2,
     desc: '灵草入炉，文武火各三遍，成丹一枚。',
-    needs: { building: { id: 'alchemyRoom', count: 1 } },
+    needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
     // 二级丹：补一/三品之间的断层（见 docs/MATERIAL-RESEARCH.md §1.2/§1.4）。
@@ -217,7 +217,7 @@ const CORE_CRAFTS = [
     cost: { herb: 100, spiritLiquid: 2 },
     time: 5,
     desc: '以灵液浇灌，一株灵草要养到叶上凝露才算是仙草。',
-    needs: { building: { id: 'herbGarden', count: 1 } },
+    needs: { upgrades: ['alchemyArt'], building: { id: 'herbGarden', count: 1 } },
   },
   {
     id: 'refineNineTurnPill',

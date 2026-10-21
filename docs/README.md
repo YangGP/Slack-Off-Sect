@@ -26,6 +26,10 @@
 | [PHASE3-SCARCE-SUPPLY](PHASE3-SCARCE-SUPPLY.md) | 第三阶段：灵晶催化剂微量计费、秘银／灵晶外交供给与外交提前的核算和验证 |
 | [PHASE4-LONGEVITY-EVAL](PHASE4-LONGEVITY-EVAL.md) | 第四阶段：4.8 口粮／宜居度减耗已实施；4.6 首转提速候选、道果口径与配对测量计划 |
 | [OPINION-REVIEW-2026-10-21](OPINION-REVIEW-2026-10-21.md) | 六条玩法意见的静态审核：费用超仓容提示、加工品无上限与自动制作、建筑计价、药藏、法宝、科技树 |
+| [PROGRESSION-TREE-AUDIT-2026-10-21](PROGRESSION-TREE-AUDIT-2026-10-21.md) | 修真 83／技艺 54／法宝 24 的基线清单与解锁结构审核（后续追加纸/石 4 项）：境界门禁覆盖、枢纽扇出、同前置兄弟组与收敛建议 |
+| [RESOURCE-UNLOCK-AUDIT-2026-10-22](RESOURCE-UNLOCK-AUDIT-2026-10-22.md) | 46 项资源的修真解锁核对：26 项加工资源直连研究，基础/模块/机制资源的来源与两处补正 |
+| [REALM-GATE-TECH-CHAIN-REVIEW-2026-10-22](REALM-GATE-TECH-CHAIN-REVIEW-2026-10-22.md) | 境界锁与科技链历史方案及执行记录：7 个直接研究门槛，含观星术例外 |
+| [RESEARCH-CHAIN-REBALANCE-ISSUES-2026-10-22](RESEARCH-CHAIN-REBALANCE-ISSUES-2026-10-22.md) | 修真链问题复核、当前修正与费用对照；来源闭包可达不等于长期平衡通过 |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
 | [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现；P4 交付计划已定（复评→深山→禁地→生态），待实施 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |

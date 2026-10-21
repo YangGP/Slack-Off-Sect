@@ -205,7 +205,7 @@ export const HUNT_TECHNIQUES = [
     cost: { insight: 200, stone: 20 },
     desc: '踏石无声，翻山如履平地。猎杀信符消耗 −10%，不改变外交费用。',
     effects: { huntCostReduction: 0.1 },
-    needs: { upgrades: ['wildHunting'] },
+    needs: { upgrades: ['beastTracking'] },
     module: 'hunting',
   },
   {
@@ -215,7 +215,7 @@ export const HUNT_TECHNIQUES = [
     cost: { insight: 350, wood: 300 },
     desc: '把弓弩、干粮、缚索列成册子，行前清点不遗漏。执符使开符速度 +25%。',
     effects: { jobRatio: { huntPlanner: 0.25 } },
-    needs: { upgrades: ['wildHunting'] },
+    needs: { upgrades: ['mountainStep'] },
     module: 'hunting',
   },
   {
