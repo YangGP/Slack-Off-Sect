@@ -77,7 +77,7 @@ const effects = (e) => {
   if (e.processingPowerCapacity) out.push(`加工供能容量 +${e.processingPowerCapacity}`)
   if (e.processingCoolingRatio) out.push(`晶核阵冷却容量 +${pct(e.processingCoolingRatio)}`)
   if (e.craftSpeedByRecipe) for (const [id, value] of Object.entries(e.craftSpeedByRecipe)) out.push(`${CRAFTS.find(c => c.id === id)?.name || id}加工效率 +${pct(value)}（金丹起）`)
-  if (e.craftCostReduction) for (const [id, value] of Object.entries(e.craftCostReduction)) out.push(`${CRAFTS.find(c => c.id === id)?.name || id}每份耗料 −${pct(value)}（整枚向上取整）`)
+  if (e.craftCostReduction) for (const [id, value] of Object.entries(e.craftCostReduction)) out.push(`${CRAFTS.find(c => c.id === id)?.name || id}每份耗料 −${pct(value)}（保留小数）`)
   if (e.huntSuccessBonus) out.push(`猎杀成功率 +${Math.round(e.huntSuccessBonus * 100)} 个百分点`)
   if (e.huntYieldBonus) out.push(`猎杀收获 +${pct(e.huntYieldBonus)}`)
   if (e.huntCostReduction) out.push(`猎杀信符消耗 −${pct(e.huntCostReduction)}`)
@@ -101,11 +101,11 @@ const effects = (e) => {
 }
 
 emit('## A.1 资源\n')
-emit('| 资源 | id | 基础上限 | 通用扩仓比例 | 隐藏 | 整枚计数 | 说明 |')
-emit('| --- | --- | --- | --- | --- | --- | --- |')
+emit('| 资源 | id | 基础上限 | 通用扩仓比例 | 隐藏 | 说明 |')
+emit('| --- | --- | --- | --- | --- | --- |')
 for (const r of RESOURCES) {
   emit(
-    `| ${r.name} | \`${r.id}\` | ${r.baseMax === Infinity ? '∞' : r.baseMax} | ${(r.storageWeight ?? 1) * 100}% | ${r.hidden ? '是' : '否'} | ${r.integer ? '是' : '否'} | ${r.desc} |`,
+    `| ${r.name} | \`${r.id}\` | ${r.baseMax === Infinity ? '∞' : r.baseMax} | ${(r.storageWeight ?? 1) * 100}% | ${r.hidden ? '是' : '否'} | ${r.desc} |`,
   )
 }
 

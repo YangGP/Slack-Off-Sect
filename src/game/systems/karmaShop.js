@@ -1,4 +1,4 @@
-import { ZERO, money, moneyMax, floorMoney } from '../decimal'
+import { ZERO, money, moneyMax } from '../decimal'
 import { KARMA_PERKS, KARMA_PERK_MAP, createKarmaProgression } from '@/data/karmaShop'
 import { REALMS } from '@/data/realms'
 import { setResourceValue, withResourceAction } from '../resourceObservation'
@@ -38,15 +38,13 @@ export function perkLevel(state, id) {
 }
 
 /**
- * 永久修持下一级报价（仙缘）：⌊baseCost × growth^level⌋。
- * 取整是为了保住「仙缘恒为整数」的既有不变量——结算端（settleKarma/deathKarma）
- * 全部 floorMoney，若报价带小数会让余额出现 79.5 这类显示噪音。
+ * 永久修持下一级报价（仙缘）：baseCost × growth^level，小数完整保留。
  */
 export function perkCost(state, id) {
   if (!Object.hasOwn(KARMA_PERK_MAP, id)) return ZERO
   const meta = KARMA_PERK_MAP[id]
   if (!meta) return ZERO
-  return floorMoney(money(meta.baseCost).times(money(meta.growth).pow(perkLevel(state, id))))
+  return money(meta.baseCost).times(money(meta.growth).pow(perkLevel(state, id)))
 }
 
 /** 仙缘修持前置（境界 / 轮迴数），与香火条目共用同一套判定语义。 */

@@ -56,7 +56,7 @@ export function initialState({ ok, close, section }) {
     ok('有阵徒之后灵气产出叠加', E.moneyGt(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
     ok(
       `灵气消耗按弟子数算（2 人 × ${CONFIG.DISCIPLE_UPKEEP}，凡体倍率 1.0）`,
-      close(derived.upkeep, 0.5, 1e-9),
+      close(derived.upkeep, CONFIG.DISCIPLE_UPKEEP * 2, 1e-9),
       `实际 ${derived.upkeep}`,
     )
 

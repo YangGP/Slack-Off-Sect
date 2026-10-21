@@ -31,7 +31,7 @@ export function pacingOptions(args = []) {
   const result = { hours: 168, seed: 1, outcomes: 'natural', aids: 'full', faith: 'off', visits: 'active',
     events: 0, lives: 1, wallSeconds: 600, traceLimit: 1000, projects: 'stage', labor: 'reference', specialization: 'on', reserve: 'legacy', decisionSeconds: 5, batchActions: 1,
     reincarnations: 0, reincarnateRealm: 6, reincarnatePreparation: 'none', stopRealm: 0, details: 'full', record: false,
-    sampleSeconds: 300, stopAfterReincarnation: false }
+    sampleSeconds: 1800, stopAfterReincarnation: false }
   for (const arg of args) {
     const match = /^--([a-z-]+)=(.+)$/.exec(arg)
     if (!match) throw Error(`无效测量参数：${arg}`)

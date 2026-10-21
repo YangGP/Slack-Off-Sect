@@ -8,7 +8,7 @@ import { REALMS, BREAKTHROUGH } from '@/data/realms'
 import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
 import { isModuleEnabled } from '@/data/modules'
-import { ONE, ZERO, ceilMoney, money, moneyEq, moneyLt, moneyMax, moneySubtract, moneySum } from '../decimal'
+import { ONE, ZERO, money, moneyEq, moneyLt, moneyMax, moneySubtract, moneySum } from '../decimal'
 
 /** 资源和培养名额有限时，手动批量与自动操作均优先重点弟子。 */
 function trainingOrder(members) {
@@ -76,7 +76,7 @@ export function discipleDismissalPreview(state, ids) {
   const selected = new Set(ids)
   // 出征中的弟子不能逐出。
   const members = state.disciples.members.filter(member => selected.has(member.id) && !member.onMission)
-  // 逐出费用是金额：逐人向上取整后精确求和，够不够由 canAfford 的 Decimal 比较判定。
+  // 逐出费用是金额：逐人按精确小数求和，够不够由 canAfford 的 Decimal 比较判定。
   const qi = moneySum(members.map(member => discipleDismissalCost(member, state.realm)))
   return { ids: members.map(member => member.id), count: members.length, cost: { qi },
     affordable: canAfford(state, { qi }) }
@@ -103,9 +103,9 @@ export function dismissDisciples(state, derived, ids, quote = null) {
 export function discipleBreakthroughPreview(state, member) {
   const target = member.realm + 1
   const required = cultivationRequired(member.realm)
-  // 破境费用是金额：按成长系数缩放后整枚资源向上取整，且每种材料至少 1。
+  // 破境费用按成长系数精确缩放，允许小于 1 的材料费用。
   const cost = Object.fromEntries(Object.entries(REALMS[target]?.cost || {}).map(([id, amount]) =>
-    [id, moneyMax(ONE, ceilMoney(money(amount).times(DISCIPLE_GROWTH.costFactor)))]))
+    [id, money(amount).times(DISCIPLE_GROWTH.costFactor)]))
   const chance = Math.min(BREAKTHROUGH.chanceCap, realmBaseChance(target) * DISCIPLE_GROWTH.successFactor +
     Math.max(0, state.realm - target) * DISCIPLE_GROWTH.guidance + talentBonus(member, 'breakthrough') +
     rootBreakthroughBonus(member) / 100 + (member.aidBonus || 0))

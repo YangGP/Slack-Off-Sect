@@ -159,7 +159,7 @@ export function createInitialState(now = Date.now()) {
       craftReserves: {},
       autoCraftPriority: 'infuseStone',
       quickCrafts: [...DEFAULT_QUICK_CRAFTS],
-      // 可选模块开关（默认值与清单见 @/data/modules）
+      // 兼容旧存档字段；注册模块始终启用
       modules: defaultModules(),
     },
 
@@ -263,7 +263,7 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
     // 仙缘与道果是金额：加法走 Decimal，不能原生相加（会把数值拼成字符串）。
     state.karma = moneyMax(ZERO, state.karma ?? ZERO).plus(karmaGain ?? ZERO)
     // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
-    if (kind === 'ascension') state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(1).floor()
+    if (kind === 'ascension') state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(1)
     // 永久货币镜像立即同步：转世/飞升后 resources.karma/dao 必须与顶层字段同值，
     // 否则界面与下一次写档会出现两套金额（旧实现只在读档校验里补镜像）。
     setResourceValue(state, "karma", state.karma, { source: 'game/state.js:resetForRebirth' })

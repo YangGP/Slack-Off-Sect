@@ -2,8 +2,7 @@ import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { BUILDING_MAP } from '@/data/buildings'
 import { checkNeeds, buildingCost, canAfford, payCost, entryOf, pushLog, buildingCostFrom } from './core'
 import { recompute } from './economy'
-import { RESOURCE_MAP } from '@/data/resources'
-import { MONEY_INFINITY, ZERO, floorMoney, money, moneyMin } from '../decimal'
+import { MONEY_INFINITY, ZERO, money, moneyMin } from '../decimal'
 
 export function buyBuilding(state, derived, id, count = 1) {
   return withResourceAction(state, { type: 'buyBuilding', id: id }, () => {
@@ -40,9 +39,9 @@ export function sellBuilding(state, derived, id, count = 1) {
       state.starterHutStanding = false
     }
     for (const k in refund) {
-      // 返还一半；整枚计数的资源（灵石/丹药/符箓/法器）向下取整，免得返还出「半枚」。
+      // 按原价返还一半，小数完整保留。
       const half = refund[k].times('0.5')
-      refund[k] = RESOURCE_MAP[k]?.integer ? floorMoney(half) : half
+      refund[k] = half
     }
     e.count -= n
     if (state.legacyWarehouseCounts?.[id] != null) state.legacyWarehouseCounts[id] = Math.min(state.legacyWarehouseCounts[id], e.count)

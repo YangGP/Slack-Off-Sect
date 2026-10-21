@@ -12,13 +12,12 @@ import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/real
 import { createInitialState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
 import { atLeast } from './numbers'
-import { ZERO, floorMoney, money, moneyFinite, moneyIsPositive, moneyNonNegative, moneySum } from './decimal'
-import { fmtAmount, fmtCost, fmtInt } from './format'
+import { ZERO, money, moneyFinite, moneyIsPositive, moneyNonNegative, moneySum } from './decimal'
+import { fmtAmount, fmtCost } from './format'
 import { cloneRuntime } from './clone'
 import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
 import * as analytics from '@/analytics/collector'
-import { deactivateModule } from './moduleRegistry'
 import { IS_DEV_PREVIEW, STORAGE_PREFIX } from './deployment'
 
 // ============================================================
@@ -386,7 +385,6 @@ export const actions = {
       toast('数量必须是非负有限数字，且不超过安全整数上限', 'bad')
       return false
     }
-    if (meta.integer) value = floorMoney(value)
     state.resources[id] = value
     if (id === 'karma' || id === 'dao') state[id] = value
     if (moneyIsPositive(value)) state.seen[id] = true
@@ -651,9 +649,9 @@ export const actions = {
     E.recompute(state, derived)
     analytics.endRun(snapshot, { reason: 'reincarnation', karmaGain: gain, daoGain: 0 })
     analytics.beginRun('reincarnation', { debug: ui.debug === true })
-    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${fmtInt(gain)} 点再入红尘`, 'realm')
+    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${fmtAmount(gain)} 点再入红尘`, 'realm')
     saveNow()
-    toast(`转世成功，获得仙缘 ${fmtInt(gain)}`, 'good')
+    toast(`转世成功，获得仙缘 ${fmtAmount(gain)}`, 'good')
     return true
   },
   ascend() {
@@ -672,9 +670,9 @@ export const actions = {
     // 飞升实际额外结一颗道果，与 resetForAscension 的结算一致。
     analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain: 1 })
     analytics.beginRun('ascension', { debug: ui.debug === true })
-    E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtInt(gain)} 点转世重修`, 'realm')
+    E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtAmount(gain)} 点转世重修`, 'realm')
     saveNow()
-    toast(`飞升成功，获得仙缘 ${fmtInt(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
+    toast(`飞升成功，获得仙缘 ${fmtAmount(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
     return true
   },
   /** 事件弹窗：打开/关闭只影响会话 UI，不改变待决事件。 */
@@ -899,15 +897,11 @@ export const actions = {
   dismissAnalyticsFailure() {
     ui.analyticsFailureOpen = false
   },
-  /** 开关可选模块：关闭时立即清理该模块状态（如召回出征弟子），并回退页面 */
+  /** 兼容旧调用：功能模块始终启用，拒绝关闭请求。 */
   setModuleEnabled(id, enabled) {
     const meta = MODULE_MAP[id]
-    if (!meta) return false
-    state.settings.modules = { ...(state.settings.modules || {}), [id]: enabled === true }
-    if (enabled !== true) {
-      deactivateModule(state, id)
-      if (meta.tabId && state.ui.tab === meta.tabId) state.ui.tab = 'sect'
-    }
+    if (!meta || enabled !== true) return false
+    state.settings.modules = { ...(state.settings.modules || {}), [id]: true }
     E.recompute(state, derived)
     saveNow()
     return true

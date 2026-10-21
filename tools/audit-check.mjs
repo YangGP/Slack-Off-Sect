@@ -158,7 +158,8 @@ const studying = createInitialState(), studyDerived = E.createDerived()
 studying.realm = 5
 for (const id of ['qiOrigin', 'woodworking', 'talismanArt', 'shapeRune', 'crystalTheory', 'qiPurify', 'liquidArt', 'qiLiquid',
   'preachArt', 'arrayAssembly', 'homePlanning', 'herbStudy', 'prospectStudy', 'earthArt', 'forgeArt', 'forestryArt',
-  'qiArt', 'qiGazing', 'fieldTillage', 'earthEssence', 'flowField', 'oralTeaching']) studying.upgrades[id] = true
+  'qiArt', 'qiGazing', 'fieldTillage', 'earthEssence', 'flowField', 'oralTeaching', 'paperArt',
+  'qiRune', 'conductionRune', 'capacityRune', 'steelWorking', 'quarryArt', 'mithrilArt']) studying.upgrades[id] = true
 for (const [id, count] of [['hut', 80], ['logHouse', 20], ['library', 150], ['scriptureArchive', 150], ['granary', 20], ['talismanHall', 1], ['forge', 1], ['quarry', 1], ['workshop', 1]]) studying.buildings[id] = { count, on: true }
 E.recompute(studying, studyDerived)
 studying.disciples.total = studyDerived.maxDisciples

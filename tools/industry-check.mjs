@@ -106,7 +106,7 @@ export function runIndustryChecks(E = Engine,
     ok('手动加工按节料后的费用支付', close(before.minus(s.resources.qi), 127.5))
     s.upgrades.crystalPolishing = true
     E.recompute(s, d)
-    ok('整数原料节料向上取整，存读档不丢半件', E.moneyEq(craftCost(d, CRAFT_MAP.condenseCrystal).spiritLiquid, 3) && E.moneyEq(craftCost(d, CRAFT_MAP.condenseCrystal).qi, 240))
+    ok('节料后保留小数材料成本', E.moneyEq(craftCost(d, CRAFT_MAP.condenseCrystal).spiritLiquid, '2.4') && E.moneyEq(craftCost(d, CRAFT_MAP.condenseCrystal).qi, 240))
     s.upgrades.arrayStandards = s.upgrades.runeStamping = true
     s.autoCraft.drawTalisman = s.autoCraft.assembleArrayBase = true
     s.resources.plank = E.money(50); s.resources.ore = E.money(1000)

@@ -172,15 +172,20 @@ export function reincarnation({ ok, close, section }) {
       REALMS[state.realm].name + ' / 飞升需 ' + REALMS[ASCEND_REALM_INDEX].name,
     )
 
-    // 同一条公式：越晚结算越值钱
+    // 同一条公式：越晚结算越值钱（首转另有 ×2 结算倍率，公式对照用非首转）
     state.stats.lifeInsight = E.money(40000)
+    state.stats.reincarnations = 1
     E.recompute(state, derived)
     const atShen = E.reincarnationGain(state, derived)
+    state.stats.reincarnations = 0
+    E.recompute(state, derived)
+    const atShenFirst = E.reincarnationGain(state, derived)
     state.realm = ASCEND_REALM_INDEX
     E.recompute(state, derived)
     const atDujie = E.ascensionGain(state, derived)
     const gainRatio = E.moneyToNumber(atDujie.div(atShen))
     ok('化神期转世能结算仙缘', E.moneyIsPositive(atShen), String(atShen))
+    ok('首转仙缘结算 ×2（只此一次）', E.moneyEq(atShenFirst, atShen.times(2)), atShen + ' → ' + atShenFirst)
     ok('渡劫期飞升拿得更多（同一公式，门槛更高）', E.moneyGt(atDujie, atShen), atShen + ' → ' + atDujie)
     ok('两者用同一条公式（境界因子 1+境界×0.3）', close(gainRatio, (1 + ASCEND_REALM_INDEX * 0.3) / (1 + REINCARNATE_REALM_INDEX * 0.3), 0.02), gainRatio.toFixed(3))
 
@@ -333,15 +338,15 @@ export function breakthroughRisk({ ok, close, section }) {
     ok('辅助材料不足不支付、不掷骰', !E.breakthrough(poor, pd, all, () => { throw Error('不应掷骰') }) && E.moneyEq(poor.resources.qi, 100000))
     ok('渡劫失败境界不变', !E.breakthrough(s, d, all, () => 0.99) && s.realm === 4)
     {
-      // 渡劫失败：先扣基础与辅助材料，再按剩余库存的 2% 额外没收（逐项向下取整）。
+      // 渡劫失败：先扣基础与辅助材料，再按剩余库存的 2% 额外没收（保留小数）。
       const pillLeft = E.money(100000).minus(p.cost.pill)
       const talismanLeft = E.money(100000).minus(p.cost.talisman)
       ok('失败扣基础与辅助材料及2%相关库存',
-        E.moneyEq(s.resources.pill, pillLeft.minus(pillLeft.times(0.02).floor())) &&
+        E.moneyEq(s.resources.pill, pillLeft.minus(pillLeft.times(0.02))) &&
         E.moneyEq(s.resources.faith, 99750) &&
         E.moneyEq(s.resources.immortalHerb, 99992) &&
         E.moneyEq(s.resources.arrayBase, 99996) &&
-        E.moneyEq(s.resources.talisman, talismanLeft.minus(talismanLeft.times(0.02).floor())))
+        E.moneyEq(s.resources.talisman, talismanLeft.minus(talismanLeft.times(0.02))))
     }
     ok('失败减产5%且有恢复期限', s.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05 && b.until > Date.now()))
     E.breakthrough(s, d, {}, () => 0.99)
@@ -371,13 +376,13 @@ export function breakthroughRisk({ ok, close, section }) {
       const material = Object.keys(cost).find(id => id !== 'qi' && id !== 'insight')
       const remaining = E.moneySubtract(alive.resources[material], cost[material])
       ok(`境界${realm}失败存活必退一境`, !E.breakthrough(alive, ad, {}, () => 0.99) && alive.realm === realm - 1)
-      ok(`境界${realm}退境仍减产扣料并保留本世`, E.moneyEq(alive.resources[material], remaining.minus(remaining.times(0.02).floor())) && alive.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && alive.stats.bestRealm === realm && E.moneyEq(alive.stats.lifeInsight, 200000) && E.moneyEq(alive.karma, 50) && E.moneyEq(alive.dao, 2))
+      ok(`境界${realm}退境仍减产扣料并保留本世`, E.moneyEq(alive.resources[material], remaining.minus(remaining.times(0.02))) && alive.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && alive.stats.bestRealm === realm && E.moneyEq(alive.stats.lifeInsight, 200000) && E.moneyEq(alive.karma, 50) && E.moneyEq(alive.dao, 2))
       ok(`境界${realm}退境后产出倍率立即更新`, ad.realmMult === REALMS[realm - 1].mult)
     }
     const [dead, dd] = setup(7)
     dead.achievements.firstQi = true
     dead.stats.bestRealm = 7
-    const gain = E.floorMoney(E.reincarnationGain(dead, dd).div(2))
+    const gain = E.reincarnationGain(dead, dd).div(2)
     let roll = 0
     ok('炼虚失败可身死重开', !E.breakthrough(dead, dd, {}, () => roll++ === 0 ? 0.99 : 0) && dead.realm === 0)
     ok('只减半本次仙缘且不误计转世飞升', E.moneyEq(dead.karma, E.money(50).plus(gain)) && E.moneyEq(dead.dao, 2) && dead.stats.breakthroughDeaths === 1 && dead.stats.reincarnations === 0 && dead.stats.ascensions === 0)

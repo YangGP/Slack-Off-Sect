@@ -47,7 +47,7 @@ export function karmaShop({ ok, close, section }) {
     ok('首级道基共鸣花 8 仙缘', E.buyKarmaPerk(s, 'foundationEcho'))
     ok('购买后顶层与镜像双写同步', s.karma.eq(92) && s.resources.karma.eq(92), String(s.karma) + ' / ' + String(s.resources.karma))
     ok('等级与累计投入入账', s.karmaProgression.levels.foundationEcho === 1 && s.karmaProgression.totalSpent.eq(8))
-    ok('报价按 1.5 增长取整', E.perkCost(s, 'foundationEcho').eq(12))
+    ok('报价按 1.5 精确增长', E.perkCost(s, 'foundationEcho').eq(12))
     // 超上限
     s.karmaProgression.levels.foundationEcho = 5
     s.karma = E.money(500)

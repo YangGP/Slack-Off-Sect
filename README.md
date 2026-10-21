@@ -2,19 +2,22 @@
 
 用 Vue 3 + Vite（纯 JavaScript）实现的修仙宗门挂机放置游戏，参考猫国的资源池、劳动力、叠加建筑与研究加工体系。
 
-**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.423 · 渐进解锁、仓储调整与伐木增产**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
+**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.424 · 材料链扩充与小数结算**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
 
 ## 开发与检查
 
 ~~~bash
 npm install
 npm run dev          # 开发预览 http://127.0.0.1:5273
-npm run check        # 编码、引擎、SSR、DOM检查
+npm run check        # 日常检查：编码、8组核心引擎动作、SSR
+npm run check:full   # 按需完整回归，含长模拟、审计、启动与DOM
 npm run build        # 生产构建到 dist/
 npm run preview      # 预览构建结果
 npm run docs:tables  # 从数据文件重新生成全量表
 npm run clean        # 删除构建、测试与审计产物
 ~~~
+
+局部改动只运行对应检查，例如 `npm run smoke -- --group=saveSerialization`；用 `npm run smoke -- --list` 查看功能组。产业负荷与记录恢复测试按修改范围单独选择，不作为每次提交的附加必跑项。
 
 ## 玩法
 

@@ -19,7 +19,7 @@ export function goldenCoreProduction({ ok, close, section }) {
   {
     const { state: s, derived: d } = newGame()
     const recipes = ['recordDaoNote', 'compileDaoTreatise', 'drawArrayDiagram'].map(id => CRAFT_MAP[id])
-    for (const id of ['preachArt', 'crystalTheory', 'compositeRune', 'astrologyArt', 'intuition']) s.upgrades[id] = true
+    for (const id of ['preachArt', 'crystalTheory', 'compositeRune', 'astrologyArt', 'intuition', 'paperArt']) s.upgrades[id] = true
     for (const [id, count] of Object.entries({ scriptureArchive: 20, academy: 5, observatory: 5, warehouse: 10, talismanHall: 4 })) s.buildings[id] = { count, on: true }
     for (const [realm, expected] of [[3, 0], [4, 1], [5, 2], [6, 3]]) {
       s.realm = realm
@@ -27,12 +27,15 @@ export function goldenCoreProduction({ ok, close, section }) {
       ok(`知识链在境界${realm}只开放前${expected}层`, recipes.filter(c => E.isCraftUnlocked(s, c)).length === expected)
     }
     s.resources.insight = E.money(20000)
-    s.resources.wood = E.money(10000)
-    ok('道札可手动批量制作，扣除灵机和书写材料', E.moneyEq(E.craft(s, d, 'recordDaoNote', { times: 200 }), 200) && E.moneyEq(s.resources.daoNote, 200) && E.moneyIsZero(s.resources.insight) && E.moneyIsZero(s.resources.wood))
+    s.resources.paper = E.money(400)
+    const dbgMade = E.craft(s, d, 'recordDaoNote', { times: 200 })
+    ok('道札可手动批量制作，扣除灵机和书写材料', E.moneyEq(dbgMade, 230) && E.moneyEq(s.resources.daoNote, 230) && E.moneyIsZero(s.resources.insight) && E.moneyIsZero(s.resources.paper))
     s.resources.insight = E.money(15000)
-    ok('道札汇为道论，确实消耗上游知识', E.moneyEq(E.craft(s, d, 'compileDaoTreatise', { times: 10 }), 10) && E.moneyIsZero(s.resources.daoNote) && E.moneyEq(s.resources.daoTreatise, 10) && E.moneyIsZero(s.resources.insight))
-    Object.assign(s.resources, { insight: E.money(6000), talisman: E.money(5) })
-    ok('道论与符箓绘为阵图', E.moneyEq(E.craft(s, d, 'drawArrayDiagram'), 1) && E.moneyIsZero(s.resources.daoTreatise) && E.moneyEq(s.resources.arrayDiagram, 1) && E.moneyIsZero(s.resources.insight) && E.moneyIsZero(s.resources.talisman))
+    s.resources.paper = E.money(20)
+    s.resources.daoNote = E.money(200)
+    ok('道札汇为道论，确实消耗上游知识', E.moneyEq(E.craft(s, d, 'compileDaoTreatise', { times: 10 }), 10) && E.moneyIsZero(s.resources.daoNote) && E.moneyEq(s.resources.daoTreatise, 10) && E.moneyIsZero(s.resources.insight) && E.moneyIsZero(s.resources.paper))
+    Object.assign(s.resources, { insight: E.money(6000), talisman: E.money(5), paper: E.money(10) })
+    ok('道论与符箓绘为阵图', E.moneyEq(E.craft(s, d, 'drawArrayDiagram'), 1) && E.moneyIsZero(s.resources.daoTreatise) && E.moneyEq(s.resources.arrayDiagram, 1) && E.moneyIsZero(s.resources.insight) && E.moneyIsZero(s.resources.talisman) && E.moneyIsZero(s.resources.paper))
     Object.assign(s.resources, asMoney(UPGRADE_MAP.particleTheory.cost))
     s.upgrades.particleTheory = false
     const theoryNeed = s.resources.daoTreatise
@@ -42,17 +45,17 @@ export function goldenCoreProduction({ ok, close, section }) {
     ok('观星台扩建实际消耗道札', E.buyBuilding(s, d, 'observatory', 1) === 1 && E.moneyIsPositive(notes) && E.moneyIsZero(s.resources.daoNote))
     s.buildings.workshop = { count: 1, on: true }
     E.recompute(s, d)
-    Object.assign(s.resources, { insight: E.money(1700), wood: E.money(850), daoNote: E.money(0) })
-    ok('知识材料沿用制作增产和小数累计', E.moneyEq(E.craft(s, d, 'recordDaoNote', { times: 17 }), 18) && close(s.craftProgress.recordDaoNote, 0.02))
-    Object.assign(s.resources, { insight: E.money(750), wood: E.money(2000), daoNote: E.money(0), daoTreatise: E.money(0), arrayDiagram: E.money(0) })
+    Object.assign(s.resources, { insight: E.money(1700), paper: E.money(34), daoNote: E.money(0) })
+    ok('知识材料增产的小数直接入库', close(E.craft(s, d, 'recordDaoNote', { times: 17 }), 20.57) && s.craftProgress.recordDaoNote === undefined)
+    Object.assign(s.resources, { insight: E.money(750), wood: E.money(2000), paper: E.money(4), daoNote: E.money(0), daoTreatise: E.money(0), arrayDiagram: E.money(0) })
     s.settings.autoCraftOn = true
     s.autoCraft.recordDaoNote = true
     E.setCraftTarget(s, d, 'recordDaoNote', 2)
     s.settings.craftReserves = { insight: E.money(500) }
     E.simulateOffline(s, d, 120)
-    ok('知识自动加工遵守目标和灵机保留量', E.moneyEq(s.resources.daoNote, 2) && E.moneyGte(s.resources.insight, 500) && E.moneyLt(s.resources.insight, 750))
+    ok('知识自动加工遵守目标和灵机保留量', E.moneyEq(s.resources.daoNote, '2.42') && E.moneyGte(s.resources.insight, 500) && E.moneyLt(s.resources.insight, 750))
     const restored = parseImport(exportSave(s))
-    ok('知识库存、进度与自动设置可以存读档', E.moneyEq(restored.resources.daoNote, 2) && close(restored.craftProgress.recordDaoNote, s.craftProgress.recordDaoNote) && restored.autoCraft.recordDaoNote && E.moneyEq(restored.settings.craftReserves.insight, 500))
+    ok('知识库存、进度与自动设置可以存读档', E.moneyGte(s.resources.daoNote, 2) && E.moneyEq(restored.resources.daoNote, s.resources.daoNote) && restored.craftProgress.recordDaoNote === undefined && restored.autoCraft.recordDaoNote && E.moneyEq(restored.settings.craftReserves.insight, 500))
     // 旧档夹具：这里刻意给旧格式的 Number 金额，验证读档路径能把它解析成 Decimal。
     const legacy = normalizeState({ realm: 6, upgrades: { particleTheory: true }, buildings: { observatory: { count: 1, on: true } }, resources: { insight: 100 } })
     ok('旧档知识补零、不追缴已有研究建筑', recipes.every(c => E.moneyIsZero(legacy.resources[c.out])) && legacy.upgrades.particleTheory && legacy.buildings.observatory.count === 1 && E.moneyEq(legacy.resources.insight, 100))
@@ -127,7 +130,9 @@ export function goldenCoreProduction({ ok, close, section }) {
     s.buildings.warehouse = { count: 5, on: true }
     ok('阵基装配与材料库在金丹参悟', E.research(s, d, 'arrayAssembly') && E.research(s, d, 'earthEssence') && UPGRADE_MAP.earthEssence.needs.realm == null)
     ok('未见过玄钢前材料库不露面（渐进露出）', !d.unlockedBuildings.includes('depot'))
-    ok('淬出几份玄钢后材料库露面', E.research(s, d, 'steelWorking') && E.moneyEq(E.craft(s, d, 'refineSteel', { times: 3 }), 3) && d.unlockedBuildings.includes('depot'))
+    const steelLearned = E.research(s, d, 'steelWorking')
+    const steelExpected = E.craftYield(d, CRAFT_MAP.refineSteel).times(3)
+    ok('淬出几份玄钢后材料库露面', steelLearned && E.moneyEq(E.craft(s, d, 'refineSteel', { times: 3 }), steelExpected) && d.unlockedBuildings.includes('depot'))
     ok('点修真不能直接制作灵晶或建成晶核阵', E.moneyIsZero(E.craft(s, d, 'condenseCrystal')) && E.buyBuilding(s, d, 'crystalArray', 1) === 0)
     s.realm = 5
     E.recompute(s, d)
@@ -144,21 +149,23 @@ export function goldenCoreProduction({ ok, close, section }) {
     const stoneBefore = s.resources.stone
     const crystalNeed = BUILDING_MAP.crystalArray.cost.crystal
     const arrayNeed = BUILDING_MAP.crystalArray.cost.arrayBase
+    s.resources.mithril = E.money(10)
     const crystalMade = E.craft(s, d, 'condenseCrystal', { times: crystalNeed })
-    ok('灵晶确实由灵液与灵气加工，不消耗符箓与灵石', E.moneyEq(crystalMade, crystalNeed) &&
+    ok('灵晶确实由灵液与灵气加工，不消耗符箓与灵石', close(crystalMade, E.money(crystalNeed).times(E.craftYield(d, CRAFT_MAP.condenseCrystal))) &&
       E.moneyEq(s.resources.spiritLiquid, liquidBefore.minus(CRAFT_MAP.condenseCrystal.cost.spiritLiquid * crystalNeed)) &&
       E.moneyEq(s.resources.talisman, talismanBefore) &&
       E.moneyEq(s.resources.qi, qiBefore.minus(CRAFT_MAP.condenseCrystal.cost.qi * crystalNeed)) &&
       E.moneyEq(s.resources.stone, stoneBefore))
-    ok('学工艺后能加工阵基并完成第一座晶核阵', E.moneyEq(E.craft(s, d, 'assembleArrayBase', { times: arrayNeed }), arrayNeed) && E.buyBuilding(s, d, 'crystalArray', 1) === 1)
-    ok('晶核阵消费成品并保留无限灵晶库存', E.moneyIsZero(s.resources.crystal) && E.moneyIsZero(s.resources.arrayBase) && !d.max.crystal.isFinite() && d.craftBonusByResource.crystal > 0)
+    const arrayExpected = E.craftYield(d, CRAFT_MAP.assembleArrayBase).times(arrayNeed)
+    ok('学工艺后能加工阵基并完成第一座晶核阵', E.moneyEq(E.craft(s, d, 'assembleArrayBase', { times: arrayNeed }), arrayExpected) && E.buyBuilding(s, d, 'crystalArray', 1) === 1)
+    ok('晶核阵消费成品并保留无限灵晶库存', E.moneyEq(s.resources.crystal, crystalMade.minus(crystalNeed)) && E.moneyEq(s.resources.arrayBase, arrayExpected.minus(arrayNeed)) && !d.max.crystal.isFinite() && d.craftBonusByResource.crystal > 0)
     const recipe = CRAFT_MAP.condenseCrystal
     const beforeRate = E.eventResourceRate(s, d, 'crystal')
     const beforeYield = E.craftYield(d, recipe)
     s.upgrades.crystalPolishing = true
     E.recompute(s, d)
     ok('凝晶精修减少每份耗料并提高加工效率，单份收益不变', close(E.craftYield(d, recipe), beforeYield) && E.moneyEq(craftCost(d, recipe).qi, 240) && d.craftSpeedByRecipe.condenseCrystal === 0.25)
-    d.rates = { qi: E.money(600), wood: E.money(80), ore: E.money(40) }
+    d.rates = { qi: E.money(600), wood: E.money(80), ore: E.money(40), spiritLiquid: E.money(60), mithril: E.money('0.2') }
     const crystalRate = E.eventResourceRate(s, d, 'crystal')
     d.craftBonusByResource.crystal += 0.5
     ok('工艺奖励计价使用同一专业加成', E.moneyGt(E.eventResourceRate(s, d, 'crystal'), crystalRate) && E.moneyGte(beforeRate, 0))
@@ -169,13 +176,28 @@ export function goldenCoreProduction({ ok, close, section }) {
     E.recompute(s, d)
     E.setCraftTarget(s, d, 'condenseCrystal', 2)
     E.simulateOffline(s, d, 30)
-    ok('灵晶离线自动制作遵守目标并结转已有小数收益', E.moneyEq(s.resources.crystal, 2) && E.moneyEq(s.resources.talisman, 900) && E.moneyEq(s.craftTargets.condenseCrystal, 2))
+    ok('灵晶离线自动制作遵守目标并结转已有小数收益', E.moneyGte(s.resources.crystal, 2) && E.moneyEq(s.resources.talisman, 900) && E.moneyEq(s.craftTargets.condenseCrystal, 2))
     const saved = parseImport(exportSave(s))
-    ok('灵晶工艺与库存目标可以存读档', E.moneyEq(saved.resources.crystal, 2) && saved.upgrades.crystalCraft && E.moneyEq(saved.craftTargets.condenseCrystal, 2))
+    ok('灵晶工艺与库存目标可以存读档', E.moneyEq(saved.resources.crystal, s.resources.crystal) && saved.upgrades.crystalCraft && E.moneyEq(saved.craftTargets.condenseCrystal, 2))
     // 旧档夹具：这里刻意给旧格式的 Number 金额，验证读档路径能把它解析成 Decimal。
     const old = normalizeState({ resources: { stone: 17 }, buildings: { observatory: { count: 1, on: true } } })
     ok('旧档保留库存与建筑，新增灵晶补零', E.moneyEq(old.resources.stone, 17) && E.moneyIsZero(old.resources.crystal) && E.isBuildingUnlocked(old, 'observatory'))
     resetForReincarnation(s, 0)
     ok('重修清空灵晶和本世工艺', E.moneyIsZero(s.resources.crystal) && !s.upgrades.crystalCraft)
+  }
+  section('灵晶催化剂：每份直接支付小数秘银')
+  {
+    const { state: s, derived: d } = newGame()
+    s.realm = 5
+    s.upgrades.crystalCraft = true
+    s.buildings.talismanHall = { count: 1, on: true }
+    Object.assign(s.resources, { qi: E.money(1000000), spiritLiquid: E.money(2000), mithril: E.ZERO })
+    E.recompute(s, d)
+    ok('无秘银时不能凝晶', E.maxCraftable(s, d, 'condenseCrystal') === 0 && E.moneyIsZero(E.craft(s, d, 'condenseCrystal')))
+    s.resources.mithril = E.money('0.01')
+    ok('每份凝晶扣 0.01 秘银，1.05 产量直接入库', E.moneyEq(E.craft(s, d, 'condenseCrystal'), '1.05') && E.moneyIsZero(s.resources.mithril))
+    s.resources.mithril = E.money('0.025')
+    const restored = parseImport(exportSave(s))
+    ok('小数秘银随存档保留，无催化进度字段', E.moneyEq(restored.resources.mithril, '0.025') && restored.catalystProgress === undefined)
   }
 }

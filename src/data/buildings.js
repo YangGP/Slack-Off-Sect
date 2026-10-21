@@ -71,12 +71,12 @@ const CORE_BUILDINGS = [
     // 实物建筑不吃灵气：矿石砌炉、木料烧炭。
     // 造价必须落在**矿石基础上限 250** 之内：早期没有库房，矿石一到 250 就顶住，
     // 定 300 会让这座炉子永远盖不起来，而库房又卡在它的下游 —— 直接死锁（实测 6 小时起全停）。
-    cost: { rock: 180, wood: 150 },
+    cost: { cutStone: 45, wood: 150 },
     priceRatio: 1.3,
     desc: '矿石入炉、灵木作炭。每座每秒耗矿石 0.3 与灵木 0.15，烧出玄铁 0.15（两石一木换一铁）。',
     effects: { prod: { ore: 0.15 } },
     upkeep: { rock: 0.3, wood: 0.15 },
-    needs: { upgrades: ['prospectStudy'] },
+    needs: { upgrades: ['quarryArt', 'prospectStudy'] },
   },
   {
     id: 'spiritQuarry',
@@ -85,12 +85,12 @@ const CORE_BUILDINGS = [
     group: 'produce',
     // 与炼铁炉同在"寻脉"这一条线上：矿石砌井口、木料搭支架（实物建筑不吃灵气，
     // 也不再用修炼硬通货充当砌石 —— 灵石留给凝灵与交易）
-    cost: { wood: 400, rock: 250, ore: 80 },
+    cost: { wood: 400, cutStone: 63, ore: 80 },
     // 天然灵石由矿工采出，每座启用矿井叠加固定副产出，不放大矿石或玄铁。
     priceRatio: 1.55,
     desc: '岩层里嵌着天然灵石。每座启用的矿井，让每名矿工额外采出 0.0015 灵石/秒，多座相加；无人采矿时不产出。',
     effects: {},
-    needs: { upgrades: ['prospectStudy'], building: { id: 'ironFurnace', count: 1 } },
+    needs: { upgrades: ['quarryArt', 'prospectStudy'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
     id: 'herbGarden',
@@ -98,11 +98,11 @@ const CORE_BUILDINGS = [
     glyph: '圃',
     group: 'produce',
     // 普通药圃用木料营造，灵石留给凝灵与交易。
-    cost: { wood: 240, rock: 120, stone: 60 },
+    cost: { wood: 240, cutStone: 30, stone: 60 },
     priceRatio: 1.15,
     desc: '按四时节气轮种，开放采药人职位；派遣弟子照料和采收后才能取得灵草。每座启用的药圃提高灵草产出10%，多座相加。',
     effects: { ratio: { herb: 0.1 } },
-    needs: { upgrades: ['herbStudy'] },
+    needs: { upgrades: ['quarryArt', 'herbStudy'] },
   },
   {
     id: 'gatheringArray',
@@ -110,7 +110,7 @@ const CORE_BUILDINGS = [
     glyph: '叠',
     group: 'produce',
     // 阵基以矿石垒筑、少量灵石研粉描纹：硬通货只占零头，砌筑重活交给矿石
-    cost: { rock: 400, stone: 150, insight: 300 },
+    cost: { cutStone: 100, stone: 150, insight: 300 },
     priceRatio: 1.4,
     desc: '在小阵之上再叠三重纹路，把方圆百里的灵气都攒进山门。',
     // 大阵攒的是灵气，但"攒住"这件事对整条灵气产线都成立：
@@ -123,7 +123,7 @@ const CORE_BUILDINGS = [
     upkeep: { qi: 1.2 }, // 大阵自己在引气，也在漏气
 
     // 观清气脉并掌握阵纹布置，才可营造大阵。
-    needs: { upgrades: ['qiGazing', 'fieldTillage'] },
+    needs: { upgrades: ['quarryArt', 'qiGazing', 'fieldTillage'] },
   },
   {
     id: 'crystalArray',
@@ -194,22 +194,22 @@ const CORE_BUILDINGS = [
     name: '清风小院',
     glyph: '院',
     group: 'living',
-    cost: { wood: 80, rock: 120 },
+    cost: { wood: 80, cutStone: 30 },
     priceRatio: 1.3,
     desc: '石径排水，木廊遮荫，同门劳作之后有处歇脚。每座宜居度 +4。',
     effects: { habitability: 4 },
-    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }], upgrades: ['homePlanning'] },
+    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }], upgrades: ['quarryArt', 'homePlanning'] },
   },
   {
     id: 'communalHall',
     name: '膳养堂',
     glyph: '膳',
     group: 'living',
-    cost: { wood: 180, rock: 240, herb: 100 },
+    cost: { wood: 180, cutStone: 60, herb: 100 },
     priceRatio: 1.32,
     desc: '分灶炊煮、药膳调养，弟子不必各自操持起居。每座宜居度 +8；灵气口粮照常消耗。',
     effects: { habitability: 8 },
-    needs: { building: { id: 'herbGarden', count: 1 } },
+    needs: { building: { id: 'herbGarden', count: 1 }, upgrades: ['quarryArt'] },
   },
   {
     id: 'cleansingBath',
@@ -254,7 +254,7 @@ const CORE_BUILDINGS = [
     name: '料场',
     glyph: '料',
     group: 'store',
-    cost: { wood: 150, rock: 200 },
+    cost: { wood: 150, cutStone: 50 },
     priceRatio: 1.35,
     desc: '平整出一片料场，原料按堆码放，另设石匣存放灵石。用于早期补充仓储，大量囤料需建库房。',
     effects: { storage: { rock: 500, ore: 150, wood: 400, herb: 200, stone: 250 } },
@@ -266,7 +266,7 @@ const CORE_BUILDINGS = [
     glyph: '库',
     group: 'store',
     // 石砌墙基、铁箍木架：矿石承重，灵石不掺和
-    cost: { wood: 150, rock: 200, ore: 60 },
+    cost: { wood: 150, cutStone: 50, ore: 60 },
     priceRatio: 1.22,
     desc: '石基铁箍木架，专存灵木、矿石、玄铁与灵草，另设少量石匣存放灵石 —— 丹药符箓另有去处。',
     // 库房只存**基础物资**：灵木 / 灵石 / 矿石 / 玄铁 / 灵草。
@@ -274,7 +274,7 @@ const CORE_BUILDINGS = [
     // 涨价率略高于谷仓，批量扩容需与采集、加工扩产一起推进。
     // 灵气上限归「谷仓」，灵机归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
     effects: { storage: { wood: 1000, stone: 500, rock: 600, ore: 400, herb: 500 } },
-    needs: { upgrades: ['earthArt'] },
+    needs: { upgrades: ['quarryArt', 'earthArt'] },
   },
   {
     id: 'depot',
@@ -294,7 +294,7 @@ const CORE_BUILDINGS = [
     name: '玄库',
     glyph: '玄',
     group: 'store',
-    cost: { spiritMortar: 20, stone: 2000, plank: 15, ore: 500, insight: 2000 },
+    cost: { spiritMortar: 20, cutStone: 1300, stone: 400, plank: 15, ore: 500, insight: 2000 },
     priceRatio: 1.3,
     desc: '混灵土固基、铁箍封边，专存大宗营造原料，兼收灵气 —— 洞天之前的主力仓。',
     effects: {
@@ -331,7 +331,7 @@ const CORE_BUILDINGS = [
     glyph: '天',
     group: 'store',
     // 洞天以复合建材承重、玄金储灵，避免继续堆基础木板与玄钢。
-    cost: { ironMortar: 40, arcaneGold: 10, stone: 12000, insight: 10000, artifact: 30 },
+    cost: { ironMortar: 40, arcaneGold: 10, cutStone: 7500, stone: 2400, runeStone: 40, insight: 10000, artifact: 30 },
     priceRatio: 1.35,
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；加工品无需仓容。',
     effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000, immortalForce: 20000 }, habitability: 5 },
@@ -346,7 +346,7 @@ const CORE_BUILDINGS = [
     name: '广储库',
     glyph: '广',
     group: 'store',
-    cost: { ironMortar: 30, mithril: 20, plank: 20, stone: 8000 }, // 待校准
+    cost: { ironMortar: 30, mithril: 20, plank: 20, cutStone: 5200, stone: 1600 }, // 待校准
     priceRatio: 1.32,
     desc: '广厦分格、铁架承重，大宗营造原料与粒子、仙灵力各有定额 —— 洞天之前的主力仓。',
     effects: { storageAll: 4000, storage: { insight: 12000, qi: 50000, wood: 50000, stone: 50000, rock: 50000, ore: 50000, faith: 50000, qiParticle: 50000, yangParticle: 50000, yinParticle: 50000, qiEnergy: 15000, immortalForce: 12000 } },
@@ -370,11 +370,11 @@ const CORE_BUILDINGS = [
     name: '典籍库',
     glyph: '籍',
     group: 'cultivate',
-    cost: { wood: 60, rock: 80 },
+    cost: { wood: 60, cutStone: 20 },
     priceRatio: 1.14,
     desc: '书架分格、典籍归档，保存悟道所得，也方便弟子查阅。每座灵机上限 +80、灵机产出 +5%。',
     effects: { storage: { insight: 80 }, ratio: { insight: 0.05 } },
-    needs: { building: { id: 'library', count: 1 } },
+    needs: { building: { id: 'library', count: 1 }, upgrades: ['quarryArt'] },
   },
   {
     id: 'academy',
@@ -438,13 +438,13 @@ const CORE_BUILDINGS = [
     glyph: '丹',
     group: 'craft',
     // 不再吃灵草：灵草是炼丹房要消耗的原料，建它时先要 200 灵草等于先有鸡还是先有蛋。
-    cost: { wood: 360, rock: 240, stone: 150, ore: 60 },
+    cost: { wood: 360, cutStone: 60, stone: 150, ore: 60 },
     priceRatio: 1.25,
     desc: '三足鼎立、文武火候，灵草在这里变成丹药。',
     // 加工品无需仓容；扩建提高制作收益与加工容量。
     effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 }, ratio: { herb: 0.1 } },
     upkeep: { wood: 0.25 }, // 丹炉要一直添柴
-    needs: { upgrades: ['alchemyArt'] },
+    needs: { upgrades: ['quarryArt', 'alchemyArt'] },
   },
   {
     // 丹道高阶设施：承接二级/三级丹的产能，使高阶丹不再只依赖一件法宝（见 docs/MATERIAL-RESEARCH.md §1.5）。
@@ -464,24 +464,24 @@ const CORE_BUILDINGS = [
     name: '炼器坊',
     glyph: '器',
     group: 'craft',
-    cost: { ore: 400, wood: 500, rock: 240 },
+    cost: { ore: 400, wood: 500, cutStone: 60 },
     priceRatio: 1.25,
     desc: '风箱一响，玄铁就有了骨气。',
     effects: { craftBonusByResource: { artifact: 0.08, steel: 0.08, spiritArtifact: 0.08, spiritTreasure: 0.08 }, ratio: { ore: 0.1 } },
     upkeep: { wood: 0.5 }, // 风箱炭火不熄
-    needs: { upgrades: ['forgeArt'] },
+    needs: { upgrades: ['quarryArt', 'forgeArt'] },
   },
   {
     id: 'talismanHall',
     name: '符箓堂',
     glyph: '符',
     group: 'craft',
-    cost: { wood: 420, rock: 200, herb: 300 },
+    cost: { wood: 420, cutStone: 50, herb: 300 },
     priceRatio: 1.25,
-    desc: '以灵木与金属为载体，刻纹注灵，制成符箓、灵符与阵法构件。',
+    desc: '以灵纸与金属为载体，起稿、刻纹、注灵，制成符箓、灵符与阵法构件。',
     effects: { craftBonusByResource: { talisman: 0.08, spiritTalisman: 0.08 } },
     upkeep: { wood: 0.2 }, // 抄符耗纸
-    needs: { upgrades: ['talismanArt'] },
+    needs: { upgrades: ['quarryArt', 'talismanArt'] },
   },
   {
     id: 'workshop',
@@ -504,12 +504,12 @@ const CORE_BUILDINGS = [
     name: '山门',
     glyph: '门',
     group: 'incense',
-    cost: { wood: 360, rock: 200, ore: 40 },
+    cost: { wood: 360, cutStone: 50, ore: 40 },
     priceRatio: 1.3,
     desc: '山门一立，香客便知此处有仙。开放香使职位，派遣弟子接待香客才能收取香火。',
     // 香火是全局最易贴顶的资源（72h 实测 100%），每座仓位按灵木档位的同量级上调
     effects: { storage: { faith: 240 } },
-    needs: { upgrades: ['incenseVow'], building: { id: 'hut', count: 1 } },
+    needs: { upgrades: ['quarryArt', 'incenseVow'], building: { id: 'hut', count: 1 } },
   },
   {
     id: 'incenseCauldron',
@@ -529,7 +529,7 @@ const CORE_BUILDINGS = [
     name: '祖师殿',
     glyph: '祖',
     group: 'incense',
-    cost: { ironMortar: 20, stone: 3000, plank: 10, insight: 6000, talisman: 25 },
+    cost: { ironMortar: 20, cutStone: 1950, stone: 600, plank: 10, insight: 6000, talisman: 25 },
     priceRatio: 1.35,
     desc: '历代祖师的牌位在此，弟子路过都要收一收心思。',
     effects: { ratio: { insight: 0.1 }, habitability: 8 },
@@ -572,7 +572,7 @@ const CORE_BUILDINGS = [
     glyph: '通',
     group: 'wonder',
     // 复合结构承重，玄金储灵、晶银控气，灵符镇住高塔气机。
-    cost: { ironMortar: 100, arcaneGold: 20, crystalSilver: 10, stone: 60000, artifact: 100, insight: 36000, spiritTalisman: 100, arrayDiagram: 8 },
+    cost: { ironMortar: 100, arcaneGold: 20, crystalSilver: 10, cutStone: 37000, stone: 12000, runeStone: 400, artifact: 100, insight: 36000, spiritTalisman: 100, arrayDiagram: 8 },
     priceRatio: 1.6,
     desc: '塔尖直插云海，聚气存念并镇住灵气分子与正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
     effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000, immortalForce: 40000 } },
@@ -590,7 +590,7 @@ const CORE_BUILDINGS = [
     group: 'wonder',
     // 阵要一直烧灵气：把灵气离析成灵气分子，是粒子链的第一步（灵气分子 → 偏极解离 → 正负灵子 → 湮灭）
     // 元婴入门（工业滞后理论 1 境），容量由元婴玄库承接；重复扩建仍按比例涨价。
-    cost: { crystal: 12, spiritTalisman: 6, stone: 12000, insight: 16000, artifact: 40, arrayBase: 8 },
+    cost: { crystal: 12, spiritTalisman: 6, cutStone: 7800, stone: 2400, insight: 16000, artifact: 40, arrayBase: 8 },
     priceRatio: 1.5,
     desc: '阵法从灵气中离析出相抱的灵气分子 —— 拆得越久，越像在跟天地借火。',
     effects: { prod: { qiParticle: 0.04 } },
@@ -605,7 +605,7 @@ const CORE_BUILDINGS = [
     glyph: '偏',
     group: 'wonder',
     // 灵子链第二步：输入解离之力，处理分子；化神入门（滞后理论 1 境）。一对一供料仅指基础数据的归一化流量。
-    cost: { crystal: 30, spiritArtifact: 6, stone: 20000, insight: 24000, artifact: 40, arrayBase: 10, qiParticle: 10 },
+    cost: { crystal: 30, spiritArtifact: 6, cutStone: 12600, stone: 4000, runeStone: 40, insight: 24000, artifact: 40, arrayBase: 10, qiParticle: 10 },
     priceRatio: 1.5,
     desc: '输入灵气作为解离之力，打开分子束缚；两极之势让正负灵子分流，避免重新复合。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
@@ -620,7 +620,7 @@ const CORE_BUILDINGS = [
     glyph: '湮',
     group: 'wonder',
     // 化神可达：造价用灵器／灵符／灵晶／玄钢等化神前已有来源的材料，不依赖炼虚的秘银与合体的玄金。
-    cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, stone: 30000, artifact: 30, arrayDiagram: 2 },
+    cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, cutStone: 18500, stone: 6000, runeStone: 60, artifact: 30, arrayDiagram: 2 },
     priceRatio: 1.6,
     desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座运行还会为多数资源添一层独立产出乘区（香火、灵气分子、正负灵子与灵能不吃此层），不放大每份制作收益与维护费。',
     // 化神入门：既产灵能，又给多数资源一层独立产出乘区（参考猫国核反应堆；不含香火与粒子链）。毛输出 0.06，炉内自用 0.015，净 0.045。
@@ -638,7 +638,7 @@ const CORE_BUILDINGS = [
     name: '采仙台',
     glyph: '仙',
     group: 'wonder',
-    cost: { mithril: 8, crystal: 40, arrayBase: 12, artifact: 30, stone: 20000, insight: 18000, spiritArtifact: 4, arrayDiagram: 3 },
+    cost: { mithril: 8, crystal: 40, arrayBase: 12, artifact: 30, cutStone: 12600, stone: 4000, runeStone: 40, insight: 18000, spiritArtifact: 4, arrayDiagram: 3 },
     priceRatio: 1.5,
     desc: '高台上的相激之场缓缓运转，把天地间自然聚成的仙灵力一丝丝拢住。取之极慢，却已足够看清这一味材料。',
     effects: { prod: { immortalForce: 0.002 } },
@@ -654,7 +654,7 @@ const CORE_BUILDINGS = [
     name: '聚仙阵',
     glyph: '聚',
     group: 'wonder',
-    cost: { arcaneGold: 16, mithril: 12, stone: 40000, insight: 60000, artifact: 40, spiritArtifact: 8, spiritTalisman: 20 },
+    cost: { arcaneGold: 16, mithril: 12, cutStone: 24700, stone: 8000, runeStone: 80, insight: 60000, artifact: 40, spiritArtifact: 8, spiritTalisman: 20 },
     priceRatio: 1.6,
     desc: '分子为料、灵能为力，阵中分子层层吸能聚合，固结成稳定的仙灵力。料与力缺一不可。',
     effects: { prod: { immortalForce: 0.01 } },
@@ -667,7 +667,7 @@ const CORE_BUILDINGS = [
     glyph: '因',
     group: 'wonder',
     // 复合池壁与晶银阵眼承托因果，九转丹与灵符持续镇守。
-    cost: { ironMortar: 150, crystalSilver: 20, stone: 300000, insight: 140000, pill: 1000, spiritArtifact: 25, spiritTreasure: 10, nineTurnPill: 25, spiritTalisman: 50 },
+    cost: { ironMortar: 150, crystalSilver: 20, cutStone: 185000, stone: 60000, runeStone: 300, insight: 140000, pill: 1000, spiritArtifact: 25, spiritTreasure: 10, nineTurnPill: 25, spiritTalisman: 50 },
     priceRatio: 1.7,
     desc: '池中养着一缕前世因果，转世与飞升时都能多带走几分。',
     effects: { ratio: { insight: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },

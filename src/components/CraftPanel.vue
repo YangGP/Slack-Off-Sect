@@ -327,7 +327,7 @@ const condenseStatus = computed(() => {
               @input="weightDrafts[row.meta.id] = $event.target.value" @change="updateWeight(row.meta.id, $event)" />
           </label>
           <label v-if="!compact && derived.craftTargetsUnlocked" class="small">目标
-            <input class="qty" type="number" min="0" step="1" :value="targetDrafts[row.meta.id] ?? targetText(row.meta.id)"
+            <input class="qty" type="number" min="0" step="any" :value="targetDrafts[row.meta.id] ?? targetText(row.meta.id)"
               :aria-label="`${row.meta.name}库存目标`"
               @input="targetDrafts[row.meta.id] = $event.target.value"
               @change="updateTarget(row.meta.id, $event)" />

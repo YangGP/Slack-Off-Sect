@@ -12,7 +12,7 @@ if (args.includes('--help')) {
   --hours=3024 --seed=12345   0 hours means the hard cap of 3024h
   --outcomes=natural|guaranteed --aids=full|none --events=0|1
   --visits=active|quarter|hourly|three|waking --faith=off|growth
-  --sample=300 --wall-seconds=7200
+  --sample=1800 --wall-seconds=7200
   --decision-seconds=5 --batch-actions=1
   --reincarnations=0 --reincarnate-realm=7 --lives=1
   --resume=<checkpoint.json> [--wall-seconds=7200]

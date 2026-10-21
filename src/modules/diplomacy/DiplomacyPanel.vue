@@ -7,11 +7,11 @@
 import { computed } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { DIPLOMACY, DIPLOMACY_SECTS } from './data.js'
-import { RESOURCE_MAP, resourceName } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { REALMS } from '@/data/realms'
 import { isDiplomacyUnlocked, tradePreview } from '@/game/engine'
-import { ZERO, ceilMoney } from '@/game/decimal'
-import { fmtAmount, fmtInt, fmtPercent } from '@/game/format'
+import { ZERO } from '@/game/decimal'
+import { fmtAmount, fmtPercent } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
 
 const unlocked = computed(() => isDiplomacyUnlocked(state))
@@ -30,9 +30,7 @@ function costText(cost) {
 function fortuneText(options) {
   const parts = []
   for (const [res, amount] of Object.entries(options || {})) {
-    // 机缘掉落是金额：整枚计数的资源向上取整展示（与入库口径一致），其余交给格式化助手。
-    const shown = RESOURCE_MAP[res]?.integer ? ceilMoney(amount) : amount
-    parts.push(`${resourceName(res)} ≈${fmtAmount(shown)}`)
+    parts.push(`${resourceName(res)} ≈${fmtAmount(amount)}`)
   }
   return parts.join(' 或 ')
 }
@@ -50,7 +48,7 @@ function trade(sectId) {
           <p>每次交易另有{{ fortunePct }}概率触发机缘，额外获得一份掉落；山门越多，机缘越易（每座 +1%，封顶 35%）。</p>
           <p>机缘掉落按当前产能定价：按产能折算的奖励不超过该资源仓储的 {{ Math.round(DIPLOMACY.FORTUNE_STORAGE_SHARE * 100) }}%，但保底数量不受此限；实际入库仍受仓容限制。</p>
         </template></HoverTip>
-      <span class="hint">信符 {{ fmtInt(warrant) }} / {{ fmtInt(warrantMax) }} · 每回互市 {{ DIPLOMACY.WARRANT_COST }} 枚</span>
+      <span class="hint">信符 {{ fmtAmount(warrant) }} / {{ fmtAmount(warrantMax) }} · 每回互市 {{ DIPLOMACY.WARRANT_COST }} 枚</span>
     </div>
     <div class="box-body">
       <div v-if="!unlocked" class="empty">

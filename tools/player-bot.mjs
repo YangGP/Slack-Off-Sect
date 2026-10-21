@@ -1,5 +1,5 @@
 /**
- * 模拟玩家策略（供 tools/balance.mjs 与 tools/resource-audit.mjs 共用）。
+ * 模拟玩家策略（供 tools/balance.mjs 与长测脚本共用）。
  *
  * 行为设定：每 5 秒决策一次 —— 派活、参悟最便宜的条目（修真 / 技艺 / 法宝同一张表）、按「优先级 + 已有数量」打分买建筑、
  * 灵气富余就凝石、缺破境材料就专门去做、能破境就破境。
@@ -8,7 +8,7 @@
 import * as E from './engine-fixture.mjs'
 import { JOB_MAP } from '../src/data/jobs.js'
 import { CONFIG } from '../src/data/config.js'
-import { ALL_UPGRADES } from '../src/data/upgrades.js'
+import { ALL_UPGRADES, UPGRADE_MAP } from '../src/data/upgrades.js'
 import { UNCAPPED_CRAFTED_RESOURCES } from '../src/data/resources.js'
 import { CRAFTS, craftCost } from '../src/data/crafts.js'
 import { ZERO, ceilMoney, money, moneyGt, moneyGte, moneyLt, moneyLte, moneyMax, moneyMin, moneySum } from '../src/game/decimal.js'
@@ -399,6 +399,28 @@ export function createBot(state, derived, policy = {}) {
   }
 
   function act() {
+    // 4.4：秘银是凝晶催化剂。参考玩家在缺秘银时先解锁外交，再用富余玄铁／灵石去银溪谷换。
+    // 只换到够用即止，避免把建屋与炼器的玄铁掏空。
+    if (state.realm >= 5) {
+      const contact = UPGRADE_MAP.neighborContacts
+      if (!state.upgrades.neighborContacts && E.isUpgradeUnlocked(state, contact) && E.canAfford(state, contact.cost)) {
+        E.research(state, derived, 'neighborContacts')
+      }
+      if (E.isDiplomacyUnlocked(state) && E.countOf(state, 'huntingCamp') === 0) {
+        E.buyBuilding(state, derived, 'huntingCamp')
+        E.recompute(state, derived)
+      }
+      if (E.isDiplomacyUnlocked(state) && (state.disciples.jobs.huntPlanner || 0) < 1 && E.idleDisciples(state) > 0) {
+        E.setJob(state, derived, 'huntPlanner', 1)
+        E.recompute(state, derived)
+      }
+      if (E.isDiplomacyUnlocked(state) && moneyLt(state.resources.mithril ?? ZERO, money(2)) &&
+          moneyGte(state.resources.ore ?? ZERO, money(800)) && moneyGte(state.resources.stone ?? ZERO, money(500)) &&
+          moneyGte(state.resources.warrant ?? ZERO, money(50))) {
+        E.tradeWithSect(state, derived, 'silverGorge')
+        E.recompute(state, derived)
+      }
+    }
     if (derived.industrial && derived.autoCraftSpeedUnlocked) {
       for (const id of derived.availableCrafts) if (derived.autoCraftSpeeds[id] !== 5) E.setAutoCraftSpeed(state, derived, id, 5)
       const capacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0)

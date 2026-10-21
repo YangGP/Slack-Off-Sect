@@ -6,7 +6,7 @@ import { BREAKTHROUGH, BREAKTHROUGH_AIDS, REALMS, ASCEND_REALM_INDEX, REINCARNAT
 import { realmBaseChance } from '@/data/disciples'
 import { gameRandom, gameNow } from '../context'
 import { resetForRebirth } from '../state'
-import { ONE, ZERO, floorMoney, money, moneyGt, moneyMax, moneyMin } from '../decimal'
+import { ONE, ZERO, money, moneyGt, moneyMax, moneyMin } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
 import { FAITH_UPGRADE_MAP } from '@/data/faith'
 import { CONFIG } from '@/data/config'
@@ -107,7 +107,7 @@ export function breakthroughPreview(state, derived, options = {}) {
     deathRisk: (1 - chance) * deathOnFailure,
     holdRisk: (1 - chance) * holdOnFailure,
     deathKeepRatio: 0.5 + karmaShopBonuses(state).deathKeepBonus,
-    deathKarma: floorMoney(reincarnationGain(state, derived).times(money(0.5 + karmaShopBonuses(state).deathKeepBonus))),
+    deathKarma: reincarnationGain(state, derived).times(money(0.5 + karmaShopBonuses(state).deathKeepBonus)),
   }
 }
 
@@ -137,7 +137,7 @@ export function breakthrough(state, derived, options = {}, random = () => gameRa
             if (res === 'insight' || res === 'qi') continue
             // 渡劫失败按库存比例没收：比例是有界 Number，库存与损失是金额。
             const have = state.resources[res] ?? ZERO
-            const amount = moneyMin(have, floorMoney(have.times(BREAKTHROUGH.stockLoss)))
+            const amount = moneyMin(have, have.times(BREAKTHROUGH.stockLoss))
             if (moneyGt(amount, ZERO)) {
               payCost(state, { [res]: amount })
               lost.push(`${RESOURCE_MAP[res].name} ${amount}`)
@@ -202,14 +202,16 @@ export function settleKarma(state, derived, allowed) {
   const daoBonus = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_KARMA_GAIN_BONUS))
   const ledgerBonus = ONE.plus(karmaShopBonuses(state).insightBonus)
   const gain = base.times(realmFactor).times(ONE.plus(derived.ascendBonus || 0)).times(daoBonus).times(ledgerBonus)
-  return moneyMax(allowed ? ONE : ZERO, floorMoney(gain))
+  return moneyMax(allowed ? ONE : ZERO, gain)
 }
 
 export function ascensionGain(state, derived) {
   return settleKarma(state, derived, canAscend(state))
 }
 
-/** 转世能拿多少仙缘（同一公式，门槛更低所以到手更少） */
+/** 转世能拿多少仙缘（同一公式，门槛更低所以到手更少；首转另有结算倍率） */
 export function reincarnationGain(state, derived) {
-  return settleKarma(state, derived, canReincarnate(state))
+  const base = settleKarma(state, derived, canReincarnate(state))
+  if (reincarnationsDone(state) !== 0) return base
+  return base.times(money(CONFIG.FIRST_REINCARNATION_KARMA_MULT))
 }

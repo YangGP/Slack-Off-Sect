@@ -330,6 +330,17 @@ const CORE_CULTIVATION = [
     // 所以它**不能**要百工坊，也不能要木板（否则与"百工坊用木板下料"闭环）。
     needs: { upgrades: ['prospectStudy'], buildings: [{ id: 'lumberYard', count: 1 }, { id: 'ironFurnace', count: 1 }] },
   },
+  // 纸张：知识与符咒的通用载体（第一阶段 4.1）。筑基档，先于金丹知识链。
+  {
+    id: 'paperArt',
+    name: '抄纸法',
+    glyph: '纸',
+    cost: { insight: 150, wood: 300, herb: 100 },
+    desc: '灵木沤浆、抄帘成纸。有了纸，道理才写得下、符样才起得了稿。开启《抄造灵纸》；道札制作产出 +15%。',
+    effectDesc: '因此留得住灵机：道札、符箓、道论、阵图与灵符自此共用一种载体。',
+    effects: { craftBonusByResource: { daoNote: 0.15 } },
+    needs: { realm: 3, upgrades: ['herbStudy'] },
+  },
 
   // ---------- 金铁族 ----------
   {
@@ -912,12 +923,13 @@ const CORE_CULTIVATION = [
     id: 'neighborContacts',
     name: '邻宗往来',
     glyph: '邻',
-    cost: { insight: 2000, stone: 300, herb: 200 },
-    desc: '修书遣使，与山外的药泉谷、黑铁山、须弥寺互通声气。富余的换紧缺的，宗门才活得久。',
-    effectDesc: '因此开立宗门外交：与各宗互市，以富余资源换取紧缺物资。',
+    // 与《山野猎法》同为筑基档：把“换紧缺料”的通道提前，实际仍受山门与信符限流。
+    cost: { insight: 180, stone: 150, herb: 100 },
+    desc: '修书遣使，与山外的药泉谷、黑铁山、须弥寺、银溪谷、星崖观互通声气。富余的换紧缺的，宗门才活得久。',
+    effectDesc: '因此开立宗门外交：与各宗互市，以富余资源换取紧缺物资；秘银与灵晶只在少数宗门有售，且定价偏高。',
     effects: { openTrade: true },
     note: '解锁宗门外交页',
-    needs: { upgrades: ['gateRecord'] },
+    needs: { realm: 3, building: { id: 'gate', count: 1 } },
     module: 'diplomacy',
   },
 
@@ -976,7 +988,7 @@ export const CULTIVATION_STAGES = [
     key: 'matHerb',
     label: '材料研究 · 草木',
     hint: '原理 → 工艺 → 精研',
-    ids: ['herbStudy', 'woodworking'],
+    ids: ['herbStudy', 'woodworking', 'paperArt'],
   },
   {
     key: 'matOre',

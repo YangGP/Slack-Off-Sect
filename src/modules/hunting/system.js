@@ -7,7 +7,7 @@ import { REALMS } from '@/data/realms'
 import { isModuleEnabled } from '@/data/modules'
 import { talentBonus, hasHuntTalent, TALENT_RULES } from '@/data/talents'
 import { clamp, pushLog, addResource, activeOf } from '@/game/systems/core'
-import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
+import { MONEY_INFINITY, ZERO, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
 import { atLeast } from '@/game/numbers'
 import { gameNow } from '@/game/context'
 
@@ -47,7 +47,7 @@ export function createHuntingState() {
     // 独立随机序列：猎杀不消耗事件/突破/收徒的随机数，存读档不重抽已结算结果。
     randomSeed: 1,
     missions: {},
-    // 各兽材小数累计，范围 [0, 1)；整数入库后只留不足 1 的余量。
+    // 兼容旧档未入库的小数收益；新收益直接入库，不再累积余量。
     yieldRemainders: {},
     fieldState: {},
     lastOutcome: null,
@@ -289,10 +289,10 @@ export function warrantBalance(state) {
   return money(state.resources.warrant ?? ZERO)
 }
 
-/** 猎杀专属减耗后的单次费用（金额取整、至少 1）；不影响外交。 */
+/** 猎杀专属减耗后的单次费用，保留小数；不影响外交。 */
 export function huntCost(derived) {
   const reduction = Math.min(HUNT.COST_REDUCTION_CAP, Math.max(0, derived?.huntCostReduction || 0))
-  return Math.max(1, moneyToCount(ceilMoney(money(HUNT.WARRANT_COST).times(1 - reduction))))
+  return money(HUNT.WARRANT_COST).times(1 - reduction)
 }
 
 export function warrantCost(derived) {
@@ -504,7 +504,7 @@ export function advanceHunt(state, derived, dt) {
 }
 
 /**
- * 归队结算：逐人判定成功，按 T_base 与快照倍率计算兽材，整数入库、小数累计。
+ * 归队结算：逐人判定成功，按 T_base 与快照倍率计算兽材，小数直接入库。
  * `autoRepeat: false` 用于长离线的有界快进 —— 它自己统一处理后续批次与末趟，
  * 否则这里的「立即再出发」会把队员再次标记为出征，让快进拿不到队伍与剩余时长。
  */
@@ -532,11 +532,10 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
         .times(effectiveContribution)
         .times(mission.yieldBonus)
       const total = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
-      const whole = floorMoney(total)
-      hunting.yieldRemainders[res] = total.minus(whole)
-      remainders[res] = hunting.yieldRemainders[res]
-      if (whole.gt(0)) {
-        gains[res] = addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
+      delete hunting.yieldRemainders[res]
+      remainders[res] = ZERO
+      if (total.gt(0)) {
+        gains[res] = addResource(state, res, total, derived?.max?.[res] ?? MONEY_INFINITY)
       } else {
         gains[res] = ZERO
       }
@@ -574,7 +573,7 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
       .join('、')
     pushLog(
       state,
-      `猎杀（${field?.name || mission.fieldId}）：${rows.length} 人成功 ${successCount} 人${gainText ? '，猎获 ' + gainText : '，暂无整数入库'}`,
+      `猎杀（${field?.name || mission.fieldId}）：${rows.length} 人成功 ${successCount} 人${gainText ? '，猎获 ' + gainText : '，暂无猎获'}`,
       successCount > 0 ? 'good' : 'bad',
     )
 
@@ -652,9 +651,8 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
     const estimate = huntBatchGainEstimate(field, rows, derived, trips)
     for (const [res, y] of Object.entries(estimate.expected)) {
       const sum = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
-      const whole = floorMoney(sum)
-      hunting.yieldRemainders[res] = sum.minus(whole)
-      if (whole.gt(0)) addResource(state, res, whole, derived?.max?.[res] ?? MONEY_INFINITY)
+      delete hunting.yieldRemainders[res]
+      if (sum.gt(0)) addResource(state, res, sum, derived?.max?.[res] ?? MONEY_INFINITY)
     }
     setResourceValue(state, "warrant", moneyAvailable(state.resources.warrant ?? ZERO, cost.times(trips)), { source: 'hunting/system.js:advanceOfflineHunt' })
     const hunters = rows.length * trips

@@ -3,7 +3,7 @@ import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
 import { CONFIG } from './config'
-import { ZERO, ceilMoney, money, moneyNonNegative } from '../game/decimal.js'
+import { ZERO, money, moneyNonNegative } from '../game/decimal.js'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,
@@ -73,7 +73,7 @@ const clampRealm = value => Math.max(0, Math.min(REALMS.length - 1, value))
 /** 招募花费：灵气随宗门境界倍率缩放，附加材料为固定值。 */
 export function recruitCost(tier, sectRealm) {
   const mult = realmProductionBase(REALMS[sectRealm]?.mult ?? 1)
-  const cost = { qi: Math.max(1, Math.ceil((tier.qi || 0) * mult)) }
+  const cost = { qi: money(tier.qi || 0).times(mult) }
   for (const [id, amount] of Object.entries(tier.cost || {})) if (amount > 0) cost[id] = amount
   return cost
 }
@@ -104,9 +104,9 @@ export function discipleAnnualBaseUpkeep(member, sectRealm) {
     .times(DISCIPLE_DISMISSAL.yearSeconds)
 }
 
-/** 逐出费用（灵气）：年基础口粮 ×（已满年数 + 1），逐人向上取整。 */
+/** 逐出费用（灵气）：年基础口粮 ×（已满年数 + 1），小数完整保留。 */
 export function discipleDismissalCost(member, sectRealm) {
-  return ceilMoney(discipleAnnualBaseUpkeep(member, sectRealm).times(discipleResidenceYears(member) + 1))
+  return discipleAnnualBaseUpkeep(member, sectRealm).times(discipleResidenceYears(member) + 1)
 }
 
 export const SPIRITUAL_ROOTS = [

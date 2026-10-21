@@ -1,35 +1,34 @@
 /**
  * 制作配方（对应猫国的 craft 表：花资源换 1 个成品，可被 craftBonus 放大）。
- * 产出的小数部分会累计到 state.craftProgress，攒满就多给一个。
+ * 产出直接按 Decimal 数量入库，小数不再等到凑整。
  *
  * `time` 是「连续」制作时每做一份要花多少秒：
  *   点「制作」是瞬发的（点一下立刻出一份，见 §7）；
  *   点「连续」则是下一个长期活儿 —— 按这个节奏一份一份出，直到材料或仓储用尽。
  */
-import { RESOURCE_MAP } from './resources.js'
 import { insertAfter } from './modules.js'
-import { ONE, ceilMoney, money } from '../game/decimal.js'
+import { ONE, money } from '../game/decimal.js'
 import { registerStaticMoneyCache } from '../game/staticMoneyCache.js'
 import { HUNT_CRAFTS, HUNT_CRAFT_ANCHOR } from '../modules/hunting/data.js'
 
 const CORE_CRAFTS = [
   {
     id: 'recordDaoNote', name: '记录道札', out: 'daoNote', amount: 1, tier: 1,
-    primary: ['insight', 'wood'], cost: { insight: 100, wood: 50 }, time: 4,
-    desc: '以灵木为书写载体，将研读与试验所得整理成可保存的道札。',
-    needs: { realm: 4, upgrades: ['preachArt'] },
+    primary: ['insight', 'paper'], cost: { insight: 100, paper: 2 }, time: 4,
+    desc: '以灵纸为书写载体，将研读与试验所得整理成可保存的道札。',
+    needs: { realm: 4, upgrades: ['preachArt', 'paperArt'] },
   },
   {
     id: 'compileDaoTreatise', name: '汇编道论', out: 'daoTreatise', amount: 1, tier: 2,
-    primary: ['daoNote', 'insight'], cost: { daoNote: 20, insight: 1500 }, time: 8,
-    desc: '交互核验道札中的记录，将零散认识整理为可复用的理论。',
-    needs: { realm: 5, upgrades: ['preachArt', 'crystalTheory'] },
+    primary: ['daoNote', 'insight'], cost: { daoNote: 20, insight: 1500, paper: 2 }, time: 8,
+    desc: '交互核验道札中的记录，将零散认识整理为可复用的理论，装订成册。',
+    needs: { realm: 5, upgrades: ['preachArt', 'crystalTheory', 'paperArt'] },
   },
   {
     id: 'drawArrayDiagram', name: '绘制阵图', out: 'arrayDiagram', amount: 1, tier: 3,
-    primary: ['daoTreatise', 'insight'], cost: { daoTreatise: 10, insight: 6000, talisman: 5 }, time: 12,
-    desc: '以道论验算阵位，用符箓标定纹路，绘成可直接施工的工程阵图。',
-    needs: { realm: 6, upgrades: ['crystalTheory', 'compositeRune', 'astrologyArt'] },
+    primary: ['daoTreatise', 'insight'], cost: { daoTreatise: 10, insight: 6000, talisman: 5, paper: 10 }, time: 12,
+    desc: '以道论验算阵位，在灵纸上起稿定形，再用符箓标定纹路，绘成可直接施工的工程阵图。',
+    needs: { realm: 6, upgrades: ['crystalTheory', 'compositeRune', 'astrologyArt', 'paperArt'] },
   },
   {
     // 搬迁自宗门页的手动按钮：现在它就是炼制页里的一条普通配方，
@@ -99,6 +98,30 @@ const CORE_CRAFTS = [
     needs: { realm: 5, upgrades: ['alchemyEssence'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
+    id: 'cutStone',
+    name: '压制石材',
+    out: 'cutStone',
+    amount: 1,
+    tier: 1,
+    primary: ['rock'],
+    cost: { rock: 4, qi: 2 },
+    time: 2,
+    desc: '顺着石纹下凿，再以灵气施压定形，压成可砌基垒墙的石材；碎料回炉仍能再压。',
+    needs: { upgrades: ['quarryArt'] },
+  },
+  {
+    id: 'makePaper',
+    name: '抄造灵纸',
+    out: 'paper',
+    amount: 1,
+    tier: 1,
+    primary: ['wood'],
+    cost: { wood: 30, qi: 10 },
+    time: 1.5,
+    desc: '灵木沤浆、抄帘、压榨、晾干，得纸一张。记事、成册、起稿与刻符都从这张纸开始。',
+    needs: { realm: 3, upgrades: ['paperArt'] },
+  },
+  {
     id: 'sawPlank',
     name: '刨木成板',
     out: 'plank',
@@ -117,12 +140,12 @@ const CORE_CRAFTS = [
     out: 'talisman',
     amount: 1,
     tier: 1,
-    primary: ['wood'],
-    // 符文是技术，符箓刻在灵木载体上；高阶灵符采用金属载体。
-    cost: { wood: 125, qi: 60 },
+    primary: ['paper'],
+    // 符文是技术，符箓先以灵纸起稿定形；高阶灵符改用金属载体。
+    cost: { paper: 4, qi: 60 },
     time: 2,
-    desc: '将灵木削成符牌，刻入简单符文，再注入灵气定形，成为可携带的符箓。',
-    needs: { building: { id: 'talismanHall', count: 1 } },
+    desc: '在灵纸上起稿定形、刻入简单符文，再注入灵气固化为可携带的符箓。',
+    needs: { building: { id: 'talismanHall', count: 1 }, upgrades: ['paperArt'] },
   },
   {
     id: 'forgeArtifact',
@@ -149,6 +172,18 @@ const CORE_CRAFTS = [
     needs: { realm: 4, upgrades: ['arrayAssembly'], building: { id: 'talismanHall', count: 1 } },
   },
   {
+    id: 'drawRuneStone',
+    name: '绘制灵纹',
+    out: 'runeStone',
+    amount: 1,
+    tier: 2,
+    primary: ['cutStone', 'paper'],
+    cost: { cutStone: 2, paper: 1, qi: 40 },
+    time: 4,
+    desc: '在灵纸上起稿定形，再按样把导灵纹刻进石材，制成能承托阵纹的营造构件。',
+    needs: { realm: 6, upgrades: ['buildingCode', 'paperArt'] },
+  },
+  {
     id: 'refineSteel',
     name: '淬玄成钢',
     out: 'steel',
@@ -167,9 +202,9 @@ const CORE_CRAFTS = [
     amount: 1,
     tier: 1,
     primary: ['spiritLiquid'],
-    cost: { spiritLiquid: 3, qi: 300 },
+    cost: { spiritLiquid: 3, qi: 300, mithril: 0.01 },
     time: 5,
-    desc: '以固形纹约束结晶边界，灵液与灵气凝成稳定晶核。基础口径为灵液 3、灵气 300，实际用料与产出按加成结算；用于晶核凝炼阵、观星台与高级阵法。',
+    desc: '以固形纹约束结晶边界，灵液与灵气在秘银催引下凝成稳定晶核。基础口径为灵液 3、灵气 300、秘银 0.01；用于晶核凝炼阵、观星台与高级阵法。',
     needs: { realm: 5, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {
@@ -206,11 +241,11 @@ const CORE_CRAFTS = [
     amount: 1,
     tier: 2,
     primary: ['steel', 'spiritLiquid'],
-    cost: { steel: 2, spiritLiquid: 2, qi: 300, faith: 200 },
+    cost: { steel: 2, spiritLiquid: 2, paper: 2, qi: 300, faith: 200 },
     time: 5,
-    desc: '将纳灵纹铭刻在玄钢符牌上，以灵液注灵，承托更强气机；香火中的稳定意念辅助定纹，成就灵符。',
+    desc: '先在灵纸上起稿定形，再将纳灵纹铭刻在玄钢符牌上，以灵液注灵，承托更强气机；香火中的稳定意念辅助定纹，成就灵符。',
     // 原理节点承接精研，不回锁首份灵符配方与旧档自动产线。
-    needs: { realm: 5, upgrades: ['capacityRune'], building: { id: 'talismanHall', count: 1 } },
+    needs: { realm: 5, upgrades: ['capacityRune', 'paperArt'], building: { id: 'talismanHall', count: 1 } },
   },
   {
     id: 'forgeSpiritArtifact',
@@ -307,13 +342,13 @@ const CORE_CRAFTS = [
   },
 ]
 
-/** 核心配方 + 可选模块（猎杀）贡献的配方，按锚点插回保持原顺序 */
+/** 核心配方 + 猎杀模块贡献的配方，按锚点插回保持原顺序 */
 export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
-export const DEFAULT_QUICK_CRAFTS = ['growWood', 'infuseStone', 'refinePill', 'sawPlank']
-export const ADVANCED_CRAFT_OUTPUTS = ['daoNote', 'daoTreatise', 'arrayDiagram', 'spiritLiquid', 'arrayBase', 'steel', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
+export const DEFAULT_QUICK_CRAFTS = ['growWood', 'infuseStone', 'refinePill', 'sawPlank', 'makePaper', 'cutStone']
+export const ADVANCED_CRAFT_OUTPUTS = ['daoNote', 'daoTreatise', 'arrayDiagram', 'paper', 'spiritLiquid', 'arrayBase', 'steel', 'cutStone', 'runeStone', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {
   if (!Array.isArray(ids)) return [...DEFAULT_QUICK_CRAFTS]
@@ -355,7 +390,6 @@ export function craftCost(derived, recipe) {
   const factor = ONE.minus(saving)
   return Object.fromEntries(Object.entries(base).map(([res, amount]) => {
     const reduced = amount.times(factor)
-    // 整枚资源按份向上取整：Decimal 精确运算下不需要再垫 1e-9。
-    return [res, RESOURCE_MAP[res]?.integer ? ceilMoney(reduced) : reduced]
+    return [res, reduced]
   }))
 }

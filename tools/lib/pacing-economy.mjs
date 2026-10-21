@@ -97,6 +97,7 @@ export function measureSpecialization(seconds = 600) {
         state.settings.craftReservePercent = 0
         E.recompute(state, derived)
         for (const res of E.RESOURCES) if (Number.isFinite(res.baseMax) || E.CRAFTS.some(recipe => recipe.out === res.id)) state.resources[res.id] = E.money(10000000)
+        E.recompute(state, derived) // 两组都按补料后的供给计算，避免仅购买组因 research 重算而恢复设施加成。
         const cost = { ...upgrade.cost }
         if (buy && !E.research(state, derived, id)) throw Error(`专精实验无法真实购买：${id}`)
         state.resources[recipe.out] = E.ZERO

@@ -4,7 +4,7 @@ import { state, derived, view, actions, highlightCost, clearHighlight } from '@/
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, realmProductionBase } from '@/data/realms'
 import { DAO_HEART_DIVISOR } from '@/data/faith'
 import { breakthroughPreview, canAfford, realmProductionMultiplier, karmaMultipliers, canAttest } from '@/game/engine'
-import { fmt, fmtAmount, fmtCost, fmtInt, fmtPercent } from '@/game/format'
+import { fmt, fmtAmount, fmtCost, fmtPercent } from '@/game/format'
 import { ZERO, money, moneyToNumber } from '@/game/decimal'
 import { enough as enoughOf } from '@/game/pricing'
 import { aidExtraText } from '@/game/effectsText'
@@ -51,10 +51,10 @@ const karmaStorageBonus = computed(() => moneyToNumber(derived.karmaStorageMult.
 const affordable = computed(() => (cost.value ? canAfford(state, cost.value) : false))
 /** 结算的仙缘是金额（Decimal）：显示前统一走 fmtInt，不要直接拼对象 */
 const gain = computed(() => view.ascendGain.value)
-const gainText = computed(() => fmtInt(gain.value))
+const gainText = computed(() => fmtAmount(gain.value))
 const canAscend = computed(() => view.canAscend.value)
 const reincarnateGain = computed(() => view.reincarnateGain.value)
-const reincarnateGainText = computed(() => fmtInt(reincarnateGain.value))
+const reincarnateGainText = computed(() => fmtAmount(reincarnateGain.value))
 const canReincarnate = computed(() => view.canReincarnate.value)
 const reincarnationEffects = computed(() => ({
   before: karmaMultipliers(state.karma),
@@ -63,7 +63,7 @@ const reincarnationEffects = computed(() => ({
 const unusedDaoHeart = computed(() => canAttest(state) && money(state.resources.vow).gte(DAO_HEART_DIVISOR))
 const karmaEffectText = value => '+' + fmtPercent(moneyToNumber(value.minus(1)), 2)
 /** 身死结算的仙缘也是金额 */
-const deathKarmaText = computed(() => fmtInt(preview.value.deathKarma))
+const deathKarmaText = computed(() => fmtAmount(preview.value.deathKarma))
 
 /** 飞升的唯一条件是渡劫期（转世不是门槛，只是常见路线） */
 const ascendRealmOk = computed(() => state.realm >= ASCEND_REALM_INDEX)
@@ -121,7 +121,7 @@ function reincarnate() {
             <td class="dim nowrap">仙缘</td>
             <td class="num">
               <HoverTip :width="320">
-                <span>{{ fmtInt(state.karma) }} <span class="dim">×{{ derived.karmaMult.toFixed(2) }}</span></span>
+                <span>{{ fmtAmount(state.karma) }} <span class="dim">×{{ derived.karmaMult.toFixed(2) }}</span></span>
                 <template #heading>仙缘<span class="tip-right">永久加成</span></template>
                 <template #tip>
                   <div class="tip-desc">转世与飞升带走的因果，下一世还在身上。</div>
@@ -156,7 +156,7 @@ function reincarnate() {
             <td class="dim nowrap">道果</td>
             <td class="num">
               <HoverTip :width="320">
-                <span>{{ fmtInt(state.dao ?? ZERO) }} <span class="dim">×{{ derived.daoMult.toFixed(2) }}</span></span>
+                <span>{{ fmtAmount(state.dao ?? ZERO) }} <span class="dim">×{{ derived.daoMult.toFixed(2) }}</span></span>
                 <template #heading>道果<span class="tip-right">只有飞升给</span></template>
                 <template #tip>
                   <div class="tip-desc">飞升时结下的道果，比仙缘更高一层。</div>
@@ -315,6 +315,9 @@ function reincarnate() {
         <!-- 门槛未达成时不要显示数字：那只是「按当前境界套公式」的值，玩家转不了世 -->
         <span v-if="canReincarnate" class="v good">{{ reincarnateGainText }} 点</span>
         <span v-else class="v dim">待修到 {{ REALMS[REINCARNATE_REALM_INDEX].name }} 结算</span>
+      </div>
+      <div v-if="canReincarnate && (state.stats.reincarnations || 0) === 0" class="small dim">
+        首次转世结算 ×{{ CONFIG.FIRST_REINCARNATION_KARMA_MULT }}；之后恢复常规公式。
       </div>
       <div style="padding: 8px 0">
         <template v-if="canReincarnate">

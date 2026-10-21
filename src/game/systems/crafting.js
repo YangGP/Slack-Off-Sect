@@ -1,6 +1,6 @@
 import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { floorNumber, atLeast } from '../numbers'
-import { MONEY_INFINITY, ONE, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneyToCount, moneyToNumber } from '../decimal'
+import { MONEY_INFINITY, ONE, ZERO, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneyToCount, moneyToNumber } from '../decimal'
 import { maxCraftable, maxCraftableMoney, materialCopiesMoney, isAutoCrafting, EPS, autoCraftReserve, craftTarget, canAutoCraft, processingPlan, processingFuelReserve, hasCraftOrder, canProcessCraft, clickGain, craftYield } from './craftingRules'
 import { CRAFT_MAP, CRAFTS, autoCraftTime, craftCost, craftTime } from '@/data/crafts'
 import { RECIPE_STATIONS, PROCESSING_STATIONS, PROCESSING_MODES } from '@/data/industry'
@@ -47,18 +47,17 @@ export function manageCraftOrder(state, derived, recipeId, action) {
 }
 
 /**
- * 把一次制作的产出累进 craftProgress，返回**实际入库金额**（Decimal）。
+ * 制作产出直接入库，小数不再留待凑整；兼容旧运行状态中尚未入库的余量。
  * 产出份数是金额，不在这里转安全整数；次数统计仍是 Number，单独按上限累加。
  */
 export function addCraftGain(state, derived, recipe, gain, copies = ONE) {
   return withResourceAction(state, { type: 'addCraftGain', id: recipe.id, copies: copies.toString(), offered: gain.toString() }, () => {
     const acc = (state.craftProgress[recipe.id] ?? ZERO).plus(gain)
-    const whole = acc.floor()
-    state.craftProgress[recipe.id] = acc.minus(whole)
+    delete state.craftProgress[recipe.id]
     let made = ZERO
-    if (whole.gt(0)) {
-      made = addResource(state, recipe.out, whole, derived.max[recipe.out] ?? MONEY_INFINITY)
-      state.stats.crafted[recipe.out] = (state.stats.crafted[recipe.out] ?? ZERO).plus(whole)
+    if (acc.gt(0)) {
+      made = addResource(state, recipe.out, acc, derived.max[recipe.out] ?? MONEY_INFINITY)
+      state.stats.crafted[recipe.out] = (state.stats.crafted[recipe.out] ?? ZERO).plus(acc)
     }
     state.stats.craftCount = Math.min(Number.MAX_SAFE_INTEGER,
       (state.stats.craftCount || 0) + moneyToCount(copies))
@@ -219,7 +218,7 @@ function outputRoomCopies(state, derived, recipe, cap) {
   const progress = state.craftProgress[recipe.id] ?? ZERO
   if (!gain.isFinite() || gain.lte(0)) return 0
   if (have.gte(cap)) return 0
-  return moneyToCount(moneyMax(ZERO, ceilMoney(cap.minus(have)).minus(progress).div(gain).ceil()))
+  return moneyToCount(moneyMax(ZERO, cap.minus(have).minus(progress).div(gain).ceil()))
 }
 
 /**
@@ -436,7 +435,7 @@ export function setCraftTarget(state, derived, recipeId, value) {
     try { target = money(value) } catch { return false }
     if (!target.isFinite() || target.isNegative()) return false
     state.craftTargets ||= {}
-    state.craftTargets[recipeId] = floorMoney(target)
+    state.craftTargets[recipeId] = target
     return true
 
   })
@@ -469,9 +468,8 @@ export function settleCraftCopies(state, derived, recipe, times, cap = derived.m
     const limit = money(cap)
     if (!have.isFinite() || !limit.gt(have) || have.gte(limit) ||
         !gain.isFinite() || gain.lte(0) || !progress.isFinite()) return empty
-    // 原来逐份扣料、累计小数并在满仓后停下。直接算出触及上限的那一份，
-    // 保留最后一份的溢出和进度规则，避免大批制作阻塞浏览器主线程。
-    const roomCopies = moneyMax(ZERO, ceilMoney(limit.minus(have)).minus(progress).div(gain).ceil())
+    // 制作批次数仍取整，产出允许小数；最后一批超出仓容的部分按实际容量截断。
+    const roomCopies = moneyMax(ZERO, limit.minus(have).minus(progress).div(gain).ceil())
     const count = moneyMin(floorMoney(want), materialCopiesMoney(state, derived, recipe), roomCopies)
     if (!count.isFinite() || !count.gt(0)) return empty
     payCost(state, craftCost(derived, recipe), count)

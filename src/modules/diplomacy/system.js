@@ -5,7 +5,7 @@ import { isModuleEnabled } from '@/data/modules'
 import { recountDisciples } from '@/data/disciples'
 import { addResource, canAfford, payCost, pushLog, activeOf } from '@/game/systems/core'
 import { eventResourceRate } from '@/game/systems/events'
-import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyGt, moneyMax, moneyMin, moneySubtract } from '@/game/decimal'
+import { MONEY_INFINITY, ZERO, money, moneyAvailable, moneyGt, moneyMax, moneyMin, moneySubtract } from '@/game/decimal'
 import { atLeast } from '@/game/numbers'
 
 /**
@@ -70,7 +70,7 @@ export function fortuneChance(state) {
  *   - { loot }          固定数量；
  *   - { lootRate, floor } 按产能秒数定价，保底不低于 floor，且单次不超过仓储的份额上限。
  * 保底优先于份额上限：仓储很小时 floor 仍成立，实际入库再由 addResource 按仓容截断。
- * 整枚计数的资源向上取整，预览与结算口径一致。
+ * 预览与结算均保留完整小数。
  */
 export function fortuneOptionRewards(state, derived, option) {
   const out = {}
@@ -88,7 +88,7 @@ export function fortuneOptionRewards(state, derived, option) {
     // 份额上限按「有仓容才算份额」：缺失仓容按 0 处理（沿用旧口径），无上限哨兵则是真无上限。
     const share = moneyMax(ZERO, derived?.max?.[res] ?? ZERO).times(DIPLOMACY.FORTUNE_STORAGE_SHARE)
     const bounded = moneyMax(floor, moneyMin(rate.times(seconds), moneyMax(floor, share)))
-    out[res] = RESOURCE_MAP[res]?.integer ? ceilMoney(bounded) : bounded
+    out[res] = bounded
   }
   return out
 }
@@ -110,7 +110,7 @@ export function fortuneRewards(state, derived, sect) {
 
 /**
  * 固定回报能否入库：只要有一项能实际收到正数即视为可交易，部分仓容也允许。
- * 整枚计数的资源按向下取整后的实际入库量判断（与 addResource 口径一致）。
+ * 按实际入库量判断，允许接收不足一个单位的资源。
  * 机缘是随机项，不计入「保证可收」。
  */
 export function hasRoomForGains(state, derived, gains) {
@@ -121,7 +121,7 @@ export function hasRoomForGains(state, derived, gains) {
     const want = money(amount)
     // 无上限仓容时按「能全收」处理，与 addResource 的口径一致。
     const room = cap.isFinite() ? moneyMax(ZERO, moneySubtract(cap, have)) : want
-    const actual = RESOURCE_MAP[res].integer ? floorMoney(moneyMin(want, room)) : moneyMin(want, room)
+    const actual = moneyMin(want, room)
     if (actual.gt(0)) return true
   }
   return false
@@ -137,8 +137,7 @@ export function tradePreview(state, derived, sectId) {
   if (hasRoom) {
     for (const [res, amount] of Object.entries(sect.gains)) {
       if (!RESOURCE_MAP[res]) continue
-      // 整枚计数的资源按向上取整后的实际入库量判断溢出，与 addResource 口径一致。
-      const want = RESOURCE_MAP[res].integer ? ceilMoney(amount) : money(amount)
+      const want = money(amount)
       const cap = capacityOf(derived, res)
       const have = state.resources[res] ?? ZERO
       if (cap.isFinite() && moneyGt(have.plus(want), cap)) { overflow = true; break }

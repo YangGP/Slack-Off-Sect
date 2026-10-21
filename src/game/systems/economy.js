@@ -412,6 +412,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const habitabilityBonus = acc.habitabilityBonus + housingHabitability
   const habitability = CONFIG.HABITABILITY_BASE + habitabilityBonus + (state.habitabilityPenalty || 0)
   const { globalMult: habitabilityMult, discipleMult, leaveChance } = habitabilityEffects(habitability, state.disciples.total)
+  // 4.8：宜居度只减不加，且独立于锁灵阵等阵法减耗；低于基准不额外加耗。
+  const habitabilityUpkeepReduction = Math.min(CONFIG.HABITABILITY_UPKEEP_CAP,
+    Math.max(0, habitability - CONFIG.HABITABILITY_BASE) * CONFIG.HABITABILITY_UPKEEP_PER_POINT)
 
   // 宜居度拥挤惩罚只作用于弟子岗位，建筑和法宝的基础产出不受此项影响。
   for (const job of JOBS) {
@@ -533,7 +536,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const baseRawUpkeep = baseDiscipleUpkeep.times(derived.discipleWeight)
   const rawUpkeep = baseRawUpkeep.times(populationUpkeepMult)
   const reduction = rawUpkeep.times(Math.min(CONFIG.UPKEEP_REDUCTION_CAP, acc.consumeReduction))
-  const upkeep = rawUpkeep.minus(reduction)
+  const afterConsume = rawUpkeep.minus(reduction)
+  // 宜居度减耗单独记账：必须进入 expenseList，否则界面/净流量与实际库存不一致。
+  const habitabilityReduction = afterConsume.times(habitabilityUpkeepReduction)
+  const upkeep = afterConsume.minus(habitabilityReduction)
 
   // 把来源折算成最终数值（所有来源共享同一组乘区，所以按比例缩放即可对上总额）
   const sourceFactor = {}
@@ -569,6 +575,15 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
         label: '减耗（锁灵阵等）',
         count: 0,
         value: reduction,
+      })
+    }
+    if (habitabilityReduction.gt(0)) {
+      items.push({
+        kind: 'reduce',
+        id: 'habitabilityUpkeep',
+        label: '减耗（宜居度）',
+        count: 0,
+        value: habitabilityReduction,
       })
     }
     expenseList.qi = items
@@ -629,14 +644,16 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       if (acc.storageRatio[k] > 0) max[k] = (max[k] ?? ZERO).times(ONE.plus(acc.storageRatio[k]))
     }
   }
+  // 4.3：持有的道论按卷提供临时灵机仓容，只作尾款缓冲；加成不超过基础上限的 100%。
+  const treatiseHeld = state.resources?.daoTreatise ?? ZERO
+  if (treatiseHeld.gt(0)) {
+    const baseInsightCap = max.insight ?? ZERO
+    const treatiseBonus = moneyMin(treatiseHeld.times(CONFIG.DAOTREATISE_INSIGHT_CAP), baseInsightCap)
+    max.insight = baseInsightCap.plus(treatiseBonus)
+  }
   // D7 收愿仪：只放大香火仓容，放在定额与比例加仓之后，不重复计入 storageRatio。
   const holdVowRatio = faithStorageRatio(state)
   if (holdVowRatio > 0) max.faith = (max.faith ?? ZERO).times(ONE.plus(holdVowRatio))
-  // 整枚计数资源的仓容在**所有加仓之后**统一取整：比例加仓也参与，
-  // 避免出现「4.5 枚灵石」这种取整后仍然带小数的上限。
-  for (const r of RESOURCES) {
-    if (r.integer) max[r.id] = max[r.id].floor()
-  }
   derived.max = max
   derived.rates = rates
   derived.calendar = calendar
@@ -668,7 +685,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.prodRaw = prod
   derived.upkeep = upkeep
   derived.rawUpkeep = rawUpkeep
+  derived.habitabilityUpkeepAmount = habitabilityReduction
   derived.discipleUpkeep = discipleUpkeep
+  derived.habitabilityUpkeepReduction = habitabilityUpkeepReduction
   derived.populationUpkeepMult = populationUpkeepMult
   derived.netQi = net.qi
   derived.habitability = habitability

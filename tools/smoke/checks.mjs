@@ -57,3 +57,15 @@ export const smokeChecks = [
   extensions.discipleScenarios,
   extensions.offlineScenarios,
 ]
+
+// 日常只检查核心动作；长模拟、全表遍历和专项边界由 --full 或 --group 显式选择。
+export const quickSmokeChecks = [
+  startup.initialState,
+  buildings.buildingActions,
+  economy.incomeBreakdown,
+  automation.automaticCrafting,
+  crafting.manualCrafting,
+  progression.researchAndAscension,
+  saves.saveSerialization,
+  money.moneyDomain,
+]

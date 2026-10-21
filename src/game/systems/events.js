@@ -6,10 +6,11 @@ import { isCraftUnlocked, canAfford, clamp, addResource, pushLog } from './core'
 import { RECIPE_STATIONS } from '@/data/industry'
 import { craftYield } from './craftingRules'
 import { RESOURCE_MAP } from '@/data/resources'
-import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyClamp, moneyGt, moneyMax, moneyMin, moneyToNumber } from '../decimal'
+import { MONEY_INFINITY, ZERO, money, moneyAvailable, moneyClamp, moneyGt, moneyMax, moneyMin, moneyToNumber } from '../decimal'
 import { CONFIG } from '@/data/config'
 import { newDisciple, recountDisciples, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
 import { isModuleEnabled } from '@/data/modules'
+import { fmtAmount } from '../format'
 
 export function eventEligible(state, event) {
   if (!isEventInRealm(event, state.realm)) return false
@@ -97,7 +98,7 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     const amount = moneyMax(floorCost, eventResourceRate(state, derived, res).times(cost.seconds))
     const cap = moneyMax(floorCost, money(derived.max[res] ?? ZERO).times('0.1'))
     const bounded = moneyMin(amount, cap)
-    required[res] = RESOURCE_MAP[res]?.integer ? ceilMoney(bounded) : bounded
+    required[res] = bounded
   }
   const affordable = canAfford(state, required)
   const resources = new Set([
@@ -105,25 +106,22 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     ...(spec.disaster?.resources || []), ...Object.keys(spec.lootRate || {}), ...Object.keys(spec.boundedLoss || {}),
   ])
   for (const res of resources) {
-    const integer = RESOURCE_MAP[res]?.integer
-    // 整枚计数的资源在损失与奖励口径上先向下取整，与 addResource 的入库口径一致。
-    const whole = (amount) => integer ? floorMoney(amount) : amount
     const have = state.resources[res] ?? ZERO
-    const fixed = moneyMin(have, whole(money(spec.cost?.[res] ?? 0).plus(required[res] ?? ZERO)))
-    const share = whole(have.minus(fixed).times(spec.costShare?.[res] || 0))
+    const fixed = moneyMin(have, money(spec.cost?.[res] ?? 0).plus(required[res] ?? ZERO))
+    const share = have.minus(fixed).times(spec.costShare?.[res] || 0)
     const remaining = have.minus(fixed).minus(share)
     const guard = clamp((derived.disasterGuard || 0) + (derived.disasterGuardByResource?.[res] || 0), 0, 0.8)
     const disaster = spec.disaster?.resources.includes(res)
-      ? whole(remaining.times(disasterPercent).times(1 - guard)) : ZERO
-    const boundedLoss = whole(moneyMin(remaining, money(spec.boundedLoss?.[res] ?? 0).times(1 - guard)))
+      ? remaining.times(disasterPercent).times(1 - guard) : ZERO
+    const boundedLoss = moneyMin(remaining, money(spec.boundedLoss?.[res] ?? 0).times(1 - guard))
     const lost = fixed.plus(share).plus(disaster).plus(boundedLoss)
     // 单次奖励上限是仓容的固定份额；无上限仓容用金额域的哨兵，时间域的 Infinity 不跨域套用。
     const rewardCap = money(derived.max[res] ?? MONEY_INFINITY).times(CONFIG.EVENT_REWARD_STORAGE_SHARE)
     const offered = spec.lootRate?.[res] != null
-      ? whole(moneyMin(rewardCap, moneyMax(money(spec.floor?.[res] ?? 0),
-        eventResourceRate(state, derived, res).times(spec.lootRate[res])))) : ZERO
+      ? moneyMin(rewardCap, moneyMax(money(spec.floor?.[res] ?? 0),
+        eventResourceRate(state, derived, res).times(spec.lootRate[res]))) : ZERO
     const room = moneyMax(ZERO, money(derived.max[res] ?? MONEY_INFINITY).minus(have.minus(lost)))
-    const gained = moneyMin(offered, whole(room))
+    const gained = moneyMin(offered, room)
     rows.push({ res, lost, gained, overflow: offered.minus(gained) })
   }
   const recruits = Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
@@ -136,8 +134,7 @@ export function settleEventOutcome(state, derived, spec, text, kind, source) {
     const pct = range[0] + gameRandom(state) * (range[1] - range[0])
     const outcome = eventOutcome(state, derived, spec, pct)
     const parts = []
-    // 纪事文案里的金额：到显示边界才转 Number 四舍五入，不参与结算。
-    const logAmount = (value) => Math.round(moneyToNumber(value))
+    const logAmount = fmtAmount
     for (const row of outcome.rows) {
       // 损失在 eventOutcome 里已按库存夹过；扣减仍走金额助手的「不足归零」，库存不会变负。
       setResourceValue(state, row.res, moneyAvailable(state.resources[row.res] ?? ZERO, row.lost), { source: 'systems/events.js:settleEventOutcome' })

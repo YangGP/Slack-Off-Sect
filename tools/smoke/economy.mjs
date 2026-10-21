@@ -40,6 +40,36 @@ export function incomeBreakdown({ ok, close, section }) {
       close(E.money(100000).minus(state.resources.qi), upkeep, 1e-6))
   }
   {
+    // 4.8：宜居度只减不加，且与阵法减耗分开计算
+    const { state, derived } = newGame()
+    state.realm = 4
+    state.disciples.total = 10
+    state.buildings.livingCourt = { count: 10, on: true }
+    E.recompute(state, derived)
+    const base = derived.discipleWeight * CONFIG.DISCIPLE_UPKEEP * derived.realmBaseProductionMult
+    ok('宜居度高于基础值后按点减耗', close(derived.habitabilityUpkeepReduction, 0.08, 1e-9) &&
+      close(derived.upkeep, base * 0.92, 1e-9), `${derived.habitabilityUpkeepReduction} / ${derived.upkeep} vs ${base}`)
+    state.resources.qi = E.money(1000)
+    E.recompute(state, derived)
+    const upkeepBefore = derived.upkeep
+    const qiBefore = state.resources.qi
+    const consumedBefore = E.moneySum(state.disciples.members.map((member) => member.totalQiConsumed))
+    ok('宜居减耗进入出项明细与资源栏净流量',
+      close(E.moneySum(derived.expenseSources.qi.map((item) => item.value)), upkeepBefore.neg(), 1e-9) &&
+      close(E.resourceFlow(derived, 'qi').net, derived.net.qi, 1e-9))
+    E.tick(state, derived, 1, { events: false })
+    const consumedAfter = E.moneySum(state.disciples.members.map((member) => member.totalQiConsumed))
+    ok('宜居减耗实际进入库存与个人累计', close(qiBefore.minus(state.resources.qi), upkeepBefore, 1e-6) &&
+      close(consumedAfter.minus(consumedBefore), upkeepBefore, 1e-6),
+      `${qiBefore} → ${state.resources.qi} / ${consumedBefore} → ${consumedAfter}`)
+    state.habitabilityPenalty = -50
+    E.recompute(state, derived)
+    ok('宜居度低于基础值只取消减耗、不额外加耗', derived.habitabilityUpkeepReduction === 0 && close(derived.upkeep, base, 1e-9))
+    state.habitabilityPenalty = -1000
+    E.recompute(state, derived)
+    ok('极低宜居度仍不额外加耗', derived.habitabilityUpkeepReduction === 0 && close(derived.upkeep, base, 1e-9))
+  }
+  {
     const { state, derived } = newGameRunning()
     state.resources.qi = E.money(5000)
     state.resources.wood = E.money(5000)
@@ -116,9 +146,11 @@ export function incomeBreakdown({ ok, close, section }) {
       const { state: s4, derived: d4 } = newGame()
       s4.buildings.lumberYard = { count: 3, on: true }
       s4.upgrades.earthArt = true // 库房现在挂在「土木术」后面
+      s4.upgrades.quarryArt = true // 砌基改用石材，需先会压制
       E.recompute(s4, d4)
       const before = { ...d4.max }
       s4.resources.wood = E.money(5000)
+      s4.resources.cutStone = E.money(5000)
       s4.resources.stone = E.money(5000)
       s4.resources.rock = E.money(5000)
       s4.resources.ore = E.money(5000)

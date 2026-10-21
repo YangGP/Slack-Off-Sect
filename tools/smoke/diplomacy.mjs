@@ -14,7 +14,7 @@ function diplomacyReady() {
 }
 
 export function diplomacyTrade({ ok, section }) {
-  section('宗门外交（首版：三宗固定汇率 + 机缘骰 + 信符限速）')
+  section('宗门外交（五宗固定汇率 + 机缘骰 + 信符限速）')
   {
     // 解锁门
     {
@@ -28,7 +28,7 @@ export function diplomacyTrade({ ok, section }) {
       s.realm = DIPLOMACY.MIN_REALM
       ok('研究 + 境界齐备即开门', E.isDiplomacyUnlocked(s) === true)
       s.settings.modules.diplomacy = false
-      ok('关闭模块后收回', E.isDiplomacyUnlocked(s) === false)
+      ok('旧模块关闭标记不影响外交', E.isDiplomacyUnlocked(s) === true)
       void d
     }
 
@@ -178,8 +178,10 @@ export function diplomacyTrade({ ok, section }) {
       s.upgrades.neighborContacts = true
       s.upgrades.herbStudy = true
       s.upgrades.waterSanitation = true
+      s.upgrades.quarryArt = true
       s.resources.qi = E.money(5000)
       s.resources.wood = E.money(5000)
+      s.resources.cutStone = E.money(200)
       s.resources.rock = E.money(5000)
       s.resources.stone = E.money(5000)
       s.resources.insight = E.money(100000)
@@ -202,6 +204,23 @@ export function diplomacyTrade({ ok, section }) {
       const roleKept = reloaded.disciples.members.some(m => m.roleId === 'huntPlanner')
       ok('只开外交时执符使供信符、互市成功且读档保留岗位',
         !!planner && campCount > 0 && warrantReady && traded.ok === true && roleKept)
+    }
+
+    // 4.4 缺失产物：秘银与灵晶只能高价少量换，不能替代产线
+    {
+      const { state: s, derived: d } = diplomacyReady()
+      Object.assign(s.resources, {
+        ore: E.money(2000), stone: E.money(2000), insight: E.money(3000), faith: E.money(500),
+        warrant: E.money(DIPLOMACY.WARRANT_COST * 2),
+      })
+      E.recompute(s, d)
+      const silver = E.tradeWithSect(s, d, 'silverGorge')
+      ok('银溪谷以玄铁灵石换秘银 3', silver.ok && E.moneyEq(s.resources.mithril, 3))
+      E.recompute(s, d)
+      const star = E.tradeWithSect(s, d, 'starCliff')
+      ok('星崖观以灵机香火换灵晶 10', star.ok && E.moneyEq(s.resources.crystal, 10))
+      ok('秘银与灵晶的外交换量受信符限流', s.diplomacy.statistics.trades === 2 &&
+        E.moneyIsZero(s.resources.warrant))
     }
   }
 }

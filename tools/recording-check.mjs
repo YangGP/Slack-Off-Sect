@@ -6,7 +6,7 @@ import * as E from '../src/game/engine.js'
 import { createInitialState, resetForReincarnation } from '../src/game/state.js'
 import { setGameContext } from '../src/game/context.js'
 import { withResourceAction } from '../src/game/resourceObservation.js'
-import { createResourceRecorder, rebuildResourceReport, loadMeasurementCheckpoint } from './lib/resource-recorder.mjs'
+import { createResourceRecorder, rebuildResourceReport, loadMeasurementCheckpoint, readResourceRecords } from './lib/resource-recorder.mjs'
 import { pack } from './lib/measurement-state.mjs'
 import { progressionDiagnostics } from './progression-diagnostics.mjs'
 import { settleEventOutcome } from '../src/game/systems/events.js'
@@ -28,18 +28,80 @@ function fixture() {
 const observe = f => f.recorder.observe(f.state, f.derived, f.now, progressionDiagnostics(f.state, f.derived))
 const finish = f => f.recorder.finish(f.state, { elapsed: f.now, derived: f.derived })
 const cases = {
+  compact() {
+    const f = fixture()
+    for (let i = 0; i < 100; i++) assert.equal(E.setCraftTarget(f.state, f.derived, 'sawPlank', 25), false)
+    f.derived.craftTargetsUnlocked = true
+    assert.equal(E.setCraftTarget(f.state, f.derived, 'sawPlank', 25), true)
+    for (let i = 0; i < 100; i++) assert.equal(E.setCraftTarget(f.state, f.derived, 'sawPlank', 25), true)
+    assert.throws(() => withResourceAction(f.state, { type: 'setCraftTarget', id: 'sawPlank' }, () => {
+      throw Error('configuration failure')
+    }), /configuration failure/)
+    E.addResource(f.state, 'insight', 100)
+    E.addResource(f.state, 'qi', 500, E.money(1000))
+    assert.ok(E.canAfford(f.state, E.breakthroughPreview(f.state, f.derived).cost))
+    assert.equal(E.breakthrough(f.state, f.derived, {}, () => 1), false)
+    assert.ok(E.money(E.craft(f.state, f.derived, 'growWood', { times: 2 })).gt(0))
+    observe(f)
+    const { report, dir } = finish(f), rows = [...readResourceRecords(dir)]
+    assert.equal(report.accountingComplete, true)
+    assert.equal(rows.filter(row => ['action-start', 'action-end', 'action-summary', 'mutation'].includes(row.kind)).length, 0)
+    assert.ok(rows.some(row => row.kind === 'action-error' && row.type === 'setCraftTarget'))
+    assert.ok(rows.some(row => row.kind === 'transition' && row.type === 'breakthrough' && row.result === false))
+    assert.ok(report.flows.some(row => row.action?.type === 'breakthrough' && E.money(row.negative).gt(0)))
+    assert.ok(rows.some(row => row.kind === 'window' && row.flows.some(flow => flow.action?.type === 'addCraftGain')))
+    assert.ok(rows.filter(row => row.kind === 'window').every(row => row.flows.every(flow => flow.action?.actionId === undefined)))
+    assert.ok(E.money(report.recipeOutputs.growWood).gt(0))
+    assert.deepEqual(rebuildResourceReport(dir).totals, report.totals)
+    console.log('pacing recording: ordinary actions omitted; grouped flows, failed breakthrough and error retained')
+  },
   ledger() {
     const f = fixture()
-    withResourceAction(f.state, { type: 'net-zero', id: 'proof' }, () => {
+    for (let i = 0; i < 100; i++) withResourceAction(f.state, { type: 'net-zero', id: 'proof' }, () => {
       E.addResource(f.state, 'qi', 80, E.money(1000)); E.payCost(f.state, { qi: 80 })
+      E.addResource(f.state, 'wood', 10, E.money(1000)); E.payCost(f.state, { wood: 10 })
     })
     observe(f)
     const { report, dir } = finish(f)
     assert.equal(report.accountingComplete, true)
     assert.equal(report.totals.qi, '0')
-    assert.ok(report.flows.some(row => row.resource === 'qi' && row.positive === '80'))
-    assert.ok(report.flows.some(row => row.resource === 'qi' && row.negative === '80'))
+    assert.ok(report.flows.some(row => row.resource === 'qi' && row.positive === '8000'))
+    assert.ok(report.flows.some(row => row.resource === 'qi' && row.negative === '8000'))
     assert.equal(rebuildResourceReport(dir).accountingComplete, true)
+    const batches = [...readResourceRecords(dir)].filter(row => row.kind === 'window')
+    assert.equal(report.recordsByKind.window, 1)
+    assert.equal(batches[0].flows.length, 4)
+    assert.equal(report.totals.wood, '0')
+    assert.equal(report.recordsByKind.mutation, undefined)
+  },
+  'pacing-window'() {
+    const f = fixture()
+    // Alternate every five game seconds without changing inventories.
+    for (let i = 0; i <= 360; i++) {
+      f.time(i * 5000)
+      const missing = i % 2 === 0
+      f.recorder.observe(f.state, f.derived, f.now, {
+        selectedCost: { qi: '100' }, targetRealmName: '引气',
+        missing: missing ? [{ resource: 'qi', capacityBlocked: true,
+          recipe: 'growWood', recipeUnlocked: true, processing: { reason: 'fixture' } }] : [],
+      }, { projectsReady: !missing })
+    }
+    const { report, dir } = finish(f)
+    const rows = [...readResourceRecords(dir)], windows = rows.filter(row => row.kind === 'window')
+    assert.equal(windows.length, 1)
+    assert.equal(rows.some(row => row.kind === 'interval'), false)
+    const stats = windows[0].pacing, stage = report.stages[0]
+    assert.equal(stats.sampledMs, 1800000)
+    assert.equal(stats.shortageMs.qi, 900000)
+    assert.equal(stats.capacityMs.qi, 900000)
+    assert.equal(stats.processingMs['qi:growWood:fixture'], 900000)
+    assert.equal(stage.materialsReadyMs, 900000)
+    assert.equal(stage.projectBlockedMs, 900000)
+    assert.equal(stage.firstMaterialsReadySeconds, 5)
+    assert.equal(stage.lastMissingSeconds, 1795)
+    assert.equal(stage.readySinceSeconds, 1795)
+    assert.equal(stage.secondsAfterLastReadiness, 5)
+    assert.deepEqual(rebuildResourceReport(dir).stages, report.stages)
   },
   missing() {
     const f = fixture()
@@ -175,21 +237,47 @@ const cases = {
     assert.deepEqual(a.runtimeState.breakthroughRng, c.runtimeState.breakthroughRng)
     assert.deepEqual(a.recording.report.totals, c.recording.report.totals)
     assert.deepEqual(a.recording.report.exposure, c.recording.report.exposure)
+    assert.deepEqual(a.recording.report.actionSummary, c.recording.report.actionSummary)
+    const timing = report => report.stages.map(s => Object.fromEntries([
+      'sampledMs', 'insightOnlyMs', 'materialsReadyMs', 'projectBlockedMs', 'shortageMs',
+      'capacityMs', 'fullMs', 'processingMs', 'buildingBlockedMs', 'firstMaterialsReadySeconds',
+      'readySinceSeconds', 'lastMissingSeconds', 'lastReadiness',
+    ].map(key => [key, s[key]])))
+    assert.deepEqual(timing(a.recording.report), timing(c.recording.report))
     assert.equal(c.recording.report.accountingComplete, true)
     assert.equal(Object.values(c.recording.report.exposure).reduce((sum, row) => sum + row.durationMs, 0), c.simulatedSeconds * 1000)
     assert.equal(Object.entries(c.recording.report.exposure).filter(([key]) => key.endsWith(':offline')).reduce((sum, [, row]) => sum + row.durationMs, 0), 780000)
   },
   'resume-realm'() {
-    const options = { hours: 1.25, seed: 2, visits: 'waking', events: 1, decisionSeconds: 150, batchActions: 12, details: 'decisions', record: true }
-    const a = measurePacing(options, () => {}, { includeRuntime: true, recordRoot: root() })
-    const b = measurePacing(options, () => {}, { stopAtSeconds: 4000, recordRoot: root() })
-    const c = measurePacing({}, () => {}, { resume: loadMeasurementCheckpoint(b.checkpointPath), includeRuntime: true })
-    assert.ok(a.attempts.length > 0)
-    assert.deepEqual(pack(a.runtimeState.state), pack(c.runtimeState.state))
-    assert.deepEqual(a.attempts, c.attempts)
-    assert.deepEqual(a.recording.report.totals, c.recording.report.totals)
-    assert.deepEqual(a.recording.report.exposure, c.recording.report.exposure)
-    assert.equal(c.recording.report.accountingComplete, true)
+    // 用真实突破构造确定的阶段边界，避免依赖自动玩家随平衡变化的突破时刻。
+    const run = resume => {
+      const f = fixture()
+      E.addResource(f.state, 'qi', 1000, E.money(2000))
+      E.addResource(f.state, 'insight', 100)
+      f.time(1000); observe(f)
+      if (resume) {
+        const path = f.recorder.checkpoint({ state: f.state, derived: f.derived }, f.state, f.derived, f.now)
+        const cp = loadMeasurementCheckpoint(path, { fixture: '1' })
+        f.state = cp.simulator.state; f.derived = cp.simulator.derived
+        f.recorder = createResourceRecorder({ resume: cp, sources: { fixture: '1' } })
+        f.recorder.setEnvironment(() => ({ lifeId: 1, currentRealm: f.state.realm, online: true }))
+        f.recorder.open(f.state, f.now, f.derived)
+        setGameContext(f.state, { now: () => f.now, random: () => 0.1, resourceObserver: f.recorder.observer })
+      }
+      f.time(2000)
+      assert.equal(E.breakthrough(f.state, f.derived, {}, () => 0), true)
+      observe(f)
+      f.time(3000); observe(f)
+      const { report, dir } = finish(f)
+      assert.equal(f.state.realm, 1)
+      assert.equal(report.accountingComplete, true)
+      assert.equal(report.stages.length, 2)
+      assert.equal([...readResourceRecords(dir)].filter(row => row.kind === 'transition' && row.type === 'breakthrough').length, 1)
+      return { state: pack(f.state), report }
+    }
+    const a = run(false), b = run(true)
+    assert.deepEqual(a.state, b.state)
+    for (const key of ['totals', 'exposure', 'stages', 'actionSummary']) assert.deepEqual(a.report[key], b.report[key])
   },
   budget() {
     const result = measurePacing({ hours: 0.05, record: true }, () => {}, { recordRoot: root(), recorderOptions: { maxBytes: 512 } })

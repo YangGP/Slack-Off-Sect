@@ -4,9 +4,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { RESOURCES } from '../../src/data/resources.js'
 import { money, ZERO } from '../../src/game/decimal.js'
 import { checkpointText, parseCheckpoint } from './measurement-state.mjs'
-import { recordingChoices, recordingProcessing } from './recording-queries.mjs'
+import { recordingChoices } from './recording-queries.mjs'
 
-const VERSION = 3
+const VERSION = 7
 const sha = value => createHash('sha256').update(value).digest('hex')
 const amount = value => money(value ?? ZERO)
 const strings = values => Object.fromEntries(Object.entries(values).map(([id, v]) => [id, amount(v).toString()]))
@@ -14,6 +14,51 @@ const capacity = value => value == null ? { unknown: true } : value.isFinite()
   ? { unlimited: false, value: value.toString() } : { unlimited: true }
 const modelFields = ['modelGross', 'modelExpense', 'netClipped', 'roundingLoss', 'decayLoss', 'decayAndClippingLoss']
 function atomic(path, content) { writeFileSync(path + '.tmp', content); renameSync(path + '.tmp', path) }
+
+const pacingMaps = ['shortageMs', 'capacityMs', 'fullMs', 'processingMs', 'buildingBlockedMs']
+const pacingSums = ['sampledMs', 'insightOnlyMs', 'materialsReadyMs', 'projectBlockedMs']
+function pacingStats() {
+  return { ...Object.fromEntries(pacingSums.map(key => [key, 0])),
+    ...Object.fromEntries(pacingMaps.map(key => [key, {}])), hadMissing: false }
+}
+function accumulatePacing(stats, row, origin) {
+  const addMs = (map, key) => { map[key] = (map[key] || 0) + row.duration }
+  stats.sampledMs += row.duration
+  if (row.missing.length) {
+    stats.hadMissing = true
+    stats.lastMissing = row.missing
+    stats.lastMissingSeconds = (row.end - origin) / 1000
+    stats.readySinceSeconds = null
+  } else if (!row.canAscend) {
+    stats.firstMaterialsReadySeconds ??= (row.start - origin) / 1000
+    stats.readySinceSeconds ??= (row.start - origin) / 1000
+  }
+  stats.lastReadiness = Object.fromEntries(Object.entries(row.ready || {}).map(([id, at]) => [id, (at - origin) / 1000]))
+  if (row.insightOnly) stats.insightOnlyMs += row.duration
+  if (!row.missing.length && !row.canAscend) stats.materialsReadyMs += row.duration
+  if (row.projectsReady === false) stats.projectBlockedMs += row.duration
+  for (const id of row.missing) addMs(stats.shortageMs, id)
+  for (const id of row.capacityBlocked) addMs(stats.capacityMs, id)
+  for (const id of row.full || []) addMs(stats.fullMs, id)
+  for (const id of row.buildingBlocked || []) addMs(stats.buildingBlockedMs, id)
+  for (const line of row.processing || []) addMs(stats.processingMs,
+    `${line.resource}:${line.recipe}:${line.unlocked ? line.reason || 'unknown' : '配方未解锁'}`)
+}
+function mergePacing(stage, bucket, stats) {
+  for (const key of pacingSums) stage[key] += stats[key]
+  for (const key of pacingMaps) for (const [id, ms] of Object.entries(stats[key])) stage[key][id] = (stage[key][id] || 0) + ms
+  if (stats.firstMaterialsReadySeconds != null) stage.firstMaterialsReadySeconds ??= stats.firstMaterialsReadySeconds
+  if (stats.hadMissing) stage.readySinceSeconds = stats.readySinceSeconds ?? null
+  else if (stats.readySinceSeconds != null) stage.readySinceSeconds ??= stats.readySinceSeconds
+  if (stats.lastMissing) {
+    stage.lastMissing = stats.lastMissing
+    stage.lastMissingSeconds = stats.lastMissingSeconds
+  }
+  stage.lastReadiness = stats.lastReadiness
+  bucket.durationMs += stats.sampledMs
+  bucket.insightOnlyMs += stats.insightOnlyMs
+  for (const key of ['shortageMs', 'capacityMs']) for (const [id, ms] of Object.entries(stats[key])) bucket[key][id] = (bucket[key][id] || 0) + ms
+}
 
 export function resourceWriteCoverage() {
   const sites = [], missing = []
@@ -76,15 +121,17 @@ export function createResourceRecorder({ root = '.resource-records', options = {
   let bytes = files.reduce((sum, f) => sum + f.bytes, 0), buffer = [], bufferedBytes = 0, firstSeq = seq + 1
   let failure = null, recordBudget = false, opening = resume?.recorder.opening || null
   const totals = { ...(resume?.recorder.totals || {}) }, residuals = []
+  let pacing = null, pacingStart = null
   let continuous = {}, continuousStart = null, lastSnapshot = resume?.recorder.lastSnapshot ?? -Infinity
   let interval = resume?.recorder.interval || null, env = {}, environment = () => ({})
   let environmentKey = resume?.recorder.environmentKey || null, visit = resume?.recorder.visit || 0
   let quoteRevision = resume?.recorder.quoteRevision || 0, ready = resume?.recorder.ready || {}, quoteKey = resume?.recorder.quoteKey || null
   let choicesKey = resume?.recorder.choicesKey || null
   let clockOrigin = resume?.recorder.clockOrigin ?? null, observedState = null, observedDerived = null
-  const coverage = { resources: RESOURCES.map(r => r.id), writePaths: resourceWriteCoverage(), accounting: 'mutation facts + independent inventory/disk reconciliation',
+  const coverage = { resources: RESOURCES.map(r => r.id), writePaths: resourceWriteCoverage(), accounting: 'windowed resource totals + independent inventory/disk reconciliation',
     continuous: 'engine combined net settlements; gross/expense are models',
-    precision: 'online engine boundaries; offline approximation stays approximate', resume: 'runtime state + all harness variables and RNG streams' }
+    precision: 'pacing durations accumulated at engine boundaries and persisted per window; offline approximation stays approximate', resume: 'runtime state + all harness variables and RNG streams',
+    actions: 'no ordinary action logs or request counters; milestones and errors only; resource flows grouped by window, resource, source and purpose' }
   if (coverage.writePaths.uninstrumentedRuntimeWrites.length) throw Error(`Resource write paths lack observation: ${coverage.writePaths.uninstrumentedRuntimeWrites}`)
   const manifest = { schemaVersion: VERSION, runId: resume?.runId || runId, options, node: process.version,
     command: process.argv, sources, coverage, startedAt: new Date().toISOString() }
@@ -107,18 +154,27 @@ export function createResourceRecorder({ root = '.resource-records', options = {
     if (bufferedBytes >= chunkBytes) flush()
   }
   const guard = run => { try { run() } catch (error) { failure ||= error } }
-  function endContinuous(at) {
-    for (const row of Object.values(continuous)) write('settlement', { ...row, start: continuousStart, end: at })
-    continuous = {}; continuousStart = null
-  }
   function closeInterval(at) {
-    if (interval) write('interval', { ...interval.row, start: interval.start, end: at, duration: at - interval.start })
+    if (interval && at > interval.start) {
+      pacing ??= pacingStats(); pacingStart ??= interval.start
+      accumulatePacing(pacing, { ...interval.row, start: interval.start, end: at, duration: at - interval.start }, clockOrigin)
+    }
     interval = null
+  }
+  function endWindow(at) {
+    const activeInterval = interval
+    closeInterval(at)
+    if (continuousStart != null || pacing) write('window', { at,
+      simulatedMs: clockOrigin == null ? null : at - clockOrigin,
+      start: Math.min(continuousStart ?? at, pacingStart ?? at), end: at,
+      flows: Object.values(continuous), pacing })
+    continuous = {}; continuousStart = null; pacing = null; pacingStart = null
+    if (activeInterval) interval = { ...activeInterval, start: at }
   }
   function syncEnvironment(at, value = environment()) {
     const key = `${value.lifeId}:${value.currentRealm}:${value.online}`
     if (key !== environmentKey) {
-      endContinuous(at); closeInterval(at)
+      endWindow(at); interval = null
       if (key.split(':').slice(0, 2).join(':') !== environmentKey?.split(':').slice(0, 2).join(':')) {
         visit++; ready = {}; quoteKey = null
       }
@@ -138,61 +194,60 @@ export function createResourceRecorder({ root = '.resource-records', options = {
   }
   function snapshot(state, derived, at, reason = 'periodic') {
     syncEnvironment(at)
-    endContinuous(at)
+    endWindow(at)
     write('snapshot', { reason, resources: strings(state.resources), capacities: Object.fromEntries(RESOURCES.map(r => [r.id, capacity(derived.max[r.id])])),
-      peaks: strings(state.peak), rates: strings(derived.rates), net: strings(derived.net), expense: strings(derived.expense || {}),
-      autoCraftDrain: derived.autoCraftDrain, jobs: state.disciples.jobs, population: state.disciples.total,
-      buildings: state.buildings, upgrades: state.upgrades, orders: state.craftOrders, autoCraft: state.autoCraft,
-      targets: strings(state.craftTargets), reserves: state.settings.craftReserves, modes: state.settings.processingModes,
-      timers: state.craftTimers, progress: strings(state.craftProgress),
-      sourceBreakdown: derived.sources, expenseBreakdown: derived.expenseSources,
-      processing: recordingProcessing(state, derived) })
+      rates: strings(derived.rates), net: strings(derived.net), expense: strings(derived.expense || {}),
+      population: state.disciples.total, jobs: state.disciples.jobs })
     lastSnapshot = at
   }
   const observer = {
     begin(detail) {
       const action = { actionId: ++actionSeq, parentActionId: detail.parent?.actionId || null, type: detail.type, id: detail.id,
-        copies: detail.copies, offered: detail.offered, value: detail.value,
         resetEnvironment: detail.type === 'resetForRebirth' ? environment() : detail.parent?.resetEnvironment,
         craftMode: detail.type === 'craft' ? 'manual' : detail.parent?.craftMode ||
           (['settleCraftCopies', 'addCraftGain', 'runAutoCondense', 'runAutoCondenseBatch'].includes(detail.type) ? 'automatic' : null) }
       guard(() => {
         syncEnvironment(detail.at)
-        const research = detail.type === 'research'
-        const building = detail.type === 'buyBuilding'
-          && !(observedState?.buildings[detail.id]?.count > 0)
-        if (!action.parentActionId && observedDerived && (research || building || detail.type === 'breakthrough' || detail.type === 'resetForRebirth')) {
-          action.milestone = `${detail.type}:${detail.id}`
-          snapshot(observedState, observedDerived, detail.at, `before:${action.milestone}`)
-        }
-        write('action-start', action)
+        const transition = !action.parentActionId && ['breakthrough', 'resetForRebirth'].includes(detail.type)
+        const milestone = !action.parentActionId && (detail.type === 'research'
+          || detail.type === 'buyBuilding' && !(observedState?.buildings[detail.id]?.count > 0))
+        if (transition || milestone) action.milestone = `${detail.type}:${detail.id || ''}`
+        if (transition && observedDerived) snapshot(observedState, observedDerived, detail.at, `before:${action.milestone}`)
       })
       return action
     },
     end(action, result) { guard(() => {
-      write('action-end', { ...action, ...result })
-      if (observedDerived && !action.parentActionId && ['research', 'buyBuilding', 'sellBuilding', 'breakthrough', 'resetForRebirth'].includes(action.type)) {
-        choices(observedState, observedDerived, env.at)
-        if (action.milestone) snapshot(observedState, observedDerived, env.at, `after:${action.milestone}`)
+      if (!result.ok) write('action-error', { type: action.type, id: action.id, error: result.error })
+      else if (action.milestone && result.result !== false) {
+        write('milestone', { type: action.type, id: action.id, result: result.result })
+      }
+      if (action.milestone && ['breakthrough', 'resetForRebirth'].includes(action.type)) {
+        // Failures can consume resources or reset the realm too.
+        write('transition', { type: action.type, id: action.id, ...result })
+        if (observedDerived) snapshot(observedState, observedDerived, env.at, `after:${action.milestone}`)
       }
     }) },
     mutation({ id, before, after, at, action, detail }) {
       guard(() => {
         syncEnvironment(at, action?.resetEnvironment || environment())
         const delta = amount(after).minus(amount(before)), source = detail.source || 'unknown'
-        if (delta.isZero() && modelFields.every(f => amount(detail[f]).isZero()) && amount(detail.requested).isZero()) return
+        if (delta.isZero() && modelFields.every(f => amount(detail[f]).isZero())) return
         totals[id] = amount(totals[id]).plus(delta).toString()
-        const row = { resource: id, source, delta: delta.toString(), detail,
-          positive: delta.gt(0) ? delta.toString() : '0', negative: delta.lt(0) ? delta.neg().toString() : '0' }
-        if (source.includes('simulation.js') || source.includes('IndustrialCraft')) {
-          const key = JSON.stringify([id, source, env.online, visit, action?.type, action?.id, action?.craftMode]), existing = continuous[key]
-          if (existing) {
-            for (const f of ['delta','positive','negative']) existing[f] = amount(existing[f]).plus(row[f]).toString()
-            for (const f of modelFields) if (detail[f] != null) existing.detail[f] = amount(existing.detail[f]).plus(detail[f]).toString()
-            existing.count++
-          } else { continuousStart ??= at; continuous[key] = { ...env, ...row, action: action || null, detail: { ...detail }, count: 1 } }
-          if (at - continuousStart >= 60000) endContinuous(at)
-        } else write('mutation', { ...row, before: amount(before).toString(), after: amount(after).toString(), action: action || null })
+        // Keep purpose and manual/automatic attribution, never per-call IDs or payloads.
+        const attribution = action ? { type: action.type, id: action.id, craftMode: action.craftMode,
+          reset: !!action.resetEnvironment || action.type === 'resetForRebirth' } : null
+        const key = JSON.stringify([id, source, attribution]), existing = continuous[key]
+        if (existing) {
+          existing.delta = amount(existing.delta).plus(delta).toString()
+          const direction = delta.gt(0) ? 'positive' : 'negative'
+          existing[direction] = amount(existing[direction]).plus(delta.abs()).toString()
+          for (const f of modelFields) if (detail[f] != null) existing.detail[f] = amount(existing.detail[f]).plus(detail[f]).toString()
+        } else {
+          continuousStart ??= at
+          continuous[key] = { resource: id, source, action: attribution, delta: delta.toString(),
+            positive: delta.gt(0) ? delta.toString() : '0', negative: delta.lt(0) ? delta.neg().toString() : '0',
+            detail: Object.fromEntries(modelFields.filter(f => detail[f] != null).map(f => [f, amount(detail[f]).toString()])) }
+        }
       })
     },
   }
@@ -212,7 +267,7 @@ export function createResourceRecorder({ root = '.resource-records', options = {
     check(); syncEnvironment(at)
     const residual = reconcile(state, 'observation')
     if (Object.keys(residual).length) throw Error(`Unrecorded resource mutation: ${JSON.stringify(residual)}`)
-    if (at - lastSnapshot >= (options.sampleSeconds ?? 300) * 1000) snapshot(state, derived, at)
+    if (at - lastSnapshot >= (options.sampleSeconds ?? 1800) * 1000) snapshot(state, derived, at)
     const key = JSON.stringify(diagnostics.selectedCost)
     if (key !== quoteKey) { quoteKey = key; quoteRevision++; ready = {} }
     const missing = diagnostics.missing.map(m => m.resource)
@@ -235,7 +290,9 @@ export function createResourceRecorder({ root = '.resource-records', options = {
   }
   function choices(state, derived, at) {
     syncEnvironment(at)
-    const value = recordingChoices(state, derived), key = JSON.stringify(value)
+    const value = Object.fromEntries(Object.entries(recordingChoices(state, derived)).map(([group, rows]) =>
+      [group, rows.map(({ id, visible, available, learned }) => ({ id, visible, available, learned }))]))
+    const key = JSON.stringify(value)
     if (key !== choicesKey) {
       const previous = choicesKey ? JSON.parse(choicesKey) : {}, changes = {}
       for (const [group, rows] of Object.entries(value)) {
@@ -246,10 +303,7 @@ export function createResourceRecorder({ root = '.resource-records', options = {
     }
   }
   function checkpoint(simulator, state, derived, at) {
-    check(); endContinuous(at)
-    const activeInterval = interval
-    closeInterval(at); snapshot(state, derived, at, 'checkpoint'); flush()
-    if (activeInterval) interval = { ...activeInterval, start: at }
+    check(); snapshot(state, derived, at, 'checkpoint'); flush()
     const recorder = { seq, actionSeq, files: [...files], opening, totals, lastSnapshot, environmentKey, visit, quoteRevision, ready, quoteKey,
       interval, choicesKey, maxBytes, chunkBytes, clockOrigin }
     const cp = { version: VERSION, node: process.version, directory: dir, runId: manifest.runId, sources, options, simulator, recorder }
@@ -261,8 +315,10 @@ export function createResourceRecorder({ root = '.resource-records', options = {
     return path
   }
   function finish(state, { completed = false, stopReason = '', elapsed = 0, derived } = {}) {
-    check(); endContinuous(elapsed); closeInterval(elapsed)
+    check()
     if (derived) snapshot(state, derived, elapsed, 'final')
+    else { syncEnvironment(elapsed); endWindow(elapsed) }
+    interval = null
     reconcile(state, 'final'); write('closing', { resources: strings(state.resources), completed, stopReason }); flush()
     atomic(join(dir, 'manifest.json'), JSON.stringify({ ...manifest, files, bytes, seq, completed, stopReason }, null, 2))
     const report = rebuildResourceReport(dir)
@@ -303,10 +359,11 @@ export function rebuildResourceReport(dir) {
   const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
   let opening = null, closing = null, origin = null, records = 0
   const totals = {}, flows = {}, recipeOutputs = {}, recipeModes = {}, exposure = {}, stages = {}, milestones = []
+  const actionSummary = {}, recordsByKind = {}
   const add = (map, id, value) => { map[id] = amount(map[id]).plus(value).toString() }
-  const addMs = (map, id, value) => { map[id] = (map[id] || 0) + value }
   for (const row of readResourceRecords(dir)) {
       records++
+      recordsByKind[row.kind] = (recordsByKind[row.kind] || 0) + 1
       if (origin == null) origin = row.at
       const stage = stages[row.realmVisitId] ||= { visit: row.realmVisitId, life: row.lifeId, realm: row.currentRealm,
         fromMs: row.at - origin, toMs: row.at - origin, sampledMs: 0, materialsReadyMs: 0, projectBlockedMs: 0,
@@ -314,64 +371,55 @@ export function rebuildResourceReport(dir) {
         resources: {}, losses: {}, model: {}, spending: {} }
       stage.fromMs = Math.min(stage.fromMs, (row.start ?? row.at) - origin)
       stage.toMs = Math.max(stage.toMs, (row.end ?? row.at) - origin)
+      if (row.kind === 'milestone') milestones.push({ seq: row.seq, visit: row.realmVisitId,
+        life: row.lifeId, realm: row.currentRealm, seconds: (row.at - origin) / 1000, reason: `${row.type}:${row.id || ''}` })
       if (row.kind === 'snapshot' && row.reason !== 'periodic') milestones.push({ seq: row.seq, visit: row.realmVisitId,
         life: row.lifeId, realm: row.currentRealm, seconds: (row.at - origin) / 1000, reason: row.reason })
       if (row.kind === 'opening') opening = row.resources
       if (row.kind === 'closing') closing = row.resources
-      if (row.kind === 'mutation' || row.kind === 'settlement') {
-        totals[row.resource] = amount(totals[row.resource]).plus(row.delta).toString()
-        const resource = stage.resources[row.resource] ||= { positive: '0', negative: '0' }
-        resource.positive = amount(resource.positive).plus(row.positive).toString()
-        resource.negative = amount(resource.negative).plus(row.negative).toString()
-        const losses = stage.losses[row.resource] ||= {}
-        const model = stage.model[row.resource] ||= {}
-        for (const field of modelFields) if (row.detail[field] != null) {
-          add(field.startsWith('model') ? model : losses, field, row.detail[field])
+      if (row.kind === 'action-summary') for (const action of row.actions) {
+        const key = JSON.stringify([row.realmVisitId, action.type, action.id, action.outcome])
+        const entry = actionSummary[key] ||= { visit: row.realmVisitId, life: row.lifeId, realm: row.currentRealm,
+          type: action.type, id: action.id, outcome: action.outcome, count: 0 }
+        entry.count += action.count
+      }
+      if (row.kind === 'mutation' || row.kind === 'settlement' || row.kind === 'window') for (const entry of row.flows || [row]) {
+        // Schema 6/7 store one window envelope; older records store one resource per row.
+        const flowRow = { ...row, ...entry }
+        totals[flowRow.resource] = amount(totals[flowRow.resource]).plus(flowRow.delta).toString()
+        const resource = stage.resources[flowRow.resource] ||= { positive: '0', negative: '0' }
+        resource.positive = amount(resource.positive).plus(flowRow.positive).toString()
+        resource.negative = amount(resource.negative).plus(flowRow.negative).toString()
+        const losses = stage.losses[flowRow.resource] ||= {}
+        const model = stage.model[flowRow.resource] ||= {}
+        for (const field of modelFields) if (flowRow.detail[field] != null) {
+          add(field.startsWith('model') ? model : losses, field, flowRow.detail[field])
         }
-        const reset = row.action?.resetEnvironment != null || row.action?.type === 'resetForRebirth' || row.source === 'resetForRebirth'
-        if (reset && amount(row.negative).gt(0)) add(losses, 'resetLoss', row.negative)
-        if (!reset && row.action && amount(row.negative).gt(0)) {
-          const destination = `${row.action.type}:${row.action.id || ''}:${row.action.craftMode || ''}`
-          add(stage.spending[destination] ||= {}, row.resource, row.negative)
+        const reset = flowRow.action?.reset === true || flowRow.action?.resetEnvironment != null || flowRow.action?.type === 'resetForRebirth' || flowRow.source === 'resetForRebirth'
+        if (reset && amount(flowRow.negative).gt(0)) add(losses, 'resetLoss', flowRow.negative)
+        if (!reset && flowRow.action && amount(flowRow.negative).gt(0)) {
+          const destination = `${flowRow.action.type}:${flowRow.action.id || ''}:${flowRow.action.craftMode || ''}`
+          add(stage.spending[destination] ||= {}, flowRow.resource, flowRow.negative)
         }
-        const key = `${row.realmVisitId}:${row.resource}:${row.source}:${row.action?.type || 'continuous'}:${row.action?.id || ''}:${row.action?.craftMode || ''}`
-        const flow = flows[key] ||= { resource: row.resource, source: row.source, visit: row.realmVisitId, life: row.lifeId, realm: row.currentRealm,
-          action: row.action || null, positive: '0', negative: '0', detail: {} }
-        flow.positive = amount(flow.positive).plus(row.positive).toString()
-        flow.negative = amount(flow.negative).plus(row.negative).toString()
-        for (const f of modelFields) if (row.detail[f] != null) flow.detail[f] = amount(flow.detail[f]).plus(row.detail[f]).toString()
-        if (row.action?.type === 'addCraftGain' && amount(row.delta).gt(0)) {
-          recipeOutputs[row.action.id] = amount(recipeOutputs[row.action.id]).plus(row.delta).toString()
-          const modes = recipeModes[row.action.id] ||= { manual: '0', automatic: '0' }
-          const mode = row.action.craftMode || 'automatic'
-          modes[mode] = amount(modes[mode]).plus(row.delta).toString()
+        const key = `${flowRow.realmVisitId}:${flowRow.resource}:${flowRow.source}:${flowRow.action?.type || 'continuous'}:${flowRow.action?.id || ''}:${flowRow.action?.craftMode || ''}`
+        const flow = flows[key] ||= { resource: flowRow.resource, source: flowRow.source, visit: flowRow.realmVisitId, life: flowRow.lifeId, realm: flowRow.currentRealm,
+          action: flowRow.action || null, positive: '0', negative: '0', detail: {} }
+        flow.positive = amount(flow.positive).plus(flowRow.positive).toString()
+        flow.negative = amount(flow.negative).plus(flowRow.negative).toString()
+        for (const f of modelFields) if (flowRow.detail[f] != null) flow.detail[f] = amount(flow.detail[f]).plus(flowRow.detail[f]).toString()
+        if (flowRow.action?.type === 'addCraftGain' && amount(flowRow.positive).gt(0)) {
+          recipeOutputs[flowRow.action.id] = amount(recipeOutputs[flowRow.action.id]).plus(flowRow.positive).toString()
+          const modes = recipeModes[flowRow.action.id] ||= { manual: '0', automatic: '0' }
+          const mode = flowRow.action.craftMode || 'automatic'
+          modes[mode] = amount(modes[mode]).plus(flowRow.positive).toString()
         }
       }
-      if (row.kind === 'interval') {
+      if (row.kind === 'interval' || row.kind === 'window' && row.pacing) {
         const key = `${row.lifeId}:${row.realmVisitId}:${row.online ? 'online' : 'offline'}`
         const bucket = exposure[key] ||= { durationMs: 0, insightOnlyMs: 0, shortageMs: {}, capacityMs: {} }
-        bucket.durationMs += row.duration; if (row.insightOnly) bucket.insightOnlyMs += row.duration
-        for (const id of row.missing) bucket.shortageMs[id] = (bucket.shortageMs[id] || 0) + row.duration
-        for (const id of row.capacityBlocked) bucket.capacityMs[id] = (bucket.capacityMs[id] || 0) + row.duration
-        stage.sampledMs += row.duration
-        if (row.missing.length) {
-          stage.lastMissing = row.missing
-          stage.lastMissingSeconds = (row.end - origin) / 1000
-          stage.readySinceSeconds = null
-        } else if (!row.canAscend) {
-          stage.firstMaterialsReadySeconds ??= (row.start - origin) / 1000
-          stage.readySinceSeconds ??= (row.start - origin) / 1000
-        }
-        stage.lastReadiness = Object.fromEntries(Object.entries(row.ready || {}).map(([id, at]) => [id, (at - origin) / 1000]))
-        if (row.insightOnly) stage.insightOnlyMs += row.duration
-        if (!row.missing.length && !row.canAscend) stage.materialsReadyMs += row.duration
-        if (row.projectsReady === false) stage.projectBlockedMs += row.duration
-        for (const id of row.missing) addMs(stage.shortageMs, id, row.duration)
-        for (const id of row.capacityBlocked) addMs(stage.capacityMs, id, row.duration)
-        for (const id of row.full || []) addMs(stage.fullMs, id, row.duration)
-        for (const id of row.buildingBlocked || []) addMs(stage.buildingBlockedMs, id, row.duration)
-        for (const line of row.processing || []) addMs(stage.processingMs,
-          `${line.resource}:${line.recipe}:${line.unlocked ? line.reason || 'unknown' : '配方未解锁'}`, row.duration)
+        const stats = row.kind === 'interval' ? pacingStats() : row.pacing
+        if (row.kind === 'interval') accumulatePacing(stats, row, origin)
+        mergePacing(stage, bucket, stats)
       }
   }
   if (!opening || !closing) throw Error('Opening/closing state missing; measurement is incomplete')
@@ -392,8 +440,9 @@ export function rebuildResourceReport(dir) {
     stage.durationSeconds = (stage.toMs - stage.fromMs) / 1000
     stage.secondsAfterLastReadiness = stage.readySinceSeconds == null ? null : stage.toMs / 1000 - stage.readySinceSeconds
   }
-  return { schemaVersion: VERSION, runId: manifest.runId, options: manifest.options,
+  return { schemaVersion: VERSION, sourceSchemaVersion: manifest.schemaVersion, runId: manifest.runId, options: manifest.options,
     completed: manifest.completed ?? false, stopReason: manifest.stopReason ?? 'incomplete',
     accountingComplete: !Object.keys(residual).length, opening, closing,
-    residual, totals, flows: Object.values(flows), recipeOutputs, recipeModes, exposure, stages: stageList, milestones, records }
+    residual, totals, flows: Object.values(flows), recipeOutputs, recipeModes, exposure, stages: stageList, milestones,
+    ...(Object.keys(actionSummary).length ? { actionSummary: Object.values(actionSummary) } : {}), recordsByKind, records }
 }

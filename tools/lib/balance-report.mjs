@@ -54,9 +54,9 @@ export function writeBalanceArtifacts(directory, ledger, pacing = null) {
   writeCsv('flows.csv', ['visit', 'life', 'realm', 'resource', 'source', 'action', 'id', 'craft_mode', 'actual_increase', 'actual_decrease'],
     ledger.flows.map(f => [f.visit, f.life, f.realm, f.resource, f.source, f.action?.type, f.action?.id,
       f.action?.craftMode, f.positive, f.negative]))
-  writeCsv('blockers.csv', ['visit', 'life', 'realm', 'kind', 'resource_or_facility', 'sampled_seconds'],
+  writeCsv('blockers.csv', ['visit', 'life', 'realm', 'kind', 'resource_or_facility', 'sampled_seconds', 'sampled_fraction'],
     stages.flatMap(s => ['shortageMs', 'capacityMs', 'fullMs', 'processingMs', 'buildingBlockedMs'].flatMap(kind =>
-      Object.entries(s[kind]).map(([id, ms]) => [s.visit, s.life, s.realm, kind, id, ms / 1000]))))
+      Object.entries(s[kind]).map(([id, ms]) => [s.visit, s.life, s.realm, kind, id, ms / 1000, s.sampledMs ? ms / s.sampledMs : 0]))))
   function* samples() {
     for (const row of readResourceRecords(directory)) if (row.kind === 'snapshot') {
       for (const [id, value] of Object.entries(row.resources)) {
@@ -77,13 +77,17 @@ export function writeBalanceArtifacts(directory, ledger, pacing = null) {
     firstReach: pacing?.firstReach, firstReadiness: pacing?.firstReadiness,
     firstFacilities: pacing?.firstFacilities, firstOutput: pacing?.firstOutput, firstAcquired: pacing?.firstAcquired,
     resourceTotals, stages, milestones: ledger.milestones, recipeOutputs: ledger.recipeOutputs, recipeModes: ledger.recipeModes,
+    actionSummary: ledger.actionSummary, recordsByKind: ledger.recordsByKind,
+    recording: { mode: ledger.sourceSchemaVersion >= 5 ? 'pacing' : 'legacy-detail', sampleSeconds: ledger.options?.sampleSeconds ?? 1800 },
     boundaries: [
       '实际增减为已观察的库存变化；连续生产与维护同时发生时，毛收支仅作模型列示。',
       '重置发放、旧余额镜像恢复也属于实际库存变动，不应当作生产收入；按 flows.csv 的 source/action 区分。阶段期初期末由已对账流水推导。',
       '截断、取整、逸散和重置损失分列；离线近似的逸散与截断无法拆分时保留合并字段。损失不可再次从期末余额扣除。',
       '缺料、满仓、加工状态与降载时长按观察区间左端统计，允许重叠，不能相加当作总卡关时间。',
+      '新格式将资源收支和阻塞累计时长合成一条窗口记录，不保留5秒状态切换轨迹；blockers.csv的sampled_fraction以所属阶段观察时长为分母。',
       'materials_ready 表示已观察到材料齐备但尚未飞升的时长，不自动归因为机器人等待；加工状态不全是阻塞。',
-      '原始 action-start/action-end 与前后快照、报价和区间在 records-*.jsonl；milestones 以 seq 定位。',
+      '默认记录整体节奏：资源收支按时间窗口、阶段、来源及用途汇总，正向和负向分别累计；不保存普通动作、配置请求或调用计数。',
+      '关键研究、首次设施、突破、重置及异常保留节点；records-*.jsonl 可重建阶段统计，不能还原逐动作轨迹。历史详细格式按原记录读取。',
       ...(pacing?.boundaries || []),
     ], files,
   }
@@ -97,7 +101,13 @@ export function writeBalanceArtifacts(directory, ledger, pacing = null) {
     '按阶段缺料记录（重叠时长分别列示）：', '',
     ...stages.flatMap(s => Object.entries(s.shortageMs).sort((a, b) => b[1] - a[1]).slice(0, 5)
       .map(([id, ms]) => `- 第${s.life}世／访问${s.visit} ${realmName(s.realm)}：${resName(id)} ${hours(ms / 1000)} 小时。`)), '',
-    '数据文件：resources.csv 为阶段收支，spending.csv 为实际离散支出去向，losses.csv 为损失，blockers.csv 为采样状态时长，samples.csv 为周期及关键快照。完整结算与策略诊断见 result.json。', '',
+    '仓容不足与满仓时间：', '',
+    ...stages.flatMap(s => ['capacityMs', 'fullMs'].flatMap(kind => Object.entries(s[kind]).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([id, ms]) => `- 第${s.life}世／${realmName(s.realm)}：${resName(id)}${kind === 'capacityMs' ? '仓容不足' : '满仓'} ${hours(ms / 1000)} 小时。`))), '',
+    '实际损失（满仓时长不等于溢出损失）：', '',
+    ...stages.flatMap(s => Object.entries(s.losses).flatMap(([id, losses]) => Object.entries(losses).filter(([, value]) => money(value).gt(0))
+      .map(([kind, value]) => `- 第${s.life}世／${realmName(s.realm)}：${resName(id)} ${kind} ${value}。`))), '',
+    '数据文件：resources.csv 为阶段收支，spending.csv 为支出用途汇总，losses.csv 为损失，blockers.csv 为状态时长，samples.csv 为周期及关键快照。完整结算见 result.json。', '',
     ...summary.boundaries.map(text => `- ${text}`), '',
   ]
   writeFileSync(join(directory, 'summary.json'), JSON.stringify(summary, null, 2))

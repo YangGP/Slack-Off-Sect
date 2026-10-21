@@ -19,7 +19,7 @@ export function uncappedCrafting({ ok, close, section }) {
   s.realm = 10
   s.karma = E.money(100)
   E.recompute(s, d)
-  ok('23种稳定加工品无仓容，原料、猎物与粒子仍有限', UNCAPPED_CRAFTED_RESOURCES.size === 23 &&
+  ok('26种稳定加工品无仓容，原料、猎物与粒子仍有限', UNCAPPED_CRAFTED_RESOURCES.size === 26 &&
     [...UNCAPPED_CRAFTED_RESOURCES].every(id => !d.max[id].isFinite()) &&
     ['qi', 'insight', 'faith', 'wood', 'stone', 'beastHide', 'qiParticle', 'qiEnergy', 'immortalForce', 'warrant'].every(id => d.max[id].isFinite()))
   ok('100仙缘生产2倍、有限仓储1.05倍，信符独立', d.karmaMult.eq(2) && d.karmaStorageMult.eq('1.05') && d.max.warrant.eq(100))
@@ -27,7 +27,7 @@ export function uncappedCrafting({ ok, close, section }) {
   s.faithProgression.cultivation.realmDevotion = 10
   E.recompute(s, d)
   ok('万民归心强化削减后的奖励，口粮基准不叠加修持', d.realmProductionMult === 10 && d.realmBaseProductionMult === 5.5)
-  ok('招募按削减后的口粮基准报价', recruitCost({ qi: 100 }, 10).qi === 550)
+  ok('招募按削减后的口粮基准报价', E.moneyEq(recruitCost({ qi: 100 }, 10).qi, 550))
   s.dao = E.money(1)
   s.settings.craftReservePercent = 20
   s.settings.craftReserves.plank = E.money(7)
@@ -192,7 +192,7 @@ export function storageAndRefinement({ ok, section }) {
     s.buildings.alchemyRoom = { count: 1, on: true }
     E.recompute(s, d)
     ok('专属成品仓储不被通用折算削弱', E.moneyEq(d.max.pill, pillBefore))
-    ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer && Number.isFinite(r.baseMax)).every(r => E.money(d.max[r.id]).isInteger()))
+    ok('资源目录不再标记强制整数', RESOURCES.every(r => !Object.hasOwn(r, 'integer')))
     const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: E.money(1000) } })
     E.recompute(old, d)
     E.addResource(old, 'nineTurnPill', 10, d.max.nineTurnPill)
@@ -217,7 +217,7 @@ export function storageAndRefinement({ ok, section }) {
     s.resources.spiritArtifact = denied.spiritArtifact
     E.refineTreasure(s, d, 'flyingSword')
     ok('祭炼实际扣除进阶材料并提升层数', E.moneyIsZero(s.resources.spiritArtifact) && E.moneyIsZero(s.resources.steel) && s.treasureLevels.flyingSword === 3)
-    ok('进阶用料随层数增长并整枚计价', E.moneyEq(E.refineCost(s, 'flyingSword').spiritArtifact, 2))
+    ok('进阶用料随层数增长并保留小数', E.moneyEq(E.refineCost(s, 'flyingSword').spiritArtifact, '1.7'))
     ok('仙草增加可重复消费去向', UPGRADE_MAP.alchemyCauldron.refine.materials.immortalHerb > 0)
   }
 }

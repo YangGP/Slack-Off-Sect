@@ -6,7 +6,7 @@
  */
 import { computed } from 'vue'
 import { state, derived, actions } from '@/game/store'
-import { fmt, fmtInt, fmtPercent } from '@/game/format'
+import { fmt, fmtAmount, fmtPercent } from '@/game/format'
 import { ZERO, money, moneyGte } from '@/game/decimal'
 import { KARMA_PERKS } from '@/data/karmaShop'
 import { karmaNeedsMet, karmaNeedsText, karmaShopBonuses, perkCost, rebirthCount } from '@/game/engine'
@@ -49,12 +49,12 @@ function missingText(missing) {
         <div class="karma-balances">
           <div class="karma-balance">
             <span class="k">仙缘余额</span>
-            <b>{{ fmtInt(balance) }}</b>
+            <b>{{ fmtAmount(balance) }}</b>
             <span class="small dim">计入产出乘区</span>
           </div>
           <div class="karma-balance">
             <span class="k">已修持投入</span>
-            <b>{{ fmtInt(totalSpent) }}</b>
+            <b>{{ fmtAmount(totalSpent) }}</b>
             <span class="small dim">跨轮回保留 · 不计加成</span>
           </div>
           <div class="karma-balance">
@@ -81,7 +81,7 @@ function missingText(missing) {
           </div>
           <div class="dim karma-note">{{ row.meta.desc }}</div>
           <div class="btn-row karma-actions">
-            <span class="small">下一级 {{ fmtInt(row.cost) }} 仙缘</span>
+            <span class="small">下一级 {{ fmtAmount(row.cost) }} 仙缘</span>
             <button
               class="btn"
               :disabled="row.level >= row.meta.max || !row.affordable || !row.ready"

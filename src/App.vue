@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
-import { fmtCost, fmtInt, fmtPercent, fmtTime } from '@/game/format'
+import { fmtCost, fmtAmount, fmtPercent, fmtTime } from '@/game/format'
 import { enough } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { moneyIsPositive } from '@/game/decimal'
@@ -342,7 +342,7 @@ function downloadLegacy() {
           <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
         </span>
         <span>全局 <b>×{{ derived.globalMult.toFixed(2) }}</b>（加成 +{{ fmtPercent(derived.ratioAll) }}）</span>
-        <span v-if="karmaPositive">仙缘 <b>{{ fmtInt(state.karma) }}</b></span>
+        <span v-if="karmaPositive">仙缘 <b>{{ fmtAmount(state.karma) }}</b></span>
         <span>挂机 <b>{{ fmtTime(state.stats.playTime) }}</b></span>
       </div>
     </div>

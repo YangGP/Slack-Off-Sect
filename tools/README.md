@@ -8,16 +8,19 @@
 
 | 命令 | 职责 |
 | --- | --- |
-| `npm run check` | 编码、工具、引擎、SSR、真实启动、DOM 完整检查 |
-| `npm run smoke` | 引擎检查；入口保持简短，用例按功能位于 [smoke/](smoke/README.md) |
+| `npm run check` | 日常：编码、8组核心引擎动作、SSR |
+| `npm run check:full` | 按需完整：编码、审计、完整引擎、SSR、真实启动、DOM |
+| `npm run smoke` | 核心动作检查，执行进程限时5秒；用例位于 [smoke/](smoke/README.md) |
+| `npm run smoke -- --group=名称` | 只跑一个功能组，--list 查看名称 |
+| `npm run smoke:full` | 完整引擎清单和架构回归，包含长模拟和专项矩阵 |
 | `npm run check:render` | SSR 模板及控制台警告 |
 | `npm run check:startup` | 真实 main 入口、初始化、热更新与循环生命周期 |
 | `npm run check:dom` | 浏览器环境中的交互；用例位于 [dom/](dom/README.md) |
 | `npm run check:tools` | 审计输入、数据还原、重复运行、报价和风险模型回归 |
-| `npm run check:industry` | 工业供料、共享冷却和粒子配对负载实验 |
+| `npm run check:industry` | 一分钟固定供料、共享冷却和粒子配对负载；-- --full 保留十分钟测量 |
 | `npm run check:encoding` | 项目文本 BOM / 换行检查；跳过产物、外部参考项目及目录链接 |
 
-`architecture-check`、`industry-check`、`disciple-check`、`talent-check`、`auto-talent-check`、`power-check`、`offline-check`、`offline-async-check` 是被 smoke 调用的专项检查，导入时不自行执行。不要为同一组断言另开一份副本。
+`architecture-check`、`industry-check`、`disciple-check`、`talent-check`、`auto-talent-check`、`power-check`、`offline-check`、`offline-async-check` 由完整引擎清单或指定功能组调用，导入时不自行执行。不要为同一组断言另开一份副本。局部改动只跑相关组；记录恢复和小数专项同样只选择相关单例，不作为每次提交的附加必跑项。产业循环逐秒检查库存边界，但按场景汇总统计，断言计数不再随模拟秒数膨胀。
 
 离线相关的分工：`offline-check` 管「同输入可复现、分段数与离线时长无关、库存与加工不越界、短窗口仍与逐秒参考一致」；`offline-async-check` 管「同步/异步一致、批次预算不改变结果、取消与异常不写回」；长离线的**收益不必与逐秒参考相同**（有界近似的既定口径），只断言上界与不变量。
 

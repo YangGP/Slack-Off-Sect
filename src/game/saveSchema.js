@@ -7,14 +7,14 @@ import { EVENT_MAP } from '@/data/events'
 import { REALMS } from '@/data/realms'
 import { MODULES } from '@/data/modules'
 import { moduleSaveKeys, normalizeModuleSlices } from '@/game/moduleRegistry'
-import { ZERO, floorMoney, moneyNonNegative } from '@/game/decimal'
+import { ZERO, moneyNonNegative } from '@/game/decimal'
 import { normalizeAnalytics } from '@/game/analyticsState'
 import { D7_RULESET, normalizeFaithProgression } from '@/data/faith'
 import { normalizeKarmaProgression } from '@/data/karmaShop'
 
 /** 存档结构版本：v3 起金额字段以十进制字符串保存（v1/v2 为 JSON number）。 */
 export const SAVE_VERSION = 3
-/** 核心存档字段；可选模块的切片键（如 hunting）在末尾动态追加 */
+/** 核心存档字段；功能模块的切片键（如 hunting）在末尾动态追加 */
 const CORE_SAVE_FIELDS = [
   'version', 'createdAt', 'lastTickAt', 'lastSaveAt', 'resources', 'seen', 'peak',
   'disciples', 'arrivalTimer', 'totalDays', 'treasureLevels', 'craftTimers', 'craftOrders',
@@ -44,10 +44,10 @@ export function moneyValue(value, fallback = ZERO) {
 }
 
 /** 金额映射（资源、峰值、制作进度/目标、材料保留量等）：只保留目录内的已知键。 */
-export function moneyMap(values, catalog, { integer = false } = {}) {
+export function moneyMap(values, catalog) {
   return Object.fromEntries(Object.entries(values || {})
     .filter(([id]) => Object.hasOwn(catalog, id))
-    .map(([id, value]) => [id, integer ? floorMoney(moneyValue(value)) : moneyValue(value)]))
+    .map(([id, value]) => [id, moneyValue(value)]))
 }
 
 /** 经济累计类统计：这些键是金额，其余统计仍是 Number 计数。 */
@@ -89,10 +89,8 @@ const numericMap = (values, catalog, integer = false) => Object.fromEntries(
 )
 const flags = (values, catalog) => Object.fromEntries(Object.entries(values || {})
   .filter(([id, value]) => Object.hasOwn(catalog, id) && value === true))
-/** 模块开关：只保留已知模块，非布尔值一律回落到默认 */
-const sanitizeModuleFlags = (raw) => Object.fromEntries(
-  MODULES.map(m => [m.id, typeof raw?.[m.id] === 'boolean' ? raw[m.id] : m.defaultEnabled]),
-)
+/** 模块始终启用，旧档关闭标记统一归一为 true。 */
+const sanitizeModuleFlags = () => Object.fromEntries(MODULES.map(m => [m.id, true]))
 
 /** 迁移后校验：仅持久化已知字段；金额为有限非负 Decimal，控制域为有限非负 Number。 */
 export function validateState(state, fresh) {
@@ -104,7 +102,7 @@ export function validateState(state, fresh) {
   result.ruleset = D7_RULESET
   result.faithProgression = normalizeFaithProgression(result.faithProgression)
   result.karmaProgression = normalizeKarmaProgression(result.karmaProgression)
-  // 先定下模块开关：模块切片归一化要据此判断「关闭时丢弃活动状态」
+  // 兼容旧档模块字段：已注册模块统一启用
   const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {
     result[key] = safeNumber(result[key], fresh[key])
@@ -112,15 +110,12 @@ export function validateState(state, fresh) {
   for (const key of ['arrivalTimer', 'totalDays', 'starvationTimer', 'leaveTimer', 'logSeq']) {
     result[key] = safeNumber(result[key])
   }
-  // 永久货币是金额：顶层字段为权威来源，resources 中的镜像同步为同值；道果仍为整数。
+  // 永久货币保留小数，顶层字段为权威来源，resources 中的镜像同步为同值。
   result.karma = moneyValue(result.karma)
-  result.dao = floorMoney(moneyValue(result.dao))
+  result.dao = moneyValue(result.dao)
   result.realm = Number.isInteger(result.realm) && result.realm >= 0 && result.realm < REALMS.length ? result.realm : 0
   result.habitabilityPenalty = Number.isFinite(result.habitabilityPenalty) ? Math.max(-60, Math.min(0, result.habitabilityPenalty)) : 0
   result.resources = { ...fresh.resources, ...moneyMap(result.resources, RESOURCE_MAP) }
-  for (const [id, meta] of Object.entries(RESOURCE_MAP)) {
-    if (meta.integer) result.resources[id] = floorMoney(result.resources[id])
-  }
   result.resources.karma = result.karma
   result.resources.dao = result.dao
   result.peak = moneyMap(result.peak, RESOURCE_MAP)
@@ -141,7 +136,7 @@ export function validateState(state, fresh) {
   result.achievements = flags(result.achievements, Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a])))
   result.treasureLevels = numericMap(result.treasureLevels, UPGRADE_MAP, true)
   result.craftProgress = moneyMap(result.craftProgress, CRAFT_MAP)
-  result.craftTargets = moneyMap(result.craftTargets, CRAFT_MAP, { integer: true })
+  result.craftTargets = moneyMap(result.craftTargets, CRAFT_MAP)
   result.autoCraft = flags(result.autoCraft, CRAFT_MAP)
   result.craftTimers = Object.fromEntries(Object.entries(result.craftTimers)
     .filter(([id, timer]) => Object.hasOwn(CRAFT_MAP, id) && isRecord(timer))
@@ -156,7 +151,7 @@ export function validateState(state, fresh) {
     (!buff.target || Object.hasOwn(RESOURCE_MAP, buff.target)))
     .map(buff => ({ id: buff.id, name: typeof buff.name === 'string' ? buff.name : buff.id,
       mult: buff.mult, target: buff.target || null, until: buff.until }))
-  Object.assign(result, normalizeModuleSlices(state, fresh))
+  Object.assign(result, normalizeModuleSlices(result, fresh))
   if (!Object.hasOwn(EVENT_MAP, result.pendingChoice?.id)) result.pendingChoice = null
   // 妖兽威胁的预计损失是金额（灵草数量），按金额域清洗；其余字段是时间戳/标识。
   if (result.pendingChoice?.id === 'beastThreat') {

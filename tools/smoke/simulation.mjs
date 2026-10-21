@@ -34,10 +34,10 @@ export function playerBot({ ok, section }) {
     for (const res of RESOURCES) s.resources[res.id] = d.max[res.id].isFinite() ? d.max[res.id] : E.money(UNCAPPED_CRAFTED_RESOURCES.has(res.id) ? 10000 : 0)
     const bot = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayBase: 4 }), breakthrough: () => false })
     const archiveCost = E.buildingCost(s, 'scriptureArchive', 1)
-    ok('回归夹具确实受灵机及典籍库建材仓容限制', E.moneyLt(d.max.insight, UPGRADE_MAP.arrayAssembly.cost.insight) && E.moneyGt(archiveCost.rock, d.max.rock))
+    ok('回归夹具仍受灵机仓容与典籍库涨价限制', E.moneyLt(d.max.insight, UPGRADE_MAP.arrayAssembly.cost.insight) && archiveCost.cutStone > 20)
     ok('扩仓计划保留超出当前建材仓容的典籍库目标', bot.prerequisites().buildings.get('scriptureArchive') === 25)
     bot.act()
-    ok('先扩原料仓解决科研扩仓的建材上限', E.countOf(s, 'warehouse') > 2)
+    ok('先扩灵机仓承接科研扩仓', E.countOf(s, 'scriptureArchive') > 24)
     s.upgrades.arrayAssembly = true
     E.recompute(s, d)
     const afterAssembly = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ insight: 12000 }), breakthrough: () => false })

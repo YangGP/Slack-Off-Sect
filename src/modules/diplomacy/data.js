@@ -21,8 +21,8 @@ export const DIPLOMACY = {
   FORTUNE_STORAGE_SHARE: 0.2,
   /** 机缘产出按产能秒数定价的秒数。 */
   FORTUNE_RATE_SECONDS: 120,
-  /** 开放境界：金丹起（4）。 */
-  MIN_REALM: 4,
+  /** 开放境界：筑基起（3），与《山野猎法》看齐；实际还受《邻宗往来》研究与山门约束。 */
+  MIN_REALM: 3,
 }
 
 export const DIPLOMACY_SECTS = [
@@ -60,6 +60,32 @@ export const DIPLOMACY_SECTS = [
     fortune: [
       { lootRate: { insight: 120 }, floor: { insight: 40 } },
       { loot: { spiritTalisman: 1 } },
+    ],
+  },
+  {
+    // 秘银的炼虚前唯一稳定来源：定价偏高，只换不回，防止用基础资源套利。
+    id: 'silverGorge',
+    name: '银溪谷',
+    glyph: '银',
+    desc: '谷中银脉丰而炉火弱，缺的是砌炉的灵石与锻炉的玄铁。愿以秘银换料。',
+    pays: { ore: 500, stone: 300 },
+    gains: { mithril: 3 },
+    fortune: [
+      { lootRate: { insight: 120 }, floor: { insight: 40 } },
+      { loot: { mithril: 1 } },
+    ],
+  },
+  {
+    // 灵晶的少量补充渠道：定价刻意偏高且受信符限流，不能替代凝晶产线。
+    id: 'starCliff',
+    name: '星崖观',
+    glyph: '星',
+    desc: '观星炼晶，晶核成色极稳，却少灵机推演与香火定纹。愿以灵晶换道札与香火。',
+    pays: { insight: 900, faith: 120 },
+    gains: { crystal: 10 },
+    fortune: [
+      { lootRate: { insight: 120 }, floor: { insight: 40 } },
+      { loot: { crystal: 5 } },
     ],
   },
 ]

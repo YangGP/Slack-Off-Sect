@@ -1,13 +1,12 @@
 /**
- * 可选模块清单与开关判定。
+ * 功能模块清单与接入判定。
  *
  * 定位：这里只放「有哪些模块」这一层元数据，**零依赖**，可以被数据层、系统层、
  * 存档层自由引用而不产生循环。模块的具体内容（数据/系统/界面）放在 `src/modules/<id>/`，
  * 由 `src/game/moduleRegistry.js` 聚合挂载。
  *
- * 开关读 `state.settings.modules[<id>]`：缺省用 defaultEnabled（旧档自动按默认值补齐）。
- * 条目上带 `module: '<id>'` 的目录项（资源/岗位/建筑/配方/研究）在模块关闭时统一失效，
- * 判定集中在 core 的解锁函数与 economy 的累加循环里。
+ * 猎杀与外交始终启用；module/moduleAny 仅表示代码归属，不提供玩法开关。
+ * 旧档 settings.modules 中的 false 不再影响功能接入。
  * 需要多个模块任一启用即生效的条目改用 `moduleAny: ['a', 'b']`（例如猎杀与外交共用的信符供给）。
  */
 export const MODULES = [
@@ -16,14 +15,14 @@ export const MODULES = [
     name: '妖兽猎杀',
     // 界面标签 id（关闭后若正停留在该页则回退到宗门页）
     tabId: 'hunt',
-    desc: '猎场出征、信符与兽材利用。关闭后隐藏猎杀页与相关建筑/岗位/研究；信符供给在「外交」模块启用时保留。',
+    desc: '猎场出征、信符与兽材利用。',
     defaultEnabled: true,
   },
   {
     id: 'diplomacy',
     name: '宗门外交',
     tabId: 'diplomacy',
-    desc: '与邻宗互市：以富余资源换取紧缺物资。关闭后隐藏外交页与相关研究；信符供给在「猎杀」模块启用时保留。',
+    desc: '与邻宗互市，以富余资源换取紧缺物资。',
     defaultEnabled: true,
   },
 ]
@@ -35,15 +34,12 @@ export function defaultModules() {
   return Object.fromEntries(MODULES.map((m) => [m.id, m.defaultEnabled]))
 }
 
-/** 模块是否启用：读 settings，缺省回落到 defaultEnabled */
+/** 已注册模块始终接入；旧存档中的关闭标记不再生效。 */
 export function isModuleEnabled(state, id) {
-  const meta = MODULE_MAP[id]
-  if (!meta) return false
-  const value = state?.settings?.modules?.[id]
-  return value === undefined ? meta.defaultEnabled : value === true
+  return Object.hasOwn(MODULE_MAP, id)
 }
 
-/** 目录项是否实际生效：未标记模块恒为真；moduleAny 任一启用即生效；否则看 module 开关 */
+/** 目录项是否归属于已注册模块；未标记归属的核心条目始终生效。 */
 export function isEntryEnabled(state, entry) {
   if (entry?.moduleAny) return entry.moduleAny.some((id) => isModuleEnabled(state, id))
   return !entry?.module || isModuleEnabled(state, entry.module)

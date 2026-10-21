@@ -4,7 +4,7 @@ import { CONFIG } from '@/data/config'
 import { CRAFT_MAP, DEFAULT_QUICK_CRAFTS, normalizeQuickCrafts } from '@/data/crafts'
 import { RECIPE_STATIONS } from '@/data/industry'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
-import { ZERO, floorMoney, money, moneyClamp, moneyGt, moneyMax, moneyNonNegative } from './decimal'
+import { ZERO, money, moneyClamp, moneyGt, moneyMax, moneyNonNegative } from './decimal'
 import { normalizeDisciples } from '@/data/disciples'
 import { WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS } from '@/data/buildings'
 
@@ -23,10 +23,6 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     const validOld = nonNegativeMoney(merged.resources.huntPreparation)
     merged.resources.warrant = moneyMax(validNew, validOld)
     delete merged.resources.huntPreparation
-  }
-  // 整枚计数的资源（灵石/丹药/符箓/法器）在旧档里可能被算成小数（涨价/折扣/祭炼留下的），读档时抹平
-  for (const r of RESOURCES) {
-    if (r.integer) merged.resources[r.id] = floorMoney(nonNegativeMoney(merged.resources[r.id]))
   }
   merged.seen = { ...fresh.seen, ...(state.seen || {}) }
   merged.peak = { ...(state.peak || {}) }
@@ -55,7 +51,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   normalizeDisciples(merged.disciples, { preferMembers })
   // 老档补「飞升层」与「转世计数」
   merged.dao = nonNegativeMoney(state.dao)
-  merged.stats = { ...(merged.stats || {}) }
+  merged.stats = { ...fresh.stats, ...(merged.stats || {}) }
   merged.stats.reincarnations = merged.stats.reincarnations || 0
   merged.buildings = Object.fromEntries(Object.entries(state.buildings || {}).map(([id, entry]) => [id, { ...entry }]))
   const warehouseVersion = state.warehouseCapacityVersion
@@ -111,6 +107,15 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     if (merged.upgrades.qiLiquid) merged.upgrades.qiMeasure = true
   }
   merged.qiLiquidVersion = 2
+  // 纸张成为道札与符箓的共同载体：已产出过相关成品、或已开着相关自动产线的旧档补《抄纸法》，
+  // 避免新前置把旧档的自动产线回锁。新档不满足条件，不免费发研究。
+  if (!merged.upgrades.paperArt) {
+    const crafted = state.stats?.crafted || {}
+    const usedPaper = ['daoNote', 'daoTreatise', 'arrayDiagram', 'talisman', 'spiritTalisman']
+      .some(id => moneyGt(crafted[id] ?? ZERO, ZERO))
+    const autoPaper = ['recordDaoNote', 'drawTalisman', 'drawSpiritTalisman'].some(id => state.autoCraft?.[id])
+    if (usedPaper || autoPaper) merged.upgrades.paperArt = true
+  }
   // v0.38：九转炼丹的前置由法宝 alchemyCauldron 改为研究 alchemyEssence + 丹鼎。
   // 为避免已炼成九转丹炉的旧档回锁，补发 alchemyEssence（不重复收费）；无该法宝则不动。
   if (state.alchemyProgressionVersion !== 1 && merged.upgrades.alchemyCauldron) {
@@ -120,13 +125,32 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   }
   merged.alchemyProgressionVersion = 1
   merged.achievements = state.achievements || {}
-  merged.craftProgress = state.craftProgress || {}
+  // 旧版未入库的小数收益一次性转入库存；清空余量保证反复读档不重复发放。
+  merged.craftProgress = {}
+  merged.stats.crafted = { ...(merged.stats.crafted || {}) }
+  for (const [id, value] of Object.entries(state.craftProgress || {})) {
+    const recipe = CRAFT_MAP[id]
+    if (!recipe) continue
+    const remainder = nonNegativeMoney(value)
+    if (!remainder.gt(0)) continue
+    merged.resources[recipe.out] = nonNegativeMoney(merged.resources[recipe.out]).plus(remainder)
+    merged.stats.crafted[recipe.out] = nonNegativeMoney(merged.stats.crafted[recipe.out]).plus(remainder)
+  }
+  if (state.hunting?.yieldRemainders) {
+    for (const [id, value] of Object.entries(state.hunting.yieldRemainders)) {
+      if (!RESOURCES.some(r => r.id === id)) continue
+      merged.resources[id] = nonNegativeMoney(merged.resources[id]).plus(nonNegativeMoney(value))
+    }
+    merged.hunting = { ...state.hunting, yieldRemainders: {} }
+  }
   merged.autoCraft = state.autoCraft || {}
   if (!Object.hasOwn(state.resources || {}, 'qiParticle') &&
       (merged.autoCraft.condenseCrystal || merged.autoCraft.growImmortalHerb)) {
     merged.autoCraft = { ...merged.autoCraft, condenseLiquid: true }
   }
   merged.craftTargets = { ...fresh.craftTargets, ...(state.craftTargets || {}) }
+  // 旧催化进度不追缴：今后每份直接扣 0.01 秘银。
+  delete merged.catalystProgress
   merged.craftTimers = state.craftTimers || state.craftQueue || {}
   merged.craftOrders = Object.fromEntries(Object.entries(state.craftOrders || {})
     .filter(([id, order]) => Object.hasOwn(RECIPE_STATIONS, id) && Number.isInteger(order?.remaining) && order.remaining > 0 && order.remaining <= 1000000)
@@ -149,8 +173,6 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     const event = Object.hasOwn(EVENT_MAP, entry.eventId) ? EVENT_MAP[entry.eventId] : null
     return event ? { ...entry, eventLevel: getEventLevel(event).id } : entry
   }) : []
-  merged.stats = { ...fresh.stats, ...(state.stats || {}) }
-  merged.stats.crafted = { ...(state.stats && state.stats.crafted) }
   merged.settings = { ...fresh.settings, ...(state.settings || {}) }
   const legacySpeed = CONFIG.AUTO_CRAFT_SPEEDS.includes(state.settings?.autoCraftSpeed) ? state.settings.autoCraftSpeed : 1
   merged.settings.autoCraftSpeeds = Object.fromEntries(Object.keys(CRAFT_MAP).map(id => {
@@ -217,7 +239,7 @@ function retireBeastTaming(merged, original) {
     let total = ZERO, next = money(base)
     const steps = Math.min(times, REFUND_ITERATION_CAP)
     for (let index = 0; index < steps; index++) {
-      total = total.plus(next.ceil())
+      total = total.plus(next)
       next = next.times(ratio)
     }
     return total
@@ -225,7 +247,7 @@ function retireBeastTaming(merged, original) {
   if (retired) {
     const gardens = count(original.buildings?.beastGarden?.count)
     for (const [resource, base] of Object.entries({ wood: 6000, plank: 30, herb: 4000, stone: 6000 })) {
-      if (gardens) add(resource, floorMoney(sum(base, 1.45, gardens).div(2)))
+      if (gardens) add(resource, sum(base, 1.45, gardens).div(2))
     }
     if (original.upgrades?.beastTaming === true) {
       for (const [resource, amount] of Object.entries({ insight: 60000, stone: 2800, herb: 1500 })) add(resource, amount)

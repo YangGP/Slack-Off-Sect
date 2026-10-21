@@ -1,9 +1,10 @@
 import { createInitialState, normalizeState, resetForReincarnation } from '../src/game/state.js'
 import { REALMS } from '../src/data/realms.js'
+import { CONFIG } from '../src/data/config.js'
 import { EVENT_MAP } from '../src/data/events.js'
 import { trainDisciples } from './disciple-training.mjs'
 import { recruitArrivals } from '../src/game/systems/disciples.js'
-import { cultivationRequired, cultivationRate, discipleFactor, discipleDismissalCost, DISCIPLE_DISMISSAL, DISCIPLE_TRAINING, DISCIPLE_AIDS, discipleTrainingCost, trainingBonus, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, rollSpiritualRoot, newDisciple, cultivateDisciple, sortDisciples } from '../src/data/disciples.js'
+import { cultivationRequired, cultivationRate, discipleFactor, discipleAnnualBaseUpkeep, discipleDismissalCost, DISCIPLE_DISMISSAL, DISCIPLE_TRAINING, DISCIPLE_AIDS, discipleTrainingCost, trainingBonus, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, rollSpiritualRoot, newDisciple, cultivateDisciple, sortDisciples } from '../src/data/disciples.js'
 
 export function runDiscipleChecks(E, ok, close) {
   const setup = (total = 2, realm = 4) => {
@@ -28,7 +29,7 @@ export function runDiscipleChecks(E, ok, close) {
   const other = s.disciples.members[1]
   E.recompute(s, d)
   const source = d.sources.qi.find(row => row.kind === 'job')
-  ok('岗位按不同境界个体汇总，口粮同系数', close(d.discipleJobWeights.farmer, 3) && close(d.upkeep, 1.125) && close(source.raw, 1.8))
+  ok('岗位按不同境界个体汇总，口粮同系数', close(d.discipleJobWeights.farmer, 3) && close(d.upkeep, CONFIG.DISCIPLE_UPKEEP * 4.5) && close(source.raw, 1.8))
   ok('弟子成长不增加建筑自带产出', close(d.sources.qi.find(row => row.kind === 'building' && row.id === 'spiritField')?.value, buildingIncome))
   const grownRate = source.value
   first.realm = 0
@@ -37,7 +38,7 @@ export function runDiscipleChecks(E, ok, close) {
   first.realm = 4
   s.realm = 3
   E.recompute(s, d)
-  ok('退境保留个人境界并压低产出及口粮', first.realm === 4 && close(discipleFactor(first, s.realm), 1.6) && close(d.upkeep, 0.25 * 1.3 * 2.6))
+  ok('退境保留个人境界并压低产出及口粮', first.realm === 4 && close(discipleFactor(first, s.realm), 1.6) && close(d.upkeep, CONFIG.DISCIPLE_UPKEEP * 1.3 * 2.6))
   s.realm = 4
   E.recompute(s, d)
   ok('宗门恢复后个人加成恢复', first.realm === 4 && close(discipleFactor(first, s.realm), 2))
@@ -194,16 +195,16 @@ export function runDiscipleChecks(E, ok, close) {
   const protectedResult = trainDisciples(training, td, { mode: 'protected', random: () => 0 })
   ok('培养模拟保留宗门下一境材料', protectedResult.success === 0 && protectedResult.reserved === 2 && E.moneyEq(training.resources.insight, 80))
   const greedyResult = trainDisciples(training, td, { mode: 'greedy', random: () => 0 })
-  ok('培养模拟调用真实突破并记录实际支付', greedyResult.success === 2 && E.moneyEq(training.resources.insight, 78) && E.moneyEq(greedyResult.spent.insight, 2) && E.moneyEq(greedyResult.spent.qi, 6))
+  ok('培养模拟调用真实突破并记录实际支付', greedyResult.success === 2 && E.moneyEq(training.resources.insight, '79.2') && E.moneyEq(greedyResult.spent.insight, '0.8') && E.moneyEq(greedyResult.spent.qi, 5))
 
   const [account, ad] = setup(2, 4)
   account.disciples.members[0].realm = 4
   E.tick(account, ad, 10, { events: false })
-  ok('个人口粮按有效境界累计，停留时间独立于灵根', close(account.disciples.members[0].totalQiConsumed, 7.5) && close(account.disciples.members[1].totalQiConsumed, 3.75) && account.disciples.members.every(member => member.residenceSeconds === 10))
+  ok('个人口粮按有效境界累计，停留时间独立于灵根', close(account.disciples.members[0].totalQiConsumed, CONFIG.DISCIPLE_UPKEEP * 30) && close(account.disciples.members[1].totalQiConsumed, CONFIG.DISCIPLE_UPKEEP * 15) && account.disciples.members.every(member => member.residenceSeconds === 10))
   const full = account.disciples.members[0]
   full.cultivation = cultivationRequired(full.realm)
   E.tick(account, ad, 1, { events: false })
-  ok('修满后仍累计在宗门时间与实际口粮', full.residenceSeconds === 11 && close(full.totalQiConsumed, 8.25))
+  ok('修满后仍累计在宗门时间与实际口粮', full.residenceSeconds === 11 && close(full.totalQiConsumed, CONFIG.DISCIPLE_UPKEEP * 33))
   const [shortage, shortageDerived] = setup(2, 0)
   shortage.disciples.jobs.farmer = 0
   shortage.resources.qi = E.money(0.125)
@@ -215,9 +216,11 @@ export function runDiscipleChecks(E, ok, close) {
   const accountingSave = normalizeState(JSON.parse(JSON.stringify(account)))
   ok('个人停留与累计消耗随存档保留', accountingSave.disciples.members[0].residenceSeconds === full.residenceSeconds && E.moneyEq(accountingSave.disciples.members[0].totalQiConsumed, full.totalQiConsumed))
   const year = DISCIPLE_DISMISSAL.yearSeconds
-  ok('逐出按当前年基础口粮乘已满年数加1并向上取整', E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year - 0.01 }, 1), 334) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year }, 1), 668) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year * 2 }, 1), 1002))
-  ok('逐出费用不随历史突破或累计口粮增加', E.moneyEq(discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: E.money(0) }, 0), 540) && E.moneyEq(discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: E.money(1000000) }, 0), 540))
-  ok('宗门退境按当前有效境界计算年基础口粮', E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 1), 668) && E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 4), 1620))
+  const annual1 = discipleAnnualBaseUpkeep({ realm: 1 }, 1)
+  const annual0 = discipleAnnualBaseUpkeep({ realm: 0 }, 0)
+  ok('逐出按当前年基础口粮乘已满年数加1并保留小数', E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year - 0.01 }, 1), annual1) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year }, 1), annual1.times(2)) && E.moneyEq(discipleDismissalCost({ realm: 1, residenceSeconds: year * 2 }, 1), annual1.times(3)))
+  ok('逐出费用不随历史突破或累计口粮增加', E.moneyEq(discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: E.money(0) }, 0), annual0.times(2)) && E.moneyEq(discipleDismissalCost({ realm: 0, residenceSeconds: year, totalQiConsumed: E.money(1000000) }, 0), annual0.times(2)))
+  ok('宗门退境按当前有效境界计算年基础口粮', E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 1), discipleAnnualBaseUpkeep({ realm: 4 }, 1).times(2)) && E.moneyEq(discipleDismissalCost({ realm: 4, residenceSeconds: year }, 4), discipleAnnualBaseUpkeep({ realm: 4 }, 4).times(2)))
   const [expel, ed] = setup(3, 0)
   const [a, b, c] = expel.disciples.members
   a.residenceSeconds = year
@@ -225,11 +228,11 @@ export function runDiscipleChecks(E, ok, close) {
   b.totalQiConsumed = E.money(20)
   E.assignDisciples(expel, ed, [b.id], 'woodcutter')
   const ids = [a.id, b.id, a.id, 999999]
-  expel.resources.qi = E.money(809)
+  expel.resources.qi = E.money(971)
   const populationBefore = JSON.stringify(expel.disciples)
   let dismissal = E.dismissDisciples(expel, ed, ids)
-  ok('逐出费用逐人取整并去重，未知身份不收费', E.moneyEq(E.discipleDismissalPreview(expel, ids).cost.qi, 810) && E.discipleDismissalPreview(expel, ids).count === 2)
-  ok('整批灵气不足时不扣费且不移除任何弟子', dismissal.dismissed === 0 && dismissal.reason === 'insufficient' && E.moneyEq(expel.resources.qi, 809) && JSON.stringify(expel.disciples) === populationBefore)
+  ok('逐出费用逐人合计并去重，未知身份不收费', E.moneyEq(E.discipleDismissalPreview(expel, ids).cost.qi, 972) && E.discipleDismissalPreview(expel, ids).count === 2)
+  ok('整批灵气不足时不扣费且不移除任何弟子', dismissal.dismissed === 0 && dismissal.reason === 'insufficient' && E.moneyEq(expel.resources.qi, 971) && JSON.stringify(expel.disciples) === populationBefore)
   expel.resources.qi = E.money(1000)
   const quote = E.discipleDismissalPreview(expel, ids)
   a.residenceSeconds += year
@@ -237,11 +240,11 @@ export function runDiscipleChecks(E, ok, close) {
   ok('确认后费用变化时整批拒绝并要求重新确认', dismissal.reason === 'changed' && expel.disciples.total === 3 && E.moneyEq(expel.resources.qi, 1000))
   a.residenceSeconds -= year
   dismissal = E.dismissDisciples(expel, ed, ids)
-  ok('逐出支付精确费用并同步人口岗位和口粮', dismissal.dismissed === 2 && E.moneyEq(expel.resources.qi, 190) && expel.disciples.total === 1 && expel.disciples.members[0].id === c.id && expel.disciples.jobs.farmer === 1 && expel.disciples.jobs.woodcutter === 0 && close(ed.discipleWeight, 1))
+  ok('逐出支付精确费用并同步人口岗位和口粮', dismissal.dismissed === 2 && E.moneyEq(expel.resources.qi, 28) && expel.disciples.total === 1 && expel.disciples.members[0].id === c.id && expel.disciples.jobs.farmer === 1 && expel.disciples.jobs.woodcutter === 0 && close(ed.discipleWeight, 1))
   E.recompute(expel, ed)
   const expelSave = normalizeState(JSON.parse(JSON.stringify(expel)))
   ok('逐出弟子不会在刷新或读档时重新补回', expelSave.disciples.members.length === 1 && expelSave.disciples.members[0].id === c.id)
-  expel.resources.qi = E.money(270)
+  expel.resources.qi = E.money(324)
   dismissal = E.dismissDisciples(expel, ed, [c.id])
   ok('逐出最后一名弟子清空人口岗位且不复用身份', dismissal.dismissed === 1 && expel.disciples.total === 0 && Object.values(expel.disciples.jobs).every(value => value === 0) && newDisciple(expel.disciples).id > c.id)
 
@@ -281,7 +284,7 @@ export function runDiscipleChecks(E, ok, close) {
   E.recompute(dry, dd)
   E.tick(dry, dd, 1, { events: false })
   ok('少量库存不足支付整批传功时只按普通速度修炼', !dd.trainingActive && close(dry.disciples.members[0].cultivation, cultivationRate(dry.disciples.members[0])) && E.moneyIsZero(dry.resources.qi))
-  dry.resources.qi = E.money(0.65)
+  dry.resources.qi = E.money(0.7)
   E.recompute(dry, dd, 2)
   ok('传功供给按实际结算时长校验', !dd.trainingActive)
   E.recompute(dry, dd, 1)

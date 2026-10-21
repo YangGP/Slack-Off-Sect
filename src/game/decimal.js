@@ -164,11 +164,12 @@ export function moneyAvailable(value, cost) {
   return current.gte(amount) ? current.minus(amount) : ZERO
 }
 
-/** 经济取整：整枚资源入库向下取整、费用向上取整。 */
+/** 显式向下取整，仅供制作批次数等离散计数使用；资源与费用不调用。 */
 export function floorMoney(value) {
   return money(value).floor()
 }
 
+/** 显式向上取整，供离散批次数计算和历史工具兼容使用。 */
 export function ceilMoney(value) {
   return money(value).ceil()
 }

@@ -14,8 +14,8 @@ export const CONFIG = {
   AUTOSAVE_MS: 20000,
   // 单次离线收益最多结算多少小时（可被修真提升）
   OFFLINE_CAP_HOURS: 8,
-  // 每名弟子每秒消耗的灵气
-  DISCIPLE_UPKEEP: 0.25,
+  // 每名弟子每秒消耗的灵气（4.8：提高基准，使供养成为更实质的持续压力）
+  DISCIPLE_UPKEEP: 0.3,
   // 宗门规模成本：前20人不加费，此后每增加一人使全体口粮增加0.5%，额外最多100%。
   POPULATION_UPKEEP_FREE: 20,
   POPULATION_UPKEEP_PER_DISCIPLE: 0.005,
@@ -49,10 +49,18 @@ export const CONFIG = {
    * 必须与产出侧一样封顶，否则产出砍半后仓储会反客为主成为主膨胀通道。
    */
   KARMA_STORAGE_CAP: 0.5,
+  /** 4.3：每卷道论提供的临时灵机仓容；总加成不超过基础上限的 100%。 */
+  DAOTREATISE_INSIGHT_CAP: 2000,
   /** 每颗道果的全局产出加成（道果是飞升才给的更高一层货币） */
   DAO_PRODUCTION_BONUS: 0.05,
   /** 每颗道果对「转世/飞升时能拿多少仙缘」的加成 —— 上层反哺下层 */
   DAO_KARMA_GAIN_BONUS: 0.1,
+  /**
+   * 首次主动转世的仙缘结算倍率（4.6）：只对“一次都没转世”时的转世结算生效。
+   * 首转实测只有 21～22 点，累计首飞比直飞慢；提高这一次的结算，让首转真正值得。
+   * 不改变飞升结算，也不随转世次数重复生效。
+   */
+  FIRST_REINCARNATION_KARMA_MULT: 2,
   /**
    * 转世的参考次数（**不是飞升门槛**，只是界面上的参照）。
    *
@@ -92,6 +100,9 @@ export const CONFIG = {
   HABITABILITY_LEAVE_INTERVAL: 60,
   HABITABILITY_LEAVE_CHANCE_PER_POINT: 0.02,
   HABITABILITY_LEAVE_CHANCE_CAP: 0.5,
+  // 宜居度减耗：独立于阵法减耗（consumeRatio）的一条生活线，只减不加。
+  HABITABILITY_UPKEEP_PER_POINT: 0.002,
+  HABITABILITY_UPKEEP_CAP: 0.2,
   // 灵气断供时每秒钟掉多少宜居度，以及恢复时的回升速度
   HABITABILITY_STARVE_RATE: 6,
   HABITABILITY_RECOVER_RATE: 2,

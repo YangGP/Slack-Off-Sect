@@ -176,8 +176,8 @@ const prepare = () => {
   }
   for (const [id, amount] of Object.entries(need())) fill(id, amount)
 }
-// Same active labor policy as pacing-audit.mjs; avoids stockpiling crafted aids without
-// assigning enough scholars and incense keepers to actually finance the breakthrough.
+// 与旧 pacing 审计相同的主动分工策略；避免只囤护道材料、
+// 不派足悟道者与香火执事来支撑破境开销。
 const allocateLabor = () => {
   const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
   for (const job of E.JOBS) E.setJob(s, d, job.id, 0)

@@ -3,7 +3,7 @@ import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { BUILDING_MAP } from '@/data/buildings'
 import { atLeast } from '../numbers'
-import { Dec, MONEY_INFINITY, ONE, ZERO, ceilMoney, money, moneyAvailable, moneyMax } from '../decimal'
+import { Dec, MONEY_INFINITY, ONE, ZERO, money, moneyAvailable, moneyMax } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
 import { DAYS_PER_YEAR, CALENDAR, TERMS, DAYS_PER_SEASON, SEASONS } from '@/data/calendar'
 import { REALMS } from '@/data/realms'
@@ -294,44 +294,33 @@ export function payCost(state, cost, times = 1) {
 
 /**
  * 入库：返回实际增加量（Decimal）。容量为 `MONEY_INFINITY` 时不设上限。
- * 降低仓储后保留旧库存（超过新上限时停止收入，消费仍正常）；整枚资源不留小数。
+ * 降低仓储后保留旧库存（超过新上限时停止收入，消费仍正常）；小数完整保留。
  */
 export function addResource(state, id, amount, capacity = MONEY_INFINITY) {
   const gain = money(amount)
   if (gain.isZero()) return ZERO
   const cap = money(capacity)
-  const meta = RESOURCE_MAP[id]
   const before = state.resources[id] ?? ZERO
   let next = before.plus(gain)
   if (id !== 'karma' && cap.isFinite()) {
     next = Dec.min(next, Dec.max(before, cap))
   }
   if (next.isNegative()) next = ZERO
-  // 整枚计数的资源（灵石/丹药/符箓/法器）不留小数：事件按百分比增减、旧存档都可能带小数
-  const beforeIntegerRounding = next
-  if (meta?.integer) next = next.floor()
   setResourceValue(state, id, next, () => ({ source: 'systems/core.js:addResource', requested: gain.toString(),
     capacity: cap.isFinite() ? cap.toString() : 'unlimited',
-    netClipped: gain.gt(0) ? gain.minus(beforeIntegerRounding.minus(before)).toString() : '0',
-    roundingLoss: beforeIntegerRounding.minus(next).toString() }))
+    netClipped: gain.gt(0) ? gain.minus(next.minus(before)).toString() : '0',
+    roundingLoss: '0' }))
   if (next.gt(0)) state.seen[id] = true
   trackPeak(state)
   return next.minus(before)
 }
 
-/**
- * 花费取整：**整枚计数的资源**（灵石 / 丹药 / 符箓 / 法器）向上取整。
- *
- * 涨价（×1.55^n）、破境折扣（×0.85）、法宝祭炼（×1.7^n）都会算出小数，
- * 而「半枚灵石」既没法付、也会让界面出现「现有 4 / 需要 4.0000001」这种
- * 看着够其实不够的死角。所以这类资源的价格一律向上取整：
- * 玩家看到的需求就是真正要凑齐的数目（§5.2）。金额一律返回 Decimal。
- */
+/** 兼容旧接口名称：费用转换为 Decimal，小数原样保留。 */
 export function roundCost(cost) {
   const out = {}
   for (const k in cost) {
     const value = money(cost[k])
-    out[k] = RESOURCE_MAP[k]?.integer ? ceilMoney(value) : value
+    out[k] = value
   }
   return out
 }
@@ -353,7 +342,7 @@ export function buildingPriceAt(meta, index, discount = 0) {
   return cost
 }
 
-/** 购买 count 座建筑从 from 开始的总价：逐座取整后再求和，不用几何总和代替。 */
+/** 购买 count 座建筑从 from 开始的总价：逐座按精确报价求和。 */
 export function buildingCostFrom(meta, from, count, discount = 0) {
   const total = {}
   for (let i = 0; i < count; i++) {

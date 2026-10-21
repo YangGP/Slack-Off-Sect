@@ -210,20 +210,24 @@ export function runArchitectureChecks() {
     seed.settings.craftReservePercent = 0
     seed.buildings = { hut: { count: 40, on: true }, incenseCauldron: { count: 1, on: true },
       talismanHall: { count: 1, on: true } }
+    seed.upgrades.paperArt = true
     seed.disciples.total = 72
-    Object.assign(seed.resources, { qi: E.money(1000), wood: E.money('125.32') })
+    Object.assign(seed.resources, { qi: E.money(1000), wood: E.money('0.32'), paper: E.money(4) })
     seed.arrivalTimer = 14
     seed.autoCraft.drawTalisman = true
     seed.craftTimers.drawTalisman = { t: 1, made: 0 }
     markAchievements(seed)
     const state = normalizeState(seed), derived = E.createDerived()
+    let expectedTalismanYield
     withGameContext(state, { now: () => startAt, random: () => 0.9 }, () => {
       E.recompute(state, derived)
+      expectedTalismanYield = E.craftYield(derived, E.CRAFT_MAP.drawTalisman)
       assert.equal(derived.leaveChance, 0)
       if (offlineMode) E.simulateOffline(state, derived, 1, { startAt })
       else E.tick(state, derived, 1, { startAt, events: false })
     })
-    assert.ok(E.moneyEq(state.resources.talisman, 1))
+    assert.ok(E.moneyEq(state.resources.talisman, expectedTalismanYield))
+    assert.ok(E.moneyIsZero(state.resources.paper))
     assert.ok(E.moneyIsZero(state.resources.wood))
     assert.equal(state.disciples.total, 72)
     assert.equal(state.stats.recruits, 0)

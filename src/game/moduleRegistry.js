@@ -3,7 +3,7 @@ import diplomacy from '@/modules/diplomacy/index.js'
 import { isModuleEnabled } from '@/data/modules'
 
 /**
- * 可选模块注册表（游戏层，**不含 Vue**）。
+ * 功能模块注册表（游戏层，**不含 Vue**）。
  *
  * 主循环、存档与状态初始化都通过这里按「已注册模块」挂载，核心不再直接 import 任何
  * 具体模块的内部实现。模块描述符见 `src/modules/<id>/index.js`；界面贡献见 `src/modules/<id>/ui.js`。
@@ -29,8 +29,7 @@ export function initialModuleState() {
 
 /**
  * 归一化各模块的存档切片。
- * 无论开关状态均保留合法历史与偏好；关闭模块的活动任务由重挂阶段召回，
- * 以便恢复任务快照中的原岗位，而不是在读取切片时丢弃所有信息。
+ * 注册模块始终启用，保留合法历史、偏好与旧任务快照。
  */
 export function normalizeModuleSlices(rawState, freshState) {
   const out = {}
@@ -40,7 +39,7 @@ export function normalizeModuleSlices(rawState, freshState) {
   return out
 }
 
-/** 读档后重挂启用模块，召回停用模块的活动任务。 */
+/** 读档后重挂已注册模块。 */
 export function rehydrateModules(state) {
   for (const m of MODULE_DESCRIPTORS) {
     if (!isModuleEnabled(state, m.id)) { m.deactivate?.(state); continue }

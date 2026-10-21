@@ -154,7 +154,7 @@ export function dataIntegrity({ ok, section }) {
     // 清单用于避免无意把通用技艺迁入修真页，符文原理见 docs/CRAFT-PROGRESSION.md。
     const MIGRATED_NUMERIC_IDS = [
       'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft', 'crystalPolishing',
-      'mahayanaArt', 'qiRune', 'craftTempo',
+      'mahayanaArt', 'qiRune', 'craftTempo', 'paperArt',
       // 主线数值节点：灵气纯化的纯度增益
       'qiPurify',
       // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点

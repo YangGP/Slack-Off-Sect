@@ -8,7 +8,6 @@
  * 只有金额域的 `MONEY_INFINITY` 哨兵（`isFinite() === false`）显示 `∞`。
  * 时间与百分比仍是 Number 域：百分比入参若来自 Decimal，调用方先转 Number。
  */
-import { RESOURCE_MAP } from '@/data/resources'
 import { MONEY_INFINITY, ZERO, isMoney, money } from './decimal'
 
 const UNITS = [
@@ -115,31 +114,37 @@ export function fmtInt(value) {
   return intCore(integerOf(value, amount => amount.round()))
 }
 
-/** 存量先向下取整，再缩写——左栏资源表以外的地方使用它。 */
+/** 经济数值显示保留小数；极小的非零量用科学计数法，避免显示为零。 */
+function economicText(value) {
+  const inf = infiniteText(value)
+  if (inf) return inf
+  const amount = amountOf(value)
+  if (!amount || amount.isZero()) return '0'
+  const n = amount.abs()
+  const out = n.lt('0.0001') ? n.toExponential(2)
+    : n.lt(1000) ? trim(n.toFixed(4)) : compact(n)
+  return (amount.isNegative() ? '-' : '') + out
+}
+
+/** 库存按实际金额显示，不向下取整。 */
 export function fmtStock(value) {
-  return intCore(integerOf(value, amount => amount.floor()))
+  return economicText(value)
 }
 
-/** 花费 / 上限先向上取整，再缩写；是否够用由实际整数判定。 */
+/** 费用与上限按实际金额显示，不向上取整。 */
 export function fmtCost(value) {
-  return intCore(integerOf(value, amount => amount.ceil()))
+  return economicText(value)
 }
 
-/** 累计量 / 事件增减：整数（四舍五入） */
+/** 累计量与事件增减保留小数。 */
 export function fmtAmount(value) {
-  return intCore(integerOf(value, amount => amount.round()))
+  return economicText(value)
 }
 
-/**
- * **左栏资源表**里的存量文案：连续资源固定两位小数（`4.00`），
- * 整枚计数的资源（灵石/丹药/符箓/法器，数据里标 `integer: true`）显示成 `4`。
- *
- * 只有左栏用这个函数 —— 需求、存量、累计、纪事等其它地方一律用 `fmtCost` / `fmtStock` / `fmtAmount`
- * 先取整再缩写。引擎保证整枚资源不会真的出现小数（价格取整 + addResource 截断），
- * 这里再兜一层，免得旧存档或异常数据在界面上露出「4.5 枚灵石」。
- */
+/** 资源栏统一显示小数，极小库存仍显示非零值。 */
 export function fmtResource(resId, value) {
-  return RESOURCE_MAP[resId]?.integer ? fmtStock(value) : fmtFixed(value)
+  const amount = amountOf(value)
+  return amount && !amount.isZero() && amount.abs().lt('0.01') ? economicText(value) : fmtFixed(value)
 }
 
 /** 每秒速率，带正负号（统一用「/秒」，与效果文案、猫国中文版一致） */

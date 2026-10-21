@@ -1,7 +1,7 @@
 import { PROCESSING_STATIONS, RECIPE_STATIONS, PROCESSING_POWER_COST, allocateProcessing } from '@/data/industry'
 import { CRAFTS, craftCost, CRAFT_MAP, autoCraftTime, craftTime } from '@/data/crafts'
 import { atLeast } from '../numbers'
-import { MONEY_INFINITY, ONE, ZERO, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneySum, moneyToCount, moneyToNumber } from '../decimal'
+import { MONEY_INFINITY, ONE, ZERO, money, moneyAvailable, moneyMax, moneyMin, moneySum, moneyToCount, moneyToNumber } from '../decimal'
 import { isCraftUnlocked, canAfford, clamp, countOf } from './core'
 import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
@@ -230,11 +230,11 @@ export function autoCraftReserve(state, derived, res) {
   return moneyMax(byPercent, state.settings.craftReserves?.[res] ?? ZERO)
 }
 
-/** 库存目标是成品数量（金额，整数）：0 表示不限，消费成品后自动补回。 */
+/** 库存目标是成品数量（金额，允许小数）：0 表示不限，消费成品后自动补回。 */
 export function craftTarget(state, derived, recipeId) {
   if (!derived.craftTargetsUnlocked) return ZERO
   const value = money(state.craftTargets?.[recipeId] ?? ZERO)
-  return moneyMax(ZERO, floorMoney(value))
+  return moneyMax(ZERO, value)
 }
 
 /** 界面统一使用此收支快照；不改变 tick 的实际扣料与口粮判断。 */
@@ -244,7 +244,8 @@ export function resourceFlow(derived, resId) {
     ...(derived.autoCraftDrain?.[resId] || []),
   ]
   const income = derived.rates[resId] ?? ZERO
-  const expense = moneySum(expenseItems.map(item => moneyMax(ZERO, money(item.value).negated())))
+  // 减耗是正向抵扣项，先合并所有出项再取负，不能逐项截掉抵扣。
+  const expense = moneyMax(ZERO, moneySum(expenseItems.map(item => item.value)).negated())
   return { income, expense, net: income.minus(expense), expenseItems }
 }
 

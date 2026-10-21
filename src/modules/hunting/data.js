@@ -5,8 +5,7 @@
  * `RESOURCES / JOBS / BUILDINGS / CRAFTS / CULTIVATION / TECHNIQUES`，
  * 顺序用锚点插回，保证 `*_MAP` 与展示顺序与拆分前一致。
  *
- * 每条目录项带 `module: 'hunting'`：模块关闭时，core 的解锁函数与 economy
- * 的累加循环会据此让它们失效（见 src/data/modules.js、src/game/moduleRegistry.js）。
+ * 每条目录项以 module 声明代码归属；猎杀始终启用，研究与境界门槛独立判定。
  *
  * 完整公式见 docs/BEAST-SYSTEM.md §4。
  */
@@ -71,7 +70,6 @@ export const HUNT_RESOURCES = [
     glyph: '皮',
     color: '#d0a878',
     baseMax: 0,
-    integer: true,
     desc: '山麓妖兽的皮，柔韧耐磨。可作暖裘居室的衬垫与护具。',
     module: 'hunting',
   },
@@ -81,7 +79,6 @@ export const HUNT_RESOURCES = [
     glyph: '骨',
     color: '#e0d6c2',
     baseMax: 0,
-    integer: true,
     desc: '妖兽的骨，含灵气而不易碎。可炼器，也可入建材。',
     module: 'hunting',
   },
@@ -111,12 +108,12 @@ export const HUNT_BUILDINGS = [
     name: '执符堂',
     glyph: '符',
     group: 'hunt',
-    cost: { wood: 500, rock: 200, stone: 60 },
+    cost: { wood: 500, cutStone: 50, stone: 60 },
     priceRatio: 1.35,
     desc: '临山而设的堂口，执符使在此开具宗门差遣凭信，入山猎妖与邻宗互市都从这里起行。',
     // 信符仓容单独配置，不套通用仓储加成；兽皮兽骨按普通材料计容。
     effects: { storage: { warrant: 300, beastHide: 200, beastBone: 150 } },
-    needs: { realm: 3, upgrades: ['wildHunting'] },
+    needs: { realm: 3, upgrades: ['quarryArt', 'wildHunting'] },
     moduleAny: ['hunting', 'diplomacy'],
   },
   {
@@ -124,12 +121,12 @@ export const HUNT_BUILDINGS = [
     name: '暖裘居室',
     glyph: '裘',
     group: 'living',
-    cost: { wood: 300, rock: 100, beastHide: 40, beastBone: 20 },
+    cost: { wood: 300, cutStone: 25, beastHide: 40, beastBone: 20 },
     priceRatio: 1.35,
     desc: '以兽皮为壁、兽骨为架的保暖陈设。不增加住额，靠持续供给兽皮维持暖意。',
     effects: { habitability: 4 },
     upkeep: { beastHide: 0.1 },
-    needs: { realm: 3, upgrades: ['wildHunting'], building: { id: 'logHouse', count: 1 } },
+    needs: { realm: 3, upgrades: ['quarryArt', 'wildHunting'], building: { id: 'logHouse', count: 1 } },
     module: 'hunting',
   },
 ]

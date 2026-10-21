@@ -21,6 +21,10 @@
 | 文档 | 状态与范围 |
 | --- | --- |
 | [ROADMAP](ROADMAP.md) | 全部待办与阶段排期：P0上线收尾→P1节奏经济→P2弟子减负→P3誓约→P4猎场→P5事务→P6评审；D5＋D9首版已完成，D3在P1末复评 |
+| [ECONOMY-SKELETON](ECONOMY-SKELETON.md) | 第一阶段设计；§11 已实施第一版（化神～渡劫灵机尾款改知识材料、道论持有仓容）。知识工艺／设施反馈扩展未做，不等同于闭环完成 |
+| [PHASE2-MATERIAL-CHAIN-EVAL](PHASE2-MATERIAL-CHAIN-EVAL.md) | 第二阶段：4.1 灵纸、4.2 石材／灵纹石与 4.5 必要前置的联合评估、A/B/C 三包拆分与验证记录 |
+| [PHASE3-SCARCE-SUPPLY](PHASE3-SCARCE-SUPPLY.md) | 第三阶段：灵晶催化剂微量计费、秘银／灵晶外交供给与外交提前的核算和验证 |
+| [PHASE4-LONGEVITY-EVAL](PHASE4-LONGEVITY-EVAL.md) | 第四阶段：4.8 口粮／宜居度减耗已实施；4.6 首转提速候选、道果口径与配对测量计划 |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
 | [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现；P4 交付计划已定（复评→深山→禁地→生态），待实施 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |
