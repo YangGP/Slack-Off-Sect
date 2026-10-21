@@ -1,6 +1,6 @@
 <script setup>
 /**
- * 宗门页：筛选行 + 建筑按钮网格（猫国式的中间内容区）。
+ * 宗门页：筛选行 + 建筑按钮网格。
  *
  * 吸取天地灵气是开局的手动来源，原料由弟子采集。
  */
@@ -89,7 +89,7 @@ const tabs = computed(() => [
   </div>
 
   <div class="build-grid">
-    <!-- 核心按钮 1：吸取天地灵气（照猫国的「采集猫薄荷」放在建筑列表最前面） -->
+    <!-- 核心按钮 1：吸取天地灵气，放在建筑列表最前面 -->
     <div v-if="showCore" class="build-item">
       <HoverTip :width="300">
         <button class="build-btn" :class="{ poor: !showCore }" @click="actions.drawQi()">

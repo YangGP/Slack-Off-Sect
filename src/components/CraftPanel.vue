@@ -70,7 +70,7 @@ function targetLabel(id) {
   const target = autoCraftStatus(state, derived, id).target
   return target.isZero() ? '不限' : fmtStock(target)
 }
-/** 逐项材料保留量（金额）在输入框里的字符串形态 */
+/** 逐项材料保留量（金额）在输入框里的字符串形态；新档由初始状态写入建议值。 */
 function reserveText(id) {
   return (state.settings.craftReserves?.[id] ?? ZERO).toString()
 }
@@ -168,6 +168,7 @@ const condenseStatus = computed(() => {
           <p>各配方可单独选择自动速限。实际速度受共享工位容量约束，提高速限会增加每分钟耗料，每份收益不变。参悟《疾炼法》解锁速限调整。</p>
           <p>分配权重越高，工位紧张时获得的容量越多；达标、满仓或缺料会释放容量，空闲容量自动分给其他产线。手动制作与节气满仓凝液不占常驻工位。</p>
           <p>库存达到目标后暂停，使用成品后自动补回；0表示不限。手动制作不受目标限制。旧存档的未完成订单继续加工，也可暂停或取消。</p>
+          <p>新档默认保留知识中间产物：道札 20、道论 2、灵纸 10，避免顶层配方把上游抽干；旧档保持原值，可在逐项保留中改成其他数量（0 表示不保留）。</p>
         </template></HoverTip><span v-if="!compact" class="hint">通用制作加成 +{{ fmtPercent(derived.craftBonus) }}</span>
       <button v-if="compact" class="craft-open" @click="actions.setTab('craft')">全部配方 →</button>
     </div>

@@ -9,7 +9,7 @@ export function buyBuilding(state, derived, id, count = 1) {
     const meta = BUILDING_MAP[id]
     if (!meta || count <= 0) return 0
     // 注意：这里只判硬条件（needs）。「资源水位到 30% 才露面」是显示层的规则，
-    // 不该拦住已经看得到的建造请求（猫国的 unlockRatio 同样只管显示）。
+    // 不该拦住已经看得到的建造请求。
     if (!checkNeeds(state, meta.needs)) return 0
     const cost = buildingCost(state, id, count)
     if (!canAfford(state, cost)) return 0

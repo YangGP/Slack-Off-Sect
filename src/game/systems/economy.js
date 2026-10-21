@@ -725,6 +725,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.processingPowerCapacity = acc.processingPowerCapacity || 0
   const crystalArray = state.buildings.crystalArray
   const coolingArrays = crystalArray?.on ? crystalArray.count * (supply.crystalArray ?? 1) : 0
+  derived.processingCoolingRatio = acc.processingCoolingRatio || 0
   derived.processingCoolingCapacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0) * CONFIG.PROCESSING_COOLING_CAPACITY_RATIO
     + coolingArrays * 2 * (1 + (acc.processingCoolingRatio || 0))
   derived.huntSuccessBonus = acc.huntSuccessBonus

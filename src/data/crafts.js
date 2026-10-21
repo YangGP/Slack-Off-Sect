@@ -1,5 +1,5 @@
 /**
- * 制作配方（对应猫国的 craft 表：花资源换 1 个成品，可被 craftBonus 放大）。
+ * 制作配方：花资源换 1 个成品，可被 craftBonus 放大。
  * 产出直接按 Decimal 数量入库，小数不再等到凑整。
  *
  * `time` 是「连续」制作时每做一份要花多少秒：
@@ -348,6 +348,8 @@ export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 
 export const DEFAULT_QUICK_CRAFTS = ['growWood', 'infuseStone', 'refinePill', 'sawPlank', 'makePaper', 'cutStone']
+/** 自动制作的知识中间产物默认保留量：防止顶层配方把上游抽干（玩家可在逐项保留中覆盖）。 */
+export const DEFAULT_CRAFT_RESERVES = { daoNote: 20, daoTreatise: 2, paper: 10 }
 export const ADVANCED_CRAFT_OUTPUTS = ['daoNote', 'daoTreatise', 'arrayDiagram', 'paper', 'spiritLiquid', 'arrayBase', 'steel', 'cutStone', 'runeStone', 'crystal', 'immortalHerb', 'condensePill', 'nineTurnPill', 'spiritTalisman', 'spiritArtifact', 'spiritTreasure', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'ascensionSeal']
 
 export function normalizeQuickCrafts(ids) {

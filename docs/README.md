@@ -25,6 +25,7 @@
 | [PHASE2-MATERIAL-CHAIN-EVAL](PHASE2-MATERIAL-CHAIN-EVAL.md) | 第二阶段：4.1 灵纸、4.2 石材／灵纹石与 4.5 必要前置的联合评估、A/B/C 三包拆分与验证记录 |
 | [PHASE3-SCARCE-SUPPLY](PHASE3-SCARCE-SUPPLY.md) | 第三阶段：灵晶催化剂微量计费、秘银／灵晶外交供给与外交提前的核算和验证 |
 | [PHASE4-LONGEVITY-EVAL](PHASE4-LONGEVITY-EVAL.md) | 第四阶段：4.8 口粮／宜居度减耗已实施；4.6 首转提速候选、道果口径与配对测量计划 |
+| [OPINION-REVIEW-2026-10-21](OPINION-REVIEW-2026-10-21.md) | 六条玩法意见的静态审核：费用超仓容提示、加工品无上限与自动制作、建筑计价、药藏、法宝、科技树 |
 | [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
 | [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现；P4 交付计划已定（复评→深山→禁地→生态），待实施 |
 | [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |

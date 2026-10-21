@@ -3,7 +3,7 @@ import { SAVE_VERSION, assertSaveShape, validateState } from './saveSchema'
 import { gameNow, resetRuntimeCounters } from './context'
 import { RESOURCES } from '@/data/resources'
 import { JOBS } from '@/data/jobs'
-import { DEFAULT_QUICK_CRAFTS } from '@/data/crafts'
+import { DEFAULT_QUICK_CRAFTS, DEFAULT_CRAFT_RESERVES } from '@/data/crafts'
 import { defaultModules } from '@/data/modules'
 import { migrateState } from './migrations'
 import { initialModuleState, rehydrateModules, resetModules } from './moduleRegistry'
@@ -41,7 +41,7 @@ export function createInitialState(now = Date.now()) {
     resources,
     // 曾经拥有过的资源才会显示在左栏
     seen: { qi: true },
-    // 各资源的历史最高水位：建筑「渐进露出」用它判定（对标猫国 unlockRatio）
+    // 各资源的历史最高水位：建筑「渐进露出」用它判定
     peak: {},
 
     disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: now >>> 0,
@@ -156,7 +156,8 @@ export function createInitialState(now = Date.now()) {
       // 匿名平衡统计：关闭后立即停止发送，不补发。
       analyticsEnabled: false,
       craftReservePercent: 20,
-      craftReserves: {},
+      // 仅新档写入建议保留；旧档保持缺省，可在逐项保留中手动调整。
+      craftReserves: Object.fromEntries(Object.entries(DEFAULT_CRAFT_RESERVES).map(([id, amount]) => [id, money(amount)])),
       autoCraftPriority: 'infuseStone',
       quickCrafts: [...DEFAULT_QUICK_CRAFTS],
       // 兼容旧存档字段；注册模块始终启用

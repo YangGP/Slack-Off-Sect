@@ -6,7 +6,7 @@ import { setResourceValue, withResourceAction } from '../resourceObservation'
 const EMPTY_PROGRESSION = createKarmaProgression()
 
 /**
- * 仙缘修持系统：跨轮回保留的永久特权商店，仙缘计价（对标猫国形而上学 perk）。
+ * 仙缘修持系统：跨轮回保留的永久特权商店，仙缘计价。
  *
  * 纯规则层：报价、校验与购买用同一组函数；不读写 DOM、不发网络请求。
  * 只依赖数据、金额与资源观察层；

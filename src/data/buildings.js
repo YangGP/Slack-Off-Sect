@@ -1,12 +1,12 @@
 /**
- * 建筑数据（对应猫国的 buildings）。
+ * 建筑数据。
  *
  * 效果字段说明（都会按数量叠加）：
  *   prod        每秒固定产出，按“启用中的数量”叠加
  *   ratio       对某资源产出的百分比加成，按“启用中的数量”叠加
  *   ratioAll    对全部资源产出的百分比加成，按“启用中的数量”叠加
  *   storage     某资源的仓储上限，按“已建造数量”叠加
- *   storageAll  通用仓储，成品按层级折算，按“已建造数量”叠加
+ *   storageAll  通用仓储，仅有限仓容资源生效（信符除外），按“已建造数量”叠加
  *   maxDisciples 弟子上限
  *   habitability      宜居度（民心）加成
  *   consumeRatio 降低弟子灵气消耗
@@ -73,7 +73,7 @@ const CORE_BUILDINGS = [
     // 定 300 会让这座炉子永远盖不起来，而库房又卡在它的下游 —— 直接死锁（实测 6 小时起全停）。
     cost: { cutStone: 45, wood: 150 },
     priceRatio: 1.3,
-    desc: '矿石入炉、灵木作炭。每座每秒耗矿石 0.3 与灵木 0.15，烧出玄铁 0.15（两石一木换一铁）。',
+    desc: '矿石入炉、灵木作炭。基础运行时每座每秒耗矿石 0.3 与灵木 0.15，产玄铁 0.15；实际产出另受增产加成，缺料时按供应比例运行。',
     effects: { prod: { ore: 0.15 } },
     upkeep: { rock: 0.3, wood: 0.15 },
     needs: { upgrades: ['quarryArt', 'prospectStudy'] },
@@ -132,7 +132,7 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
-    desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座提高灵液、灵晶制作产出各15%，并保存备用晶核。',
+    desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座运行时提高灵液、灵晶制作产出各15%，提供1单位凝聚工位容量与2单位额外冷却容量；缺料时按供应比例发挥效果。',
     effects: { craftBonusByResource: { spiritLiquid: 0.15, crystal: 0.15 } },
     upkeep: { qi: 1 },
     needs: { realm: 5, upgrades: ['crystalTheory', 'crystalCraft'] },
@@ -454,7 +454,7 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { ironMortar: 6, plank: 12, ore: 500, insight: 2000 },
     priceRatio: 1.28,
-    desc: '玄铁混灵土铸鼎、三才定位，凝元丹与九转丹皆由此出。高阶丹不再只靠一件法宝。',
+    desc: '玄铁混灵土铸鼎、三才定位。每座运行时提高凝元丹与九转丹制作产出各12%；九转丹需建成丹鼎，凝元丹在炼丹房即可制作。',
     effects: { craftBonusByResource: { condensePill: 0.12, nineTurnPill: 0.12 } },
     upkeep: { wood: 0.5 }, // 丹鼎火候更盛，耗柴更多
     needs: { upgrades: ['alchemyEssence'], building: { id: 'alchemyRoom', count: 1 } },
@@ -607,7 +607,7 @@ const CORE_BUILDINGS = [
     // 灵子链第二步：输入解离之力，处理分子；化神入门（滞后理论 1 境）。一对一供料仅指基础数据的归一化流量。
     cost: { crystal: 30, spiritArtifact: 6, cutStone: 12600, stone: 4000, runeStone: 40, insight: 24000, artifact: 40, arrayBase: 10, qiParticle: 10 },
     priceRatio: 1.5,
-    desc: '输入灵气作为解离之力，打开分子束缚；两极之势让正负灵子分流，避免重新复合。',
+    desc: '以灵气或灵能驱动解离，打开灵气分子的束缚，让正负灵子分流，避免重新复合。默认消耗灵气，掌握《灵能输配》后可切换灵能高阶；两种供能档均需持续消耗灵气分子。',
     effects: { prod: { yangParticle: 0.02, yinParticle: 0.02 } },
     // 分子是物料，灵气是基础动力，两者分别结算；可切灵能高阶（占位）。
     upkeep: { qiParticle: 0.04 }, upkeepQi: 1, upkeepEnergy: 0.005, powerMult: 1.6,
@@ -622,8 +622,8 @@ const CORE_BUILDINGS = [
     // 化神可达：造价用灵器／灵符／灵晶／玄钢等化神前已有来源的材料，不依赖炼虚的秘银与合体的玄金。
     cost: { spiritArtifact: 6, spiritTalisman: 20, crystal: 60, steel: 15, arrayBase: 12, cutStone: 18500, stone: 6000, runeStone: 60, artifact: 30, arrayDiagram: 2 },
     priceRatio: 1.6,
-    desc: '炉心控制供料、灵势与阵形，让正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座运行还会为多数资源添一层独立产出乘区（香火、灵气分子、正负灵子与灵能不吃此层），不放大每份制作收益与维护费。',
-    // 化神入门：既产灵能，又给多数资源一层独立产出乘区（参考猫国核反应堆；不含香火与粒子链）。毛输出 0.06，炉内自用 0.015，净 0.045。
+    desc: '炉心控制正负灵子成对湮灭，回收灵能并排散废热；断料即停。每座基础灵能毛产出0.06/秒，炉内自用0.015/秒，净供能0.045/秒，实际流量随当前倍率与供应缩放。每座运行还会为多数资源添一层独立产出乘区（香火、灵气分子、正负灵子与灵能不吃此层），不放大每份制作收益与维护费。',
+    // 化神入门：既产灵能，又给多数资源一层独立产出乘区（不含香火与粒子链）。毛输出 0.06，炉内自用 0.015，净 0.045。
     // ratioReactor：每座给一层全局产出倍率，多座相加；维护费每座固定，不随该层缩放。
     effects: { prod: { qiEnergy: 0.06 }, ratioReactor: 0.05 },
     // 正负灵子是燃料；炉内自用能从毛输出扣减（净 = 0.06 − 0.015）。自用能即其稳定后的控制用能，故不再重复收灵气费；不依赖已有灵能库存。
@@ -698,7 +698,7 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { stone: 500, spiritLiquid: 4, insight: 800 },
     priceRatio: 1.3,
-    desc: '灵气自台面注入器物与矿料，灵石与玄铁的产出更稳。',
+    desc: '以灵液维持注灵，每座满供时提高灵石与玄铁的持续产出各8%；灵石增益作用于矿工采出，不提高《点石成灵》的每份制作产量。缺料时按供应比例发挥效果。',
     effects: { ratio: { stone: 0.08, ore: 0.08 } },
     upkeep: { spiritLiquid: 0.05 },
     needs: { upgrades: ['infuseTheory'] },

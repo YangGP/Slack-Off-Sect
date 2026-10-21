@@ -147,7 +147,7 @@ export function fmtResource(resId, value) {
   return amount && !amount.isZero() && amount.abs().lt('0.01') ? economicText(value) : fmtFixed(value)
 }
 
-/** 每秒速率，带正负号（统一用「/秒」，与效果文案、猫国中文版一致） */
+/** 每秒速率，带正负号（统一用「/秒」，与效果文案一致） */
 export function fmtRate(value) {
   const inf = infiniteText(value)
   if (inf) return (inf === '-∞' ? '-' : '+') + '∞/秒'
@@ -174,6 +174,13 @@ export function fmtTime(seconds) {
 /** 有界比例 → 百分比文本（入参是 Number：来自 Decimal 的比值请先 moneyToRatio / moneyToNumber） */
 export function fmtPercent(value, digits = 0) {
   return (value * 100).toFixed(digits) + '%'
+}
+
+/** 效果与供给百分比保留小数；极小的非零效果用科学计数法。 */
+export function fmtEffectPercent(value) {
+  const percent = money(value).times(100)
+  return (percent.isZero() ? '0' : percent.abs().lt('0.0001')
+    ? percent.toExponential(2) : percent.toDecimalPlaces(4).toString()) + '%'
 }
 
 export function fmtClock(timestamp) {

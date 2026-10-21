@@ -1,5 +1,5 @@
 /**
- * 技艺与法宝 —— 通用增益层，对标猫国的「工坊升级」（workshop.js）。
+ * 技艺与法宝 —— 通用增益层。
  *
  * 2026-10 两线重组（方案见 docs/RESEARCH.md）后，本页只保留两类条目：
  *   技艺（kind 省略）      ：自己练出来的手艺 —— 通用产量、仓储、灵机、防灾等增益，
@@ -9,7 +9,7 @@
  *                            每件给一条明确的加成，是「研究出成果 → 炼成器物」的闭环
  *
  * 两者共用「灵机」货币；技艺之间也会串成链（引气诀 → 阵法精要 → 灵泉灌溉），
- * 这棵树就是猫国工坊升级那种「一层层推」的推进感。
+ * 研究树按前置关系逐层推进。
  */
 import { insertAfter } from './modules.js'
 import { HUNT_TECHNIQUES, HUNT_TECHNIQUE_ANCHOR } from '../modules/hunting/data.js'
@@ -401,7 +401,7 @@ const CORE_TECHNIQUES = [
     needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['talismanArt'] },
   },
 
-  // 仓储·加固线（对标猫国 Reinforced/Titanium/Alloy Warehouse 一条线）：
+  // 仓储·加固线：
   // 对**已建成的仓储**再乘一遍上限 —— 同样几座库房，越到后期存得越多，
   // 不必靠盖几十座谷仓去顶破境要的那笔灵气。定额给建筑，比例给技艺与研究应用（见 caseStackArt 注）。
   {

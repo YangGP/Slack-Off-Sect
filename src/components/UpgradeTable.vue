@@ -1,8 +1,8 @@
 <script setup>
 /**
  * 参悟表：修真（解锁层）与技艺·法宝（数值层）共用一张表。
- * 三层信息与猫国一致：可参悟的列表 / 条件未达成的折叠 / 已参悟的折叠。
- * 价格沿用猫国的紧凑写法：够就写需求，不够写「现有/需求」并标红。
+ * 三层信息：可参悟的列表 / 条件未达成的折叠 / 已参悟的折叠。
+ * 价格使用紧凑写法：够就写需求，不够写「现有/需求」并标红。
  * 修真条目写「参悟」，法宝写「炼成」—— 一个是研究，一个是器物。
  */
 import { computed } from 'vue'
@@ -12,7 +12,7 @@ import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsTe
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
 import { ZERO, money, moneyGte, moneyMax } from '@/game/decimal'
-import { enough as enoughOf } from '@/game/pricing'
+import { enough as enoughOf, costBlocked } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { CULTIVATION, CULTIVATION_STAGE_OF } from '@/data/upgrades'
 import { CONFIG } from '@/data/config'
@@ -62,7 +62,7 @@ const capacityLocked = computed(() => props.list
  *
  * 为什么不直接把 HoverTip 包住整行：HoverTip 渲染的是一个 `<span>` 外壳，
  * 而 `<tr>` 里只能放 `<td>` —— 包起来会破坏表格结构。转发事件既保住结构，
- * 又让玩家在行内任意位置（名称、等级、花费）悬停都能看到同一条提示。
+ * 又让玩家在行内任意位置（名称、等级、效果或花费）悬停都能看到同一条提示。
  */
 function rowEnter(ev, meta) {
   if (meta?.cost) highlightCost(meta.cost)
@@ -166,7 +166,7 @@ function kindName(meta) {
         <thead>
           <tr>
             <th>已炼成的法宝</th>
-            <th>花费</th>
+            <th>{{ kind === 'technique' ? '效果' : '花费' }}</th>
             <th class="right">操作</th>
           </tr>
         </thead>
@@ -178,12 +178,14 @@ function kindName(meta) {
             @mouseleave="rowLeave($event)"
           >
             <td class="nowrap">
-              {{ item.meta.name }} <span class="small dim">法宝 · Lv.{{ item.level }} ×{{ item.mult.toFixed(2) }}</span>
+              <span :class="{ bad: costBlocked(state, derived, item.cost) }">{{ item.meta.name }}</span><span v-if="costBlocked(state, derived, item.cost)" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span> <span class="small dim">法宝 · Lv.{{ item.level }} ×{{ item.mult.toFixed(2) }}</span>
               <span v-if="item.upkeep.length" class="small dim"> · {{ state.upgradeEnabled[item.meta.id] === false ? '已停用' : item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span>
             </td>
             <td class="cost nowrap">
               <HoverTip :width="380" anchor="tr">
                 <span class="cost-line" tabindex="0" :aria-label="`${item.meta.name}祭炼详情`">
+                  <span v-if="kind === 'technique'">{{ item.effects.map(row => row.text).join('；') || '暂无生效效果' }}</span>
+                  <template v-else>
                   <span
                     v-for="(amount, res) in item.cost"
                     :key="res"
@@ -191,6 +193,7 @@ function kindName(meta) {
                   >
                     {{ resourceName(res) }} {{ costText(res, amount) }}
                   </span>
+                  </template>
                 </span>
                 <template #heading>
                   {{ item.meta.name }}
@@ -243,7 +246,7 @@ function kindName(meta) {
         <thead>
           <tr>
             <th>名称</th>
-            <th>花费</th>
+            <th>{{ kind === 'technique' ? '效果' : '花费' }}</th>
             <th class="right">操作</th>
           </tr>
         </thead>
@@ -256,13 +259,15 @@ function kindName(meta) {
             </tr>
             <tr @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
             <td class="nowrap">
-              {{ item.meta.name }}
+              <span :class="{ bad: costBlocked(state, derived, item.meta.cost) }">{{ item.meta.name }}</span><span v-if="costBlocked(state, derived, item.meta.cost)" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span>
               <span v-if="item.meta.kind === 'treasure'" class="small dim">法宝</span>
             </td>
-            <!-- 花费列只写「需要多少」；明细按建筑（宗门）的排版放进悬停提示 -->
+            <!-- 技艺页展示效果，修真页展示花费；完整费用保留在悬停提示中。 -->
             <td class="cost nowrap">
               <HoverTip :width="380" anchor="tr">
                 <span class="cost-line">
+                  <span v-if="kind === 'technique'">{{ effectLine(item.meta, describeEffects) || '—' }}</span>
+                  <template v-else>
                   <span
                     v-for="(amount, res) in item.meta.cost"
                     :key="res"
@@ -270,6 +275,7 @@ function kindName(meta) {
                   >
                     {{ resourceName(res) }} {{ costText(res, amount) }}
                   </span>
+                  </template>
                 </span>
                 <template #heading>
                   {{ item.meta.name }}

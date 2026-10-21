@@ -206,7 +206,7 @@ export function checkNeeds(state, needs) {
 }
 
 /**
- * 建筑是否露面（对标猫国的 `unlockRatio: 0.3`）：
+ * 建筑是否露面（资源水位阈值 `unlockRatio: 0.3`）：
  *   1. 已经建过 → 一直显示；
  *   2. `needs` 条件满足；
  *   3. 每种花费资源的历史最高水位都达到基础成本的30%。

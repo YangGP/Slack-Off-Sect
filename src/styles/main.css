@@ -1,6 +1,6 @@
 /* ============================================================
    摸鱼宗门 · 样式
-   参照猫国建设者的界面观感：
+   界面观感：
    白底、细灰线、单一内容边框、文字与数字为主，
    没有卡片头、圆角、渐变、阴影、斑马纹与进度条。
    ============================================================ */
@@ -444,7 +444,7 @@ select option {
   }
 }
 
-/* 中列唯一的一层边框（对应猫国中间那个大框） */
+/* 中列内容区唯一的一层边框 */
 .panel {
   border: 1px solid var(--line);
   padding: 10px 14px 14px;
@@ -1477,3 +1477,20 @@ textarea {
 }
 @keyframes loading-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
+
+/* 库存不足且费用超过仓容上限：此时等待也无法凑够，标红并加 * */
+.build-btn.over-cap {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.tip-row .k.blocked {
+  color: var(--bad);
+}
+
+.cap-star {
+  margin-left: 2px;
+  color: var(--bad);
+  font-weight: 700;
+  cursor: help;
+}

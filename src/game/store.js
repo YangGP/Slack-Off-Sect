@@ -560,7 +560,7 @@ export const actions = {
     return true
   },
 
-  /** 手动吸取天地灵气（开局唯一的灵气来源，对标猫国的采集猫薄荷）；返回本次吸到的总额（金额）。 */
+  /** 手动吸取天地灵气（开局唯一的灵气来源）；返回本次吸到的总额（金额）。 */
   drawQi(times = 1) {
     let total = ZERO
     for (let i = 0; i < times; i++) total = total.plus(E.drawQi(state, derived))

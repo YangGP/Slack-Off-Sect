@@ -1,15 +1,16 @@
 <script setup>
 /**
- * 建筑按钮（猫国式的方格按钮）。
- * 悬停提示照猫国的排版：标题 + 描述 → 价格逐行（不足的显示「现有 / 需要（还差多久）」并标红）
+ * 建筑按钮（方格按钮）。
+ * 悬停提示排版：标题 + 描述 → 价格逐行（不足的显示「现有 / 需要（还差多久）」并标红）
  * → 「效果」分节 → 底部一行风味小字。
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { buildingCost, canAfford } from '@/game/engine'
-import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects, describeProcessingEffects } from '@/game/effectsText'
-import { fmt, fmtRate, fmtTime } from '@/game/format'
+import { describeBuildingEffects, describeNeeds } from '@/game/effectsText'
+import { fmt, fmtRate, fmtEffectPercent } from '@/game/format'
 import { money } from '@/game/decimal'
+import { costBlocked } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { BUILDING_FLAVOR } from '@/data/flavor'
 import HoverTip from './HoverTip.vue'
@@ -33,38 +34,26 @@ const powerMode = computed(() => (
     ? 'energy'
     : props.meta.upkeepQi == null && props.meta.upkeepEnergy != null ? 'energy' : 'qi'
 ))
-const powerMult = computed(() => hasPower.value && powerMode.value === 'energy' ? props.meta.powerMult ?? 1 : 1)
-const runningCost = computed(() => !!props.meta.upkeep || hasPower.value)
-/** 运行比例是有界 Number，取整显示只在脚本里做 */
-const supplyPercent = computed(() => Math.round(supply.value * 100))
+const supplyPercent = computed(() => fmtEffectPercent(supply.value))
 const throughputMult = computed(() => props.meta.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
 const price = computed(() => buildingCost(state, props.meta.id, 1))
 const affordable = computed(() => canAfford(state, price.value))
+/** 库存不足且费用超过仓容时，需要先扩仓。 */
+const overCap = computed(() => costBlocked(state, derived, price.value))
 
 /**
  * 效果逐条成行：**每种资源（每项效果）自己一行** ——
  * 库房这种多资源建筑以前会挤成「灵木上限 +360，灵石上限 +240…」一长串，根本读不了。
- * 两列分别是「每座的值」和「合计值」（合计由 `scaleEffectsForTotal` 按已建 / 启用数算出）。
+ * 每座基础值与当前合计分开显示；当前产出使用经济结算的倍率。
  */
 const effectRows = computed(() => {
-  // 建筑自身效果 + 职位效果：像采矿场 / 灵石矿这种「产出挂在职位上」的建筑，
-  // effects 是空的，靠 describeJobEffects 从 jobs 数据补出「开放职位 / 职位副产」。
-  const unit = [...describeEffects(props.meta.effects), ...describeJobEffects(props.meta.id, 1), ...describeProcessingEffects(props.meta.id)]
-  const total =
-    count.value > 0
-      ? [
-          ...describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value * powerMult.value, runningCost.value)),
-          ...describeJobEffects(props.meta.id, active.value),
-          ...describeProcessingEffects(props.meta.id, active.value),
-        ]
-      : []
   const visible = new Set(view.visibleResources.value.map(resource => resource.id))
-  return unit.filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
+  return describeBuildingEffects(props.meta, state, derived).filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
     key: `${u.label}-${i}`,
     label: u.label,
     value: u.value,
-    total: total.find((row) => row.label === u.label)?.value || (count.value > 0 ? '0' : ''),
+    total: u.total,
     tone: u.tone,
   }))
 })
@@ -120,10 +109,10 @@ onBeforeUnmount(clearHighlight)
     <HoverTip :width="380" @show="onTipShow" @hide="clearHighlight">
       <button
         class="build-btn"
-        :class="{ poor: !affordable, off: entry.on === false && count > 0 }"
+        :class="{ poor: !affordable, 'over-cap': overCap, off: entry.on === false && count > 0 }"
         @click="actions.buy(meta.id, 1)"
       >
-        {{ meta.name }}<template v-if="count"> ({{ count }})</template>
+        {{ meta.name }}<span v-if="overCap" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span><template v-if="count"> ({{ count }})</template>
         <span v-if="enabled > 0 && supply < 0.999" class="small warn"> · 缺料</span>
       </button>
       <template #heading>
@@ -136,7 +125,8 @@ onBeforeUnmount(clearHighlight)
 
         <CostRows :cost="price" />
 
-        <div class="tip-section">效果<template v-if="!count">（建成后）</template></div>
+        <div class="tip-section">效果（每座基础值<template v-if="count">；括号为当前合计</template><template v-else>；建成后生效</template>）</div>
+        <div v-if="meta.effects?.storage" class="small dim">仓储合计为建筑定额，含旧档保留容量；比例扩仓另计。</div>
         <!-- 一条效果一行：多资源的建筑（库房、谷仓…）不再挤成一长串 -->
         <div v-for="row in effectRows" :key="row.key" class="tip-row">
           <span class="k">{{ row.label }}</span>
@@ -154,7 +144,7 @@ onBeforeUnmount(clearHighlight)
           <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
           <div v-if="enabled > 0" class="tip-row">
             <span class="k">供应</span>
-            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ supplyPercent }}% · 按供应比例发挥效果</span>
+            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ supplyPercent }} · 按供应比例发挥效果</span>
           </div>
           <!-- 动力与物料维护分开记账，一种资源一行 -->
           <div v-if="powerRow" class="tip-row">
@@ -176,12 +166,12 @@ onBeforeUnmount(clearHighlight)
           <div v-if="hasPower && enabled > 0" class="tip-row">
             <span class="k">供能档</span>
             <span class="v" :class="powerMode === 'energy' ? 'good' : 'muted'">
-              {{ powerMode === 'energy' ? '灵能高阶（效果 ×' + fmt(meta.powerMult || 1) + '）' : '灵气基础' }}
+              {{ powerMode === 'energy' ? '灵能高阶（主动效果 ×' + fmt(meta.powerMult || 1) + '，仓储、住额与工位容量不变）' : '灵气基础' }}
             </span>
           </div>
           <div v-if="enabled === 0" class="tip-row">
             <span class="k">当前</span>
-            <span class="v warn">已停用，暂不计维护费</span>
+            <span class="v warn">{{ count ? '已停用，暂不计维护费' : '尚未建造，暂不计维护费' }}</span>
           </div>
           <div class="tip-row">
             <span class="k">说明</span>
