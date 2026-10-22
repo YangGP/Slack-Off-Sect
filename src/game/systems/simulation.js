@@ -61,11 +61,12 @@ function createTickRunner(state, derived, seconds, opts) {
   const end = now + seconds * 1000
   // 大步长只用于没有人口、维护、加工与灵能逸散的稳定生产。
   // 其余场景逐秒结算，避免步内供给、修炼和加工状态变化被提前或延后。
-  // 审计等待期可省略提示明细；调用方在玩家行动前恢复完整派生，默认运行路径不变。
-  if (opts.finalEconomyDetails === false) {
-    withGameContext(state, { economyDetails: false }, () => recompute(state, derived))
-  } else recompute(state, derived)
-  if (prepareModules(state, derived)) recompute(state, derived)
+  // 推进中的供给仍照常求解；来源、解锁与加工收支只在收尾生成一次。
+  // 显式请求中间明细的审计调用仍可保留旧口径。
+  withGameContext(state, { economyDetails: opts.economyDetails === true && opts.finalEconomyDetails !== false }, () => {
+    recompute(state, derived)
+    if (prepareModules(state, derived)) recompute(state, derived)
+  })
   const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
     !(state.resources.qiEnergy ?? ZERO).gt(0) && !(derived.rates.qiEnergy ?? ZERO).gt(0) &&
     !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
@@ -82,7 +83,7 @@ function createTickRunner(state, derived, seconds, opts) {
     get completedSeconds() { return end - now <= 1e-6 ? seconds : Math.min(seconds, (now - start) / 1000) },
     runBatch(shouldYield = () => false) {
       return withGameContext(state, { now: () => now,
-        economyDetails: opts.economyDetails === false ? false : !opts.offline || opts.economyDetails === true }, () => {
+        economyDetails: opts.economyDetails === true }, () => {
         while (end - now > 1e-6) {
           let next = Math.min(end, now + maxSliceMs)
           // 与逐秒参考结算相同：下一次逐秒采样进入新节气时切步。
@@ -134,8 +135,11 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   if (derived.discipleWeight > 0 && derived.upkeep.gt(0)) {
     // 段内口粮系数与个体无关：先算一次，再乘各人的境界/减耗系数，省掉每人四步 Decimal 运算。
     const unitUpkeep = derived.upkeep.div(derived.discipleWeight).times(cap).times(qiSupply)
+    const consumedByFactor = new Map()
     for (const member of state.disciples.members) {
-      const consumed = unitUpkeep.times(discipleFactor(member, state.realm))
+      const factor = discipleFactor(member, state.realm)
+      if (!consumedByFactor.has(factor)) consumedByFactor.set(factor, unitUpkeep.times(factor))
+      const consumed = consumedByFactor.get(factor)
       member.totalQiConsumed = (member.totalQiConsumed ?? ZERO).plus(consumed)
     }
   }

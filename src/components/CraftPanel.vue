@@ -4,7 +4,7 @@ import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
 import { PROCESSING_STATIONS } from '@/data/industry'
-import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck } from '@/game/engine'
+import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, craftTarget, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck } from '@/game/engine'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
 import { ZERO, MONEY_INFINITY, money, moneyGte, moneyGt, moneyLt, moneySum, moneyToCount, moneyToRatio } from '@/game/decimal'
@@ -64,10 +64,10 @@ function yieldBonus(row) {
 }
 /** 库存目标是金额（整数，不封顶安全整数）：输入框里写普通整数串或科学计数法，不能写 k/m 缩写 */
 function targetText(id) {
-  return autoCraftStatus(state, derived, id).target.toString()
+  return craftTarget(state, derived, id).toString()
 }
 function targetLabel(id) {
-  const target = autoCraftStatus(state, derived, id).target
+  const target = craftTarget(state, derived, id)
   return target.isZero() ? '不限' : fmtStock(target)
 }
 /** 逐项材料保留量（金额）在输入框里的字符串形态；新档由初始状态写入建议值。 */
@@ -88,8 +88,9 @@ const BATCHES = [
   { frac: 1, label: '全部' },
 ]
 
+const unlockedRecipes = computed(() => CRAFTS.filter(c => isCraftUnlocked(state, c)))
 const allRows = computed(() =>
-  CRAFTS.filter((c) => isCraftUnlocked(state, c)).map((c) => {
+  unlockedRecipes.value.filter(c => !props.compact || state.settings.quickCrafts.includes(c.id)).map((c) => {
     // 份数是金额：按钮可用性与「¼料 / ½料 / 全部」都用完整份数，不截成安全整数。
     const canMakeMoney = maxCraftableMoney(state, derived, c.id)
     const canMake = moneyToCount(canMakeMoney)
@@ -104,7 +105,6 @@ const allRows = computed(() =>
       have: state.resources[c.out] ?? ZERO,
       max: derived.max[c.out] ?? MONEY_INFINITY,
       autoStatus,
-      bottleneck: processingBottleneck(state, derived, c.id, plan.value, autoStatus),
       batches: BATCHES.map((b) => ({ ...b, count: canMakeMoney.times(b.frac).floor() })),
     }
   }),
@@ -124,10 +124,14 @@ const someAuto = computed(() => allRows.value.some(row => row.auto))
 
 const rows = computed(() => {
   // 30% 峰值露出只约束完整炼制页；左栏快捷入口是玩家已固定的配方，不能因为还没见过费用资源就整块消失。
-  if (props.compact) return allRows.value.filter(row => state.settings.quickCrafts.includes(row.meta.id))
+  if (props.compact) return allRows.value
   const revealed = allRows.value.filter(row => isCostRevealed(state, row.meta.cost))
   return revealed.filter(row => filter.value === 'auto' ? row.auto : filter.value === 'basic' ? !ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : filter.value === 'advanced' ? ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : true)
 })
+
+// 完整页才显示瓶颈；快捷栏不计算，同一行的原因和缺口共享一次结果。
+const bottlenecks = computed(() => Object.fromEntries(rows.value.filter(row => row.autoStatus.line)
+  .map(row => [row.meta.id, processingBottleneck(state, derived, row.meta.id, plan.value, row.autoStatus)])))
 
 const locked = computed(() =>
   CRAFTS.filter((c) => !isCraftUnlocked(state, c) && isProgressionVisible(state, c.needs, c.cost)).map((c) => ({
@@ -150,7 +154,7 @@ const condenseStatus = computed(() => {
   if (!state.settings.autoCraftOn) return '凝灵诀 · 总开关已暂停'
   if (!state.upgrades.qiLiquid) return '凝灵诀 · 需凝气化液'
   const liquid = state.resources.spiritLiquid ?? ZERO
-  const target = autoCraftStatus(state, derived, 'condenseLiquid').target
+  const target = craftTarget(state, derived, 'condenseLiquid')
   if (target.gt(0) && moneyGte(liquid, target)) return '凝灵诀 · 目标已达'
   if (moneyGte(liquid, derived.max.spiritLiquid ?? MONEY_INFINITY)) return '凝灵诀 · 灵液满仓'
   const qiCost = craftCost(derived, CRAFTS.find(c => c.id === 'condenseLiquid')).qi
@@ -269,8 +273,8 @@ const condenseStatus = computed(() => {
           <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
           <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
           <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resourceName(res) }} {{ perMinuteCost(amount, row.autoStatus.perMinute) }}/分</template></span>
-          <span class="dim">瓶颈：{{ row.bottleneck.reason }}</span>
-          <span v-if="row.autoStatus.on && row.autoStatus.ready && row.bottleneck.inputs.length" class="dim">供料缺口：<template v-for="(input, index) in row.bottleneck.inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ perMinute(input.deficit) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
+          <span class="dim">瓶颈：{{ bottlenecks[row.meta.id].reason }}</span>
+          <span v-if="row.autoStatus.on && row.autoStatus.ready && bottlenecks[row.meta.id].inputs.length" class="dim">供料缺口：<template v-for="(input, index) in bottlenecks[row.meta.id].inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ perMinute(input.deficit) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
         </div>
         <div v-if="!compact" class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">

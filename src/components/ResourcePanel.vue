@@ -38,8 +38,11 @@ function maxOf(id) {
 }
 
 /** 第三列是净额（进项 − 出项），带正负号 */
+const resourceFlows = computed(() => Object.fromEntries(resources.value.map(resource =>
+  [resource.id, resourceFlow(derived, resource.id)])))
+
 function netOf(id) {
-  return resourceFlow(derived, id).net
+  return resourceFlows.value[id].net
 }
 
 function netNegative(id) {

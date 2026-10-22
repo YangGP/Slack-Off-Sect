@@ -93,13 +93,26 @@ export function isAutoCrafting(state, derived, recipeId) {
 export function processingPlan(state, derived) {
   const plan = {}
   if (!derived.industrial) return plan
+  // 同一计划内库存不变：配方资格与各燃料的单份保留一次算完，供全部设施共享。
+  // 只在本次调用中复用；扣料、完成一份或修改目标后仍会重新规划。
+  const runnable = new Set()
+  const fuelBatches = {}
+  for (const recipe of CRAFTS) {
+    if (!RECIPE_STATIONS[recipe.id] || !isProcessingCraft(state, derived, recipe.id) ||
+      maxCraftable(state, derived, recipe.id) <= 0 || !canProcessCraft(state, derived, recipe)) continue
+    runnable.add(recipe.id)
+    for (const [res, cost] of Object.entries(craftCost(derived, recipe))) {
+      fuelBatches[res] = moneyMax(fuelBatches[res] ?? ZERO, cost)
+    }
+  }
+  const fuelReserves = {}
   const groups = PROCESSING_STATIONS.map(station => {
     const recipes = PROCESSING_RECIPES[station.id]
     const capacity = derived.processingCapacity[station.id] || 0
     const requests = recipes.map(recipe => ({
       id: recipe.id,
       weight: processingWeight(state, recipe.id),
-      demand: isProcessingCraft(state, derived, recipe.id) && maxCraftable(state, derived, recipe.id) > 0 && canProcessCraft(state, derived, recipe)
+      demand: runnable.has(recipe.id)
         ? derived.autoCraftSpeeds[recipe.id] || 1 : 0,
     }))
     const selected = state.settings.processingModes?.[station.id] || 'normal'
@@ -107,8 +120,8 @@ export function processingPlan(state, derived) {
       : selected === 'overload' && derived.autoCraftSpeedUnlocked ? 'overload' : 'normal'
     const cost = PROCESSING_POWER_COST[mode]
     const fuel = cost && Object.keys(cost)[0]
-    const fuelAvailable = fuel && moneyAvailable(state.resources[fuel] ?? ZERO,
-      processingFuelReserve(state, derived, fuel)).gt(EPS)
+    if (fuel && !Object.hasOwn(fuelReserves, fuel)) fuelReserves[fuel] = autoCraftReserve(state, derived, fuel).plus(fuelBatches[fuel] ?? ZERO)
+    const fuelAvailable = fuel && moneyAvailable(state.resources[fuel] ?? ZERO, fuelReserves[fuel]).gt(EPS)
     const demand = Math.max(0, Math.min(capacity, requests.reduce((sum, r) => sum + r.demand, 0) - capacity))
     return { station, recipes, capacity, requests, mode, wanted: demand, fuelAvailable, demand: mode !== 'normal' && fuelAvailable ? demand : 0 }
   })

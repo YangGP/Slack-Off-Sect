@@ -29,6 +29,7 @@ export const smokeChecks = [
   disciples.discipleArrivals,
   storage.purchaseReachability,
   automation.automaticCrafting,
+  automation.processingFuelReserveRegression,
   research.researchVisibility,
   crafting.manualCrafting,
   progression.researchAndAscension,

@@ -11,6 +11,31 @@ const grew = (after, before) => E.moneySubtract(after, before)
 /** 金额差值转 Number：只用于「约等于几份」这类带 ±1 容差的比较。 */
 const grewNumber = (after, before) => E.moneyToNumber(grew(after, before))
 
+/** 同一时刻跨工位保留材料；下一次规划必须反映库存目标变化。 */
+export function processingFuelReserveRegression({ ok, section }) {
+  section('加工计划的跨工位燃料保留与失效')
+  const { state: s, derived: d } = newGame()
+  s.realm = 5
+  for (const id of ['intuition', 'craftTempo', 'woodworking', 'steelWorking']) s.upgrades[id] = true
+  for (const id of ['workshop', 'forge']) s.buildings[id] = { count: 1, on: true }
+  Object.assign(s.resources, { qi: E.money(120), wood: E.money(1000), ore: E.money(1000), steel: E.ZERO })
+  s.autoCraft.sawPlank = s.autoCraft.refineSteel = true
+  s.settings.autoCraftSpeeds.sawPlank = s.settings.autoCraftSpeeds.refineSteel = 10
+  s.settings.processingModes.woodwork = 'overload'
+  E.recompute(s, d)
+  // 专门观察动力保留，排除冷却短缺的干扰。
+  d.processingCoolingCapacity = 100
+  let plan = E.processingPlan(s, d)
+  ok('木作超载为炼器保留一份灵气材料', plan.sawPlank.work > 0 && plan.sawPlank.boost === 0)
+  s.craftTargets.refineSteel = E.money(1)
+  s.resources.steel = E.money(1)
+  plan = E.processingPlan(s, d)
+  ok('炼器达标后立即释放保留燃料，木作可超载', plan.refineSteel.work === 0 && plan.sawPlank.boost > 0)
+  s.resources.steel = E.ZERO
+  plan = E.processingPlan(s, d)
+  ok('目标库存被使用后重新保留炼器材料', plan.refineSteel.work > 0 && plan.sawPlank.boost === 0)
+}
+
 export function automaticCrafting({ ok, close, section }) {
   section('自动制作（一份一份不瞬发，就是原来的「连续」）')
   {
