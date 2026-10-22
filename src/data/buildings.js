@@ -127,8 +127,9 @@ const CORE_BUILDINGS = [
     },
     upkeep: { qi: 1.2 }, // 大阵自己在引气，也在漏气
 
-    // 观清气脉并掌握阵纹布置，才可营造大阵。
-    needs: { upgrades: ['quarryArt', 'qiGazing', 'fieldTillage'] },
+    // 观清气脉并掌握阵纹布置即可营造；显形另被石材造价峰值自然压在《凿石要诀》之后
+    //（压制石材配方挂在凿石要诀上）——不直接挂凿石要诀，避免一条研究同时点亮一串建筑。
+    needs: { upgrades: ['qiGazing', 'fieldTillage'] },
   },
   {
     id: 'crystalArray',
@@ -203,11 +204,12 @@ const CORE_BUILDINGS = [
     name: '清风小院',
     glyph: '院',
     group: 'living',
-    cost: { wood: 80, cutStone: 30 },
+    cost: { wood: 80, rock: 30 },
     priceRatio: 1.3,
     desc: '石径排水，木廊遮荫，同门劳作之后有处歇脚。每座宜居度 +4。',
     effects: { habitability: 4 },
-    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }], upgrades: ['quarryArt', 'homePlanning'] },
+    // 与木屋同随《居所营造》成对显形；石径用毛石垒砌，不抢凿石之后的第一段石材。
+    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }], upgrades: ['homePlanning'] },
   },
   {
     id: 'communalHall',
@@ -388,7 +390,9 @@ const CORE_BUILDINGS = [
     priceRatio: 1.14,
     desc: '书架分格、典籍归档，保存悟道所得，也方便弟子查阅。每座灵机上限 +80、灵机产出 +5%。',
     effects: { storage: { insight: 80 }, ratio: { insight: 0.05 } },
-    needs: { building: { id: 'library', count: 1 }, upgrades: ['quarryArt'] },
+    // 第二座藏经阁立起才显形（书多了才需归档）；石材造价又把它压在《凿石要诀》之后，
+    // 成为石材线的第一座，不再与聚灵大阵、清风小院挤在同一时刻露面。
+    needs: { building: { id: 'library', count: 2 } },
   },
   {
     id: 'academy',
@@ -757,10 +761,10 @@ export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 /** 宗门列表按用途排列，同类建筑内按实际露面顺序（needs + 造价峰值）排列：
  * 同组新解锁项永远出现在本组已见项的末尾（从前往后填满），不会插到老条目上方；各筛选使用同一顺序。
  * 例外一：谷仓（属仓储组）插在采矿场之前 —— 基础链第五环，「先存后采」的软顺序由列表位置表达。
- * 例外二：药圃与聚灵大阵同档（都挂凿石要诀后），先后随研究路线而定，相邻两槽偶尔互插一次。 */
+ * 例外二：聚灵大阵（显形受石材峰值压制，先于药圃）与药圃（《灵植术》攒灵机）同在凿石后露面，两槽相邻、按常见先后排列。 */
 const CORE_BUILDING_DISPLAY_ORDER = [
-  // 生产：基础采集与采石在前；药圃、聚灵随后；矿业深加工（炼铁炉、灵石矿）解锁链经炼丹术，实际晚于药圃，排其后。
-  'spiritField', 'lumberYard', 'granary', 'quarry', 'herbGarden', 'gatheringArray', 'ironFurnace', 'spiritQuarry', 'crystalArray',
+  // 生产：基础采集与采石在前；聚灵大阵（石材峰值）先于药圃（《灵植术》）露面；矿业深加工（炼铁炉、灵石矿）解锁链经炼丹术，实际晚于药圃，排其后。
+  'spiritField', 'lumberYard', 'granary', 'quarry', 'gatheringArray', 'herbGarden', 'ironFurnace', 'spiritQuarry', 'crystalArray',
   // 居所与宜居。
   'hut', 'logHouse', 'mansion', 'caveDwelling',
   'livingCourt', 'communalHall', 'cleansingBath', 'quietGarden',

@@ -7,8 +7,8 @@ export function runAutoTalentChecks(E, ok, close) {
   const state = createInitialState(100000)
   state.buildings = { hut: { count: 5, on: true }, spiritField: { count: 1, on: true }, library: { count: 2, on: true }, quarry: { count: 1, on: true } }
   state.resources.qi = E.money(500)
-  // 恰好等于《知人善任》(talentAssignment) 当前参悟价（150 灵机），让下面「扣完归零」的断言与费用表保持一致
-  state.resources.insight = E.money(150)
+  // 恰好等于《知人善任》(talentAssignment) 当前参悟价（380 灵机），让下面「扣完归零」的断言与费用表保持一致
+  state.resources.insight = E.money(380)
   const talents = ['job_woodcutter_huang', 'job_miner_xuan', 'job_herbalist_di', 'job_incenseKeeper_tian', 'cultivation_xuan', 'job_woodcutter_di']
   for (const id of talents) {
     const member = newDisciple(state.disciples)

@@ -163,7 +163,7 @@ export const HUNT_UPGRADES = [
     id: 'wildHunting',
     name: '山野猎法',
     glyph: '猎',
-    cost: { insight: 300 },
+    cost: { insight: 700 },
     desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建执符堂，并布置暖裘居室；执符堂开出的信符也供邻宗互市使用。',
     effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
     note: '解锁建筑：执符堂、暖裘居室',
