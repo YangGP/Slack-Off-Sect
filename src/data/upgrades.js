@@ -1,7 +1,7 @@
 /**
  * 修真 —— 研究层。
  *
- * 2026-10 两线重组（方案与决策见 docs/RESEARCH.md）：
+ * 2026-10 两线重组（方案与决策见 docs/CRAFT-PROGRESSION.md#研究与解锁）：
  *   主线「灵气研究」按研究问题分五章 —— 观气 → 凝聚 → 调控 → 拆解 → 归源；
  *   灵气的形态阶梯（气 → 液 → 晶 → 灵气分子 → 正负灵子 → 灵能，设定见 docs/SPIRIT-ENERGY.md）
  *   对应每一章的研究问题。
@@ -528,7 +528,7 @@ const CORE_CULTIVATION = [
     effects: { unlockBuildings: ['alchemyRoom'] },
     needs: { upgrades: ['herbStudy'], buildings: [{ id: 'library', count: 1 }, { id: 'herbGarden', count: 1 }] },
   },
-  // 自技艺页迁入（工艺）：丹道族自有工艺环，承接「凝元炼丹」与丹鼎（见 docs/MATERIAL-RESEARCH.md §1.1/§1.3）。
+  // 自技艺页迁入（工艺）：丹道族自有工艺环，承接「凝元炼丹」与丹鼎（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
   {
     id: 'alchemyEssence',
     name: '丹道精微',
@@ -566,7 +566,7 @@ const CORE_CULTIVATION = [
     // 建筑前置只需一座；当前山门每座提供香火仓容240，足以承接本研究费用。
     needs: { upgrades: ['incenseVow', 'preachArt'], building: { id: 'gate', count: 1 } },
   },
-  // 香火族工艺层：承接渡劫护道机制（见 docs/MATERIAL-RESEARCH.md §2.3），故进修真族而非技艺页。
+  // 香火族工艺层：承接渡劫护道机制（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容），故进修真族而非技艺页。
   {
     id: 'vowPower',
     name: '凝愿法',

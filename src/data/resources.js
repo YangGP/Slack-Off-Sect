@@ -217,7 +217,7 @@ const CORE_RESOURCES = [
     desc: '服之安神定气，助弟子破境。',
   },
   {
-    // 二级丹：补 pill 与 nineTurnPill 之间的断层（见 docs/MATERIAL-RESEARCH.md §1.2）。
+    // 二级丹：补 pill 与 nineTurnPill 之间的断层（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     // 承接元婴～化神的中阶研究费用与护道，使高阶丹不再只依赖一件法宝。
     id: 'condensePill',
     name: '凝元丹',

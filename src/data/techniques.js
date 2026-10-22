@@ -1,7 +1,7 @@
 /**
  * 技艺与法宝 —— 通用增益层。
  *
- * 2026-10 两线重组（方案见 docs/RESEARCH.md）后，本页只保留两类条目：
+ * 2026-10 两线重组（方案见 docs/CRAFT-PROGRESSION.md#研究与解锁）后，本页只保留两类条目：
  *   技艺（kind 省略）      ：自己练出来的手艺 —— 通用产量、仓储、灵机、防灾等增益，
  *                           门禁看建筑（藏经阁、药圃…），彼此串成链；
  *                           配方知识在修真页，设备扩产、节料与专业增益在本页。
@@ -99,7 +99,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 185, herb: 900, pill: 6 },
     desc: '火候拿捏到分毫不差，出炉的成色都不一样。丹药、凝元丹与九转丹制作产出 +5%。',
     effects: { craftBonusByResource: { pill: 0.05, condensePill: 0.05, nineTurnPill: 0.05 } },
-    // 解耦炼器术：丹道工艺可独立推进（见 docs/MATERIAL-RESEARCH.md §1.5/§1.6）。
+    // 解耦炼器术：丹道工艺可独立推进（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
   // ---------- D5＋D9：丹道效率专精（三项连续） ----------
@@ -429,7 +429,7 @@ const CORE_TECHNIQUES = [
     cost: { insight: 180, wood: 400, rock: 300 },
     desc: '横梁加铁箍、立柱下石础，同样一间仓房能多堆两成。灵气与基础物资上限 +20%。',
     effects: { storageRatio: { qi: 0.2, wood: 0.2, rock: 0.2, stone: 0.2, ore: 0.2, herb: 0.2 } },
-    // 起点补「库房 ≥ 1」：与《叠匣术》同口径，仓储技艺一律先有仓库再谈加固（见 docs/MATERIAL-RESEARCH.md §3.4）。
+    // 起点补「库房 ≥ 1」：与《叠匣术》同口径，仓储技艺一律先有仓库再谈加固（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     needs: { upgrades: ['earthArt'], building: { id: 'warehouse', count: 1 } },
   },
   {

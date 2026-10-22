@@ -61,7 +61,7 @@ export function dataIntegrity({ ok, section }) {
     ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
     const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
     const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntCostReduction', 'tribulationSafety']
-    // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
+    // 两线重组（CRAFT-PROGRESSION.md#研究与解锁）：解锁/系统效果仍全部由修真页的主线与经营节点承担
     const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
     ok(
       '修真页承担全部解锁/系统效果',
@@ -85,7 +85,7 @@ export function dataIntegrity({ ok, section }) {
     )
     ok(
       '但灵机被压到修真层的一半以下（主要成本让给材料）',
-      // 修真树按 RESEARCH.md 铺满时间线之后，它的灵机总量自然会远超技艺层，
+      // 修真树按 CRAFT-PROGRESSION.md#研究与解锁 铺满时间线之后，它的灵机总量自然会远超技艺层，
       // 所以这里只守「技艺层的灵机不许超过修真层的一半」这条设计规则，不再守下限。
       skillInsight / cultInsight <= 0.5 && skillInsight / cultInsight > 0,
       `技艺 ${skillInsight} vs 修真 ${cultInsight}（${((skillInsight / cultInsight) * 100).toFixed(0)}%）`,
@@ -160,7 +160,7 @@ export function dataIntegrity({ ok, section }) {
       // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点
       // 修真应用 · 营造（自技艺页迁入）
       'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
-      // 土木工艺：专业制作增益（营造 / 石作成规，见 MATERIAL-RESEARCH.md §3.1）
+      // 土木工艺：专业制作增益（营造 / 石作成规，见 CRAFT-PROGRESSION.md#材料研究与兼容）
       'masonryArt', 'stoneWorks',
     ]
     const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))

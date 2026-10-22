@@ -2,9 +2,9 @@
 
 功能模块由 `data/modules.js` 登记，`game/moduleRegistry.js` 接入初始化、存档与时间推进，`modules/uiRegistry.js` 接入界面。猎杀与外交始终启用，module／moduleAny 仅用于声明代码归属与共享依赖。旧档关闭标记不再生效；历史、名单与合法已付款任务继续保留，转世/飞升才重置本世切片。
 
-更新：2026-10-13。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
+整理：2026-10-22，对照v0.424。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [CRAFT-PROGRESSION.md#研究与解锁](CRAFT-PROGRESSION.md#研究与解锁)，完整数值见 [TABLES.md](TABLES.md)。
 
-个人天赋配置在 `data/talents.js`，32条词条按修炼、岗位、突破类别互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`。完整规则见 [DISCIPLE-TALENTS.md](DISCIPLE-TALENTS.md)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。
+个人天赋配置在 `data/talents.js`，40条词条按修炼、岗位、突破及两类猎杀专长互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`。完整规则见 [DISCIPLE-PROGRESSION.md#天赋](DISCIPLE-PROGRESSION.md#天赋)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。
 
 提示组件：所有tooltip统一使用`HoverTip`，不再使用`RuleTip`或原生`title`提示。组件负责正文外壳和标题：简单规则用`label`自动生成可聚焦的点状下划线入口；按钮与表格保留默认触发插槽，用`title`或`#heading`提供标题、`description`提供说明、`#tip`提供明细。所有内容共用`tip-desc`、`tip-section`、`tip-row`（左标签／右数值）及`tip-note`／`tip-flavor`（分隔线后的淡色左对齐备注），不在业务组件重复创建`tip-body`或`tip-title`。默认宽360px，复杂明细可指定宽度，均受视口约束；支持悬停、键盘聚焦、Escape关闭及触发器滚轮阅读，下拉框操作期间暂停提示。重复说明与开发信息从默认界面移除；实时数值、操作条件、缺料原因、身死总风险和读档覆盖提醒保留，重修确认流程不变。
 
@@ -197,7 +197,7 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 | 命令 | 用途与参数 |
 | --- | --- |
 | npm run balance -- 24 0 | 固定小时数、初始仙缘；无事件、每5秒决策，资源快照 |
-| npm run audit:economy -- 6400 | 整件资源需求与去向；可选假设通用仓储，默认0；不含专属容量及仙缘倍率 |
+| npm run audit:economy -- 6400 | 资源需求与去向；可选假设通用仓储，默认0；不含专属容量及仙缘倍率 |
 | npm run audit:save -- "存档路径.txt" | 只读存档仓容、自然产出、库房造价和下一境需求 |
 | npm run audit:crafts -- 24 0 | 加工链及指定研究边际提升；小时数、初始仙缘 |
 | npm run audit:buildings | 真实前置、材料来源和仓储自举；不估算耗时 |
@@ -208,7 +208,7 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 
 资源审计旧脚本（`resource-audit`／`pacing-audit`／`power-audit`／`balance-review`）已移除；对应结论保留在历史测量文档中，不再作为现行命令。
 
-累计持续产能按速率积分，包含满仓被截断的部分，排除制作、点击和事件入库；制作产量另列实际整件入库。独立加工产能是单条配方供料上界，不能视为共享材料下所有配方的并发收入。参照玩家用于比较与找瓶颈，结果不代表真人最优路线。
+累计持续产能按速率积分，包含满仓被截断的部分，排除制作、点击和事件入库；制作产量另列实际小数入库。独立加工产能是单条配方供料上界，不能视为共享材料下所有配方的并发收入。参照玩家用于比较与找瓶颈，结果不代表真人最优路线。
 
 ## 扩展与维护
 
@@ -225,6 +225,6 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 
 clean脚本只处理项目根目录的dist、dist-ssr、.smoke*、.early与.vite，删除前确认实际路径仍在项目内，拒绝目录链接。node_modules、源码、正式文档和用户存档不作为产物清理。日常运行使用npm脚本。
 
-GitHub Pages流程在.github/workflows/deploy-pages.yml：main推送后先检查，再构建发布。vite.config.js使用相对base，新增资源避免绝对路径与location.pathname依赖，支持子目录部署。
+GitHub Pages流程在.github/workflows/deploy-pages.yml：main或dev1推送后分别检查、构建两个分支，合并为一个Pages产物；main位于根目录，dev1位于/dev/。vite.config.js使用相对base，新增资源避免绝对路径与location.pathname依赖，支持子目录部署。
 
 猎杀与外交为始终启用的功能模块。module／moduleAny 是代码归属声明，isModuleEnabled 只核对注册表；旧档 false 标记在结构校验时统一为 true。凝晶秘银已并入 craftCost（每份 0.01），不存在额外的整数催化剂结算器。

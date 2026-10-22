@@ -194,7 +194,7 @@ const CORE_BUILDINGS = [
     desc: '玄铁混灵土固壁、玄金储灵，凿山为府，聚灵成池。二十四名弟子分室静修，吐纳有得。',
     effects: { maxDisciples: 24, storage: { qi: 3000, wood: 1200 }, habitability: 6 },
     upkeepQi: 0.6, upkeepEnergy: 0.006, powerMult: 1.6,
-    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档，避免过早依赖玄金（见 docs/MATERIAL-RESEARCH.md §3.3）。
+    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档，避免过早依赖玄金（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     needs: { realm: 8, upgrades: ['grottoArt'] },
   },
 
@@ -352,11 +352,11 @@ const CORE_BUILDINGS = [
     desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；加工品无需仓容。',
     effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000, immortalForce: 20000 }, habitability: 5 },
     upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
-    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档；中后期扩仓由《广储库》承接（见 docs/MATERIAL-RESEARCH.md §3.3）。
+    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档；中后期扩仓由《广储库》承接（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     needs: { realm: 8, upgrades: ['grottoArt'] },
   },
   {
-    // 中后期仓储：填「玄库（炼虚）↔ 洞天（合体）」之间的扩仓空档（见 docs/MATERIAL-RESEARCH.md §3.3）。
+    // 中后期仓储：填「玄库（炼虚）↔ 洞天（合体）」之间的扩仓空档（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     // 造价只用炼虚可得建材（玄铁混灵土/秘银等），不含炼虚还炼不出的玄金。
     id: 'grandStore',
     name: '广储库',
@@ -465,7 +465,7 @@ const CORE_BUILDINGS = [
     needs: { upgrades: ['quarryArt', 'alchemyArt'] },
   },
   {
-    // 丹道高阶设施：承接二级/三级丹的产能，使高阶丹不再只依赖一件法宝（见 docs/MATERIAL-RESEARCH.md §1.5）。
+    // 丹道高阶设施：承接二级/三级丹的产能，使高阶丹不再只依赖一件法宝（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     id: 'pillFurnace',
     name: '丹鼎',
     glyph: '鼎',

@@ -106,7 +106,7 @@ export const ADVANCED_CRAFTS = {
   // 这条约束现在由冒烟断言守着（见「参照玩家的囤货上限」一节）。
   refineSteel: { base: 'ore', floor: 300, cap: 600 },
   growImmortalHerb: { floors: { herb: 400, spiritLiquid: 6 }, cap: 200 },
-  // 二级丹：以丹药与仙草为料（见 docs/MATERIAL-RESEARCH.md §1.2），先炼它才够九转的料。
+  // 二级丹：以丹药与仙草为料（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容），先炼它才够九转的料。
   condensePill: { floors: { pill: 25, immortalHerb: 3 }, cap: 400 },
   refineNineTurnPill: { floors: { condensePill: 25, immortalHerb: 5 }, cap: 100 },
   drawSpiritTalisman: { floors: { steel: 6, spiritLiquid: 6 }, cap: 300 },

@@ -257,7 +257,7 @@ emit('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
     if (e.type === 'choice') {
       emit(`| ${level} | ${type} | **${e.name}** | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | 选择一项（见下 ${e.options.length} 行） | ${e.threat ? '5分钟到期默认防守，同类冷却至少20分钟' : '—'} |`)
       for (const o of e.options) {
-        emit(`| ${level} | ${type} ▸ | ${o.label} | \`${e.id}\` | — | — | — | ${e.threat ? o.desc : gains(o.effect || {})} | ${e.threat ? '具体用料与减免见 [金丹药圃防务](MIDGAME-EVENTS.md)' : costs(o.effect || {})} |`)
+        emit(`| ${level} | ${type} ▸ | ${o.label} | \`${e.id}\` | — | — | — | ${e.threat ? o.desc : gains(o.effect || {})} | ${e.threat ? '具体用料与减免见 [金丹药圃防务](BEAST-SYSTEM.md#药圃防务)' : costs(o.effect || {})} |`)
       }
     } else {
       emit(`| ${level} | ${type} | ${e.name} | \`${e.id}\` | ${e.kind} | ${e.weight} | ${realmOf(e)} | ${gains(e)} | ${costs(e)} |`)

@@ -110,7 +110,7 @@ export function particleChain({ ok, close, section }) {
       ok('点石成灵仍保持原始收益', close(learned.infusedStone, stockOnly.infusedStone))
     }
 
-    // 灵气六阶阶梯（RESEARCH.md）：气 → 液 → 晶 → 灵气分子 → 正负灵子 → 灵能；灵石是含灵矿物，不在阶梯上
+    // 灵气六阶阶梯（CRAFT-PROGRESSION.md#研究与解锁）：气 → 液 → 晶 → 灵气分子 → 正负灵子 → 灵能；灵石是含灵矿物，不在阶梯上
     {
       const liq = CRAFT_MAP.condenseLiquid
       const cry = CRAFT_MAP.condenseCrystal

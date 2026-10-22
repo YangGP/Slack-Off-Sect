@@ -34,22 +34,17 @@ npm run clean        # 删除构建、测试与审计产物
 | [TABLES](docs/TABLES.md) | 从源码生成的全部条目、造价、前置与效果 |
 | [ROADMAP](docs/ROADMAP.md) | 尚未实施、待评估的方向及专题入口 |
 
-现行数值以源码和生成表为准；专题解释规则与设计边界，后续工作在 ROADMAP 中维护。
+现行数值以源码和生成表为准；专题解释规则与兼容边界，后续工作在 ROADMAP 中维护。当前讨论中的[轮回与弟子长线重构](docs/REINCARNATION-REDESIGN.md)尚未实施。
 
 ## 目录与分析工具
 
 src/data/ 定义资源、建筑、研究与配方；src/game/ 负责规则、状态、存档和格式化；src/components/ 与 src/styles/ 负责界面。tools/ 包含引擎、渲染与DOM检查，及共用 player-bot 的节奏和资源审计。
 
 ~~~bash
-npm run audit -- stone 8                   # 资源流量与容量
-npm run audit -- stone 8 --craft=50        # 临时改变点石成灵成本
-npm run audit -- qi 8 --prod=spiritField:qi:0.1
 npm run audit:economy                      # 成品容量、基础需求与去向
 npm run audit:crafts -- 24 0               # 加工链与边际增益
 npm run audit:buildings                    # 前置、来源与容量可达性
-npm run audit:pacing -- 72 0 0 0           # 首次生产、建设与各境耗时
 npm run audit:breakthrough -- aided 2 72   # 满配护道的真实引擎节奏样本
-npm run audit:breakthrough-risk           # 退境、身死与重试次数的数学模型
 npm run balance:track -- 0 12345          # 完整飞升测定、资源流水、阻塞与节奏报告
 npm run balance -- 24 0                    # 固定时长的资源快照
 npm run balance:events -- 24               # 固定种子事件对照

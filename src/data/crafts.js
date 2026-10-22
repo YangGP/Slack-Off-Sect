@@ -85,7 +85,7 @@ const CORE_CRAFTS = [
     needs: { upgrades: ['alchemyArt'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
-    // 二级丹：补一/三品之间的断层（见 docs/MATERIAL-RESEARCH.md §1.2/§1.4）。
+    // 二级丹：补一/三品之间的断层（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     id: 'condensePill',
     name: '凝元炼丹',
     out: 'condensePill',
@@ -229,7 +229,7 @@ const CORE_CRAFTS = [
     cost: { condensePill: 20, immortalHerb: 5, qi: 500 },
     time: 6,
     desc: '丹鼎里火候九变，一炉只出数枚。',
-    // 解锁由法宝改为「研究 + 建筑」：去掉 upgrade: alchemyCauldron（见 docs/MATERIAL-RESEARCH.md §1.4）。
+    // 解锁由法宝改为「研究 + 建筑」：去掉 upgrade: alchemyCauldron（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     // 境界门槛取化神（realm 6，待校准）：使目标炼虚(7) 的护道可在化神备齐三品丹，
     // 与「三品丹用于炼虚～渡劫护道」的定位一致（原稿建议 7 会和护道用法冲突）。
     needs: { realm: 6, upgrades: ['alchemyEssence'], building: { id: 'pillFurnace', count: 1 } },

@@ -161,7 +161,7 @@ export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
     aid('香火祈愿', { faith: 250 }, 0.07),
   ],
   6: [
-    // 元婴～化神档由三品丹迁到二级丹「凝元丹」（见 docs/MATERIAL-RESEARCH.md §1.2，最小自洽迁移）。
+    // 元婴～化神档由三品丹迁到二级丹「凝元丹」（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容，最小自洽迁移）。
     aid('凝元养神', { condensePill: 10 }, 0.08),
     aid('晶符凝神', { crystal: 12, spiritTalisman: 4 }, 0.10),
     aid('香火祈愿', { faith: 600 }, 0.07),

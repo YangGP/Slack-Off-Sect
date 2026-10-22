@@ -354,7 +354,7 @@ export function breakthroughRisk({ ok, close, section }) {
     ok('连续失败减产不叠加', s.buffs.filter(b => b.id === 'breakthroughInjury').length === 1)
     for (let realm = 4; realm <= 9; realm++) {
       const fatal = { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }[realm]
-      // 护道可带 deathReduce（渡劫「立愿应劫」），满配身死概率相应下调（见 MATERIAL-RESEARCH.md §2.3）。
+      // 护道可带 deathReduce（渡劫「立愿应劫」），满配身死概率相应下调（见 CRAFT-PROGRESSION.md#材料研究与兼容）。
       const deathReduce = BREAKTHROUGH_AIDS[realm + 1].reduce((sum, aid) => sum + (aid.deathReduce || 0), 0)
       const expectedDeath = Math.max(0, fatal - deathReduce)
       const [below, bd] = setup(realm)

@@ -1,56 +1,34 @@
 # 文档导航
 
-更新：2026-10-18，对照v0.41.0。了解当前游戏先读DESIGN，查待开发项读ROADMAP，查完整参数读TABLES。研究、工艺、弟子等专题分别维护细节，避免同一状态或费用多处漂移。
+更新：2026-10-22，当前代码版本 v0.424。
 
-## 当前规则与工程
+先看当前规则，再看后续策划。费用、条目和前置统一查源码生成表；文档中的历史样本只说明当时版本。
 
-| 文档 | 维护范围 |
+## 当前规则
+
+| 文档 | 内容 |
 | --- | --- |
-| [DESIGN](DESIGN.md) | 游戏总览、跨系统规则、结算和存档 |
-| [ENGINEERING](ENGINEERING.md) | 工程分层、数值类型、交互约定、工具与部署 |
-| [TABLES](TABLES.md) | 源码生成的完整条目、费用、前置和效果；数据变化时用 `npm run docs:tables` 更新 |
-| [RESEARCH](RESEARCH.md) | 研究分组、依赖与能力递进原则 |
-| [CRAFT-PROGRESSION](CRAFT-PROGRESSION.md) | 手动／自动加工、动力冷却、符文、防护、建材，以及道札→道论→阵图知识链 |
-| [MATERIAL-RESEARCH](MATERIAL-RESEARCH.md) | 已实现的丹道、香火与土木研究，兼容边界和待校准项 |
-| [HABITABILITY](HABITABILITY.md) | 宜居度、人口风险与供给 |
-| [DISCIPLE-PROGRESSION](DISCIPLE-PROGRESSION.md) | 个体成长、传功、护道、招募与尚未实现的自动培养方案 |
-| [DISCIPLE-TALENTS](DISCIPLE-TALENTS.md) | 天赋获取、效果、等级与存档契约 |
+| [游戏总览](DESIGN.md) | 当前资源、建筑、轮回、事件与存档规则 |
+| [研究与工艺](CRAFT-PROGRESSION.md) | 研究链、材料、加工、动力、知识链及产业专精 |
+| [弟子与宜居度](DISCIPLE-PROGRESSION.md) | 灵根、突破、招募、培养预算、天赋与人口供给 |
+| [猎杀、外交与事务](BEAST-SYSTEM.md) | 已实现的山麓、信符、互市与药圃防务 |
+| [完整数据表](TABLES.md) | 源码生成的全部费用、前置和效果，使用 `npm run docs:tables` 更新 |
+| [工程约定](ENGINEERING.md) | 代码分层、金额、在线／离线、交互、工具与部署 |
 
-## 开发方向与系统扩展
+## 后续策划与参考
 
-| 文档 | 状态与范围 |
+| 文档 | 内容与状态 |
 | --- | --- |
-| [ROADMAP](ROADMAP.md) | 全部待办与阶段排期：P0上线收尾→P1节奏经济→P2弟子减负→P3誓约→P4猎场→P5事务→P6评审；D5＋D9首版已完成，D3在P1末复评 |
-| [ECONOMY-SKELETON](ECONOMY-SKELETON.md) | 第一阶段设计；§11 已实施第一版（化神～渡劫灵机尾款改知识材料、道论持有仓容）。知识工艺／设施反馈扩展未做，不等同于闭环完成 |
-| [PHASE2-MATERIAL-CHAIN-EVAL](PHASE2-MATERIAL-CHAIN-EVAL.md) | 第二阶段：4.1 灵纸、4.2 石材／灵纹石与 4.5 必要前置的联合评估、A/B/C 三包拆分与验证记录 |
-| [PHASE3-SCARCE-SUPPLY](PHASE3-SCARCE-SUPPLY.md) | 第三阶段：灵晶催化剂微量计费、秘银／灵晶外交供给与外交提前的核算和验证 |
-| [PHASE4-LONGEVITY-EVAL](PHASE4-LONGEVITY-EVAL.md) | 第四阶段：4.8 口粮／宜居度减耗已实施；4.6 首转提速候选、道果口径与配对测量计划 |
-| [OPINION-REVIEW-2026-10-21](OPINION-REVIEW-2026-10-21.md) | 六条玩法意见的静态审核：费用超仓容提示、加工品无上限与自动制作、建筑计价、药藏、法宝、科技树 |
-| [PROGRESSION-TREE-AUDIT-2026-10-21](PROGRESSION-TREE-AUDIT-2026-10-21.md) | 修真 83／技艺 54／法宝 24 的基线清单与解锁结构审核（后续追加纸/石 4 项）：境界门禁覆盖、枢纽扇出、同前置兄弟组与收敛建议 |
-| [RESOURCE-UNLOCK-AUDIT-2026-10-22](RESOURCE-UNLOCK-AUDIT-2026-10-22.md) | 46 项资源的修真解锁核对：26 项加工资源直连研究，基础/模块/机制资源的来源与两处补正 |
-| [REALM-GATE-TECH-CHAIN-REVIEW-2026-10-22](REALM-GATE-TECH-CHAIN-REVIEW-2026-10-22.md) | 境界锁与科技链历史方案及执行记录：7 个直接研究门槛，含观星术例外 |
-| [RESEARCH-CHAIN-REBALANCE-ISSUES-2026-10-22](RESEARCH-CHAIN-REBALANCE-ISSUES-2026-10-22.md) | 修真链问题复核、当前修正与费用对照；来源闭包可达不等于长期平衡通过 |
-| [SPIRIT-ENERGY](SPIRIT-ENERGY.md) | 世界观、已实现的粒子／仙灵力供能及后续校准和用途；设定示例不自动等于游戏机制 |
-| [BEAST-SYSTEM](BEAST-SYSTEM.md) | 山麓闭环已实现；P4 交付计划已定（复评→深山→禁地→生态），待实施 |
-| [MIDGAME-EVENTS](MIDGAME-EVENTS.md) | 药圃防务已实现，散修、邻宗和长期准备仍为草案 |
+| [开发路线](ROADMAP.md) | 唯一待办入口，区分已实施、待校准及未实施 |
+| [轮回与弟子长线重构](REINCARNATION-REDESIGN.md) | 当前讨论中的招募、同心度、道果、六猎场与全员飞升，尚未实施 |
+| [灵子与灵能设定](SPIRIT-ENERGY.md) | 世界观与供能设定；设定示例不自动构成已实现机制 |
+| [平衡评估与历史样本](BALANCE.md) | 评估原则、关键旧样本及适用边界，不能作为现版耗时承诺 |
+| [猫国结构参考](KITTENS-RESEARCH-REFERENCE.md) | 本地参考源码入口与可借鉴的结构原则 |
 
-## 测量与对照参考
+## 维护方式
 
-| 文档 | 阅读边界 |
-| --- | --- |
-| [PACING-AUDIT](PACING-AUDIT.md) | 2026-10-17历史逐境测量，截至化神；当前完整首飞参照样本见P1-BASELINE |
-| [P1-BASELINE](P1-BASELINE.md) | 2026-10-18首飞、多世、低频、事件、专精与供能测量；含150秒操作／睡眠作息的未转世直飞对照，非全局平衡验收 |
-| [REINCARNATION-PACING](REINCARNATION-PACING.md) | 修改前的化神转世与直飞补测，以及分段校准方案；历史结果不能作为修改后节奏 |
-| [P1-IMPLEMENTATION](P1-IMPLEMENTATION.md) | 新版机制已实施；首转5种子3.33～4.36天，种子2直飞／转世1次／2次为27.26／16.39／12.40天，旧版12份报告单列 |
-| [BUILDING-PRICE-COMPARISON](BUILDING-PRICE-COMPARISON.md) | 建筑报价与扩张回报分析；候选涨价不等于现价 |
-| [RESEARCH-CRAFT-PRICE-COMPARISON](RESEARCH-CRAFT-PRICE-COMPARISON.md) | 科研、材料与专精分析；早期试调值已部分由知识费用替换 |
-| [KITTENS-BALANCE-COMPARISON](KITTENS-BALANCE-COMPARISON.md) | 2026-10-18重新核对猫国重置、永久降涨价升级和仓容／加工结构；后文早期数值及D编号按历史资料阅读 |
-| [KITTENS-RESEARCH-REFERENCE](KITTENS-RESEARCH-REFERENCE.md) | 猫国研究设计参考，不是本作现行规则 |
-
-## 维护原则
-
-- 完整数值以源码和生成表为准，专题只保留必要示例与约束；数据或生成说明变化时同步更新TABLES。
-- 跨系统规则写入DESIGN，专题维护系统细节，未完成状态和处理顺序统一放在ROADMAP。
-- 明确区分已实现、待校准、未定案和暂缓，不把已完成方案继续列为开发任务。
-- 现行规则纠错直接更新；已完成实施清单与旧测量报告按 .ds 归档约定保留并注明基线，不删除正式任务记录；合并时同步修复引用，保留仍有效的兼容契约。
-- 测量需注明版本、策略、种子和在线／离线口径，原有通过记录不代表本轮重新执行。验证命令是否运行服从项目协作约定与用户授权。
+- 游戏现状写入总览和对应专题；未实施方向写入开发路线或轮回策划。
+- 完整报价只维护源码与生成表，专题保留规则、必要示例和兼容契约。
+- 新的局部审查、实施交接按项目约定放在 `.ds/tasks/`；不再在 docs 为每次改价、审查或测量新建日期文件。
+- 重复的阶段记录、失效报价和旧审计全文已整合或删除；历史原文可从 Git 历史查阅。本地协作规则、任务归档与用户存档不在此次清理范围。
+- 功能检查、源码阅读、公式复算与完整节奏测量分别说明；历史验证记录不等于本轮重新验证。
