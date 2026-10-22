@@ -4,7 +4,7 @@ import { RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
 import { JOBS } from '../../src/data/jobs.js'
 import { HUNT_FIELDS } from '../../src/modules/hunting/data.js'
-import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP, CULTIVATION_STAGE_OF } from '../../src/data/upgrades.js'
+import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { TECHNIQUES } from '../../src/data/techniques.js'
 import { CRAFTS } from '../../src/data/crafts.js'
 import { ACHIEVEMENTS } from '../../src/data/achievements.js'
@@ -154,14 +154,14 @@ export function dataIntegrity({ ok, section }) {
     // 清单用于避免无意把通用技艺迁入修真页，符文原理见 docs/CRAFT-PROGRESSION.md。
     const MIGRATED_NUMERIC_IDS = [
       'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft', 'crystalPolishing',
-      'mahayanaArt', 'qiRune', 'craftTempo', 'paperArt',
+      'mahayanaArt', 'qiRune', 'craftTempo', 'paperArt', 'paperWorks',
       // 主线数值节点：灵气纯化的纯度增益
       'qiPurify',
       // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点
       // 修真应用 · 营造（自技艺页迁入）
       'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
-      // 土木工艺：《营造技艺》暂时只保留专业制作增益（见 MATERIAL-RESEARCH.md §3.1）
-      'masonryArt',
+      // 土木工艺：专业制作增益（营造 / 石作成规，见 MATERIAL-RESEARCH.md §3.1）
+      'masonryArt', 'stoneWorks',
     ]
     const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
     ok(
@@ -174,8 +174,8 @@ export function dataIntegrity({ ok, section }) {
     const applications = ['breakthroughArt', 'waterworkshop', 'spiritSaw', 'spiritCultivation', 'swordFlight', 'spiritSmelting',
       'alchemyFire', 'flowField', 'spiritCanal', 'liquidIrrigation', 'veinInfuse', 'liquidVault', 'runeVault',
       'treasureVault', 'particleRecover', 'energyDrive']
-    ok('16项应用增益在技艺页且不占修真分组', applications.every(id =>
-      TECHNIQUES.some(u => u.id === id) && !CULTIVATION.some(u => u.id === id) && !CULTIVATION_STAGE_OF[id]))
+    ok('16项应用增益在技艺页且不占修真页', applications.every(id =>
+      TECHNIQUES.some(u => u.id === id) && !CULTIVATION.some(u => u.id === id)))
     for (const id of applications) {
       const legacy = normalizeState({ upgrades: { [id]: true } })
       ok(`迁移后的${UPGRADE_MAP[id].name}保留旧档资格与同一数据条目`,
@@ -185,10 +185,10 @@ export function dataIntegrity({ ok, section }) {
     ok(
       '修真页节点不再引用技艺版探矿术（矿脉经），消除反向跨层依赖',
       CULTIVATION.every((c) => !(c.needs?.upgrades || []).includes('prospectArt')) &&
-        (CULTIVATION.find((c) => c.id === 'earthArt').needs?.upgrades || []).includes('prospectStudy'),
+        (CULTIVATION.find((c) => c.id === 'woodworking').needs?.upgrades || []).includes('prospectStudy'),
     )
-    ok('候时法由灵机费用推进研究', E.UPGRADE_MAP.hourArt.needs.realm == null && E.UPGRADE_MAP.hourArt.cost.insight === 24000, `realm ${E.UPGRADE_MAP.hourArt.needs.realm}`)
-    ok('大乘心经由灵机费用推进研究', E.UPGRADE_MAP.mahayanaArt.needs.realm == null && E.UPGRADE_MAP.mahayanaArt.cost.insight === 160000, `realm ${E.UPGRADE_MAP.mahayanaArt.needs.realm}`)
+    ok('候时法由灵机费用推进研究', E.UPGRADE_MAP.hourArt.needs.realm == null && E.UPGRADE_MAP.hourArt.cost.insight === 19200, `realm ${E.UPGRADE_MAP.hourArt.needs.realm}`)
+    ok('大乘心经由灵机费用推进研究', E.UPGRADE_MAP.mahayanaArt.needs.realm == null && E.UPGRADE_MAP.mahayanaArt.cost.insight === 128000, `realm ${E.UPGRADE_MAP.mahayanaArt.needs.realm}`)
 
     let badJobRes = null
     for (const j of JOBS) if (!resIds.has(j.resource)) badJobRes = j.id

@@ -29,23 +29,25 @@ export function buildingActions({ ok, close, section }) {
   }
   {
     const { state, derived } = newGame()
-    state.buildings.spiritField = { count: 1, on: true } // 茅屋现在要一座聚灵阵
+    // 基础链：茅屋要一座伐木场（伐木场自身要聚灵阵，此处一并补齐）
+    state.buildings.spiritField = { count: 1, on: true }
+    state.buildings.lumberYard = { count: 1, on: true }
     state.resources.qi = E.money(1000)
-    state.resources.wood = E.money(20)
+    state.resources.wood = E.money(60)
     state.resources.stone = E.money(100)
     E.trackPeak(state)
 
     const before = { qi: state.resources.qi, stone: state.resources.stone }
     const built = E.buyBuilding(state, derived, 'hut', 1)
     ok('建成 1 座茅屋', built === 1 && E.countOf(state, 'hut') === 1)
-    ok('扣除灵气 80', close(before.qi.minus(state.resources.qi), 80, 1e-6))
+    ok('扣除灵气 150', close(before.qi.minus(state.resources.qi), 150, 1e-6))
     ok('首屋不消耗灵石', E.moneyEq(state.resources.stone, before.stone))
     ok('弟子上限 0 → 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
-    ok('仓储上限提升（灵气 +60）', E.moneyEq(derived.max.qi, 560), `实际 ${derived.max.qi}`)
+    ok('仓储上限提升（灵气 +120，两座即过炼气破境的 700）', E.moneyEq(derived.max.qi, 620), `实际 ${derived.max.qi}`)
     ok('建造计数已记录', state.stats.buildingsBuilt === 1)
 
     const second = E.buildingCost(state, 'hut', 1)
-    ok('第二座更贵（价格递增）', E.moneyGt(second.qi, 80), `实际 ${second.qi}`)
+    ok('第二座更贵（价格递增）', E.moneyGt(second.qi, 150), `实际 ${second.qi}`)
 
     const affordable = E.maxAffordable(state, 'hut')
     ok('剩余资源不足时 maxAffordable 返回零', affordable === 0, `实际 ${affordable}`)

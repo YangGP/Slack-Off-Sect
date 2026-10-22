@@ -6,7 +6,7 @@ import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
 import { PROCESSING_STATIONS } from '@/data/industry'
 import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck } from '@/game/engine'
 import { describeNeeds } from '@/game/effectsText'
-import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
+import { fmt, fmtPercent, fmtStock, fmtCost, fmtInt } from '@/game/format'
 import { ZERO, MONEY_INFINITY, money, moneyGte, moneyGt, moneyLt, moneySum, moneyToCount, moneyToRatio } from '@/game/decimal'
 import { enough as enoughOf } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
@@ -289,7 +289,7 @@ const condenseStatus = computed(() => {
         </div>
         <div class="craft-line">
           <span v-if="compact" class="craft-name">{{ resourceName(row.meta.out) }}</span>
-          <span v-if="compact" class="have">{{ fmtStock(row.have) }}</span>
+          <span v-if="compact" class="have">{{ fmtInt(row.have) }}</span>
           <button
             class="btn primary"
             :disabled="!row.affordable"

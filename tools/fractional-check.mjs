@@ -31,7 +31,7 @@ try {
       E.payCost(s, { stone: '0.01' })
       assert.equal(s.resources.stone.toString(), '0.24')
       assert.equal(fmtCost('0.01'), '0.01')
-      assert.equal(fmtStock('17.9'), '17.9')
+      assert.equal(fmtStock('17.9'), '17.90')
       assert.equal(fmtAmount('2.75'), '2.75')
       s.karma = E.money(1)
       E.recompute(s, d)

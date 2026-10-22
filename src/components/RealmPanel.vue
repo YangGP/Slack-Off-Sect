@@ -254,7 +254,7 @@ function reincarnate() {
                     <div class="tip-row">
                       <span class="k">每人口粮</span>
                       <span class="v warn">
-                        {{ perPersonUpkeep.toFixed(3) }}/秒 → {{ upkeepAfter.toFixed(3) }}/秒（↑{{
+                        {{ perPersonUpkeep.toFixed(2) }}/秒 → {{ upkeepAfter.toFixed(2) }}/秒（↑{{
                           upkeepRise
                         }}%）
                       </span>

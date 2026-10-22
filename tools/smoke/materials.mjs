@@ -73,7 +73,7 @@ export function goldenCoreProduction({ ok, close, section }) {
     s.disciples.total = 1
     s.disciples.jobs.scholar = 1
     E.recompute(s, d)
-    ok('经义互证不能在金丹提前购买', !E.isUpgradeUnlocked(s, UPGRADE_MAP.scriptureDebate) && !E.research(s, d, 'scriptureDebate'))
+    ok('金丹满足坐忘功前置即开放经义互证，无材料时购买失败', E.isUpgradeUnlocked(s, UPGRADE_MAP.scriptureDebate) && !E.research(s, d, 'scriptureDebate'))
     s.realm = 5
     E.recompute(s, d)
     const baseInsight = d.rates.insight
@@ -84,7 +84,7 @@ export function goldenCoreProduction({ ok, close, section }) {
     s.buildings.observatory = { count: 4, on: true }
     s.upgrades.astrologyArt = true
     E.recompute(s, d)
-    ok('观象参同仍须达到化神', !E.isUpgradeUnlocked(s, UPGRADE_MAP.celestialDeduction))
+    ok('讲经与观星齐备后即开放观象参同', E.isUpgradeUnlocked(s, UPGRADE_MAP.celestialDeduction))
     s.realm = 6
     s.upgrades.scriptureDebate = false
     E.recompute(s, d)
@@ -102,12 +102,13 @@ export function goldenCoreProduction({ ok, close, section }) {
   {
     const { state: s, derived: d } = newGame()
     s.realm = 3
-    for (const id of ['qiOrigin', 'qiGazing', 'qiMeasure', 'qiLiquid', 'condenseArt', 'liquidArt', 'earthArt', 'woodworking', 'herbStudy', 'talismanArt', 'forgeArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
+    for (const id of ['qiOrigin', 'qiGazing', 'qiMeasure', 'qiLiquid', 'condenseArt', 'liquidArt', 'earthArt', 'woodworking', 'herbStudy', 'talismanArt', 'forgeArt', 'qiRune', 'shapeRune', 'conductionRune', 'forestryArt']) s.upgrades[id] = true
     s.buildings.talismanHall = { count: 1, on: true }
     s.buildings.forge = { count: 1, on: true }
     // 土木精要现要求先建库房，夹具须具备实际研究前置。
     s.buildings.warehouse = { count: 1, on: true }
-    Object.assign(s.resources, { insight: E.money(50000), qi: E.money(8000), spiritLiquid: E.money(300), talisman: E.money(1900), ore: E.money(2000), plank: E.money(640), artifact: E.money(10), stone: E.money(1000), wood: E.money(2000) })
+    // 灵流要诀（技艺）前置伐木要术；研究载体道札按费用表补足（纯化 3、凝晶原理 8、凝晶工艺 10）。
+    Object.assign(s.resources, { insight: E.money(50000), qi: E.money(8000), spiritLiquid: E.money(300), talisman: E.money(1900), ore: E.money(2000), plank: E.money(640), artifact: E.money(10), stone: E.money(1000), wood: E.money(2000), daoNote: E.money(100) })
     E.recompute(s, d)
     ok('已掌握凝液仍须先纯化才能参悟凝晶', !E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory))
     ok('筑基参悟纯化后可继续凝晶，淬玄仍等待土木精要', E.research(s, d, 'qiPurify') && E.isUpgradeUnlocked(s, UPGRADE_MAP.crystalTheory) && !E.isUpgradeUnlocked(s, UPGRADE_MAP.steelWorking))
@@ -126,7 +127,7 @@ export function goldenCoreProduction({ ok, close, section }) {
     ok('增产前两条产线已在运转', E.moneyIsPositive(baseRates.wood) && E.moneyIsPositive(baseRates.herb))
     E.research(s, d, 'flowField')
     E.recompute(s, d)
-    ok('灵流要诀给灵木与灵草各三成加成，与药圃加成相加，玄铁写在效果表内', close(d.rates.wood.div(baseRates.wood), 1.3) && close(d.rates.herb.div(baseRates.herb), 1.4 / 1.1) && UPGRADE_MAP.flowField.effects.ratio.ore === 0.3)
+    ok('灵流要诀给灵木与灵草各三成加成，与伐木要术及药圃加成相加，玄铁写在效果表内', close(d.rates.wood.div(baseRates.wood), 1.5 / 1.2) && close(d.rates.herb.div(baseRates.herb), 1.4 / 1.1) && UPGRADE_MAP.flowField.effects.ratio.ore === 0.3)
     s.buildings.warehouse = { count: 5, on: true }
     ok('阵基装配与材料库在金丹参悟', E.research(s, d, 'arrayAssembly') && E.research(s, d, 'earthEssence') && UPGRADE_MAP.earthEssence.needs.realm == null)
     ok('未见过玄钢前材料库不露面（渐进露出）', !d.unlockedBuildings.includes('depot'))

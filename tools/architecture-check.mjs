@@ -208,6 +208,9 @@ export function runArchitectureChecks() {
     const seed = createInitialState(startAt)
     seed.dao = E.money(1)
     seed.settings.craftReservePercent = 0
+    // 知识链改造后灵纸有默认保留量（DEFAULT_CRAFT_RESERVES.paper = 10）：本场景验证
+    // 「维护耗尽 → 制作触发刷新 → 来客/事件读新值」的次序，清零保留让 4 张纸够刻一份符箓。
+    seed.settings.craftReserves = {}
     seed.buildings = { hut: { count: 40, on: true }, incenseCauldron: { count: 1, on: true },
       talismanHall: { count: 1, on: true } }
     seed.upgrades.paperArt = true

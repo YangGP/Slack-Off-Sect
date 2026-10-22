@@ -82,7 +82,10 @@ export const PRIORITY = [
  * 所以这里按玩家会做的事处理：**只在材料见底时才用**。
  */
 export const RESCUE_CRAFTS = {
-  growWood: { watch: 'wood', below: 0.2 },
+  // 基础链头两环（伐木场 60 + 茅屋 60）都高过 20% 见底线（200×0.2=40）：
+  // 没有樵夫的开局只能靠催生灵木自举，floor 给一个绝对保底（130 ≥ 60+60，留一口余量），
+  // 让首两环攒得出来；cap 抬高后仍按 20% 见底、不再多占灵气。
+  growWood: { watch: 'wood', below: 0.2, floor: 130 },
 }
 
 export const ADVANCED_CRAFTS = {
@@ -242,7 +245,7 @@ export function createBot(state, derived, policy = {}) {
       if (!required && !housing && !wantsComfortBuilding(meta)) { reject(id, 'comfort-target', cost); continue }
       const storageFix = shortRes.some((r) => (meta?.effects?.storage?.[r] || 0) > 0)
       if (policy.onlyBreakthrough && !required && !storageFix) {
-        const support = ['hut', 'spiritField', 'lumberYard', 'granary', 'quarry'].includes(id) && E.countOf(state, id) === 0
+        const support = ['hut', 'spiritField', 'lumberYard', 'library', 'granary', 'quarry'].includes(id) && E.countOf(state, id) === 0
         const comfort = comfortOnly(meta) && normalHabitability() < state.disciples.total
         if (!support && !housing && !comfort) { reject(id, 'optional-project', cost); continue }
       }
@@ -250,7 +253,10 @@ export function createBot(state, derived, policy = {}) {
       // 木料一旦被预留就再也买不起房，开局会永久停在无弟子状态。
       if (reserveCost && !required && !housing && !storageFix && Object.keys(cost).some((k) =>
         moneyLt(money(state.resources[k] ?? ZERO).minus(cost[k]), reserveCost[k] ?? ZERO))) { reject(id, 'reserve', cost); continue }
-      // 开局自举期：先伐木场、后谷仓，再攒首座采矿场 —— 避免反复扩屋把开局木料花光。
+      // 开局自举期：按基础链的书写顺序放行 —— 伐木场 → 藏经阁 → 谷仓 → 首座采矿场，
+      // 其余吃木材的建筑先等一等，避免反复扩屋把开局木料花光。
+      // 藏经阁必须进链条：谷仓改挂藏经阁之后（且免研究），漏了它谷仓永远锁着，
+      // 木料也就永远花不出去 —— 实测 12 小时零参悟。
       //
       // 但这条锁必须留一个例外，否则会死锁：采矿场自己也要木材（前置还得先有谷仓），
       // 而木材又被制作目标持续吃掉；于是"没采矿场 → 不许买任何吃木材的建筑 → 永远攒不出采矿场"，
@@ -263,9 +269,11 @@ export function createBot(state, derived, policy = {}) {
         id !==
           (E.countOf(state, 'lumberYard') === 0
             ? 'lumberYard'
-            : E.countOf(state, 'granary') === 0
-              ? 'granary'
-              : 'quarry')
+            : E.countOf(state, 'library') === 0
+              ? 'library'
+              : E.countOf(state, 'granary') === 0
+                ? 'granary'
+                : 'quarry')
       if (bootstrapLocked) {
         const housingCapped = state.disciples.total >= (derived.maxDisciples || 0)
         const isHousing = (E.BUILDING_MAP[id]?.effects?.maxDisciples || 0) > 0
@@ -733,9 +741,10 @@ export function createBot(state, derived, policy = {}) {
       if (c.id === 'infuseStone' && moneyLt(state.resources.qi ?? ZERO, STONE_QI_FLOOR)) continue
       const rescue = RESCUE_CRAFTS[c.id]
       if (rescue) {
-        // 只在「看的那个资源」低于上限的两成时才催生一次
+        // 只在「看的那个资源」低于上限的两成（或开局保底线）时才催生一次
         const cap = derived.max[rescue.watch] ?? ZERO
-        if (moneyGt(state.resources[rescue.watch] ?? ZERO, cap.times(rescue.below))) continue
+        const floor = moneyMax(cap.times(rescue.below), money(rescue.floor ?? 0))
+        if (moneyGt(state.resources[rescue.watch] ?? ZERO, floor)) continue
         if (E.canAfford(state, c.cost)) submitCraft(c.id)
         continue
       }

@@ -43,6 +43,11 @@ function trim(text) {
   return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text
 }
 
+/** 定点显示省略全零小数尾：'12.00' → '12'，'12.50' 保留 —— 舍入后为整数时不写 .00。 */
+function dropWholeZeros(text) {
+  return text.replace(/\.0+$/, '')
+}
+
 /** 正数的大数缩写；四舍五入进位后切换单位，避免出现 1000k。 */
 function compact(n, digits = 2, fixed = false) {
   if (n.gte(1e12)) return n.toExponential(digits)
@@ -54,15 +59,15 @@ function compact(n, digits = 2, fixed = false) {
     if (index === UNITS.length) return n.toExponential(digits)
     scaled = n.div(UNITS[index].v).toDecimalPlaces(digits)
   }
-  return (fixed ? scaled.toFixed(digits) : trim(scaled.toFixed(digits))) + UNITS[index].s
+  return (fixed ? dropWholeZeros(scaled.toFixed(digits)) : trim(scaled.toFixed(digits))) + UNITS[index].s
 }
 
-/** 1 以下的连续量：太小只写 ≈0，其余按原口径保留 4 位 / 3 位小数 */
+/** 通用量值统一固定两位小数（整数省略 .00）；两位内显示为 0 的极小非零量以 ≈0 保留非零提示。 */
 function magnitude(n, digits = 2) {
   if (n.isZero()) return '0'
-  if (n.lt(1)) return n.lt(0.0001) ? '≈0' : n.toFixed(n.lt(0.01) ? 4 : 3)
-  if (n.lt(1000)) return n.lt(10) ? trim(n.toFixed(2)) : n.lt(100) ? trim(n.toFixed(1)) : n.toFixed(0)
-  return compact(n, digits)
+  if (n.lt(1)) return n.lt(0.005) ? '≈0' : dropWholeZeros(n.toFixed(2))
+  if (n.lt(1000)) return dropWholeZeros(n.toFixed(2))
+  return compact(n, digits, true)
 }
 
 /** 通用数量格式化，例如 12345 -> 12.35k */
@@ -77,15 +82,15 @@ export function fmt(value, digits = 2) {
 
 /**
  * 固定两位小数（资源栏的「当前数值」用）。
- * 不省略尾随 0：12.5 → 12.50，1500 → 1.50k，12345 → 12.35k。
+ * 非整数保留两位：12.5 → 12.50；舍入后为整数省略 .00：12 → 12。
  */
 export function fmtFixed(value, digits = 2) {
   const inf = infiniteText(value)
   if (inf) return inf
   const amount = amountOf(value)
-  if (!amount) return (0).toFixed(digits)
+  if (!amount) return dropWholeZeros((0).toFixed(digits))
   const n = amount.abs()
-  const out = n.lt(1e3) ? n.toFixed(digits) : compact(n, digits, true)
+  const out = n.lt(1e3) ? dropWholeZeros(n.toFixed(digits)) : compact(n, digits, true)
   return amount.isNegative() ? '-' + out : out
 }
 
@@ -114,15 +119,15 @@ export function fmtInt(value) {
   return intCore(integerOf(value, amount => amount.round()))
 }
 
-/** 经济数值显示保留小数；极小的非零量用科学计数法，避免显示为零。 */
+/** 经济数值统一固定两位小数（整数省略 .00）；两位内显示为 0 的极小非零量用科学计数法，避免显示为零。 */
 function economicText(value) {
   const inf = infiniteText(value)
   if (inf) return inf
   const amount = amountOf(value)
   if (!amount || amount.isZero()) return '0'
   const n = amount.abs()
-  const out = n.lt('0.0001') ? n.toExponential(2)
-    : n.lt(1000) ? trim(n.toFixed(4)) : compact(n)
+  const out = n.lt(0.005) ? n.toExponential(2)
+    : n.lt(1000) ? dropWholeZeros(n.toFixed(2)) : compact(n, 2, true)
   return (amount.isNegative() ? '-' : '') + out
 }
 
@@ -176,11 +181,11 @@ export function fmtPercent(value, digits = 0) {
   return (value * 100).toFixed(digits) + '%'
 }
 
-/** 效果与供给百分比保留小数；极小的非零效果用科学计数法。 */
+/** 效果与供给百分比固定两位小数（整数省略 .00）；两位内显示为 0 的极小非零量用科学计数法。 */
 export function fmtEffectPercent(value) {
   const percent = money(value).times(100)
-  return (percent.isZero() ? '0' : percent.abs().lt('0.0001')
-    ? percent.toExponential(2) : percent.toDecimalPlaces(4).toString()) + '%'
+  return (percent.isZero() ? '0' : percent.abs().lt(0.005)
+    ? percent.toExponential(2) : dropWholeZeros(percent.toFixed(2))) + '%'
 }
 
 export function fmtClock(timestamp) {

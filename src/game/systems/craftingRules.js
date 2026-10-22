@@ -4,6 +4,7 @@ import { atLeast } from '../numbers'
 import { MONEY_INFINITY, ONE, ZERO, money, moneyAvailable, moneyMax, moneyMin, moneySum, moneyToCount, moneyToNumber } from '../decimal'
 import { isCraftUnlocked, canAfford, clamp, countOf } from './core'
 import { resourceName } from '@/data/resources'
+import { BUILDING_MAP } from '@/data/buildings'
 import { CONFIG } from '@/data/config'
 
 export const EPS = 1e-9
@@ -301,12 +302,12 @@ export function computeAutoCraftDrain(state, derived) {
 
 /**
  * 手动「吸取天地灵气」：开局什么都没有时唯一的灵气来源。
- * 前20座聚灵阵线性增加点击收益，此后按平方根增长；不乘全局倍率。金额为 Decimal。
+ * 基础值之上，每座已建聚灵阵按其每秒基础产出（与建筑数据同源）线性叠加点击收益；
+ * 不乘全局倍率。金额为 Decimal。
  */
 export function clickGain(state, derived) {
   void derived
   const fields = countOf(state, 'spiritField')
-  const full = CONFIG.CLICK_QI_FULL_FIELDS
-  const effective = Math.min(fields, full) + Math.sqrt(Math.max(0, fields - full))
-  return money(CONFIG.CLICK_QI_BASE).plus(money(CONFIG.CLICK_QI_PER_FIELD).times(effective))
+  const perField = BUILDING_MAP.spiritField.effects.prod.qi
+  return money(CONFIG.CLICK_QI_BASE).plus(money(perField).times(fields))
 }

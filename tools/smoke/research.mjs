@@ -2,7 +2,7 @@ import { createInitialState, normalizeState } from '../../src/game/state.js'
 import * as E from '../engine-fixture.mjs'
 import { RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
-import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP, CULTIVATION_STAGE_OF, CULTIVATION_STAGES } from '../../src/data/upgrades.js'
+import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { CRAFT_MAP } from '../../src/data/crafts.js'
 import { ASCEND_REALM_INDEX } from '../../src/data/realms.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
@@ -21,7 +21,7 @@ export function researchVisibility({ ok, section }) {
       ['incenseStudy', 'recruitDrive'], ['yinyangSplit', 'particleRecover'],
       ['qiLiquid', 'breakthroughArt'], ['earthEssence', 'steelWorking'],
       ['arrayAssembly', 'waterworkshop'], ['steelWorking', 'beastMaterialArt'],
-      ['arrayAssembly', 'preachArt'], ['preachArt', 'incenseStudy'],
+      ['paperArt', 'preachArt'], ['preachArt', 'incenseStudy'],
     ]
     for (const [previous, next] of edges) {
       const { state: s } = newGame()
@@ -78,19 +78,18 @@ export function researchUnlocks({ ok, section }) {
       JSON.stringify(BUILDING_MAP.gatheringArray.needs),
     )
 
-    // 界面按研究分组排序，同组保持节点数据顺序。
+    // 界面按数据文件顺序展示：锚点保证模块节点插回原位而不是掉到列表末尾。
     const ids = CULTIVATION.map((u) => u.id)
-    const unstaged = ids.filter((id) => !CULTIVATION_STAGE_OF[id])
-    ok('每个修真节点都归入研究分组（灵气五章、心法、材料与经营）', unstaged.length === 0, unstaged.join(','))
-    const groupedIds = CULTIVATION_STAGES.flatMap(stage => stage.ids)
-    ok('研究分组不重复收录节点或引用失效节点', groupedIds.length === new Set(groupedIds).size &&
-      groupedIds.every(id => ids.includes(id)))
     ok(
-      '第一章是「观气」（灵源考 + 观气法同章且在最前）',
-      ids[0] === 'qiOrigin' &&
-        CULTIVATION_STAGE_OF.qiGazing?.index === CULTIVATION_STAGE_OF.qiOrigin?.index &&
-        CULTIVATION_STAGE_OF.qiOrigin?.index === 0,
-      ids.slice(0, 4).join(','),
+      '列表以基础建筑研究开头，其后紧接主线「观气」章（灵源考 → 观气法 → 灵气测定 → 凝气化液）',
+      ids.slice(0, 6).join(',') === 'openMine,qiOrigin,qiGazing,qiMeasure,qiLiquid,liquidArt',
+      ids.slice(0, 6).join(','),
+    )
+    ok(
+      '猎杀研究按锚点插回原位（山野猎法在引泉净水后、兽材加工在石作规制后）',
+      ids[ids.indexOf('waterSanitation') + 1] === 'wildHunting' &&
+        ids[ids.indexOf('stoneWorks') + 1] === 'beastMaterialArt',
+      `${ids[ids.indexOf('waterSanitation') + 1]},${ids[ids.indexOf('stoneWorks') + 1]}`,
     )
     ok('修真节点数量（A 项铺满时间线后应不少于 28）', CULTIVATION.length >= 28, String(CULTIVATION.length))
   }

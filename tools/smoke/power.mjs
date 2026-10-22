@@ -116,7 +116,10 @@ export function particleChain({ ok, close, section }) {
       const cry = CRAFT_MAP.condenseCrystal
       ok('凝气成液由凝气化液放行，150 灵气一瓶', liq.needs?.upgrades?.includes('qiLiquid') && liq.cost.qi === 150 && liq.out === 'spiritLiquid')
       ok('凝液法无境界门槛、只承接化液', E.UPGRADE_MAP.liquidArt.needs.realm == null && E.UPGRADE_MAP.liquidArt.needs.upgrades.length === 1 && E.UPGRADE_MAP.liquidArt.needs.upgrades[0] === 'qiLiquid')
-      ok('凝晶原理承接灵气纯化并保留符文条件', E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('qiPurify') && E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('talismanArt'))
+      ok('凝晶原理承接灵气纯化，符文条件下移由凝晶工艺承接',
+        E.UPGRADE_MAP.crystalTheory.needs.upgrades.includes('qiPurify') &&
+        E.UPGRADE_MAP.crystalCraft.needs.upgrades.includes('shapeRune') &&
+        E.UPGRADE_MAP.crystalCraft.needs.building?.id === 'talismanHall')
       ok('凝气结晶由固形纹直接加工灵液与灵气', cry.cost.spiritLiquid === 3 && !cry.cost.talisman && cry.cost.qi === 300)
       ok('培育仙草以灵液浇灌', CRAFT_MAP.growImmortalHerb.cost.spiritLiquid === 2 && !CRAFT_MAP.growImmortalHerb.cost.qi)
       ok('灵石是含灵矿物：矿工开采与点石成灵并存', JOBS.some(job => job.secondary?.resource === 'stone') && CRAFT_MAP.infuseStone.needs?.building?.id === 'quarry')

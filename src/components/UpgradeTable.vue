@@ -14,7 +14,7 @@ import { fmt, fmtCost } from '@/game/format'
 import { ZERO, money, moneyGte, moneyMax } from '@/game/decimal'
 import { enough as enoughOf, costBlocked } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
-import { CULTIVATION, CULTIVATION_STAGE_OF, compareCultivationOrder } from '@/data/upgrades'
+import { CULTIVATION } from '@/data/upgrades'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 import CostRows from './CostRows.vue'
@@ -73,26 +73,15 @@ function rowLeave(ev) {
   ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseleave'))
 }
 
-/** 修真节点所属的研究分组（技艺 / 法宝没有分组，返回 null） */
-const stageOf = (id) => CULTIVATION_STAGE_OF[id] || null
-
-/** 这一段的第一行（用来插段标题行） */
-function isStageStart(list, i) {
-  if (!list[i]?.stage) return false
-  return i === 0 || list[i - 1]?.stage?.key !== list[i].stage.key
-}
-
+/** 各列表都按数据文件的书写顺序展示：想调整顺序直接重排数据即可。 */
 const available = computed(() =>
   availableIds.value
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
     .filter((u) => isCostRevealed(state, u.cost))
     .filter(capacityReady)
-    // 修真页同时遵循分段与段内顺序。
-    .sort(compareCultivationOrder)
     .map((u) => ({
       meta: u,
-      stage: stageOf(u.id),
       affordable: canAfford(state, u.cost),
     })),
 )
@@ -101,14 +90,13 @@ const locked = computed(() =>
   props.list
     .filter((u) => !state.upgrades[u.id] && !availableIds.value.includes(u.id))
     .filter((u) => isProgressionVisible(state, u.needs, u.cost))
-    .sort(compareCultivationOrder)
     .map((u) => ({
       meta: u,
       needs: describeNeeds(u.needs).join('，') || '条件未知',
     })),
 )
 
-const researched = computed(() => props.list.filter((u) => state.upgrades[u.id] && u.kind !== 'treasure').sort(compareCultivationOrder))
+const researched = computed(() => props.list.filter((u) => state.upgrades[u.id] && u.kind !== 'treasure'))
 
 /** 已炼成、可继续祭炼的法宝（只有法宝能祭炼） */
 const forged = computed(() =>
@@ -252,13 +240,7 @@ function kindName(meta) {
           </tr>
         </thead>
         <tbody>
-          <template v-for="(item, i) in available" :key="item.meta.id">
-            <tr v-if="isStageStart(available, i)" class="stage-row">
-              <td colspan="3">
-                <HoverTip :label="item.stage.label"><template #tip><p>{{ item.stage.hint }}</p></template></HoverTip>
-              </td>
-            </tr>
-            <tr @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
+          <tr v-for="item in available" :key="item.meta.id" @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
             <td class="nowrap">
               <span :class="{ bad: costBlocked(state, derived, item.meta.cost) }">{{ item.meta.name }}</span><span v-if="costBlocked(state, derived, item.meta.cost)" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span>
               <span v-if="item.meta.kind === 'treasure'" class="small dim">法宝</span>
@@ -294,7 +276,6 @@ function kindName(meta) {
                     <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
                   </div>
                   <div v-if="item.meta.effectDesc" class="tip-note">{{ item.meta.effectDesc }}</div>
-                  <div v-if="item.stage" class="tip-note">所属：{{ item.stage.label }} · {{ item.stage.hint }}</div>
                   <template v-if="describeNeeds(item.meta.needs).length">
                     <div class="tip-section">条件</div>
                     <div v-for="(condition, ci) in describeNeeds(item.meta.needs)" :key="ci" class="tip-condition">{{ condition }}</div>
@@ -308,7 +289,6 @@ function kindName(meta) {
               </button>
             </td>
           </tr>
-          </template>
         </tbody>
       </table>
       <div v-else class="empty">暂时没有可参悟的条目，建设对应产业、推进研究或扩充灵机上限后会逐步开放。</div>

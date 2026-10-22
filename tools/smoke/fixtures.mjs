@@ -16,6 +16,7 @@ export function newGameRunning() {
   state.resources.wood = money(2000)
   state.resources.stone = money(200)
   state.buildings.hut = { count: 1, on: true }
+  state.buildings.lumberYard = { count: 1, on: true }
   state.buildings.spiritField = { count: 1, on: true }
   state.disciples.total = 4
   E.trackPeak(state)

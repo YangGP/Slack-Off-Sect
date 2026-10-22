@@ -129,7 +129,7 @@ export async function checkLayout(context) {
       tipTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
       await new Promise((r) => setTimeout(r, 60))
 
-      // 建筑价格直接显示实际小数成本（第 4 座茅屋：灵气 297.91、灵木 74.4775）。
+      // 建筑价格直接显示实际小数成本（第 4 座茅屋：灵气 558.58、灵木 223.43，统一两位小数）。
       const hutItem = [...doc.querySelectorAll('.panel .build-item')].find((el) =>
         el.querySelector('.build-btn')?.textContent.includes('茅屋'),
       )
@@ -139,7 +139,7 @@ export async function checkLayout(context) {
       const priceSection = priceTip.slice(priceTip.indexOf('价格'), priceTip.indexOf('效果'))
       ok(
         '建筑提示保留实际小数价格',
-        priceSection.length > 0 && /灵气\s*297\.91/.test(priceSection) && /灵木\s*74\.4775/.test(priceSection),
+        priceSection.length > 0 && /灵气\s*558\.58/.test(priceSection) && /灵木\s*223\.43/.test(priceSection),
         priceSection.slice(0, 60),
       )
       hutItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))

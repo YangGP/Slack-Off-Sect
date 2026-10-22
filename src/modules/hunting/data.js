@@ -157,13 +157,13 @@ export const HUNT_CRAFTS = [
 /** 配方插回锚点：保持拆分前位于「原淬炼法器」之后 */
 export const HUNT_CRAFT_ANCHOR = 'forgeArtifact'
 
-/** 修真研究：山野猎法、兽材加工（属 CULTIVATION，末尾追加） */
+/** 修真研究：山野猎法、兽材加工（属 CULTIVATION，按锚点插回原位） */
 export const HUNT_UPGRADES = [
   {
     id: 'wildHunting',
     name: '山野猎法',
     glyph: '猎',
-    cost: { insight: 300, wood: 200, stone: 30 },
+    cost: { insight: 300 },
     desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建执符堂，并布置暖裘居室；执符堂开出的信符也供邻宗互市使用。',
     effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
     note: '解锁建筑：执符堂、暖裘居室',
@@ -185,6 +185,16 @@ export const HUNT_UPGRADES = [
     module: 'hunting',
   },
 ]
+
+/**
+ * 修真研究插回锚点：与分段拆分前的展示位置一致——
+ * 山野猎法在「宗门制度」段（引泉净水之后），兽材加工在「工艺与规制」段（石作规制之后）。
+ * 研究列表按数据顺序展示，锚点保证删除分段后两个节点不掉到页面底部。
+ */
+export const HUNT_UPGRADE_ANCHORS = {
+  wildHunting: 'waterSanitation',
+  beastMaterialArt: 'stoneWorks',
+}
 
 /** 技艺：识踪诀、踏山步、筹猎章、剥取法（属 TECHNIQUES） */
 export const HUNT_TECHNIQUES = [

@@ -47,19 +47,22 @@ const CORE_BUILDINGS = [
     priceRatio: 1.15,
     desc: '木架与料场齐备，樵夫采回的灵木在此归整，伐木更有章法。每座灵木产出 +10%，多座相加。',
     effects: { ratio: { wood: 0.1 } },
-    needs: { building: { id: 'hut', count: 1 } },
+    needs: { building: { id: 'spiritField', count: 1 } },
   },
   {
     id: 'quarry',
     name: '采矿场',
     glyph: '采',
     group: 'produce',
-    // 实物建筑用材料计价：钎锤支架都是木匠活，不吃灵气；也不用自己的产出（矿石）当造价
-    cost: { wood: 300 },
+    // 实物建筑用材料计价：钎锤支架都是木匠活，不吃灵气；也不用自己的产出（矿石）当造价。
+    // 造价 180 落在灵木基础仓容 200 之内；谷仓排在前面（+300 木）后更绰绰有余
+    // —— 与炼铁炉同一条「造价 ≤ 仓容」铁律。
+    cost: { wood: 180 },
     priceRatio: 1.15,
     desc: '钎锤齐备，开放矿工职位；派遣弟子开采矿石。每座启用的采矿场提高矿石、玄铁与灵石产出10%，多座相加。',
     effects: { ratio: { rock: 0.1, ore: 0.1, stone: 0.1 } },
-    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'granary', count: 1 }] },
+    // 谷仓不必先建（软顺序、非硬前置）：伐木场之后参悟《开山取料》即可开采。
+    needs: { building: { id: 'lumberYard', count: 1 }, upgrades: ['openMine'] },
   },
   {
     // 玄铁不再靠"再开一座矿"：矿石入炉、灵木作炭，烧出玄铁。
@@ -98,7 +101,9 @@ const CORE_BUILDINGS = [
     glyph: '圃',
     group: 'produce',
     // 普通药圃用木料营造，灵石留给凝灵与交易。
-    cost: { wood: 240, cutStone: 30, stone: 60 },
+    // 木料压回基础仓容 200 内（同采矿场的「180」档）：炼气破境要 140 灵草，
+    // 药圃不该在谷仓之外再竖一道木料墙。
+    cost: { wood: 180, cutStone: 30, stone: 60 },
     priceRatio: 1.15,
     desc: '按四时节气轮种，开放采药人职位；派遣弟子照料和采收后才能取得灵草。每座启用的药圃提高灵草产出10%，多座相加。',
     effects: { ratio: { herb: 0.1 } },
@@ -144,20 +149,24 @@ const CORE_BUILDINGS = [
     name: '茅屋',
     glyph: '茅',
     group: 'home',
-    cost: { qi: 80, wood: 20 },
+    // 造价与伐木场同档（当量约 450 气）：基础链每环之间留出 2~4 分钟攒料间隔，
+    // 避免"建完上一环、富余资源秒建下一环"（批量催生灵木时尤其明显）。
+    cost: { qi: 150, wood: 60 },
     priceRatio: 1.55,
     desc: '能住两名弟子。营造需要灵木与灵气，开局可先催生灵木备料。',
-    effects: { maxDisciples: 2, storage: { qi: 60 } },
-    needs: { building: { id: 'spiritField', count: 1 } },
+    // 存气 120：两座茅屋即有 740 灵气上限，炼气破境（需 700）不必先绕采矿链建谷仓——
+    // 参考猫国：粮仓便宜早得、上限不卡主线。谷仓仍是首座大仓（每座 +800）。
+    effects: { maxDisciples: 2, storage: { qi: 120 } },
+    needs: { building: { id: 'lumberYard', count: 1 } },
   },
   {
     id: 'logHouse',
     name: '木屋',
     glyph: '木',
     group: 'home',
-    cost: { wood: 300, stone: 20 },
+    cost: { wood: 300, rock: 60 },
     priceRatio: 1.55,
-    desc: '木梁榫卯相扣，灵石嵌入梁柱引气，冬暖夏凉，可容六名弟子。',
+    desc: '木梁榫卯相扣，矿石垒基固础，冬暖夏凉，可容六名弟子。',
     effects: { maxDisciples: 6, storage: { qi: 200, wood: 120 } },
     needs: { building: { id: 'hut', count: 1 }, upgrades: ['homePlanning'] },
   },
@@ -241,12 +250,17 @@ const CORE_BUILDINGS = [
     name: '谷仓',
     glyph: '仓',
     group: 'store',
-    cost: { wood: 180 },
-    priceRatio: 1.18,
+    // 首仓学猫国粮仓：便宜（基础仓容六成）、免研究、排在采矿场之前 —— 先存后采，
+    // 开山取料的 180 木也有仓容着落；
+    // 涨价率与料场同档：前 5~6 座便宜顺滑（筑基到金丹的灵气仓容主力），
+    // 之后单座迅速破千上万的木料——元婴起让位给玄库/洞天接力，不鼓励全程堆谷仓。
+    cost: { wood: 120 },
+    priceRatio: 1.35,
     desc: '囤灵气如囤粮，也堆得下木料与草药 —— 荒年不至于饿着弟子。',
     // 灵木也在这里囤：早期灵木产量几天内涨几十倍，只靠基础上限 200 会一直在「0 ↔ 满仓」之间跳
     effects: { storage: { qi: 800, wood: 300, herb: 120 } },
-    needs: { building: { id: 'spiritField', count: 1 } },
+    // 基础链第五环：藏经阁之后、采矿场之前（猫国粮仓同位，无需研究）。
+    needs: { building: { id: 'library', count: 1 } },
   },  {
     // 早期补充仓储：在库房开放前缓解原料与灵石仓容，每项增量低于库房。
     // 库房承担主要扩仓，料场的较高涨价率也避免长期替代库房。
@@ -271,7 +285,7 @@ const CORE_BUILDINGS = [
     desc: '石基铁箍木架，专存灵木、矿石、玄铁与灵草，另设少量石匣存放灵石 —— 丹药符箓另有去处。',
     // 库房只存**基础物资**：灵木 / 灵石 / 矿石 / 玄铁 / 灵草。
     // 原料保留挂机缓冲；灵石按矿井与点石成灵的实际流量分配，避免低速资源提前扩出数小时空仓。
-    // 涨价率略高于谷仓，批量扩容需与采集、加工扩产一起推进。
+    // 涨价率略高于采矿/伐木等产能建筑，批量扩容需与采集、加工扩产一起推进。
     // 灵气上限归「谷仓」，灵机归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
     effects: { storage: { wood: 1000, stone: 500, rock: 600, ore: 400, herb: 500 } },
     needs: { upgrades: ['quarryArt', 'earthArt'] },
@@ -363,7 +377,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.18,
     desc: '弟子在此研读、论道，把典籍中的道理化为灵机。每座灵机产出 +10%；典籍收存与灵机仓容由典籍库承担。',
     effects: { ratio: { insight: 0.1 } },
-    needs: { building: { id: 'spiritField', count: 1 } },
+    needs: { building: { id: 'hut', count: 1 } },
   },
   {
     id: 'scriptureArchive',
@@ -490,12 +504,11 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { wood: 100, rock: 150 },
     priceRatio: 1.3,
-    desc: '灵木搭棚、矿石垒台，采木采矿之后即可开张。匠人在此整料、修具并交流工艺，每座制作产出 +6%（可叠加）。',
-    // 它**只是加成建筑**：不锁任何配方或条目（数据里没有一条 needs 指向它），
-    // 效果也只留与制作有关的：制作产出 +6%/座；木板无需仓容。
-    // 无维护费，建成后即可持续提供制作增益。
+    desc: '灵木搭棚、矿石垒台，匠人在此整料、修具并交流工艺，每座制作产出 +6%（可叠加）。',
+    // 与「木作器械」同源开张：解板的是木作器械（见 sawPlank 注释），工坊随工艺立起——
+    // 它不锁任何配方或条目（数据里没有一条 needs 指向它），效果只留制作增益；木板无需仓容。
     effects: { craftBonus: 0.06 },
-    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }] },
+    needs: { buildings: [{ id: 'lumberYard', count: 1 }, { id: 'quarry', count: 1 }], upgrades: ['woodworking'] },
   },
 
   // ============ 香火 ============
@@ -741,23 +754,27 @@ export const BUILDINGS = [...CORE_BUILDINGS, ...HUNT_BUILDINGS]
 
 export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 
-/** 宗门列表按用途排列，同类建筑内按发展阶段排列；各筛选使用同一顺序。 */
+/** 宗门列表按用途排列，同类建筑内按实际露面顺序（needs + 造价峰值）排列：
+ * 同组新解锁项永远出现在本组已见项的末尾（从前往后填满），不会插到老条目上方；各筛选使用同一顺序。
+ * 例外一：谷仓（属仓储组）插在采矿场之前 —— 基础链第五环，「先存后采」的软顺序由列表位置表达。
+ * 例外二：药圃与聚灵大阵同档（都挂凿石要诀后），先后随研究路线而定，相邻两槽偶尔互插一次。 */
 const CORE_BUILDING_DISPLAY_ORDER = [
-  // 生产：基础采集、矿业、药圃与聚灵设施。
-  'spiritField', 'lumberYard', 'quarry', 'ironFurnace', 'spiritQuarry', 'herbGarden', 'gatheringArray', 'crystalArray',
+  // 生产：基础采集与采石在前；药圃、聚灵随后；矿业深加工（炼铁炉、灵石矿）解锁链经炼丹术，实际晚于药圃，排其后。
+  'spiritField', 'lumberYard', 'granary', 'quarry', 'herbGarden', 'gatheringArray', 'ironFurnace', 'spiritQuarry', 'crystalArray',
   // 居所与宜居。
   'hut', 'logHouse', 'mansion', 'caveDwelling',
   'livingCourt', 'communalHall', 'cleansingBath', 'quietGarden',
-  // 仓储：基础原料、建材、专藏、洞天。
-  'granary', 'materialYard', 'warehouse', 'depot', 'mysticVault', 'medicineVault', 'arcaneVault', 'grandStore', 'grotto',
+  // 仓储：基础原料、建材、专藏、洞天。法藏为金丹档（先露面），玄库、药藏为元婴档，按露面顺序排前。
+  'materialYard', 'warehouse', 'depot', 'arcaneVault', 'mysticVault', 'medicineVault', 'grandStore', 'grotto',
   // 修行：研读、典籍收存、讲经观星、静修历练。
   'library', 'scriptureArchive', 'academy', 'observatory', 'meditationPool', 'trialTower',
-  // 炼造：基础工坊与专业加工。
-  'workshop', 'alchemyRoom', 'pillFurnace', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'crystalBench', 'temperFurnace',
+  // 炼造：按露面顺序排 —— 炼丹房最先（探矿术挂其后）；丹鼎露面受造价材料（玄铁混灵土需《玄铁骨架》）压后，排在注灵台之后。
+  'alchemyRoom', 'workshop', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'pillFurnace', 'crystalBench', 'temperFurnace',
   // 香火后接猎杀模块，再进入阵道和奇观。
   'gate', 'incenseCauldron', 'ancestorHall',
   'mountainArray', 'spiritLockArray',
-  'splitArray', 'polarizeArray', 'annihilationFurnace', 'harvestPlatform', 'immortalArray', 'heavenTower', 'karmaPool',
+  // 奇观：通天塔（塔院图 139k）早于聚仙阵（仙灵聚合 218k）露面，按露面顺序排前。
+  'splitArray', 'polarizeArray', 'annihilationFurnace', 'harvestPlatform', 'heavenTower', 'immortalArray', 'karmaPool',
 ]
 
 /** 猎杀设施保持相邻，插在香火设施之后，与用途筛选顺序一致。 */

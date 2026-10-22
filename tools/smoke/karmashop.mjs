@@ -86,12 +86,13 @@ export function karmaShop({ ok, close, section }) {
     const plainCount = probe(plain)
     const cutCount = probe(s)
     ok('同样资源下折扣可多买建筑', cutCount > plainCount, plainCount + ' → ' + cutCount)
-    // 拆除按名义价退款：买入 68 灵气，退款仍按 80 的一半 = 40
+    // 拆除按名义价退款：买入打折、退款按名义价的一半，无套利
     s.resources.qi = E.money(240)
     s.resources.wood = E.money(1000)
     s.buildings.spiritField = { count: 1, on: true }
+    s.buildings.lumberYard = { count: 1, on: true } // 茅屋要一座伐木场（基础链第三环）
     E.recompute(s, d)
-    ok('满足聚灵阵前置后实际建造茅屋成功', E.buyBuilding(s, d, 'hut', 1) === 1)
+    ok('满足伐木场前置后实际建造茅屋成功', E.buyBuilding(s, d, 'hut', 1) === 1)
     const beforeSell = E.money(s.resources.qi)
     E.sellBuilding(s, d, 'hut', 1)
     ok('拆除按名义价退款（买入打折退款不打折，无套利）', s.resources.qi.minus(beforeSell).eq(full.qi.times('0.5')),

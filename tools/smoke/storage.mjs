@@ -177,7 +177,7 @@ export function purchaseReachability({ ok, section }) {
   }
 }
 
-export function storageAndRefinement({ ok, section }) {
+export function storageAndRefinement({ ok, close, section }) {
   section('分层仓储、点击与进阶祭炼')
   {
     const { state: s, derived: d } = newGame()
@@ -201,9 +201,9 @@ export function storageAndRefinement({ ok, section }) {
     E.tick(old, d, 1, { events: false })
     ok('旧档超额成品可正常消费', E.moneyEq(old.resources.nineTurnPill, 1007))
     s.buildings.spiritField = { count: 5, on: true }
-    ok('开局点击收益保留', E.moneyEq(E.clickGain(s, d), 5))
+    ok('五座聚灵阵点击收益按每秒基础产出线性叠加（4.0）', close(E.clickGain(s, d), 2.5 + 5 * E.BUILDING_MAP.spiritField.effects.prod.qi, 1e-9))
     s.buildings.spiritField.count = 45
-    ok('多聚灵阵点击仍增益但小于原线性收益', E.moneyGt(E.clickGain(s, d), 7.5) && E.moneyLt(E.clickGain(s, d), 25))
+    ok('多聚灵阵点击收益继续线性叠加（16）', close(E.clickGain(s, d), 2.5 + 45 * E.BUILDING_MAP.spiritField.effects.prod.qi, 1e-9))
     s.upgrades.flyingSword = true
     s.treasureLevels.flyingSword = 1
     ok('低层祭炼不要求尚未需要的进阶材料', E.moneyIsZero(E.refineCost(s, 'flyingSword').spiritArtifact))

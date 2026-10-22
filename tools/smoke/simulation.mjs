@@ -28,16 +28,18 @@ export function playerBot({ ok, section }) {
   {
     const { state: s, derived: d } = newGame()
     s.realm = 4
-    for (const [id, count] of Object.entries({ spiritField: 3, hut: 10, lumberYard: 2, granary: 10, quarry: 2, library: 3, logHouse: 8, herbGarden: 3, ironFurnace: 1, alchemyRoom: 2, scriptureArchive: 24, warehouse: 2, forge: 1, talismanHall: 1, gate: 1 })) s.buildings[id] = { count, on: true }
+    // 口传心授把典籍库仓容 ×1.4（每座 80 → 112）：21 座 = 200 + 21×112 = 2552，
+    // 仍低于阵基装配的 2600 灵机，多建一座（2664）即承接 —— 保持「研究超仓容先扩仓」的回归场景。
+    for (const [id, count] of Object.entries({ spiritField: 3, hut: 10, lumberYard: 2, granary: 10, quarry: 2, library: 3, logHouse: 8, herbGarden: 3, ironFurnace: 1, alchemyRoom: 2, scriptureArchive: 21, warehouse: 2, forge: 1, talismanHall: 1, gate: 1 })) s.buildings[id] = { count, on: true }
     for (const id of ['qiOrigin', 'homePlanning', 'herbStudy', 'alchemyArt', 'prospectStudy', 'oralTeaching', 'quarryArt', 'woodworking', 'earthArt', 'qiGazing', 'forgeArt', 'talismanArt', 'incenseVow', 'qiMeasure', 'qiLiquid', 'storeFrameArt', 'qiRune', 'shapeRune', 'conductionRune']) s.upgrades[id] = true
     E.recompute(s, d)
     for (const res of RESOURCES) s.resources[res.id] = d.max[res.id].isFinite() ? d.max[res.id] : E.money(UNCAPPED_CRAFTED_RESOURCES.has(res.id) ? 10000 : 0)
     const bot = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ arrayBase: 4 }), breakthrough: () => false })
     const archiveCost = E.buildingCost(s, 'scriptureArchive', 1)
     ok('回归夹具仍受灵机仓容与典籍库涨价限制', E.moneyLt(d.max.insight, UPGRADE_MAP.arrayAssembly.cost.insight) && archiveCost.cutStone > 20)
-    ok('扩仓计划保留超出当前建材仓容的典籍库目标', bot.prerequisites().buildings.get('scriptureArchive') === 25)
+    ok('扩仓计划保留超出当前建材仓容的典籍库目标', bot.prerequisites().buildings.get('scriptureArchive') === 22)
     bot.act()
-    ok('先扩灵机仓承接科研扩仓', E.countOf(s, 'scriptureArchive') > 24)
+    ok('先扩灵机仓承接科研扩仓', E.countOf(s, 'scriptureArchive') > 21)
     s.upgrades.arrayAssembly = true
     E.recompute(s, d)
     const afterAssembly = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({ insight: 12000 }), breakthrough: () => false })
@@ -157,7 +159,8 @@ export function longRunningStability({ ok, section }) {
     state.resources.ore = E.money(5000)
     state.resources.pill = E.money(500)
     state.resources.artifact = E.money(500)
-    E.buyBuilding(state, derived, 'spiritField', 5) // 先有聚灵阵，茅屋与藏经阁才立得住
+    E.buyBuilding(state, derived, 'spiritField', 5) // 先有聚灵阵，伐木场、茅屋与藏经阁才立得住
+    E.buyBuilding(state, derived, 'lumberYard', 1) // 茅屋要一座伐木场（基础链第三环）
     E.buyBuilding(state, derived, 'hut', 5)
     E.buyBuilding(state, derived, 'library', 2)
     E.recruitArrivals(state, derived, 200) // 等弟子自己来
