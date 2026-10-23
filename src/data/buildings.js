@@ -138,9 +138,8 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { crystal: 10, plank: 20, arrayBase: 4, ore: 500 },
     priceRatio: 1.4,
-    desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座运行时提高灵液、灵晶制作产出各15%，提供1单位凝聚工位容量与2单位额外冷却容量；缺料时按供应比例发挥效果。',
+    desc: '晶核稳定凝聚边界，减少凝液与结晶损耗。每座提高灵液、灵晶制作产出各15%，提供1单位凝聚工位容量与2单位额外冷却容量。',
     effects: { craftBonusByResource: { spiritLiquid: 0.15, crystal: 0.15 } },
-    upkeep: { qi: 1 },
     needs: { realm: 5, upgrades: ['crystalTheory', 'crystalCraft'] },
   },
 
@@ -461,7 +460,6 @@ const CORE_BUILDINGS = [
     desc: '三足鼎立、文武火候，灵草在这里变成丹药。',
     // 加工品无需仓容；扩建提高制作收益与加工容量。
     effects: { craftBonusByResource: { pill: 0.08, nineTurnPill: 0.08 }, ratio: { herb: 0.1 } },
-    upkeep: { wood: 0.25 }, // 丹炉要一直添柴
     needs: { upgrades: ['quarryArt', 'alchemyArt'] },
   },
   {
@@ -472,9 +470,8 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { ironMortar: 6, plank: 12, ore: 500, insight: 2000 },
     priceRatio: 1.28,
-    desc: '玄铁混灵土铸鼎、三才定位。每座运行时提高凝元丹与九转丹制作产出各12%；九转丹需建成丹鼎，凝元丹在炼丹房即可制作。',
+    desc: '玄铁混灵土铸鼎、三才定位。每座提高凝元丹与九转丹制作产出各12%；九转丹需建成丹鼎，凝元丹在炼丹房即可制作。',
     effects: { craftBonusByResource: { condensePill: 0.12, nineTurnPill: 0.12 } },
-    upkeep: { wood: 0.5 }, // 丹鼎火候更盛，耗柴更多
     needs: { upgrades: ['alchemyEssence'], building: { id: 'alchemyRoom', count: 1 } },
   },
   {
@@ -486,7 +483,6 @@ const CORE_BUILDINGS = [
     priceRatio: 1.25,
     desc: '风箱一响，玄铁就有了骨气。',
     effects: { craftBonusByResource: { artifact: 0.08, steel: 0.08, spiritArtifact: 0.08, spiritTreasure: 0.08 }, ratio: { ore: 0.1 } },
-    upkeep: { wood: 0.5 }, // 风箱炭火不熄
     needs: { upgrades: ['quarryArt', 'forgeArt'] },
   },
   {
@@ -498,7 +494,6 @@ const CORE_BUILDINGS = [
     priceRatio: 1.25,
     desc: '以灵纸与金属为载体，起稿、刻纹、注灵，制成符箓、灵符与阵法构件。',
     effects: { craftBonusByResource: { talisman: 0.08, spiritTalisman: 0.08 } },
-    upkeep: { wood: 0.2 }, // 抄符耗纸
     needs: { upgrades: ['quarryArt', 'talismanArt'] },
   },
   {
@@ -593,8 +588,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.6,
     desc: '塔尖直插云海，聚气存念并镇住灵气分子与正负灵子，兼有少量通用仓储。站在塔顶的人，看得见飞升的路。',
     effects: { ratio: { qi: 0.3, insight: 0.3, qiParticle: 0.15, yangParticle: 0.15, yinParticle: 0.15 }, storageAll: 25000, storage: { insight: 40000, qi: 150000, wood: 150000, stone: 150000, rock: 150000, ore: 150000, faith: 150000, qiParticle: 150000, yangParticle: 150000, yinParticle: 150000, qiEnergy: 100000, immortalForce: 40000 } },
-    upkeep: { wood: 10, ore: 3 }, // 通天塔维持不易
-    upkeepQi: 2, upkeepEnergy: 0.02, powerMult: 1.6, // 木材 / 玄铁修缮另计，仓储保留
+    upkeepQi: 2, upkeepEnergy: 0.02, powerMult: 1.6, // 仓储保留，产出乘区随供能缩放
 
     // 塔院图在 realm 9，境界标注与实际门槛对齐
     needs: { realm: 9, upgrades: ['towerPlan'] },
@@ -688,8 +682,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.7,
     desc: '池中养着一缕前世因果，转世与飞升时都能多带走几分。',
     effects: { ratio: { insight: 0.5, qiEnergy: 0.25 }, ascendBonus: 0.25 },
-    upkeep: { insight: 4 }, // 养一缕因果要耗灵机
-    upkeepQi: 1.5, upkeepEnergy: 0.015, powerMult: 1.6, // 基础仪式可用灵气，参悟维护另计
+    upkeepQi: 1.5, upkeepEnergy: 0.015, powerMult: 1.6, // 基础仪式可用灵气，主动收益随供能缩放
 
     needs: { realm: 8, upgrades: ['karmaConcord'] },
   },
@@ -705,7 +698,6 @@ const CORE_BUILDINGS = [
     priceRatio: 1.3,
     desc: '灵纹刻蚀成台，符箓、阵基与灵符的刻制更有准头。',
     effects: { craftBonusByResource: { talisman: 0.08, arrayBase: 0.08, spiritTalisman: 0.08 } },
-    upkeep: { qi: 0.5 },
     needs: { upgrades: ['etchTheory'] },
   },
   {
@@ -715,9 +707,8 @@ const CORE_BUILDINGS = [
     group: 'craft',
     cost: { stone: 500, spiritLiquid: 4, insight: 800 },
     priceRatio: 1.3,
-    desc: '以灵液维持注灵，每座满供时提高灵石与玄铁的持续产出各8%；灵石增益作用于矿工采出，不提高《点石成灵》的每份制作产量。缺料时按供应比例发挥效果。',
+    desc: '以灵液注灵养脉，每座提高灵石与玄铁的持续产出各8%；灵石增益作用于矿工采出，不提高《点石成灵》的每份制作产量。',
     effects: { ratio: { stone: 0.08, ore: 0.08 } },
-    upkeep: { spiritLiquid: 0.05 },
     needs: { upgrades: ['infuseTheory'] },
   },
   {
@@ -729,7 +720,6 @@ const CORE_BUILDINGS = [
     priceRatio: 1.3,
     desc: '稳析晶核、匀分灵液，凝液与结晶成色更齐。',
     effects: { craftBonusByResource: { spiritLiquid: 0.08, crystal: 0.08 } },
-    upkeep: { qi: 1 },
     needs: { upgrades: ['precipitateTheory'] },
   },
   {
@@ -741,7 +731,6 @@ const CORE_BUILDINGS = [
     priceRatio: 1.3,
     desc: '灵火回火去杂存精，法器与灵器的锻造成品率更高。',
     effects: { craftBonusByResource: { artifact: 0.08, spiritArtifact: 0.08 } },
-    upkeep: { ore: 0.6 },
     needs: { upgrades: ['temperTheory'] },
   },
 ]

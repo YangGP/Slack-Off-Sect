@@ -123,7 +123,11 @@ export function validateState(state, fresh) {
   result.buildings = Object.fromEntries(Object.entries(result.buildings)
     .filter(([id, entry]) => Object.hasOwn(BUILDING_MAP, id) && isRecord(entry))
     .map(([id, entry]) => {
-      const out = { count: Math.floor(safeNumber(entry.count)), on: entry.on !== false }
+      // 无运行成本（无物料维护且无持续供能）的建筑不允许停用：
+      // 旧档停用后若该建筑的维护费被移除（如加工链），会永久卡在停用且无启用按钮，载入时统一归一为启用。
+      const meta = BUILDING_MAP[id]
+      const hasCost = !!(meta.upkeep || meta.upkeepQi != null || meta.upkeepEnergy != null)
+      const out = { count: Math.floor(safeNumber(entry.count)), on: hasCost ? entry.on !== false : true }
       if (entry.power === 'energy') out.power = 'energy'
       return [id, out]
     }))
