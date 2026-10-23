@@ -43,7 +43,7 @@ export const REALMS = [
     mult: 2.6,
     desc: '元婴出窍，神游百里而肉身不动 —— 神识所及，已能分辨并驱使正负灵子。',
     // 金丹后新记录道札、凝聚灵液，避免只靠筑基时的丹药库存连续跨境。
-    cost: { insight: 12000, qi: 12000, pill: 360, stone: 2400, talisman: 160, daoNote: 120, spiritLiquid: 180 },
+    cost: { insight: 12000, qi: 12000, pill: 360, stone: 2400, talisman: 160, daoNote: 120, spiritLiquid: 180, crystal: 150 },
   },
   {
     name: '化神期',
@@ -51,7 +51,7 @@ export const REALMS = [
     desc: '神识与灵能合一：灵子之云、之波、之势尽收眼底，山门内外如观掌纹。',
     // 灵晶在元婴开放，先掌握凝聚产业再化神；三境使用同一组材料。
     // 4.3：灵机尾款压到元婴可达仓容内，缺口改由知识材料承接（道札→道论→阵图）。
-    cost: { insight: 10000, qi: 18000, spiritLiquid: 5400, crystal: 2100, artifact: 4800, arrayBase: 600, daoNote: 400, daoTreatise: 40 },
+    cost: { insight: 10000, qi: 18000, spiritLiquid: 5400, crystal: 2100, artifact: 4800, arrayBase: 600, daoNote: 400, daoTreatise: 40, qiParticle: 1200 },
   },
   {
     name: '炼虚期',
@@ -94,6 +94,7 @@ export const REALMS = [
       ascensionSeal: 9000,
       spiritTreasure: 360,
       crystalSilver: 1200,
+      immortalForce: 30000,
     },
   },
 ]

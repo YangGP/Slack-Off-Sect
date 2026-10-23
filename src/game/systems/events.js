@@ -124,7 +124,7 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     const gained = moneyMin(offered, room)
     rows.push({ res, lost, gained, overflow: offered.minus(gained) })
   }
-  const recruits = Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
+  const recruits = state.challenge?.active ? 0 : Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
   return { rows, recruits, required, affordable }
 }
 
@@ -160,7 +160,7 @@ export function settleEventOutcome(state, derived, spec, text, kind, source) {
       state.stats.recruits += outcome.recruits
       parts.push(`弟子 +${outcome.recruits}`)
       parts.push(state.disciples.members.slice(-outcome.recruits).map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、'))
-    } else if (spec.recruit) parts.push('居所已满，无法收徒')
+    } else if (spec.recruit) parts.push(state.challenge?.active ? '全员挑战期间不接收普通来客' : '居所已满，无法收徒')
     pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
 
   })

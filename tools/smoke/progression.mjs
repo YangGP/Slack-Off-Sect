@@ -235,7 +235,7 @@ export function karmaSoftCap({ ok, close, section }) {
     resetForAscension(state, 0)
     E.recompute(state, derived)
     ok('飞升结一颗道果', E.moneyEq(state.dao, 1), String(state.dao))
-    ok('道果提升全局产出（+5%/颗）', close(derived.daoMult, 1.05, 1e-9), '×' + E.moneyToNumber(derived.daoMult).toFixed(3))
+    ok('道果余额不再提升全局产出，首颗永久开启自动化', E.moneyEq(derived.daoMult, 1) && derived.daoAutomation)
 
     // 道果反哺下层：同一份「本世灵机」，有 1 颗道果时仙缘多 10%
     const probe = (dao) => {
@@ -249,7 +249,7 @@ export function karmaSoftCap({ ok, close, section }) {
     }
     const g0 = probe(0)
     const g1 = probe(1)
-    ok('道果让转世拿到的仙缘更多（+10%/颗）', E.moneyGt(g1, g0), g0 + ' → ' + g1)
+    ok('道果余额不再改变仙缘结算', E.moneyEq(g1, g0), g0 + ' → ' + g1)
 
     // 仙缘软上限：前 75% 不打折，之后渐近到 +200%
     ok('软上限：小数值不打折', close(E.softCap(1, 2), 1, 1e-9), String(E.softCap(1, 2)))

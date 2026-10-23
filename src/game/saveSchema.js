@@ -11,6 +11,7 @@ import { ZERO, moneyNonNegative } from '@/game/decimal'
 import { normalizeAnalytics } from '@/game/analyticsState'
 import { D7_RULESET, normalizeFaithProgression } from '@/data/faith'
 import { normalizeKarmaProgression } from '@/data/karmaShop'
+import { normalizeSamsara, normalizeWorlds, normalizeChallenge } from '@/data/samsara'
 
 /** 存档结构版本：v3 起金额字段以十进制字符串保存（v1/v2 为 JSON number）。 */
 export const SAVE_VERSION = 3
@@ -22,7 +23,7 @@ const CORE_SAVE_FIELDS = [
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'analytics', 'ui',
-  'ruleset', 'faithProgression', 'karmaProgression',
+  'ruleset', 'faithProgression', 'karmaProgression', 'samsara', 'worlds', 'challenge', 'invitations', 'invitationTimer', 'rebuild',
 ]
 export const SAVE_FIELDS = [...CORE_SAVE_FIELDS, ...moduleSaveKeys()]
 
@@ -62,7 +63,7 @@ export function assertSaveShape(data) {
   }
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
     'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
-    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', 'karmaProgression', 'legacyWarehouseCounts', ...moduleSaveKeys()]) {
+    'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', 'karmaProgression', 'samsara', 'worlds', 'challenge', 'rebuild', 'legacyWarehouseCounts', ...moduleSaveKeys()]) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
   for (const key of ['jobs']) {
@@ -78,7 +79,11 @@ export function assertSaveShape(data) {
     if (data.karmaProgression?.[key] != null && !isRecord(data.karmaProgression[key])) {
       throw new Error(`存档结构冲突：karmaProgression.${key}`)
     }
+    if (data.samsara?.[key] != null && !isRecord(data.samsara[key])) throw new Error(`存档结构冲突：samsara.${key}`)
   }
+  if (data.samsara?.version != null && data.samsara.version !== 1) throw new Error('轮回规则版本无法兼容')
+  if (data.samsara?.records != null && !Array.isArray(data.samsara.records)) throw new Error('存档结构冲突：samsara.records')
+  if (data.disciples?.cultivationVersion != null && ![0, 1].includes(data.disciples.cultivationVersion)) throw new Error('弟子培养规则版本无法兼容')
   // 防止损坏的人数导致读档生成海量个体；不影响已有成员的正常存取。
   if (data.disciples?.total > 100000) throw new Error('存档人数超出可恢复范围')
 }
@@ -102,6 +107,14 @@ export function validateState(state, fresh) {
   result.ruleset = D7_RULESET
   result.faithProgression = normalizeFaithProgression(result.faithProgression)
   result.karmaProgression = normalizeKarmaProgression(result.karmaProgression)
+  result.samsara = normalizeSamsara(result.samsara, result)
+  result.worlds = normalizeWorlds(result.worlds, result.disciples.members)
+  result.challenge = normalizeChallenge(result.challenge)
+  result.invitations = Math.floor(safeNumber(result.invitations, 3, 3))
+  result.invitationTimer = safeNumber(result.invitationTimer, 0, 21600)
+  const plan = isRecord(result.rebuild) ? result.rebuild : fresh.rebuild
+  result.rebuild = { active: plan.active === true, buildings: numericMap(plan.buildings, BUILDING_MAP, true),
+    upgrades: (Array.isArray(plan.upgrades) ? plan.upgrades : []).filter(id => Object.hasOwn(UPGRADE_MAP, id)), crafts: flags(plan.crafts, CRAFT_MAP) }
   // 兼容旧档模块字段：已注册模块统一启用
   const moduleFlags = sanitizeModuleFlags(state.settings?.modules)
   for (const key of ['createdAt', 'lastTickAt', 'lastSaveAt', 'nextEventAt']) {
@@ -129,6 +142,7 @@ export function validateState(state, fresh) {
       const hasCost = !!(meta.upkeep || meta.upkeepQi != null || meta.upkeepEnergy != null)
       const out = { count: Math.floor(safeNumber(entry.count)), on: hasCost ? entry.on !== false : true }
       if (entry.power === 'energy') out.power = 'energy'
+      if (meta.boost) out.boost = entry.boost === true
       return [id, out]
     }))
   result.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
@@ -156,6 +170,7 @@ export function validateState(state, fresh) {
     .map(buff => ({ id: buff.id, name: typeof buff.name === 'string' ? buff.name : buff.id,
       mult: buff.mult, target: buff.target || null, until: buff.until }))
   Object.assign(result, normalizeModuleSlices(result, fresh))
+  // 猎场旧在途任务先迁移；世界驻守占用在 state.normalizeState 的最后统一重建。
   if (!Object.hasOwn(EVENT_MAP, result.pendingChoice?.id)) result.pendingChoice = null
   // 妖兽威胁的预计损失是金额（灵草数量），按金额域清洗；其余字段是时间戳/标识。
   if (result.pendingChoice?.id === 'beastThreat') {

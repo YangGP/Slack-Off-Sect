@@ -65,6 +65,7 @@ export const DIPLOMACY_SECTS = [
   {
     // 秘银的炼虚前唯一稳定来源：定价偏高，只换不回，防止用基础资源套利。
     id: 'silverGorge',
+    realm: 6,
     name: '银溪谷',
     glyph: '银',
     desc: '谷中银脉丰而炉火弱，缺的是砌炉的灵石与锻炉的玄铁。愿以秘银换料。',
@@ -78,6 +79,7 @@ export const DIPLOMACY_SECTS = [
   {
     // 灵晶的少量补充渠道：定价刻意偏高且受信符限流，不能替代凝晶产线。
     id: 'starCliff',
+    realm: 4,
     name: '星崖观',
     glyph: '星',
     desc: '观星炼晶，晶核成色极稳，却少灵机推演与香火定纹。愿以灵晶换道札与香火。',

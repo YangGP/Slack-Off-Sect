@@ -91,8 +91,9 @@ const CORE_BUILDINGS = [
     cost: { wood: 400, cutStone: 63, ore: 80 },
     // 天然灵石由矿工采出，每座启用矿井叠加固定副产出，不放大矿石或玄铁。
     priceRatio: 1.55,
-    desc: '岩层里嵌着天然灵石。每座启用的矿井，让每名矿工额外采出 0.0015 灵石/秒，多座相加；无人采矿时不产出。',
+    desc: '岩层里嵌着天然灵石。每座矿井让每名矿工额外采出0.0015灵石/秒，多座相加；无人采矿时不产出。学会《注灵原理》后可开启注灵，每座每秒消耗0.1灵液（每小时360），满供时灵石采出翻倍；缺液只减少额外增产，关闭后恢复普通采矿。',
     effects: {},
+    boost: { id: 'spiritQuarryInfusion', upgrade: 'infuseTheory', job: 'miner', name: '灵石矿·灵液注灵', multiplier: 2, upkeep: { spiritLiquid: 0.1 } },
     needs: { upgrades: ['quarryArt', 'prospectStudy'], building: { id: 'ironFurnace', count: 1 } },
   },
   {
@@ -701,17 +702,6 @@ const CORE_BUILDINGS = [
     needs: { upgrades: ['etchTheory'] },
   },
   {
-    id: 'infusionAltar',
-    name: '注灵台',
-    glyph: '注',
-    group: 'craft',
-    cost: { stone: 500, spiritLiquid: 4, insight: 800 },
-    priceRatio: 1.3,
-    desc: '以灵液注灵养脉，每座提高灵石与玄铁的持续产出各8%；灵石增益作用于矿工采出，不提高《点石成灵》的每份制作产量。',
-    effects: { ratio: { stone: 0.08, ore: 0.08 } },
-    needs: { upgrades: ['infuseTheory'] },
-  },
-  {
     id: 'crystalBench',
     name: '析晶台',
     glyph: '析',
@@ -743,7 +733,10 @@ export const LEGACY_STORAGE_DELTA = {
   mysticVault: { wood: 5000, stone: 5000, rock: 5000, ore: 5000 },
 }
 
-export const BUILDINGS = [...CORE_BUILDINGS, ...HUNT_BUILDINGS]
+export const BUILDINGS = [...CORE_BUILDINGS, ...HUNT_BUILDINGS,
+  { id: 'heavenWorkshop', name: '天工坊', glyph: '工', group: 'craft', cost: { cutStone: 300, mithril: 20, arrayBase: 30 }, priceRatio: 1.35,
+    effects: {}, needs: { realm: 7, upgrades: ['annihilationArt'] }, desc: '合成天砖、界梁与界枢，准备万千世界建设。仙灵力取得前可先建设。' },
+]
 
 export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 
@@ -761,8 +754,8 @@ const CORE_BUILDING_DISPLAY_ORDER = [
   'materialYard', 'warehouse', 'depot', 'arcaneVault', 'mysticVault', 'medicineVault', 'grandStore', 'grotto',
   // 修行：研读、典籍收存、讲经观星、静修历练。
   'library', 'scriptureArchive', 'academy', 'observatory', 'meditationPool', 'trialTower',
-  // 炼造：按露面顺序排 —— 炼丹房最先（探矿术挂其后）；丹鼎露面受造价材料（玄铁混灵土需《玄铁骨架》）压后，排在注灵台之后。
-  'alchemyRoom', 'workshop', 'forge', 'talismanHall', 'etchTable', 'infusionAltar', 'pillFurnace', 'crystalBench', 'temperFurnace',
+  // 炼造：按露面顺序排 —— 炼丹房最先；丹鼎露面受玄铁混灵土等造价材料约束。
+  'alchemyRoom', 'workshop', 'forge', 'talismanHall', 'etchTable', 'pillFurnace', 'crystalBench', 'temperFurnace', 'heavenWorkshop',
   // 香火后接猎杀模块，再进入阵道和奇观。
   'gate', 'incenseCauldron', 'ancestorHall',
   'mountainArray', 'spiritLockArray',

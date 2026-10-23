@@ -5,7 +5,7 @@ import { recompute, canReuseEconomy } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
 import { prepareModules, runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
-import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
+import { discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
@@ -13,9 +13,14 @@ import { BUILDINGS } from '@/data/buildings'
 import { ALL_UPGRADES } from '@/data/upgrades'
 import { runAutoCraft, runAutoCondense, runAutoCraftTimers, runIndustrialCraftBatch, runAutoCondenseBatch } from './crafting'
 import { CALENDAR } from '@/data/calendar'
-import { recruitArrivals, autoAssignTalentJobs, autoBreakthroughStep, discipleBreakthroughPreview } from './disciples'
+import { recruitArrivals, autoAssignTalentJobs, discipleBreakthroughPreview } from './disciples'
 import { isLongOffline, offlineSegments, offlineSegmentCount, averageSeasonRatio, BUFF_BOUNDARY_EPS_MS } from './offlinePlan'
 import { MONEY_INFINITY, ZERO, moneyMax, moneyToRatio, requireFiniteMoney } from '../decimal'
+import { advanceDiscipleGrowth } from './disciples'
+import { SAMSARA, daoLevel, rememberDisciple } from '@/data/samsara'
+import { advanceWorlds, replenishChallenge, advanceRebuild } from './samsara'
+
+const energyDecay = state => Math.max(SAMSARA.qiDecayFloor, CONFIG.QI_ENERGY_DECAY * Math.pow(0.85, daoLevel(state, 'energyRetention')))
 
 export function checkAchievements(state, derived) {
   const newly = []
@@ -123,9 +128,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   const cap = dt > CONFIG.MAX_STEP_SECONDS ? CONFIG.MAX_STEP_SECONDS : dt
   const assignmentsChanged = autoAssignTalentJobs(state)
   if (!reuseEconomy || assignmentsChanged || !canReuseEconomy(state, derived, cap)) recompute(state, derived, cap)
-  for (const member of state.disciples.members) cultivateDisciple(member, cap, derived.trainingActive)
-  // 自动突破（§2.2.3）：仅在线结算——在线追赶与 ≤60 秒后台窗口走逐秒路径、照常触发；离线结算（opts.offline）不触发。
-  if (!offline && derived.autoDiscipleBreakthroughUnlocked) autoBreakthroughStep(state, derived)
+  advanceDiscipleGrowth(state, derived, cap)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
 
   // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。
@@ -177,6 +180,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   }
 
   trackPeak(state)
+  if (advanceWorlds(state, derived, cap)) recompute(state, derived, cap)
 
   // 1.2) 可选模块推进（猎杀任务归队会给资源并释放成员，立即重算派生数据）。
   //      离线同样推进；生态关联首轮关闭，不在此抽来袭。
@@ -187,7 +191,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   // 衰减系数只与时间有关，保留 Number，随后参与 Decimal 金额乘法。
   if ((state.resources.qiEnergy ?? ZERO).gt(0)) {
     const beforeDecay = state.resources.qiEnergy
-    const left = state.resources.qiEnergy.times(Math.pow(1 - CONFIG.QI_ENERGY_DECAY, cap))
+    const left = state.resources.qiEnergy.times(Math.pow(1 - energyDecay(state), cap))
     setResourceValue(state, "qiEnergy", left.lt(1e-9) ? ZERO : left, () => ({ source: 'systems/simulation.js:energy-decay',
       duration: cap, precision: 'exact', decayLoss: beforeDecay.minus(left.lt(1e-9) ? ZERO : left).toString() }))
   }
@@ -227,10 +231,13 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
       [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
         .find((job) => (jobs[job.id] || 0) > 0)?.id
     const index = state.disciples.members.findIndex(member => member.roleId === jobId && !member.onMission)
-    if (index >= 0) state.disciples.members.splice(index, 1)
-    recountDisciples(state.disciples)
-    pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')
-    recompute(state, derived)
+    if (index >= 0) {
+      rememberDisciple(state, state.disciples.members[index], '离山而去')
+      state.disciples.members.splice(index, 1)
+      recountDisciples(state.disciples)
+      pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')
+      recompute(state, derived)
+    }
   }
 
   // 4) 增益到期
@@ -268,6 +275,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   // 7) 弟子自动前来（有空房就来人，不用手动招募）
   if (!starving && derived.leaveChance === 0) recruitArrivals(state, derived, cap, { silent: offline })
   else state.arrivalTimer = 0
+  if (replenishChallenge(state, derived) || advanceRebuild(state, derived)) recompute(state, derived)
 
   // 8) 成就
   const counters = runtimeCounters(state)
@@ -325,7 +333,7 @@ function offlineSummary(state, before, disciplesBefore, cap, stats = null) {
     if (diff.gt(0.01)) gains[r.id] = diff
   }
   const summary = { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
-  // 离线不自动突破：修满待突破的人选汇总进摘要与纪事（§2.2.3），不依赖自动突破开关。
+  // 自动化关闭、缺料或受上限限制时，汇总仍修满待突破的人选。
   const readyToBreak = state.disciples.members.filter(member => discipleBreakthroughPreview(state, member).ready).length
   if (readyToBreak > 0) summary.readyToBreak = readyToBreak
   // 有界近似额外报告实际工作量，便于基准与回归断言「计算量没有换到内部循环」。
@@ -459,8 +467,8 @@ function approximateSegment(state, derived, segment, opts) {
     autoAssignTalentJobs(state)
     recompute(state, derived, dt)
 
-    // 3) 已有弟子按段批量累计修炼、停留与调息；修满停止，离线仍不自动突破。
-    for (const member of state.disciples.members) cultivateDisciple(member, dt, derived.trainingActive)
+    // 3) 按修满和调息边界推进培养；已开启自动突破遵守同一支付限制。
+    advanceDiscipleGrowth(state, derived, dt)
     if (settleExpiredThreat(state, derived)) recompute(state, derived, dt)
 
     // 4) 个人口粮按实际有效境界与减耗累计；断供时按口粮与维护共有的供给比例记账。
@@ -514,7 +522,7 @@ function approximateSegment(state, derived, segment, opts) {
     {
       const before = state.resources.qiEnergy ?? ZERO
       const net = (derived.rates.qiEnergy ?? ZERO).plus(derived.expense?.qiEnergy ?? ZERO)
-      const decay = clamp(CONFIG.QI_ENERGY_DECAY, 0, 1)
+      const decay = clamp(energyDecay(state), 0, 1)
       const remain = Math.pow(1 - decay, dt)
       const lambda = decay > 0 && decay < 1 ? -Math.log(1 - decay) : 0
       let next = before.times(remain).plus(lambda > 0
@@ -530,6 +538,7 @@ function approximateSegment(state, derived, segment, opts) {
       if (next.gt(0)) state.seen.qiEnergy = true
     }
     trackPeak(state)
+    if (advanceWorlds(state, derived, dt)) recompute(state, derived, dt)
 
     // 7) 可选模块的离线快进（猎杀按可完成趟数批量估算；无该钩子的模块不推进）。
     if (runModuleOfflineTicks(state, derived, dt, { startAt: startMs, endAt: opts.endAt, stats })) {
@@ -588,6 +597,7 @@ function approximateSegment(state, derived, segment, opts) {
     // 12) 弟子自动前来：沿用批量数量计算，新弟子只累计入门后的时间。
     if (!starving && derived.leaveChance === 0) recruitArrivals(state, derived, dt, { silent: true })
     else state.arrivalTimer = 0
+    if (replenishChallenge(state, derived) || advanceRebuild(state, derived)) recompute(state, derived, dt)
 
     // 13) 成就按段检查一次；离线不新增随机事件。
     const counters = runtimeCounters(state)
@@ -610,6 +620,7 @@ function batchRemoveDisciples(state, count) {
   const rank = member => !member.roleId || !jobs[member.roleId] ? 0 : member.roleId === 'farmer' ? 2 : 1
   pool.sort((a, b) => rank(a) - rank(b) || (jobs[b.roleId] || 0) - (jobs[a.roleId] || 0) || a.id - b.id)
   const removed = new Set(pool.slice(0, Math.min(count, pool.length)).map(member => member.id))
+  for (const member of state.disciples.members) if (removed.has(member.id)) rememberDisciple(state, member, '离山而去')
   state.disciples.members = state.disciples.members.filter(member => !removed.has(member.id))
   recountDisciples(state.disciples)
   return removed.size

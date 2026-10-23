@@ -10,6 +10,8 @@ import { clamp, pushLog, addResource, activeOf } from '@/game/systems/core'
 import { MONEY_INFINITY, ZERO, money, moneyAvailable, moneyFromSave, moneyMin, moneyNonNegative, moneyToCount } from '@/game/decimal'
 import { atLeast } from '@/game/numbers'
 import { gameNow } from '@/game/context'
+import { daoLevel, SAMSARA, rememberDisciple } from '@/data/samsara'
+import { recountDisciples } from '@/data/disciples'
 
 /**
  * 妖兽猎杀系统（首轮：山麓）。
@@ -67,6 +69,7 @@ export function createHuntingState() {
       autoIntervalSeconds: HUNT.AUTO_INTERVAL_DEFAULT,
       /** 当前间隔内已累计的秒数，始终保持在 [0, interval)。 */
       elapsedSeconds: 0,
+      useSupply: false,
     },
   }
 }
@@ -126,6 +129,7 @@ function sanitizeSettings(value) {
     selectedFieldId: fieldId,
     teamIds: [...new Set(teamIds)],
     autoRepeat: value?.autoRepeat === true,
+    useSupply: value?.useSupply === true,
     autoIntervalSeconds,
     elapsedSeconds: value?.autoRepeat === true ? elapsedSeconds : 0,
   }
@@ -141,7 +145,7 @@ function sanitizeMissions(value) {
     if (!field || mission.status !== 'active' || (!legacy && mission.formulaVersion !== 2)) continue
     // v1 只开放山麓；使用已知旧规则重建，不能信任存档自带的掉落数值。
     const baseDuration = legacy ? 120 : field.baseDuration
-    const baseYield = legacy ? { beastHide: 0.12, beastBone: 0.08 } : field.baseYield
+    const baseYield = legacy ? { beastHide: 0.12, beastBone: 0.08 } : { beastHide: 0.24, beastBone: 0.16 }
     if (!Number.isSafeInteger(mission.id) || mission.id <= 0 || mission.id >= Number.MAX_SAFE_INTEGER || String(mission.id) !== id) continue
     if (!Number.isFinite(mission.startedAt) || mission.startedAt < 0 ||
         !Number.isFinite(mission.actualDuration) || mission.actualDuration < 1 || mission.actualDuration > baseDuration ||
@@ -281,7 +285,7 @@ export function isHuntUnlocked(state, fieldId) {
   const field = HUNT_FIELD_MAP[fieldId]
   if (!field || !state.upgrades?.wildHunting) return false
   if (activeOf(state, 'huntingCamp') <= 0) return false
-  return state.realm >= field.entryRealm
+  return state.realm >= field.entryRealm && (!field.perk || daoLevel(state, field.perk) > 0)
 }
 
 /** 信符余额（金额）：库存按金额域读取，返回 Decimal 供后续比较与运算。 */
@@ -305,7 +309,7 @@ export function huntTeamMax(state) {
 
 /** 可选出征成员：即时猎杀不占用岗位，所有存在弟子都可被选。 */
 export function huntableMembers(state) {
-  return state.disciples?.members || []
+  return (state.disciples?.members || []).filter(m => !m.onMission && !(m.injury > 0))
 }
 
 /** 每名成员的战场快照与效率/成功率（公式见 BEAST-SYSTEM.md §4）。 */
@@ -320,7 +324,7 @@ export function evaluateTeam(state, derived, fieldId, teamIds) {
   const rows = []
   for (const id of teamIds || []) {
     const member = byId.get(id)
-    if (!member || seen.has(id) || member.realm < (field.minDiscipleRealm || 0)) continue
+    if (!member || member.onMission || member.injury > 0 || seen.has(id) || member.realm < (field.minDiscipleRealm || 0)) continue
     seen.add(id)
     const e = Math.min(member.realm, sect)
     const A = 2 ** clamp((e - field.recommendRealm) / 2, -2, 1)
@@ -395,6 +399,7 @@ export function canDepart(state, derived, fieldId, teamIds) {
   if (!state.upgrades?.wildHunting) return { ok: false, reason: '尚未掌握《山野猎法》' }
   if (activeOf(state, 'huntingCamp') <= 0) return { ok: false, reason: '需要启用中的执符堂' }
   if (state.realm < field.entryRealm) return { ok: false, reason: '宗门境界不足' }
+  if (field.perk && daoLevel(state, field.perk) < 1) return { ok: false, reason: '需在仙途商店解锁猎场资格' }
   const rows = evaluateTeam(state, derived, fieldId, teamIds ?? resolveHuntTeam(state, derived, fieldId))
   if (rows.length < HUNT.TEAM_MIN) return { ok: false, reason: '没有可出征的弟子' }
   if (rows.length > HUNT.TEAM_MAX) return { ok: false, reason: `每队最多 ${HUNT.TEAM_MAX} 人` }
@@ -514,6 +519,9 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
     const rows = []
     let successCount = 0
     let effectiveContribution = 0
+    const riskField = HUNT_FIELD_MAP[mission.fieldId]
+    const supplies = mission.formulaVersion === HUNT_SCHEMA_VERSION && hunting.settings.useSupply && money(state.resources.huntSupply || ZERO).gte(mission.snapshots.length)
+    if (supplies) setResourceValue(state, 'huntSupply', money(state.resources.huntSupply).minus(mission.snapshots.length), { source: 'hunting:supply' })
     for (const snap of mission.snapshots) {
       const success = huntRandom(hunting) < snap.p
       if (success) successCount++
@@ -521,6 +529,14 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
       const Z = success ? 1 : 0.2
       rows.push({ id: snap.id, name: snap.name, success })
       effectiveContribution += snap.A * (snap.y ?? 1) * Z
+      const member = state.disciples.members.find(m => m.id === snap.id)
+      if (member && mission.formulaVersion === HUNT_SCHEMA_VERSION) {
+        if (riskField.death && huntRandom(hunting) < riskField.death) {
+          rememberDisciple(state, member, '殒命·猎场')
+          state.disciples.members = state.disciples.members.filter(m => m.id !== member.id)
+          pushLog(state, `${member.name}在${riskField.name}猎杀中殒命。`, 'bad')
+        } else if (riskField.injury && huntRandom(hunting) < riskField.injury * (supplies ? 0.5 : 1)) member.injury = SAMSARA.injurySeconds
+      }
     }
     const gains = {}
     const remainders = {}
@@ -542,6 +558,7 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
     }
 
     hunting.statistics.completedMissions += 1
+    recountDisciples(state.disciples)
     hunting.statistics.successfulHunters += successCount
     hunting.statistics.failedHunters += rows.length - successCount
 
@@ -609,20 +626,10 @@ export function huntBatchGainEstimate(field, rows, derived, trips = 1) {
 }
 
 /**
- * 长离线的有界快进（有界近似，见 docs/ENGINEERING.md「离线结算」）。
- *
- * - 已有已付费任务按实际剩余时长推进：到期在**真实归队时刻**结算一次并释放成员，未到期只推进进度；
- *   结算时抑制 `settleMission` 的即时再出发，由本函数统一处理后续批次，剩余时长不会被吞掉。
- * - 之后的自动重复按「整趟数」一次估算，趟数同时受任务时长与信符存量封顶，
- *   奖励用当段快照的成功率期望代替逐趟抽签，不逐趟循环、不重复扣首趟费用；
- * - 最后不足一趟的时长落成**一次已扣费的活动任务**，不把批量趟数变成下次在线的待补算队列。
- *
- * 除「已有已付费的那一趟」外，所有批次与末趟都必须先通过 `canDepart` 的统一出征条件
- * （模块开关、研究、执符堂、境界、队伍、占用与信符），批量分支不能自己放宽资格。
- *
- * 与在线逐秒推进的差异是有意的：后续批次的随机序列与逐趟结果不同，
- * 但总奖励不超过「按规则可完成趟数」对应的期望上界，统计、兽材余量与成员占用保持自洽。
- * 批量批次不写 lastOutcome：它是单趟战报的结构，多趟汇总会与存档校验口径冲突。
+ * 长离线按可支付的自动周期批量估算，不生成在途任务或待补算欠账。
+ * 逐人用几何分布抽取本段首个伤亡事件，事件后本段不再派出该人；
+ * 收益按实际参与趟数的期望计算，可能比在线恢复后重返猎场更保守。
+ * 资格、信符和补给均实际校验并支付，死亡减免不生效。
  */
 export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
   return withResourceAction(state, { type: 'advanceOfflineHunt', id: state.hunting?.fieldId }, () => {
@@ -648,22 +655,44 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
     if (trips <= 0) return changed
 
     const rows = evaluateTeam(state, derived, fieldId, ids)
-    const estimate = huntBatchGainEstimate(field, rows, derived, trips)
-    for (const [res, y] of Object.entries(estimate.expected)) {
+    const suppliedTrips = settings.useSupply ? Math.min(trips, Math.floor(money(state.resources.huntSupply || ZERO).div(rows.length).toNumber())) : 0
+    const eventAt = p => p > 0 ? Math.floor(Math.log(1 - huntRandom(hunting)) / Math.log(1 - p)) + 1 : Infinity
+    const totals = {}
+    let actualTrips = 0, hunters = 0, expectedSuccess = 0, suppliesUsed = 0
+    for (const row of rows) {
+      const member = state.disciples.members.find(m => m.id === row.id)
+      // 每段每人最多处理首个伤亡事件；受伤后本段不再自动派出，避免离线凭空免伤。
+      const deathAt = eventAt(field.death || 0)
+      const injuredAt = eventAt((field.injury || 0) * (1 - 0.5 * suppliedTrips / trips))
+      const personalTrips = Math.min(trips, deathAt, injuredAt)
+      actualTrips = Math.max(actualTrips, personalTrips)
+      hunters += personalTrips
+      suppliesUsed += Math.min(personalTrips, suppliedTrips)
+      const estimate = huntBatchGainEstimate(field, [row], derived, personalTrips)
+      expectedSuccess += estimate.expectedSuccess
+      for (const [res, amount] of Object.entries(estimate.expected)) totals[res] = (totals[res] || ZERO).plus(amount)
+      if (deathAt <= trips && deathAt <= injuredAt) {
+        rememberDisciple(state, member, '殒命·猎场')
+        state.disciples.members = state.disciples.members.filter(m => m.id !== row.id)
+        pushLog(state, `${member.name}在${field.name}离线猎杀中殒命。`, 'bad')
+      } else if (injuredAt <= trips) member.injury = Math.max(0, SAMSARA.injurySeconds - (periods - injuredAt) * interval)
+    }
+    for (const [res, y] of Object.entries(totals)) {
       const sum = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)
       delete hunting.yieldRemainders[res]
       if (sum.gt(0)) addResource(state, res, sum, derived?.max?.[res] ?? MONEY_INFINITY)
     }
-    setResourceValue(state, "warrant", moneyAvailable(state.resources.warrant ?? ZERO, cost.times(trips)), { source: 'hunting/system.js:advanceOfflineHunt' })
-    const hunters = rows.length * trips
-    const successes = Math.max(0, Math.min(hunters, Math.round(estimate.expectedSuccess)))
-    hunting.statistics.departures += trips
-    hunting.statistics.completedMissions += trips
+    if (suppliesUsed > 0) setResourceValue(state, 'huntSupply', money(state.resources.huntSupply).minus(suppliesUsed), { source: 'hunting:offline-supply' })
+    setResourceValue(state, "warrant", moneyAvailable(state.resources.warrant ?? ZERO, cost.times(actualTrips)), { source: 'hunting/system.js:advanceOfflineHunt' })
+    const successes = Math.max(0, Math.min(hunters, Math.round(expectedSuccess)))
+    hunting.statistics.departures += actualTrips
+    hunting.statistics.completedMissions += actualTrips
     hunting.statistics.successfulHunters += successes
     hunting.statistics.failedHunters += hunters - successes
+    recountDisciples(state.disciples)
     const fieldState = hunting.fieldState[field.id] || {}
     fieldState.lastHuntAt = gameNow(state) + dt * 1000
-    fieldState.completedMissions = (fieldState.completedMissions || 0) + trips
+    fieldState.completedMissions = (fieldState.completedMissions || 0) + actualTrips
     fieldState.successfulHunters = (fieldState.successfulHunters || 0) + successes
     fieldState.failedHunters = (fieldState.failedHunters || 0) + hunters - successes
     hunting.fieldState[field.id] = fieldState

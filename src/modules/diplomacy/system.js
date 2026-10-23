@@ -32,6 +32,7 @@ export function createDiplomacyState() {
     schemaVersion: DIPLOMACY_SCHEMA_VERSION,
     randomSeed: 1,
     statistics: { trades: 0, fortunes: 0 },
+    settings: { auto: false, sectId: 'starCliff', elapsed: 0, warrantReserve: 100, batch: 1 },
   }
 }
 
@@ -44,6 +45,11 @@ export function normalizeDiplomacyState(raw, fresh = createDiplomacyState()) {
     trades: Number.isFinite(out.statistics?.trades) && out.statistics.trades >= 0 ? Math.floor(out.statistics.trades) : 0,
     fortunes: Number.isFinite(out.statistics?.fortunes) && out.statistics.fortunes >= 0 ? Math.floor(out.statistics.fortunes) : 0,
   }
+  const settings = out.settings || fresh.settings
+  out.settings = { auto: settings.auto === true, sectId: Object.hasOwn(DIPLOMACY_SECT_MAP, settings.sectId) ? settings.sectId : 'starCliff',
+    elapsed: Number.isFinite(settings.elapsed) ? Math.max(0, Math.min(60, settings.elapsed)) : 0,
+    warrantReserve: Number.isFinite(settings.warrantReserve) ? Math.max(0, Math.min(100000, settings.warrantReserve)) : 100,
+    batch: [1, 10, 100].includes(settings.batch) ? settings.batch : 1 }
   return out
 }
 
@@ -145,6 +151,7 @@ export function tradePreview(state, derived, sectId) {
   }
   return {
     sect,
+    unlocked: isDiplomacyUnlocked(state) && state.realm >= (sect.realm || 3),
     warrantCost: WARRANT_COST,
     warrant,
     warrantEnough: atLeast(warrant, WARRANT_COST),
@@ -165,6 +172,7 @@ export function tradeWithSect(state, derived, sectId) {
     const sect = DIPLOMACY_SECT_MAP[sectId]
     if (!sect) return { ok: false, reason: '未知宗门' }
     if (!isDiplomacyUnlocked(state)) return { ok: false, reason: '尚未与邻宗建立往来' }
+    if (state.realm < (sect.realm || 3)) return { ok: false, reason: '尚未达到该宗互市境界' }
     if (!atLeast(state.resources.warrant ?? ZERO, WARRANT_COST)) return { ok: false, reason: `信符不足 ${DIPLOMACY.WARRANT_COST}` }
     if (!canAfford(state, sect.pays)) return { ok: false, reason: '材料不足' }
     if (!hasRoomForGains(state, derived, sect.gains)) return { ok: false, reason: '仓储已满' }
@@ -229,7 +237,68 @@ export function tradeAvailable(state, derived) {
   if (!atLeast(state.resources.warrant ?? ZERO, WARRANT_COST)) return null
   return Object.keys(DIPLOMACY_SECT_MAP).find(id => {
     const sect = DIPLOMACY_SECT_MAP[id]
+    if (state.realm < (sect.realm || 3)) return false
     if (!canAfford(state, sect.pays)) return false
     return hasRoomForGains(state, derived, sect.gains)
   }) || null
+}
+
+/** 批量互市逐回使用既有原子结算，每次最多100回；材料与信符不足立即停。 */
+export function tradeBatch(state, derived, sectId, count = 1, automated = false) {
+  const sect = DIPLOMACY_SECT_MAP[sectId]
+  if (!sect || !isDiplomacyUnlocked(state)) return { ok: false, trades: 0 }
+  const limit = count === 'max' ? 100 : Math.max(1, Math.min(100, Math.floor(Number(count) || 1)))
+  let done = 0
+  const reserve = automated ? state.settings.craftReserves || {} : {}
+  for (let i = 0; i < limit; i++) {
+    if (automated && money(state.resources.warrant || ZERO).minus(DIPLOMACY.WARRANT_COST).lt(state.diplomacy.settings.warrantReserve)) break
+    if (automated && Object.entries(sect.pays).some(([r, n]) => money(state.resources[r] || ZERO).minus(n).lt(reserve[r] || ZERO))) break
+    const result = tradeWithSect(state, derived, sectId)
+    if (!result.ok) break
+    done++
+  }
+  return { ok: done > 0, trades: done }
+}
+
+/** 在线、有效离线共用60秒节拍；缺料丢弃本次机会，不保存交易欠账。 */
+export function advanceDiplomacy(state, derived, seconds, { approximate = false } = {}) {
+  const settings = state.diplomacy.settings
+  if (!settings.auto || !state.upgrades.tradeRoutes) return false
+  settings.elapsed += seconds
+  const periods = Math.floor(settings.elapsed / 60)
+  settings.elapsed %= 60
+  if (periods < 1) return false
+  if (approximate) return offlineAutoTrade(state, derived, settings.sectId, settings.batch * periods)
+  return tradeBatch(state, derived, settings.sectId, Math.min(100, settings.batch * periods), true).ok
+}
+
+/** 长离线合并支付与期望机缘，不按交易次数循环，也不人为截掉可支付的周期。 */
+function offlineAutoTrade(state, derived, sectId, requested) {
+  const sect = DIPLOMACY_SECT_MAP[sectId]
+  if (!sect || !isDiplomacyUnlocked(state) || state.realm < (sect.realm || 3)) return false
+  const settings = state.diplomacy.settings
+  let count = Math.min(requested, Math.floor(Math.max(0, money(state.resources.warrant || ZERO).minus(settings.warrantReserve).div(DIPLOMACY.WARRANT_COST).toNumber())))
+  for (const [res, n] of Object.entries(sect.pays)) {
+    const free = moneyMax(ZERO, money(state.resources[res] || ZERO).minus(state.settings.craftReserves?.[res] || ZERO))
+    count = Math.min(count, Math.floor(free.div(n).toNumber()))
+  }
+  let roomTrips = 0
+  for (const [res, n] of Object.entries(sect.gains)) {
+    const cap = capacityOf(derived, res)
+    roomTrips = Math.max(roomTrips, cap.isFinite() ? Math.ceil(moneyMax(ZERO, cap.minus(state.resources[res] || ZERO)).div(n).toNumber()) : requested)
+  }
+  count = Math.min(count, roomTrips)
+  if (!(count > 0)) return false
+  payCost(state, Object.fromEntries(Object.entries(sect.pays).map(([res, n]) => [res, money(n).times(count)])))
+  setResourceValue(state, 'warrant', money(state.resources.warrant).minus(WARRANT_COST.times(count)), { source: 'diplomacy:offline' })
+  for (const [res, n] of Object.entries(sect.gains)) addResource(state, res, money(n).times(count), capacityOf(derived, res))
+  const options = sect.fortune || [], chance = fortuneChance(state)
+  for (const option of options) {
+    for (const [res, amount] of Object.entries(fortuneOptionRewards(state, derived, option))) {
+      addResource(state, res, amount.times(count * chance / options.length), capacityOf(derived, res))
+    }
+  }
+  state.diplomacy.statistics.trades += count
+  state.diplomacy.statistics.fortunes += Math.round(count * chance)
+  return true
 }

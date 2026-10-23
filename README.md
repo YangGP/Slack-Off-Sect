@@ -2,7 +2,7 @@
 
 以宗门飞升为轮回，以弟子成长为长期目标。以先飞升带动后飞升，最终达成人人飞升的目标。
 
-**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.424 · 材料链扩充与小数结算**；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
+**在线试玩**：[摸鱼宗门](https://YangGP.github.io/Slack-Off-Sect/)。当前代码版本 **v0.425 · 轮回与弟子长线重构**（本地首版，整体平衡待校准，尚未发布）；页面右下角可查看更新日志，版本记录由 src/data/changelog.js 维护。
 
 ## 开发与检查
 
@@ -34,7 +34,7 @@ npm run clean        # 删除构建、测试与审计产物
 | [TABLES](docs/TABLES.md) | 从源码生成的全部条目、造价、前置与效果 |
 | [ROADMAP](docs/ROADMAP.md) | 尚未实施、待评估的方向及专题入口 |
 
-现行数值以源码和生成表为准；专题解释规则与兼容边界，后续工作在 ROADMAP 中维护。当前讨论中的[轮回与弟子长线重构](docs/REINCARNATION-REDESIGN.md)尚未实施。
+现行数值以源码和生成表为准；专题解释规则与兼容边界，后续工作在 ROADMAP 中维护。[轮回与弟子长线重构](docs/REINCARNATION-REDESIGN.md)首版已实施，整体节奏与培养平衡仍待校准。
 
 ## 目录与分析工具
 

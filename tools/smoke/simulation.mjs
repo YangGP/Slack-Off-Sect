@@ -104,14 +104,8 @@ export function playerBot({ ok, section }) {
     ok('机器人参悟出了东西', Object.keys(state.upgrades).length > 0, `${Object.keys(state.upgrades).length} 条`)
     ok('机器人盖起了房子', state.stats.buildingsBuilt > 0, `${state.stats.buildingsBuilt} 座`)
 
-    // 灵木的「用处」要平滑：早期不能被上限卡成 0 ↔ 满仓的锯齿，中期要有连续去处（工坊烧柴）
+    // 早期灵木不能长时间贴顶；工坊已取消烧柴维护，不再要求存在持续耗木建筑。
     {
-      const woodUpkeep = BUILDINGS.filter((b) => b.upkeep?.wood)
-      ok(
-        '灵木有连续去处（多座工坊以灵木为维护费）',
-        woodUpkeep.length >= 3,
-        woodUpkeep.map((b) => `${b.name} ${b.upkeep.wood}/s`).join('、'),
-      )
       ok('谷仓也囤灵木（早期给上限留出余量）', (BUILDING_MAP.granary.effects.storage?.wood || 0) > 0, `${BUILDING_MAP.granary.effects.storage?.wood}`)
 
       // 跑 30 分钟：灵木不该长时间贴顶（旧版前期上限只有 200，产量 3~4/秒，几十秒就灌满）

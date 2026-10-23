@@ -121,6 +121,10 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
 
 <template>
   <div class="faith-panel">
+    <div v-if="state.samsara.automation" class="box">
+      <div class="box-head">仙途开启</div>
+      <div class="box-body"><p class="small">以道心发愿，永久开放仙途商店道果区。</p><button class="btn" :disabled="state.samsara.shopOpen || !canAfford(state, { daoHeart: 1 })" @click="actions.samsara('openDaoShop')">{{ state.samsara.shopOpen ? '已永久开启' : '开启 · 道心1' }}</button></div>
+    </div>
     <div class="box faith-overview">
       <div class="box-head">香火修持</div>
       <div class="box-body">
@@ -249,12 +253,12 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
 .faith-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   min-width: 0;
 }
 .faith-balances {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 6px 0;
 }
@@ -263,15 +267,14 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line, #d8d0bd);
-  border-radius: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
 }
 .faith-balance .k { font-size: 12px; color: var(--dim, #777); }
 .faith-balance b { font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
 .faith-convert {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
   gap: 12px;
 }
 .faith-card { min-width: 0; }
@@ -290,9 +293,7 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
   min-width: 0;
 }
 .faith-panel :deep(.btn) { min-height: 32px; }
-.faith-panel :deep(.btn.primary) { min-height: 36px; }
 .faith-panel :deep(.btn:focus-visible) { outline: 2px solid #7a5c2e; outline-offset: 2px; }
-.faith-panel :deep(.btn:disabled) { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 420px) {
   .faith-convert { grid-template-columns: 1fr; }
 }

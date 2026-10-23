@@ -73,6 +73,6 @@ function apply(id) {
 .quantity-col { width: 20%; }
 .input-col { width: 25%; }
 .action-col { width: 10%; }
-th, td { padding: 6px; border-bottom: 1px solid var(--border, #444); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px; border-bottom: 1px solid var(--line-soft); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 input[type="number"] { width: 100%; min-width: 0; box-sizing: border-box; }
 </style>

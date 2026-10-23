@@ -256,8 +256,9 @@ export function resourceFlow(derived, resId) {
   const expenseItems = [
     ...(derived.expenseSources[resId] || []),
     ...(derived.autoCraftDrain?.[resId] || []),
+    ...(derived.worldFlow?.expenses?.[resId] || []),
   ]
-  const income = derived.rates[resId] ?? ZERO
+  const income = (derived.rates[resId] ?? ZERO).plus(derived.worldFlow?.rates?.[resId] || ZERO)
   // 减耗是正向抵扣项，先合并所有出项再取负，不能逐项截掉抵扣。
   const expense = moneyMax(ZERO, moneySum(expenseItems.map(item => item.value)).negated())
   return { income, expense, net: income.minus(expense), expenseItems }

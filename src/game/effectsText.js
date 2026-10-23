@@ -186,7 +186,9 @@ export function describeBuildingEffects(meta, state, derived) {
   const totalEffects = scaleEffectsForTotal(meta.effects, count, active * powerMult, !!meta.upkeep || hasPower)
   if (totalEffects?.storage) totalEffects.storage = effectiveBuildingStorage(state, meta.id)
   const unit = [...describeEffects(meta.effects), ...describeJobEffects(meta.id), ...describeProcessingEffects(meta.id)]
-  const total = [...describeEffects(totalEffects), ...describeJobEffects(meta.id, active, state.upgrades), ...describeProcessingEffects(meta.id, active, derived)]
+  const boostMult = meta.boost && entry?.boost === true && state.upgrades[meta.boost.upgrade]
+    ? 1 + (meta.boost.multiplier - 1) * (derived.buildingSupply?.[meta.boost.id] ?? 0) : 1
+  const total = [...describeEffects(totalEffects), ...describeJobEffects(meta.id, active, state.upgrades, boostMult), ...describeProcessingEffects(meta.id, active, derived)]
   return unit.map((row) => {
     const res = row.resource
     if (res && meta.effects?.prod?.[res] != null && row.label === `${resourceName(res)} 产出`) {
@@ -208,7 +210,7 @@ export function describeBuildingEffects(meta, state, derived) {
  *
  * count 用于「每座叠加」的副产出（如灵石矿让矿工产灵石）：传已启用数量即可得到合计值。
  */
-export function describeJobEffects(buildingId, count = 1, upgrades = null) {
+export function describeJobEffects(buildingId, count = 1, upgrades = null, boostMult = 1) {
   const out = []
   if (!buildingId) return out
   const push = (label, value, tone, resource) => out.push({ label, value, text: `${label} ${value}`.trim(), tone, ...(resource ? { resource } : {}) })
@@ -230,8 +232,8 @@ export function describeJobEffects(buildingId, count = 1, upgrades = null) {
     // 本建筑让该职位多加的副产出（灵石矿 → 矿工产灵石，可多座叠加）
     const sec = job.secondary
     if (sec && sec.building === buildingId) {
-      const base = sec.base * (sec.perBuilding ? count : 1)
-      push(`${job.name} 额外产出`, `${resourceName(sec.resource)} +${fmt(base)}/秒·人`, 'good', sec.resource)
+      const base = sec.base * (sec.perBuilding ? count : 1) * boostMult
+      push(`${job.name} 额外产出`, `${resourceName(sec.resource)} +${fmtAmount(base)}/秒·人`, 'good', sec.resource)
     }
   }
   return out

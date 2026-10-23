@@ -4,6 +4,7 @@ import { CONFIG } from '../src/data/config.js'
 import { EVENT_MAP } from '../src/data/events.js'
 import { trainDisciples } from './disciple-training.mjs'
 import { recruitArrivals } from '../src/game/systems/disciples.js'
+import { withGameContext } from '../src/game/context.js'
 import { cultivationRequired, cultivationRate, discipleFactor, discipleAnnualBaseUpkeep, discipleDismissalCost, DISCIPLE_DISMISSAL, DISCIPLE_TRAINING, DISCIPLE_AIDS, discipleTrainingCost, trainingBonus, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, rollSpiritualRoot, newDisciple, cultivateDisciple, sortDisciples } from '../src/data/disciples.js'
 
 export function runDiscipleChecks(E, ok, close) {
@@ -482,9 +483,9 @@ export function runDiscipleChecks(E, ok, close) {
   const offFee = E.discipleBreakthroughPreview(autoOffline, autoOffline.disciples.members[0]).cost
   for (const [id, amount] of Object.entries(offFee)) autoOffline.resources[id] = E.money(amount).times(2)
   E.recompute(autoOffline, autoOfflineD)
-  const offSummary = E.simulateOffline(autoOffline, autoOfflineD, 30)
-  ok('离线（含 60 秒内精确路径）不自动突破并汇总修满人数', autoOffline.disciples.members.every(member => member.realm === 0) &&
-    offSummary.readyToBreak === 2)
+  const offSummary = withGameContext(autoOffline, { random: () => 0 }, () => E.simulateOffline(autoOffline, autoOfflineD, 30))
+  ok('已开启的离线自动突破沿用材料与名单限制', autoOffline.disciples.members.every(member => member.realm === 1) &&
+    !(offSummary.readyToBreak > 0))
 
   const legacyAuto = normalizeState({ disciples: { total: 1, jobs: {}, rootSeed: 12345 } })
   ok('旧档自动突破默认关闭且口径为默认值', legacyAuto.settings.autoBreakthrough === false &&

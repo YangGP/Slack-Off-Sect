@@ -42,6 +42,8 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
     ...(state.disciples || {}),
     jobs: { ...fresh.disciples.jobs, ...((state.disciples && state.disciples.jobs) || {}) },
   }
+  // 缺标记必须进入旧年度线换算，不能被 fresh 的新版本默认值提前遮蔽。
+  merged.disciples.cultivationVersion = state.disciples?.cultivationVersion ?? 0
   // 采石工并入矿工，原有分配相加，人口总数保持不变。
   merged.disciples.jobs.miner = (merged.disciples.jobs.miner || 0) + (merged.disciples.jobs.stonecutter || 0)
   delete merged.disciples.jobs.stonecutter
@@ -215,6 +217,7 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   if (Array.isArray(merged.settings.quickCrafts)) merged.settings.quickCrafts = merged.settings.quickCrafts.map(id => id === 'condenseStone' ? 'infuseStone' : id)
   merged.settings.quickCrafts = normalizeQuickCrafts(merged.settings.quickCrafts)
   merged.ui = { ...fresh.ui, ...(state.ui || {}) }
+  retireInfusionAltar(merged)
   retireBeastTaming(merged, state)
   // 读档保留增益，由在线/离线时间轴处理到期。
   return merged
@@ -226,6 +229,24 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
  * 免得损坏的极端建筑数把读档卡死（正常存档的家园数远低于此）。
  */
 const REFUND_ITERATION_CAP = 4096
+
+/** 注灵台退役：先按原参考造价返还，再移除旧条目；重复读档不再补偿。 */
+function retireInfusionAltar(state) {
+  const entry = state.buildings.infusionAltar
+  const count = Number.isSafeInteger(entry?.count) && entry.count > 0 ? Math.min(entry.count, REFUND_ITERATION_CAP) : 0
+  if (count > 0) {
+    let scale = money(1), total = ZERO
+    for (let i = 0; i < count; i++) { total = total.plus(scale); scale = scale.times('1.3') }
+    for (const [res, unit] of Object.entries({ stone: 500, spiritLiquid: 4, insight: 800 })) {
+      state.resources[res] = nonNegativeMoney(state.resources[res]).plus(total.times(unit))
+      state.seen[res] = true
+      state.peak[res] = moneyMax(nonNegativeMoney(state.peak[res]), state.resources[res])
+    }
+    state.logSeq = Math.min(Number.MAX_SAFE_INTEGER, (Number.isSafeInteger(state.logSeq) ? state.logSeq : 0) + 1)
+    state.log.unshift({ id: state.logSeq, at: state.lastSaveAt, kind: 'info', text: '注灵台已移除，按原参考造价返还建造材料。学会《注灵原理》后，可在灵石矿旁手动开启灵液增产，默认关闭。' })
+  }
+  delete state.buildings.infusionAltar
+}
 
 function retireBeastTaming(merged, original) {
   const retired = original.beastRetirementVersion !== 1

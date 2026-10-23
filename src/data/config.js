@@ -13,7 +13,7 @@ export const CONFIG = {
   // 自动存档间隔
   AUTOSAVE_MS: 20000,
   // 单次离线收益最多结算多少小时（可被修真提升）
-  OFFLINE_CAP_HOURS: 8,
+  OFFLINE_CAP_HOURS: 12,
   // 每名弟子每秒消耗的灵气（4.8：提高基准，使供养成为更实质的持续压力）
   DISCIPLE_UPKEEP: 0.3,
   // 宗门规模成本：前20人不加费，此后每增加一人使全体口粮增加0.5%，额外最多100%。
@@ -51,10 +51,9 @@ export const CONFIG = {
   KARMA_STORAGE_CAP: 0.5,
   /** 4.3：每卷道论提供的临时灵机仓容；总加成不超过基础上限的 100%。 */
   DAOTREATISE_INSIGHT_CAP: 2000,
-  /** 每颗道果的全局产出加成（道果是飞升才给的更高一层货币） */
-  DAO_PRODUCTION_BONUS: 0.05,
-  /** 每颗道果对「转世/飞升时能拿多少仙缘」的加成 —— 上层反哺下层 */
-  DAO_KARMA_GAIN_BONUS: 0.1,
+  /** 道果改为消费型培养货币；保留兼容常量，不提供余额增益。 */
+  DAO_PRODUCTION_BONUS: 0,
+  DAO_KARMA_GAIN_BONUS: 0,
   /**
    * 首次主动转世的仙缘结算倍率（4.6）：只对“一次都没转世”时的转世结算生效。
    * 首转实测只有 21～22 点，累计首飞比直飞慢；提高这一次的结算，让首转真正值得。
@@ -115,6 +114,7 @@ export const CONFIG = {
   AUTO_CONDENSE_RATIO: 0.5,
   // 日志上限
   LOG_LIMIT: 220,
+  LOG_DISPLAY_LIMIT: 100, // 纪事展示与存档保留最近100条；运行时缓冲上限另计。
   // 建筑、研究、技艺、法宝与配方渐进露出：每种费用资源的峰值均须达到基础费用的这个比例。
   BUILDING_UNLOCK_RATIO: 0.3,
   // 维护费供给迭代的收敛上限（防死循环）；供给不足时按实际比例缩放

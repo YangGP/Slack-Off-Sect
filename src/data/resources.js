@@ -57,7 +57,7 @@ const CORE_RESOURCES = [
     color: '#8cd6e8',
     baseMax: 80,
     storageWeight: 0.04,
-    desc: '灵气凝成的液态精华，压在玉瓶里十年不散。凝晶与育仙草都以它为引。',
+    desc: '灵气凝成的液态精华，压在玉瓶里十年不散。凝晶、育仙草和灵石矿的可选注灵增产都以它为引。',
   },
   {
     id: 'crystal',
@@ -380,7 +380,7 @@ const CORE_RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '飞升时结下的道果。每颗永久提升全局产出，并让下次转世或飞升的仙缘更多。',
+    desc: '飞升时按弟子入宗后修为与同心度结算，用于仙途商店永久培养修持；余额不提高产出或仙缘。',
   },
   {
     id: 'karma',
@@ -406,7 +406,12 @@ for (const resource of CORE_RESOURCES) {
 }
 
 /** 核心资源 + 可选模块（猎杀）贡献的资源，按锚点插回保持原顺序 */
-export const RESOURCES = insertAfter(CORE_RESOURCES, HUNT_RESOURCE_ANCHOR, HUNT_RESOURCES)
+const WORLD_RESOURCES = [
+  ['heavenBrick', '天砖', '砖'], ['worldBeam', '界梁', '梁'], ['worldCore', '界枢', '枢'],
+  ['clearMarrow', '清灵髓', '髓'], ['worldSand', '镇界砂', '砂'],
+].map(([id, name, glyph]) => ({ id, name, glyph, color: '#a3cfc0', baseMax: Infinity, noProduction: true,
+  desc: id === 'clearMarrow' ? '洗髓小界所得，用于渡劫弟子个人终极准备。' : id === 'worldSand' ? '护道小界所得，用于全宗集体渡劫。' : '天工坊合成的世界建设材料，本世消耗、轮回清空。' }))
+export const RESOURCES = [...insertAfter(CORE_RESOURCES, HUNT_RESOURCE_ANCHOR, HUNT_RESOURCES), ...WORLD_RESOURCES]
 
 export const RESOURCE_MAP = Object.fromEntries(RESOURCES.map((r) => [r.id, r]))
 
@@ -426,6 +431,7 @@ export const RESOURCE_GROUPS = [
   { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
   { id: 'materials', name: '加工材料', resources: ['plank', 'cutStone', 'paper', 'steel', 'arrayBase', 'runeStone', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
   { id: 'crafted', name: '丹符器物', resources: ['pill', 'condensePill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
-  { id: 'hunting', name: '猎杀物资', resources: ['beastHide', 'beastBone'] },
+  { id: 'hunting', name: '猎杀物资', resources: ['beastHide', 'beastBone', 'innerCore', 'spiritCore', 'spiritFur', 'healingHerb', 'huntSupply'] },
+  { id: 'worlds', name: '世界仙材', resources: ['heavenBrick', 'worldBeam', 'worldCore', 'clearMarrow', 'worldSand'] },
   { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'immortalForce', 'ascensionSeal'] },
 ]

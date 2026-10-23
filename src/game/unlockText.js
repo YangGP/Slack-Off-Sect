@@ -75,6 +75,7 @@ for (const c of CRAFTS) {
 }
 
 const nameOf = (id) => BUILDING_MAP[id]?.name || UPGRADE_MAP[id]?.name || CRAFT_MAP[id]?.name || id
+const boostUnlocks = id => BUILDINGS.filter(b => b.boost?.upgrade === id).map(b => b.boost.name)
 
 /** 结构化输出：{ buildings:[名], upgrades:[名], crafts:[名] } */
 export function unlockGroups(id) {
@@ -94,6 +95,8 @@ export function unlockText(id) {
   if (g.buildings.length) parts.push('解锁建筑：' + g.buildings.join('、'))
   if (g.crafts.length) parts.push('开放配方：' + g.crafts.join('、'))
   if (g.upgrades.length) parts.push('开启参悟：' + g.upgrades.join('、'))
+  const boosts = boostUnlocks(id)
+  if (boosts.length) parts.push('开放增产开关：' + boosts.join('、'))
   return parts.join('；')
 }
 
@@ -104,6 +107,7 @@ export function unlockRows(id) {
   for (const value of g.buildings) rows.push({ label: '解锁建筑', value })
   for (const value of g.crafts) rows.push({ label: '开放配方', value })
   for (const value of g.upgrades) rows.push({ label: '开启参悟', value })
+  for (const value of boostUnlocks(id)) rows.push({ label: '开放增产开关', value })
   return rows
 }
 

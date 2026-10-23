@@ -70,6 +70,7 @@ export function karmaNeedsText(state, needs) {
 
 /** 仙缘页是否可进入：已有仙缘，或经历过任何一次转世/飞升。 */
 export function karmaShopUnlocked(state) {
+  if (state.samsara?.automation || state.samsara?.shopOpen) return true
   if (moneyMax(ZERO, state.karma ?? ZERO).gt(0)) return true
   if (KARMA_PERKS.some(meta => perkLevel(state, meta.id) > 0)) return true
   return rebirthCount(state) > 0

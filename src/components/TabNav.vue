@@ -15,7 +15,9 @@ const CORE_TABS = [
   { id: 'skills', name: '技艺' },
   { id: 'craft', name: '炼制' },
   { id: 'faith', name: '香火' },
-  { id: 'karma', name: '仙缘' },
+  { id: 'karma', name: '仙途商店' },
+  { id: 'worlds', name: '万千世界' },
+  { id: 'memorial', name: '门人名录' },
   { id: 'achievements', name: '成就' },
   { id: 'settings', name: '设置' },
 ]
@@ -31,6 +33,8 @@ const tabs = computed(() => {
   let list = [...CORE_TABS]
   if (!faithUnlocked(state)) list = list.filter(t => t.id !== 'faith')
   if (!karmaShopUnlocked(state)) list = list.filter(t => t.id !== 'karma')
+  if (state.realm < 7) list = list.filter(t => t.id !== 'worlds')
+  if (!(state.samsara.completions > 0)) list = list.filter(t => t.id !== 'memorial')
   for (const m of MODULE_UI) {
     if (!isModuleEnabled(state, m.id)) continue
     list = insertAfter(list, m.tab.after, [m.tab])
@@ -46,7 +50,7 @@ function badgeOf(id) {
 </script>
 
 <template>
-  <nav class="tabs">
+  <nav class="tabs" aria-label="主功能导航">
     <template v-for="(t, i) in tabs" :key="t.id">
       <span v-if="i" class="divider">|</span>
       <button class="tab" :class="{ active: t.id === 'debug' ? ui.debugPage : !(ui.debug && ui.debugPage) && state.ui.tab === t.id }" @click="actions.setTab(t.id)">

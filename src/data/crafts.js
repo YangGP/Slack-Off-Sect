@@ -343,7 +343,12 @@ const CORE_CRAFTS = [
 ]
 
 /** 核心配方 + 猎杀模块贡献的配方，按锚点插回保持原顺序 */
-export const CRAFTS = insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS)
+const WORLD_CRAFTS = [
+  { id: 'makeHeavenBrick', name: '合成天砖', out: 'heavenBrick', amount: 1, tier: 3, cost: { immortalForce: 50, cutStone: 20, crystal: 5 }, time: 60, needs: { realm: 8, building: { id: 'heavenWorkshop', count: 1 } }, desc: '仙灵力与灵晶稳定石材，制成世界地基。' },
+  { id: 'makeWorldBeam', name: '合成界梁', out: 'worldBeam', amount: 1, tier: 3, cost: { immortalForce: 20, arcaneGold: 5, arrayBase: 5 }, time: 90, needs: { realm: 8, building: { id: 'heavenWorkshop', count: 1 } }, desc: '以玄金阵基承载世界建筑。' },
+  { id: 'makeWorldCore', name: '合成界枢', out: 'worldCore', amount: 1, tier: 3, cost: { immortalForce: 100, spiritTreasure: 1, daoTreatise: 5 }, time: 120, needs: { realm: 9, building: { id: 'heavenWorkshop', count: 1 } }, desc: '灵宝与道论制成世界核心。' },
+]
+export const CRAFTS = [...insertAfter(CORE_CRAFTS, HUNT_CRAFT_ANCHOR, HUNT_CRAFTS), ...WORLD_CRAFTS]
 
 export const CRAFT_MAP = Object.fromEntries(CRAFTS.map((c) => [c.id, c]))
 

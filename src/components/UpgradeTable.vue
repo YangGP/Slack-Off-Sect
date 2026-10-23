@@ -369,4 +369,12 @@ function kindName(meta) {
 .upgrade-table td.right {
   white-space: nowrap;
 }
+.upgrade-table + .upgrade-table { margin-top: 18px; }
+.upgrade-table tbody td { border-bottom: 1px solid var(--line-soft); }
+@container content (max-width: 540px) {
+  .upgrade-name { width: 32%; }
+  .upgrade-action { width: 72px; }
+  .upgrade-table td.right { white-space: normal; }
+  .upgrade-table td.right .btn { margin: 2px 0; padding: 4px 7px; }
+}
 </style>

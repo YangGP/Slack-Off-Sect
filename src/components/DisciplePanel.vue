@@ -14,6 +14,7 @@ import { ZERO, money, moneyFinite, moneyIsPositive } from '@/game/decimal'
 import HabitabilityTip from './HabitabilityTip.vue'
 import HoverTip from './HoverTip.vue'
 import StableSelect from './StableSelect.vue'
+import { discipleSpeed, loyaltyEfficiency, loyaltyCost, FINAL_PREPARATION_COST } from '@/data/samsara'
 
 const idle = computed(() => idleDisciples(state))
 const waitNext = computed(() => nextArrivalIn(state, derived))
@@ -37,12 +38,33 @@ const rootFilter = ref('all')
 const talentFilter = ref('all')
 const trainFilter = ref('all')
 const focusFilter = ref('all')
+const search = ref('')
+const statusFilter = ref('all')
+const expandedMember = ref(null)
+function readyToBreakthrough(member) {
+  return member.realm < state.realm && member.realm < REALMS.length - 1 && !(member.cooldown > 0) && member.cultivation >= cultivationRequired(member.realm)
+}
+const statusOptions = [
+  { value: 'all', label: '全部', matches: () => true },
+  { value: 'ready', label: '待突破', matches: readyToBreakthrough },
+  { value: 'idle', label: '闲散', matches: member => !member.roleId && !member.onMission },
+  { value: 'injured', label: '受伤', matches: member => member.injury > 0 },
+  { value: 'mission', label: '驻守', matches: member => !!member.onMission },
+]
+const statusCounts = computed(() => Object.fromEntries(statusOptions.map(option => [option.value, state.disciples.members.filter(option.matches).length])))
+const advancedFilterCount = computed(() => [realmFilter, rootFilter, talentFilter, trainFilter, focusFilter].filter(filter => filter.value !== 'all').length)
+function resetFilters() {
+  search.value = ''; statusFilter.value = 'all'
+  for (const filter of [realmFilter, rootFilter, talentFilter, trainFilter, focusFilter]) filter.value = 'all'
+}
 const sortOrder = ref('arrival')
 const page = ref(0)
 const selected = ref([])
 const targetRole = ref('idle')
 const selectedSet = computed(() => new Set(selected.value))
 const filtered = computed(() => sortDisciples(state.disciples.members.filter(member =>
+  (!search.value.trim() || `${member.name} #${member.id}`.toLowerCase().includes(search.value.trim().toLowerCase())) &&
+  statusOptions.find(option => option.value === statusFilter.value).matches(member) &&
   (realmFilter.value === 'all' || member.realm === Number(realmFilter.value)) &&
   (rootFilter.value === 'all' || member.spiritualRoot === rootFilter.value) &&
   (trainFilter.value === 'all' || (trainFilter.value === 'mentored' ? member.mentored === true : (member.aidBonus || 0) > 0)) &&
@@ -51,9 +73,18 @@ const filtered = computed(() => sortDisciples(state.disciples.members.filter(mem
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 30)))
 const visible = computed(() => filtered.value.slice(Math.min(page.value, pages.value - 1) * 30, (Math.min(page.value, pages.value - 1) + 1) * 30))
 const selectedIds = computed(() => filtered.value.filter(member => selectedSet.value.has(member.id)).map(member => member.id))
+const selectedOnPage = computed(() => visible.value.filter(member => selectedSet.value.has(member.id)).length)
+const pageSelected = computed(() => visible.value.length > 0 && selectedOnPage.value === visible.value.length)
+function selectPage(checked = true) {
+  const ids = new Set(selectedIds.value)
+  for (const member of visible.value) {
+    if (checked) ids.add(member.id)
+    else ids.delete(member.id)
+  }
+  selected.value = [...ids]
+}
 const dismissal = computed(() => discipleDismissalPreview(state, selectedIds.value))
-const filteredReady = computed(() => filtered.value.filter(member => discipleBreakthroughPreview(state, member).ready).length)
-const canBatchBreakthrough = computed(() => filtered.value.some(member => selectedSet.value.has(member.id) && discipleBreakthroughPreview(state, member).ready))
+const canBatchBreakthrough = computed(() => filtered.value.some(member => selectedSet.value.has(member.id) && readyToBreakthrough(member)))
 const realmOptions = [{ value: 'all', label: '全部境界' }, ...REALMS.map((realm, index) => ({ value: String(index), label: realm.name }))]
 const rootOptions = [{ value: 'all', label: '全部灵根' }, ...SPIRITUAL_ROOTS.map(root => ({ value: root.id, label: root.name }))]
 const talentOptions = [{ value: 'all', label: '全部天赋' }, { value: 'none', label: '无天赋' },
@@ -80,7 +111,7 @@ const roleOptions = computed(previous => {
   // 派生数据每帧重新计算，但实际可用岗位未变时保留选项数组身份。
   return previous?.length === options.length && options.every((option, index) => option.value === previous[index].value) ? previous : options
 })
-watch([realmFilter, rootFilter, talentFilter, trainFilter, focusFilter], () => { page.value = 0; selected.value = [] })
+watch([search, statusFilter, realmFilter, rootFilter, talentFilter, trainFilter, focusFilter], () => { page.value = 0; selected.value = []; expandedMember.value = null })
 watch(sortOrder, () => { page.value = 0 })
 
 /** 每名弟子的平均口粮：金额 ÷ 人数（人数是有界控制量） */
@@ -99,7 +130,7 @@ const managementRows = computed(() => visible.value.map(member => {
   const dismissalCost = discipleDismissalCost(member, state.realm)
   return {
     ...member, factor: discipleFactor(member, state.realm),
-    jobFactor: discipleFactor(member, state.realm) * (1 + talentBonus(member, 'job')),
+    jobFactor: discipleFactor(member, state.realm) * (1 + talentBonus(member, 'job')) * loyaltyEfficiency(member),
     talentRows: (member.talents || []).map(entry => {
       const meta = TALENT_MAP[entry.id]
       return meta ? { ...meta, level: entry.level, description: talentDescription(meta, entry.level) } : null
@@ -108,7 +139,7 @@ const managementRows = computed(() => visible.value.map(member => {
     mentored: member.mentored === true,
     trainingCost: discipleTrainingCost(member, state.realm),
     aid: discipleAidPreview(state, member),
-    rate: cultivationRate(member, derived.trainingActive), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
+    rate: cultivationRate(member, derived.trainingActive && !member.onMission) * discipleSpeed(state), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
     // 口粮与逐出费用都是金额：先在 Decimal 域分摊，界面只负责格式化。
     upkeep: derived.discipleWeight > 0
       ? money(derived.upkeep).times(discipleFactor(member, state.realm)).div(derived.discipleWeight)
@@ -135,15 +166,11 @@ async function dismiss(ids) {
     managementPanel.value?.focus({ preventScroll: true })
   }
 }
-function memberTip(event, type) {
-  event.currentTarget.querySelector('.tip-trigger')?.dispatchEvent(new MouseEvent(type))
-}
-
 const rows = computed(() =>
   JOBS.map((job) => {
     const unlocked = derived.unlockedJobs.includes(job.id)
     const count = state.disciples.jobs[job.id] || 0
-    const outputs = jobOutputs(state, job).map(({ resource, base }) => {
+    const outputs = jobOutputs(state, job, derived.buildingSupply).map(({ resource, base }) => {
       const average = count > 0 ? (derived.discipleJobWeights?.[job.id] || count) / count : 1
       // 基础产出是数据层 Number，专业/弟子/来源因子逐层相乘；来源因子是 Decimal（随全局倍率增长），
       // 整条链都在金额域算，最后才交给 fmtRate 显示。
@@ -322,6 +349,8 @@ function commitJob(jobId, event) {
 
       </div>
       <div v-if="managementOpen" id="disciple-management" ref="managementPanel" class="management-surface" role="region" aria-label="弟子管理" tabindex="-1">
+      <details v-if="derived.discipleTrainingUnlocked || derived.autoDiscipleBreakthroughUnlocked" class="management-fold">
+        <summary>培养设置<span class="small dim">自动突破{{ derived.autoDiscipleBreakthroughUnlocked && state.settings.autoBreakthrough ? '已开启' : '未开启' }} · {{ state.disciples.members.filter(member => member.mentored).length }}人传功中</span></summary>
       <div v-if="derived.discipleTrainingUnlocked" class="training-budget" role="group" aria-label="培养预算">
         <HoverTip title="培养预算" description="灵气底线：传功不得使灵气跌破「口粮 × N 秒」的库存，不足整批暂停、不欠账，离线同样生效。保留宗门破境材料：批量突破不得动用宗门下一境破境材料，单人手动不受限，想动用请先关闭。传功上限：同时受传功的人数上限，开启时校验，不自动补位。">
           <span class="small dim">培养预算</span>
@@ -337,7 +366,7 @@ function commitJob(jobId, event) {
         </label>
       </div>
       <div v-if="derived.autoDiscipleBreakthroughUnlocked" class="training-budget" role="group" aria-label="自动突破">
-        <HoverTip title="自动突破" description="仅在线结算：修满、无调息且目标在宗门之内的弟子自动尝试突破；离线不突破，归来在离线摘要查看修满人数。重点名单优先；缺料、触宗门材料保留或灵气底线即跳过等待。失败沿用现行规则：全额扣料、损失20%本境修为并调息60秒。">
+        <HoverTip title="自动突破" description="开启后在线与有效离线均执行：修满、无调息且目标在宗门之内的弟子自动尝试突破。重点名单优先；缺料、触宗门材料保留或灵气底线即跳过等待，不主动消耗个人护道。失败扣料、损失20%本境修为并调息60秒。">
           <label class="sw"><input type="checkbox" aria-label="自动突破" :checked="state.settings.autoBreakthrough" @change="actions.setSetting('autoBreakthrough', $event.target.checked)" />自动突破</label>
         </HoverTip>
         <label class="training-field"><span class="small dim">人选</span>
@@ -352,7 +381,17 @@ function commitJob(jobId, event) {
           </select>
         </label>
       </div>
-      <div class="management-filters" role="group" aria-label="弟子筛选与排序">
+      </details>
+      <div class="management-toolbar">
+        <input v-model="search" class="member-search" type="search" aria-label="搜索弟子" placeholder="搜索姓名或编号" />
+        <StableSelect v-model="sortOrder" label="弟子排序" :options="sortOptions" />
+      </div>
+      <div class="management-status" role="group" aria-label="弟子状态筛选">
+        <button v-for="option in statusOptions" :key="option.value" class="btn" :aria-pressed="statusFilter === option.value" @click="statusFilter = option.value">{{ option.label }} <span class="dim">{{ statusCounts[option.value] }}</span></button>
+      </div>
+      <details class="management-fold">
+        <summary>更多筛选<span v-if="advancedFilterCount" class="small dim">已启用 {{ advancedFilterCount }} 项</span></summary>
+      <div class="management-filters" role="group" aria-label="弟子筛选">
         <label class="management-field"><span>境界</span>
           <StableSelect v-model="realmFilter" label="弟子境界筛选" :options="realmOptions" />
         </label>
@@ -368,19 +407,26 @@ function commitJob(jobId, event) {
         <label class="management-field"><span>重点</span>
           <StableSelect v-model="focusFilter" label="弟子重点筛选" :options="focusOptions" />
         </label>
-        <label class="management-field"><span>排序</span>
-          <StableSelect v-model="sortOrder" label="弟子排序" :options="sortOptions" />
-        </label>
       </div>
+      </details>
       <div class="management-selection">
-        <span class="small dim">当前 {{ filtered.length }} 人 · 待突破 {{ filteredReady }} 人</span>
+        <span class="small dim">找到 {{ filtered.length }} / {{ state.disciples.members.length }} 人<span v-if="selectedIds.length"> · 已选 {{ selectedIds.length }} 人</span></span>
         <div class="management-selection-actions">
-          <span class="small dim">已选 {{ selectedIds.length }} 人</span>
-          <button class="btn" :disabled="!filtered.length" @click="selected = filtered.map(member => member.id)">选择本分类</button>
+          <button v-if="search.trim() || statusFilter !== 'all' || advancedFilterCount" class="btn" @click="resetFilters">清除筛选</button>
+          <button class="btn" :disabled="!visible.length || pageSelected" @click="selectPage()">选择本页</button>
+          <button class="btn" :disabled="!filtered.length || selectedIds.length === filtered.length" @click="selected = filtered.map(member => member.id)">选择全部结果（{{ filtered.length }}）</button>
           <button class="btn" :disabled="!selectedIds.length" @click="selected = []">取消选择</button>
         </div>
       </div>
-      <div class="management-batch" role="group" aria-label="弟子批量操作">
+      <div v-if="selectedIds.length" class="management-batch" role="group" aria-label="弟子批量操作">
+        <div class="management-selection-actions">
+          <strong class="small">已选 {{ selectedIds.length }} 人</strong>
+          <button class="btn" :disabled="!canBatchBreakthrough" @click="actions.breakthroughDisciples(selectedIds)">所选弟子突破</button>
+          <button class="btn" @click="actions.setDiscipleFocus(selectedIds, true)">所选标为重点</button>
+          <button class="btn" @click="actions.setDiscipleFocus(selectedIds, false)">所选取消重点</button>
+        </div>
+        <details class="batch-more">
+          <summary>更多批量操作</summary>
         <div class="management-assignment">
           <label class="management-job"><span class="small dim">岗位</span>
             <StableSelect v-model="targetRole" label="所选弟子的岗位" :options="roleOptions" />
@@ -388,9 +434,7 @@ function commitJob(jobId, event) {
           <button class="btn" :disabled="!selectedIds.length" @click="assignSelected">分配所选弟子</button>
         </div>
         <div class="management-selection-actions">
-          <button class="btn" :disabled="!selectedIds.length" @click="actions.setDiscipleFocus(selectedIds, true)">所选标为重点</button>
-          <button class="btn" :disabled="!selectedIds.length" @click="actions.setDiscipleFocus(selectedIds, false)">所选取消重点</button>
-          <button class="btn" :disabled="!canBatchBreakthrough" @click="actions.breakthroughDisciples(selectedIds)">所选弟子突破</button>
+          <button v-if="state.realm >= 10" class="btn" :disabled="!selectedIds.length" @click="actions.samsara('finalPreparation', selectedIds)">所选终极准备 · 每人清灵髓30、灵宝2、九转丹5</button>
           <template v-if="derived.discipleTrainingUnlocked">
             <button class="btn" :disabled="!selectedIds.length" @click="actions.setMentored(selectedIds, true)">所选传功</button>
             <button class="btn" :disabled="!selectedIds.length" @click="actions.setMentored(selectedIds, false)">所选停功</button>
@@ -405,12 +449,16 @@ function commitJob(jobId, event) {
             </template>
           </HoverTip>
         </div>
+        </details>
+        <span class="small dim">仅操作当前筛选结果中的所选弟子；更改筛选会清空选择。</span>
       </div>
-      <div v-if="managementRows.length">
+      <div v-if="managementRows.length" class="member-list-region" role="region" aria-label="弟子管理列表">
         <table class="grid disciple-list">
-          <thead><tr><th>选择</th><th>弟子</th><th>灵根</th><th>岗位</th><th>状态</th><th>操作</th></tr></thead>
+          <colgroup><col style="width:32px"><col><col style="width:25%"><col style="width:132px"></colgroup>
+          <thead><tr><th><input type="checkbox" aria-label="选择本页弟子" :checked="pageSelected" :indeterminate="selectedOnPage > 0 && !pageSelected" @change="selectPage($event.target.checked)" /></th><th>弟子 / 分工</th><th>修炼状态</th><th>操作</th></tr></thead>
           <tbody>
-            <tr v-for="member in managementRows" :key="member.id" @mouseenter="memberTip($event, 'mouseenter')" @mouseleave="memberTip($event, 'mouseleave')">
+            <template v-for="member in managementRows" :key="member.id">
+            <tr class="member-row" :class="{ 'member-selected': selectedSet.has(member.id), 'member-expanded': expandedMember === member.id }">
               <td><input v-model="selected" type="checkbox" :value="member.id" :aria-label="`选择弟子${member.id}`" /></td>
               <td class="nowrap">
                 <HoverTip :width="360" anchor="tr">
@@ -450,36 +498,55 @@ function commitJob(jobId, event) {
                     </template>
                   </template>
                 </HoverTip>
-                <div class="small dim">{{ REALMS[member.realm].name }}</div>
-                <div class="small dim">{{ member.talentRows.length ? `${member.talentTier}级 · ${member.talentRows.length}条天赋` : '无天赋' }}</div>
+                <div class="small dim">{{ REALMS[member.realm].name }} · {{ member.root?.name || '三灵根' }} · {{ JOBS.find(job => job.id === member.roleId)?.name || '闲散' }}</div>
+                <div class="small dim">同心 {{ Math.round((member.loyalty ?? 1) * 100) }}%<span v-if="member.mentored"> · 传功中</span><span v-if="member.aid.pending"> · 已护道</span></div>
+                <div v-if="member.onMission" class="small dim">世界驻守中</div>
+                <div v-if="member.injury > 0" class="small bad">伤后恢复 {{ fmtTime(member.injury) }}</div>
               </td>
-              <td class="nowrap">{{ member.root?.name || '三灵根' }}</td>
-              <td>{{ JOBS.find(job => job.id === member.roleId)?.name || '闲散' }}</td>
-              <td class="nowrap">
+              <td class="member-growth">
                 <template v-if="cultivationRequired(member.realm)">
                   <span :class="member.preview.ready && !member.preview.affordable ? 'bad' : member.preview.ready ? 'good' : 'dim'">{{ member.preview.ready && !member.preview.affordable ? '材料不足' : member.preview.status }}</span>
-                  <div v-if="member.preview.status === '修炼中'" class="small dim">{{ Math.floor(Math.min(1, member.cultivation / member.preview.required) * 100) }}%</div>
+                  <div class="member-progress" role="progressbar" aria-label="本境修炼进度" :aria-valuenow="Math.floor(Math.min(1, member.cultivation / member.preview.required) * 100)" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${Math.min(1, member.cultivation / member.preview.required) * 100}%` }"></span></div>
+                  <div v-if="member.preview.status === '修炼中'" class="small dim">{{ Math.floor(Math.min(1, member.cultivation / member.preview.required) * 100) }}%<template v-if="member.rate > 0"> · {{ fmtTime((member.preview.required - member.cultivation) / member.rate) }}</template></div>
                   <div v-else-if="member.cooldown > 0" class="small dim">{{ fmtTime(member.cooldown) }}</div>
                 </template>
-                <span v-else>圆满</span>
+                <span v-else>{{ member.finalReady ? '终极准备就绪' : '圆满' }}</span>
               </td>
-              <td>
+              <td class="member-quick">
+                <div class="member-actions">
+                  <button v-if="member.realm < REALMS.length - 1" class="btn" :title="`${member.preview.status} · 成功率 ${fmt(member.preview.chance * 100)}% · ${costText(member.preview.cost)}`" :disabled="!member.preview.ready || !member.preview.affordable" @click="actions.breakthroughDisciples([member.id])">突破</button>
+                  <button class="btn" :aria-expanded="expandedMember === member.id" :aria-controls="`member-details-${member.id}`" :aria-label="`${expandedMember === member.id ? '收起' : '管理'}弟子${member.id}`" @click="expandedMember = expandedMember === member.id ? null : member.id">{{ expandedMember === member.id ? '收起' : '管理' }}</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="expandedMember === member.id" :id="`member-details-${member.id}`" class="member-details">
+              <td colspan="4">
+                <div class="small member-detail-summary">{{ member.name }} · #{{ member.id }} · 入宗后修为 {{ fmt(member.lifetimeCultivation || 0) }} · {{ member.talentRows.length ? `${member.talentTier}级 · ${member.talentRows.length}条天赋` : '无天赋' }}</div>
+                <div v-if="member.realm < REALMS.length - 1" class="small dim member-detail-summary">突破至{{ REALMS[member.preview.target].name }}：成功率 {{ fmt(member.preview.chance * 100) }}% · {{ costText(member.preview.cost) }}</div>
+                <div class="member-actions">
+                <button class="btn" :title="costText(loyaltyCost(member))" :disabled="member.loyalty >= 1 || !canAfford(state, loyaltyCost(member))" @click="actions.samsara('cultivateLoyalty', member.id)">同心培养</button>
+                <button class="btn" :disabled="member.realm > state.realm || member.cultivation >= cultivationRequired(member.realm) || !moneyIsPositive(state.resources.innerCore)" @click="actions.samsara('useCultivationItem', member.id, 'innerCore')">服内丹</button>
+                <button class="btn" :disabled="member.realm > state.realm || member.cultivation >= cultivationRequired(member.realm) || !moneyIsPositive(state.resources.spiritCore)" @click="actions.samsara('useCultivationItem', member.id, 'spiritCore')">服灵髓内丹</button>
+                <button v-if="member.realm >= 10" class="btn" :title="costText(FINAL_PREPARATION_COST)" :disabled="member.finalReady || !canAfford(state, FINAL_PREPARATION_COST)" @click="actions.samsara('finalPreparation', member.id)">{{ member.finalReady ? '终极准备就绪' : '终极准备' }}</button>
                 <button class="btn" :aria-pressed="member.focus" @click="actions.setDiscipleFocus([member.id], !member.focus)">{{ member.focus ? '取消重点' : '标为重点' }}</button>
                 <template v-if="derived.discipleTrainingUnlocked">
                   <button class="btn" :aria-pressed="member.mentored" @click="actions.setMentored([member.id], !member.mentored)">{{ member.mentored ? '停功' : '传功' }}</button>
-                  <button v-if="member.realm < REALMS.length - 1" class="btn" :disabled="member.aid.pending || !member.aid.affordable" @click="actions.applyDiscipleAid([member.id])">{{ member.aid.pending ? '已护道' : '护道' }}</button>
+                  <button v-if="member.realm < REALMS.length - 1" class="btn" :title="costText(member.aid.cost || {})" :disabled="member.aid.pending || !member.aid.affordable" @click="actions.applyDiscipleAid([member.id])">{{ member.aid.pending ? '已护道' : '护道' }}</button>
                 </template>
                 <template v-if="member.realm < REALMS.length - 1">
                   <button class="btn" :disabled="!member.preview.ready || !member.preview.affordable" @click="actions.breakthroughDisciples([member.id])">突破</button>
                 </template>
                 <span v-else>圆满</span>
-                <button class="btn danger" :aria-label="`逐出弟子${member.id}`" :disabled="!member.dismissalAffordable" @click="dismiss([member.id])">逐出</button>
+                <button class="btn danger" :aria-label="`逐出弟子${member.id}`" :disabled="state.challenge.active || member.onMission || !member.dismissalAffordable" @click="dismiss([member.id])">逐出</button>
+                </div>
+                <div v-if="member.loyalty < 1" class="small dim member-cost">同心培养：丹药 {{ loyaltyCost(member).pill }} · 香火 {{ loyaltyCost(member).faith }}</div>
               </td>
             </tr>
+            </template>
           </tbody>
         </table>
       </div>
-      <p v-else class="small dim">此分类暂无弟子。</p>
+      <p v-else class="small dim">{{ state.disciples.members.length ? '没有符合条件的弟子，可清除筛选后重试。' : '暂无弟子，招募后即可在此管理。' }}</p>
       <div v-if="pages > 1" class="btn-row">
         <button class="btn" :disabled="page <= 0" @click="page = Math.max(0, Math.min(page, pages - 1) - 1)">上一页</button>
         <span>{{ Math.min(page, pages - 1) + 1 }} / {{ pages }} 页，每页30人</span>
@@ -491,6 +558,37 @@ function commitJob(jobId, event) {
 </template>
 
 <style scoped>
+.job-grid .btn-row { min-width: 280px; flex-wrap: nowrap; gap: 4px; }
+.job-grid .btn-row .btn { padding: 4px 8px; }
+.job-grid .btn-row .qty { flex: 0 0 56px; }
+@container content (max-width: 620px) {
+  .job-grid thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .job-grid tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .job-grid td { min-width: 0; padding: 0; }
+  .job-grid td:first-child { font-weight: 600; }
+  .job-grid td:nth-child(2) { text-align: right; }
+  .job-grid td:nth-child(2)::before { content: '人数 '; color: var(--dim); }
+  .job-grid td:nth-child(3)::before { content: '每人 '; color: var(--dim); font-size: 12px; }
+  .job-grid td:nth-child(4)::before { content: '合计 '; color: var(--dim); font-size: 12px; }
+  .job-grid td:nth-child(4) { text-align: right; }
+  .job-grid td:nth-child(3) div, .job-grid td:nth-child(4) div { display: inline; }
+  .job-grid td:nth-child(3) div + div, .job-grid td:nth-child(4) div + div { display: block; }
+  .job-grid td.btn-row { grid-column: 1 / -1; min-width: 0; flex-wrap: wrap; padding-top: 5px; }
+}
+.disciple-list { table-layout: fixed; width: 100%; }
+.disciple-list td { vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+.disciple-list td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; }
+.member-row.member-selected { background: #fff9ef; }
+.member-row.member-expanded td { border-bottom: 0; }
+.member-growth { font-size: 13px; overflow-wrap: anywhere; }
+.member-progress { height: 4px; margin: 6px 0 3px; background: var(--line-soft); overflow: hidden; }
+.member-progress > span { display: block; height: 100%; background: var(--accent); }
+.member-details td { padding: 10px 12px 14px; background: #fcfbf8; white-space: normal; overflow-wrap: anywhere; }
+.member-detail-summary { margin-bottom: 8px; }
+.member-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.member-actions .btn { margin: 0; padding: 3px 7px; min-height: 27px; font-size: 12px; }
+.member-cost { margin-top: 6px; font-size: 12px; }
+.disciple-head { flex-wrap: wrap; }
 .auto-talent-jobs {
   margin-bottom: 8px;
 }
@@ -638,6 +736,19 @@ function commitJob(jobId, event) {
 .management-surface .btn-row {
   flex-wrap: wrap;
 }
+.management-fold { margin-bottom: 10px; border-bottom: 1px solid var(--line-soft); }
+.management-fold > summary, .batch-more > summary { cursor: pointer; padding: 6px 0; font-size: 13px; }
+.management-fold > summary > span { margin-left: 10px; }
+.management-fold[open] > summary { margin-bottom: 8px; }
+.management-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.management-toolbar .member-search { flex: 1 1 150px; min-width: 0; width: 100%; }
+.management-toolbar select { flex: 0 1 130px; min-width: 0; }
+.management-toolbar input, .management-toolbar select { height: 32px; margin: 0; }
+.management-status { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.management-status .btn { margin: 0; padding: 3px 9px; font-size: 13px; }
+.management-status .btn[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); background: #fff9ef; }
+.batch-more { width: 100%; }
+.batch-more .management-assignment { margin: 4px 0 8px; }
 .training-budget {
   display: flex;
   align-items: center;
@@ -693,10 +804,10 @@ function commitJob(jobId, event) {
   margin-bottom: 8px;
 }
 .management-batch {
-  padding: 8px 0;
+  padding: 10px;
   margin-bottom: 8px;
-  border-top: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
+  border: 1px solid var(--line-soft);
+  background: #fcfbf8;
 }
 .management-field select,
 .management-job select,
@@ -715,9 +826,18 @@ function commitJob(jobId, event) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
-  .management-field:last-child {
-    grid-column: 1 / -1;
-  }
+}
+@container content (max-width: 620px) {
+  .disciple-list colgroup { display: none; }
+  .disciple-list thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .disciple-list tbody, .disciple-list { display: block; }
+  .disciple-list .member-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(100px, 36%); gap: 5px 6px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .disciple-list .member-row td { min-width: 0; padding: 0; border: 0; }
+  .member-row > td:first-child { grid-row: 1 / 3; }
+  .member-quick { grid-column: 2 / -1; padding-top: 3px !important; }
+  .member-details, .member-details > td { display: block; }
+  .member-details > td { padding: 10px; }
+  .management-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 }
 .disciple-name {
   cursor: help;

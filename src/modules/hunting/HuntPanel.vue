@@ -14,6 +14,7 @@ import { hasHuntTalent, talentBonus, TALENT_MAP } from '@/data/talents'
 import { ZERO, moneyGt } from '@/game/decimal'
 import { fmtAmount, fmtFixed, fmtPercent, fmtTime } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
+import { daoLevel } from '@/data/samsara'
 
 const fieldId = computed(() => state.hunting.settings.selectedFieldId)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])
@@ -82,9 +83,12 @@ function setInterval(value) {
           <p>信符与外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚。</p>
           <p>兽材按整数入库，不足 1 的部分跨次累计。</p>
         </template></HoverTip>
-      <span class="hint">首轮只开放山麓；来袭关联尚未启用</span>
+      <span class="hint">普通三猎场随境界开放，高级三猎场需道果资格</span>
     </div>
     <div class="box-body">
+      <p class="small dim">猎场供宜居兽材、修为物品与培养消耗品；宗门成长资源由外交交换。受伤暂不能出征，但仍能自然修炼。</p>
+      <p class="small" :class="field.death ? 'bad' : 'dim'">{{ field.desc }}</p>
+      <label class="small"><input type="checkbox" :checked="settings.useSupply" @change="actions.huntSetSupply($event.target.checked)" /> 使用护身药散（每人一份，受伤率减半；死亡风险不变）</label>
       <div v-if="!unlocked" class="empty">
         尚未开放猎杀：需掌握《山野猎法》，并启用执符堂（筑基期）。
       </div>
@@ -96,10 +100,11 @@ function setInterval(value) {
             :key="f.id"
             class="btn"
             :class="{ primary: f.id === fieldId }"
-            :disabled="state.realm < f.entryRealm"
+            :disabled="state.realm < f.entryRealm || (f.perk && !daoLevel(state, f.perk))"
             @click="selectField(f.id)"
           >
             {{ f.name }}
+            <span v-if="f.perk && !daoLevel(state, f.perk)" class="dim">（需道果解锁）</span>
             <span class="dim">（宗门 ≥ {{ REALMS[f.entryRealm].name }}）</span>
           </button>
         </div>
@@ -217,11 +222,16 @@ function setInterval(value) {
 </template>
 
 <style scoped>
-.hunt-fields { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.hunt-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 8px 0; }
+.hunt-fields .btn { margin: 0; padding: 8px 10px; text-align: left; }
+.hunt-fields .btn > span { display: block; margin-top: 3px; font-size: 12px; }
 .hunt-autocfg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
 .hunt-members { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 0; }
 .hunt-member { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.hunt-member.on { color: #d8b98a; }
+.hunt-member.on { color: var(--link); }
 .hunt-bonus-results { display: grid; gap: 4px; padding: 8px 0; }
-.hunt-actions { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.hunt-actions { display: flex; align-items: center; gap: 10px; padding: 12px 0; flex-wrap: wrap; }
+@container content (max-width: 620px) {
+  .hunt-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

@@ -60,7 +60,7 @@ export function karmaShop({ ok, close, section }) {
     const { state: s, derived: d } = newGame()
     s.karmaProgression.levels.dreamBreath = 3
     E.recompute(s, d)
-    ok('梦息并入离线上限（8 + 6 小时）', d.offlineHours === 8 + 6, String(d.offlineHours))
+    ok('梦息并入基础离线上限', d.offlineHours === CONFIG.OFFLINE_CAP_HOURS + 6, String(d.offlineHours))
     // 因果田乘在仙缘仓储乘区之上：120 点 ×1.06 基础 × 1.15（3 级）
     s.karma = E.money(120)
     s.resources.karma = s.karma

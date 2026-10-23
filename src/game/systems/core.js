@@ -160,7 +160,7 @@ export function activeOf(state, id) {
 }
 
 /** 职位基础产出；副产出依赖启用中的专业设施。 */
-export function jobOutputs(state, job) {
+export function jobOutputs(state, job, buildingSupply = {}) {
   const outputs = !job.building || activeOf(state, job.building) > 0 ? [{ resource: job.resource, base: job.base }] : []
   for (const output of job.additionalOutputs || []) {
     // 副产出可以由建筑开启，也可以由研究节点开启（例如矿工的玄铁挂在「探矿术」上）
@@ -169,12 +169,20 @@ export function jobOutputs(state, job) {
   }
   if (job.secondary) {
     const active = activeOf(state, job.secondary.building)
+    const boost = BUILDING_MAP[job.secondary.building]?.boost
+    const boostMult = boost && buildingBoostAvailable(state, job.secondary.building) && state.buildings[job.secondary.building].boost === true
+      ? 1 + (boost.multiplier - 1) * (buildingSupply[boost.id] ?? 0) : 1
     if (active > 0) outputs.push({
       ...job.secondary,
-      base: job.secondary.base * (job.secondary.perBuilding ? active : 1),
+      base: money(job.secondary.base).times(job.secondary.perBuilding ? active : 1).times(boostMult),
     })
   }
   return outputs
+}
+
+export function buildingBoostAvailable(state, id) {
+  const boost = BUILDING_MAP[id]?.boost, entry = state.buildings[id]
+  return !!boost && entry?.count > 0 && entry.on !== false && state.upgrades[boost.upgrade] === true
 }
 
 export function idleDisciples(state) {
@@ -433,6 +441,7 @@ export function isManualRecruit(state, derived) {
 
 /** 距离下一名弟子的到来还有多少秒（没有空房、离开风险或已切到主动招募时返回 null） */
 export function nextArrivalIn(state, derived) {
+  if (state.challenge?.active) return null
   if (isManualRecruit(state, derived)) return null
   if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) return null
   return Math.max(0, arrivalInterval(derived) - (state.arrivalTimer || 0))

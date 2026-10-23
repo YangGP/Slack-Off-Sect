@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, realmProductionBase } from '@/data/realms'
 import { DAO_HEART_DIVISOR } from '@/data/faith'
@@ -12,6 +12,8 @@ import { resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 import CostRows from './CostRows.vue'
+import ChallengePanel from './ChallengePanel.vue'
+import { daoReward, daoContributions } from '@/data/samsara'
 
 const next = computed(() => REALMS[state.realm + 1] || null)
 const aids = reactive({})
@@ -52,6 +54,11 @@ const affordable = computed(() => (cost.value ? canAfford(state, cost.value) : f
 /** 结算的仙缘是金额（Decimal）：显示前统一走 fmtInt，不要直接拼对象 */
 const gain = computed(() => view.ascendGain.value)
 const gainText = computed(() => fmtAmount(gain.value))
+const daoGain = computed(() => daoReward(state))
+const contributionPage = ref(0)
+const contributions = computed(() => daoContributions(state))
+const contributionPages = computed(() => Math.max(1, Math.ceil(contributions.value.length / 30)))
+const contributionRows = computed(() => contributions.value.slice(Math.min(contributionPage.value, contributionPages.value - 1) * 30, (Math.min(contributionPage.value, contributionPages.value - 1) + 1) * 30))
 const canAscend = computed(() => view.canAscend.value)
 const reincarnateGain = computed(() => view.reincarnateGain.value)
 const reincarnateGainText = computed(() => fmtAmount(reincarnateGain.value))
@@ -70,7 +77,7 @@ const ascendRealmOk = computed(() => state.realm >= ASCEND_REALM_INDEX)
 
 function ascend() {
   const ok = window.confirm(
-    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gainText.value} 点仙缘与 1 颗道果（都是永久的）。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
+    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gainText.value} 点仙缘与 ${fmtAmount(daoGain.value)} 颗道果（都是永久的）。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
   )
   if (ok) actions.ascend()
 }
@@ -81,7 +88,7 @@ function ascend() {
  */
 function reincarnate() {
   const ok = window.confirm(
-    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGainText.value} 点仙缘。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。\n继续修到渡劫期可选择飞升，额外结一颗道果；仙缘仍按届时本世积累结算。确定转世吗？`,
+    `转世会重置资源、弟子、建筑、修真、技艺·法宝与境界（与飞升相同），并获得 ${reincarnateGainText.value} 点仙缘。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。\n继续修到渡劫期可选择飞升，按弟子入宗后修为与同心度结算道果；仙缘仍按届时本世积累结算。确定转世吗？`,
   )
   if (ok) actions.reincarnate()
 }
@@ -107,7 +114,7 @@ function reincarnate() {
         </template>
       </div>
 
-      <table class="grid">
+      <table class="grid realm-summary">
         <tbody>
           <tr>
             <td class="dim nowrap">当前境界</td>
@@ -156,22 +163,11 @@ function reincarnate() {
             <td class="dim nowrap">道果</td>
             <td class="num">
               <HoverTip :width="320">
-                <span>{{ fmtAmount(state.dao ?? ZERO) }} <span class="dim">×{{ derived.daoMult.toFixed(2) }}</span></span>
+                <span>{{ fmtAmount(state.dao ?? ZERO) }}</span>
                 <template #heading>道果<span class="tip-right">只有飞升给</span></template>
                 <template #tip>
                   <div class="tip-desc">飞升时结下的道果，比仙缘更高一层。</div>
-                  <div class="tip-section">效果</div>
-                  <div class="tip-row">
-                    <span class="k">全局产出</span>
-                    <span class="v good">每颗 +{{ fmtPercent(CONFIG.DAO_PRODUCTION_BONUS) }}</span>
-                  </div>
-                  <div class="tip-row">
-                    <span class="k">转世/飞升仙缘</span>
-                    <span class="v good">每颗 +{{ fmtPercent(CONFIG.DAO_KARMA_GAIN_BONUS) }}</span>
-                  </div>
-                  <div class="tip-row">
-                    <span class="k">当前</span><span class="v">×{{ derived.daoMult.toFixed(2) }}</span>
-                  </div>
+                  <p>用于仙途商店永久培养修持与高级猎场资格，余额不提高全局产出或仙缘结算。首颗道果的自动化永久保留。</p>
                 </template>
               </HoverTip>
             </td>
@@ -220,7 +216,7 @@ function reincarnate() {
             <tr @mouseenter="highlightCost(cost)" @mouseleave="clearHighlight()">
               <td class="dim nowrap">花费</td>
               <!-- 花费列只写需求值；明细按建筑（宗门）的排版放进悬停提示 -->
-              <td class="cost nowrap">
+              <td class="cost realm-cost">
                 <HoverTip :width="380">
                   <span class="cost-line">
                     <span
@@ -278,13 +274,13 @@ function reincarnate() {
   <div class="box">
     <div class="box-head">
       <HoverTip label="转世与飞升"><template #tip>
-          <p>两者清空范围相同，都结算仙缘；飞升额外结一颗道果。转世并非飞升门槛。</p>
+          <p>两者清空范围相同，都结算仙缘；飞升按弟子入宗后修为与同心度结算道果。转世并非飞升门槛。</p>
           <p>重置：资源、弟子、建筑、修真、技艺·法宝（含祭炼等级）、制作进度、境界。保留：成就、仙缘、道果、道心与永久修持、累计统计与宗门纪事。</p>
           <p>首颗道果解锁「道果统筹」：重修时即可自动炼制，可指定优先配方并保留材料。</p>
         </template></HoverTip>
     </div>
     <div class="box-body">
-      <table class="grid">
+      <table class="grid realm-summary">
         <tbody>
           <tr>
             <td class="dim nowrap">已转世</td>
@@ -293,9 +289,7 @@ function reincarnate() {
             <td class="num">{{ state.stats.ascensions }} 次</td>
             <td class="dim nowrap">永久加成</td>
             <td class="num">
-              仙缘 ×{{ derived.karmaMult.toFixed(2) }} <span class="dim">·</span> 道果 ×{{
-              derived.daoMult.toFixed(2)
-              }}
+              仙缘 ×{{ derived.karmaMult.toFixed(2) }} <span class="dim">·</span> 培养 ×{{ fmt(Math.pow(1.25, state.samsara.levels.cultivation || 0)) }}
               <span class="dim">·</span> 仓储 +{{ fmtPercent(karmaStorageBonus, 1) }}
             </td>
           </tr>
@@ -347,7 +341,7 @@ function reincarnate() {
       <div class="tip-row">
         <span class="k">可得</span>
         <!-- 同理：飞升要在渡劫期结算，境界没到就别报数字（越晚结算越值钱，写早了会误导） -->
-        <span v-if="ascendRealmOk" class="v good">{{ gainText }} 点仙缘 + 1 颗道果</span>
+        <span v-if="ascendRealmOk" class="v good">{{ gainText }} 点仙缘 + {{ fmtAmount(daoGain) }} 颗道果</span>
         <span v-else class="v dim">待修到 {{ REALMS[ASCEND_REALM_INDEX].name }} 结算</span>
       </div>
       <div style="padding: 8px 0">
@@ -355,4 +349,26 @@ function reincarnate() {
       </div>
     </div>
   </div>
+  <div v-if="ascendRealmOk" class="box">
+    <div class="box-head">本次弟子贡献</div>
+    <div class="box-body">
+      <p class="small">只结算当前在宗成员：入宗后终身修为 × 同心度；离册者仅留名录。基础1颗另计，下列为贡献奖励的比例分摊。</p>
+      <div class="contribution-list"><div v-for="m in contributionRows" :key="m.id" class="small contribution-row"><span>{{ m.name }}</span><span class="dim">{{ fmt(m.lifetime) }} × {{ fmtPercent(m.loyalty) }}</span><span class="num">{{ fmtAmount(m.share) }} 道果</span></div></div>
+      <div v-if="contributionPages > 1" class="btn-row"><button class="btn" :disabled="contributionPage <= 0" @click="contributionPage--">上一页</button><span>{{ Math.min(contributionPage, contributionPages - 1) + 1 }}/{{ contributionPages }}</span><button class="btn" :disabled="contributionPage >= contributionPages - 1" @click="contributionPage++">下一页</button></div>
+    </div>
+  </div>
+  <ChallengePanel />
 </template>
+<style scoped>
+.realm-cost .cost-line { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.realm-cost .cost-line > span { white-space: nowrap; }
+.realm-cost .cost-line > span + span::before { content: none; }
+.contribution-list { margin: 8px 0 12px; }
+.contribution-row { display: grid; grid-template-columns: 5em minmax(0, 1fr) auto; gap: 6px 12px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+.contribution-row > :last-child { text-align: right; }
+@container content (max-width: 620px) {
+  .realm-summary tr { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 0 12px; }
+  .realm-summary td { min-width: 0; }
+  .realm-summary td:nth-child(even) { text-align: right; }
+}
+</style>

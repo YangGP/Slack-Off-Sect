@@ -442,6 +442,13 @@ export const actions = {
     afterAction(`${E.BUILDING_MAP[id]?.name} ${on ? '启用' : '停用'}`, 'info')
     return on
   },
+  setBuildingBoost(id, enabled) {
+    const result = E.setBuildingBoost(state, derived, id, enabled)
+    if (result === null) return false
+    afterAction(`${E.BUILDING_MAP[id]?.name} ${enabled ? '开启' : '关闭'}灵液注灵`, 'info')
+    saveNow()
+    return true
+  },
   setBuildingPower(id, mode) {
     if (!E.setBuildingPower(state, derived, id, mode)) {
       toast('尚不能接入灵能：需先参悟《灵能输配》', 'bad')
@@ -662,17 +669,18 @@ export const actions = {
     }
     // 结算的仙缘是金额（Decimal）：跨世累加在 resetForAscension 里走 Decimal 加法。
     const gain = E.ascensionGain(state, derived)
+    const daoGain = E.daoReward(state)
     const name = REALMS[state.realm].name
     const snapshot = analytics.captureRun()
     analytics.beforeStateReplace()
     resetForAscension(state, gain)
     E.recompute(state, derived)
-    // 飞升实际额外结一颗道果，与 resetForAscension 的结算一致。
-    analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain: 1 })
+    // 采集实际贡献道果，与 resetForAscension 的结算一致。
+    analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain })
     analytics.beginRun('ascension', { debug: ui.debug === true })
     E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtAmount(gain)} 点转世重修`, 'realm')
     saveNow()
-    toast(`飞升成功，获得仙缘 ${fmtAmount(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
+    toast(`飞升成功，获得仙缘 ${fmtAmount(gain)} 与 ${fmtAmount(daoGain)} 颗道果`, 'good')
     return true
   },
   /** 事件弹窗：打开/关闭只影响会话 UI，不改变待决事件。 */
@@ -816,6 +824,49 @@ export const actions = {
   buyKarmaPerk(id) {
     if (!E.buyKarmaPerk(state, id)) return false
     E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  samsara(name, ...args) {
+    const allowed = { buyDaoPerk: E.buyDaoPerk, openDaoShop: E.openDaoShop, cultivateLoyalty: E.cultivateLoyalty,
+      useCultivationItem: E.useCultivationItem, buildWorld: E.buildWorld, stationDisciple: E.stationDisciple,
+      finalPreparation: E.finalPreparation, beginChallenge: E.beginChallenge, prepareChallenge: E.prepareChallenge, resolveChallenge: E.resolveChallenge }
+    if (!Object.hasOwn(allowed, name)) return false
+    const snapshot = name === 'resolveChallenge' ? analytics.captureRun() : null
+    const result = allowed[name](state, derived, ...args)
+    if (!result) { toast('条件未满足，请检查材料与当前状态', 'bad'); return false }
+    if (name === 'resolveChallenge' && result.success === false) {
+      resetEventPrompt()
+      analytics.endRun(snapshot, { reason: 'reincarnation', karmaGain: result.karma, daoGain: result.dao })
+      analytics.beginRun('reincarnation', { debug: ui.debug === true })
+    }
+    E.recompute(state, derived)
+    saveNow()
+    return result
+  },
+  setRebuild(value) {
+    state.rebuild.active = value === true
+    saveNow()
+  },
+  huntSetSupply(value) {
+    state.hunting.settings.useSupply = value === true
+    saveNow()
+  },
+  diplomacyBatch(sectId, count = 1) {
+    const result = E.tradeBatch(state, derived, sectId, count)
+    E.recompute(state, derived)
+    saveNow()
+    return result
+  },
+  diplomacyAuto(key, value) {
+    if (!state.upgrades.tradeRoutes) return false
+    const settings = state.diplomacy.settings
+    if (key === 'auto' && typeof value === 'boolean') settings.auto = value
+    else if (key === 'sectId' && typeof value === 'string') settings.sectId = value
+    else if (key === 'batch' && [1, 10, 100].includes(Number(value))) settings.batch = Number(value)
+    else if (key === 'warrantReserve' && Number.isFinite(Number(value))) settings.warrantReserve = Math.max(0, Math.min(100000, Number(value)))
+    else return false
+    settings.elapsed = 0
     saveNow()
     return true
   },
@@ -994,6 +1045,7 @@ export const actions = {
     return true
   },
   setTab(tab) {
+    if (tab === 'memorial' && !(state.samsara.completions > 0)) return
     if (tab === 'debug') {
       if (ui.debug) ui.debugPage = true
       return

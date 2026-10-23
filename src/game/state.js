@@ -13,6 +13,7 @@ import { KARMA_PERK_MAP, createKarmaProgression, normalizeKarmaProgression } fro
 import { decodeMoneyFields } from './moneyFields'
 import { createAnalyticsState } from './analyticsState'
 import { WAREHOUSE_CAPACITY_VERSION } from '@/data/buildings'
+import { createSamsara, createWorlds, createChallenge, daoReward, rememberDisciple } from '@/data/samsara'
 
 /**
  * 初始状态。所有可存档数据都在这里定义。
@@ -45,7 +46,13 @@ export function createInitialState(now = Date.now()) {
     peak: {},
 
     disciples: { total: 0, jobs, members: [], nextId: 1, rootSeed: now >>> 0,
-      talentSeed: (now ^ 0x6d2b79f5) >>> 0, recruitSeed: (now ^ 0x1b873593) >>> 0, talentVersion: 2 },
+      talentSeed: (now ^ 0x6d2b79f5) >>> 0, recruitSeed: (now ^ 0x1b873593) >>> 0, talentVersion: 2, cultivationVersion: 1, peak: 0 },
+    samsara: createSamsara(),
+    worlds: createWorlds(),
+    challenge: createChallenge(),
+    invitationTimer: 0,
+    invitations: 3,
+    rebuild: { buildings: {}, upgrades: [], crafts: {}, active: false },
     // 弟子自动前来的计时（秒）
     arrivalTimer: 0,
     // 历法：已经过去的天数（小数，1 天 = CALENDAR.DAY_SECONDS 秒）
@@ -143,7 +150,7 @@ export function createInitialState(now = Date.now()) {
       sectBreakthroughReserve: true,
       // 传功人数上限：setMentored 开关时校验，达上限拒绝本次开启，不自动补位
       mentorLimit: 20,
-      // 自动突破（需《因材施教》）：仅在线结算，离线不突破；旧档默认关闭
+      // 自动突破（需《因材施教》）：开启后有效离线也执行；旧档默认关闭。
       autoBreakthrough: false,
       // 目标境界上限：'sect' 不高于当前宗门境界（默认），或具体境界下标（止步该境）
       autoBreakthroughCap: 'sect',
@@ -190,6 +197,13 @@ export function normalizeState(state, { now = Date.now(), preferMembers = false 
   const normalized = validateState(migrateState(decoded, fresh, { preferMembers }), fresh)
   // 成员占用等属于运行时字段：读档后按活动任务重新标记（仅启用的模块）。
   rehydrateModules(normalized)
+  for (const entry of Object.values(normalized.worlds)) {
+    const member = normalized.disciples.members.find(m => m.id === entry.memberId)
+    if (member && entry.level > 0) { member.onMission = true; member.roleId = null }
+    else entry.memberId = null
+  }
+  for (const id of Object.keys(normalized.disciples.jobs)) normalized.disciples.jobs[id] = 0
+  for (const member of normalized.disciples.members) if (member.roleId) normalized.disciples.jobs[member.roleId]++
   return normalized
 }
 
@@ -214,9 +228,14 @@ export function resetForAscension(state, karmaGain) {
  * 保留 成就 / 统计 / 仙缘（karma）。
  * 区别只有两处：门槛（化神期 vs 渡劫期）与统计里记哪一个计数。
  */
-export function resetForRebirth(state, karmaGain, kind = 'ascension') {
+export function resetForRebirth(state, karmaGain, kind = 'ascension', options = {}) {
   return withResourceAction(state, { type: 'resetForRebirth', id: null }, () => {
     const fresh = createInitialState(gameNow(state))
+    const earnedDao = options.daoGain ?? (kind === 'ascension' ? daoReward(state) : ZERO)
+    const exitName = { ascension: '普通飞升', reincarnation: '转世', death: '宗门身死', challengeReset: '挑战重置', challengeFailure: '集体渡劫失败' }[kind] || '重修'
+    for (const member of state.disciples.members) rememberDisciple(state, member, member.collectiveAscended ? '飞升圆满' : '随世而去·' + exitName)
+    const savedPlan = { buildings: Object.fromEntries(Object.entries(state.buildings).map(([id, entry]) => [id, entry.count])),
+      upgrades: Object.keys(state.upgrades).filter(id => state.upgrades[id]), crafts: { ...state.autoCraft }, active: false }
     resetRuntimeCounters(state)
 
     // 道心与永久修持跨轮回保留；愿力、仪轨与一次性专属研究随本世清空。
@@ -242,6 +261,11 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
       }
     }
     state.disciples = { ...fresh.disciples, jobs: { ...fresh.disciples.jobs }, members: [] }
+    state.worlds = createWorlds()
+    state.challenge = createChallenge()
+    state.invitationTimer = 0
+    state.invitations = 3
+    state.rebuild = Object.keys(savedPlan.buildings).length ? savedPlan : { ...(state.rebuild || fresh.rebuild), active: false }
     state.arrivalTimer = 0
     state.buildings = {}
     state.starterHutBuilt = false
@@ -263,8 +287,9 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
     state.realm = 0
     // 仙缘与道果是金额：加法走 Decimal，不能原生相加（会把数值拼成字符串）。
     state.karma = moneyMax(ZERO, state.karma ?? ZERO).plus(karmaGain ?? ZERO)
-    // 飞升额外结一颗道果（更高一层货币）；转世不给 —— 见 docs/DESIGN.md §8.2 / §8.3
-    if (kind === 'ascension') state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(1)
+    // 飞升按在宗贡献结道果；挑战失败可结部分，普通转世与手动重置不给。
+    state.dao = moneyMax(ZERO, state.dao ?? ZERO).plus(earnedDao)
+    if (moneyIsPositive(earnedDao)) state.samsara.automation = true
     // 永久货币镜像立即同步：转世/飞升后 resources.karma/dao 必须与顶层字段同值，
     // 否则界面与下一次写档会出现两套金额（旧实现只在读档校验里补镜像）。
     setResourceValue(state, "karma", state.karma, { source: 'game/state.js:resetForRebirth' })
@@ -277,11 +302,12 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension') {
     state.affairs = { ...fresh.affairs }
     resetModules(state, fresh)
     state.stats.lifeInsight = ZERO
-    if (kind === 'reincarnation') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
+    if (kind === 'reincarnation' || kind === 'challengeReset' || kind === 'challengeFailure') state.stats.reincarnations = (state.stats.reincarnations || 0) + 1
     else if (kind === 'death') state.stats.breakthroughDeaths = (state.stats.breakthroughDeaths || 0) + 1
     else state.stats.ascensions += 1
     state.nextEventAt = gameNow(state) + 90000
     state.lastTickAt = gameNow(state)
+    state.ui.tab = 'karma'
     return state
 
   })

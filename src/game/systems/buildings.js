@@ -1,6 +1,6 @@
 import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { BUILDING_MAP } from '@/data/buildings'
-import { checkNeeds, buildingCost, canAfford, payCost, entryOf, pushLog, buildingCostFrom } from './core'
+import { checkNeeds, buildingCost, canAfford, payCost, entryOf, pushLog, buildingCostFrom, buildingBoostAvailable } from './core'
 import { recompute } from './economy'
 import { MONEY_INFINITY, ZERO, money, moneyMin } from '../decimal'
 
@@ -75,6 +75,17 @@ export function toggleBuilding(state, derived, id) {
     recompute(state, derived)
     return e.on
 
+  })
+}
+
+/** 独立的增产开关；关闭只停止耗料和额外增产，不停基础采矿。 */
+export function setBuildingBoost(state, derived, id, enabled) {
+  if (typeof enabled !== 'boolean' || !buildingBoostAvailable(state, id)) return null
+  return withResourceAction(state, { type: 'setBuildingBoost', id }, () => {
+    state.buildings[id].boost = enabled
+    pushLog(state, `${BUILDING_MAP[id].name} 已${enabled ? '开启灵液注灵' : '关闭灵液注灵，恢复普通采矿'}`, 'info')
+    recompute(state, derived)
+    return enabled
   })
 }
 

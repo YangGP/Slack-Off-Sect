@@ -137,3 +137,8 @@ function doReset() {
     </div>
   </div>
 </template>
+<style scoped>
+.box-body > label.sw { margin: 0 16px 10px 0; }
+.kv { padding: 6px 0; }
+.kv + .kv { border-top: 1px solid var(--line-soft); }
+</style>

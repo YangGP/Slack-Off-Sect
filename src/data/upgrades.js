@@ -921,10 +921,10 @@ const CORE_CULTIVATION = [
     name: '注灵原理',
     glyph: '注',
     cost: { insight: 8000, stone: 250, qi: 800, daoNote: 10 },
-    desc: '把灵气稳定注入器物与金属载体，注灵台由此立起；高阶注灵加工以它为前提。',
-    effectDesc: '因此注得进、留得住：御剑术可继续精研，并解锁注灵台。',
-    effects: { unlockBuildings: ['infusionAltar'] },
-    note: '解锁建筑：注灵台；作下游前置资格',
+    desc: '以灵液温养矿脉，掌握后可在灵石矿旁开启注灵，持续消耗灵液提高灵石采出量；高阶注灵加工也以它为前提。',
+    effectDesc: '开放灵石矿注灵开关：每座每秒消耗0.1灵液（每小时360），满供时矿工灵石采出翻倍；不增加矿石、玄铁或点石成灵的产量。',
+    effects: {},
+    note: '开放灵石矿灵液增产开关；作下游前置资格',
     needs: { upgrades: ['liquidArt'] },
   },
   {
@@ -951,6 +951,9 @@ const CORE_CULTIVATION = [
   },
 
   // ============ 宗门外交（可选模块贡献，见 modules/diplomacy） ============
+  { id: 'tradeRoutes', name: '互市定约', glyph: '贸', cost: { insight: 3000, daoNote: 20, stone: 300 },
+    needs: { realm: 4, upgrades: ['neighborContacts'] }, effects: { jobRatio: { huntPlanner: 0.25 } },
+    desc: '约定定期互市，执符使产出+25%，可开启每60秒自动交易并设置材料与信符保留。', note: '解锁自动互市', module: 'diplomacy' },
   // 与《主动招募》同型：规则型开关节点（effects.openTrade），不开建筑、不占仓容。
   {
     id: 'neighborContacts',

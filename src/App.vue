@@ -21,6 +21,8 @@ import CraftPanel from './components/CraftPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
 import FaithPanel from './components/FaithPanel.vue'
 import KarmaPanel from './components/KarmaPanel.vue'
+import WorldPanel from './components/WorldPanel.vue'
+import MemorialPanel from './components/MemorialPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugPanel from './components/DebugPanel.vue'
@@ -43,6 +45,8 @@ const corePanels = {
   craft: CraftPanel,
   faith: FaithPanel,
   karma: KarmaPanel,
+  worlds: WorldPanel,
+  memorial: MemorialPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,
@@ -51,6 +55,7 @@ const corePanels = {
 /** 核心面板 + 已启用模块贡献的面板（模块关闭时不挂载） */
 const panels = computed(() => {
   const out = { ...corePanels }
+  if (!(state.samsara.completions > 0)) delete out.memorial
   for (const m of MODULE_UI) {
     if (isModuleEnabled(state, m.id)) out[m.tab.id] = m.panel
   }

@@ -128,7 +128,8 @@ for (const g of BUILDING_GROUPS) {
     const up = b.upkeep
       ? '维护 ' + Object.entries(b.upkeep).map(([k, v]) => `${res(k)} −${v}/s`).join(' ')
       : ''
-    const eff = [effects(b.effects), up].filter((x) => x && x !== '—').join('；') || '—'
+    const boost = b.boost ? `可选注灵：需《${uname(b.boost.upgrade)}》，持续消耗${Object.entries(b.boost.upkeep).map(([k, v]) => `${res(k)} ${v}/秒·座`).join('、')}，满供时矿工灵石采出×${b.boost.multiplier}，默认关闭` : ''
+    const eff = [effects(b.effects), up, boost].filter((x) => x && x !== '—').join('；') || '—'
     emit(`| ${b.name} | \`${b.id}\` | ${cost(b.cost)} | ${b.priceRatio} | ${eff} | ${needs(b.needs)} |`)
   }
   emit('')

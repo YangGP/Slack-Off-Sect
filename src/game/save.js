@@ -5,6 +5,7 @@ import { cloneRuntime } from './clone'
 import { encodeMoneyFields } from './moneyFields'
 import { D7_RULESET } from '@/data/faith'
 import { STORAGE_PREFIX } from './deployment'
+import { CONFIG } from '@/data/config'
 
 export { SAVE_VERSION, D7_RULESET }
 
@@ -21,7 +22,7 @@ const browserStorage = () => typeof localStorage !== 'undefined' ? localStorage 
  */
 export function serialize(state, now = Date.now()) {
   const copy = Object.fromEntries(SAVE_FIELDS.filter(key => key in state).map(key => [key,
-    key === 'log' ? cloneRuntime(state.log.slice(0, 60)) : cloneRuntime(state[key]),
+    key === 'log' ? cloneRuntime(state.log.slice(0, CONFIG.LOG_DISPLAY_LIMIT)) : cloneRuntime(state[key]),
   ]))
   copy.lastSaveAt = now
   copy.version = SAVE_VERSION

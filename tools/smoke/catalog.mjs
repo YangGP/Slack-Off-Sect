@@ -10,6 +10,7 @@ import { CRAFTS } from '../../src/data/crafts.js'
 import { ACHIEVEMENTS } from '../../src/data/achievements.js'
 import { EVENTS } from '../../src/data/events.js'
 import { REALMS } from '../../src/data/realms.js'
+import { WORLD_DEFS } from '../../src/data/samsara.js'
 import { newGame } from './fixtures.mjs'
 
 export function dataIntegrity({ ok, section }) {
@@ -162,6 +163,7 @@ export function dataIntegrity({ ok, section }) {
       'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
       // 土木工艺：专业制作增益（营造 / 石作成规，见 CRAFT-PROGRESSION.md#材料研究与兼容）
       'masonryArt', 'stoneWorks',
+      'tradeRoutes', // 定期互市制度同时改善共享执符岗位。
     ]
     const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
     ok(
@@ -259,6 +261,12 @@ export function resourceSourcesAndSinks({ ok, section }) {
       for (const k of Object.keys(f.advancedYield || {})) sourced.add(k)
     }
     sunk.add('warrant')
+    // 世界驻守与个人消费通过系统动作结算，不是岗位或普通配方。
+    for (const world of WORLD_DEFS) {
+      sourced.add(world.out)
+      for (const res of Object.keys(world.cost)) sunk.add(res)
+    }
+    for (const res of ['innerCore', 'spiritCore', 'huntSupply', 'clearMarrow', 'worldSand', 'heavenBrick']) sunk.add(res)
 
     const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !exchange.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
     const noSink = RESOURCES.filter(

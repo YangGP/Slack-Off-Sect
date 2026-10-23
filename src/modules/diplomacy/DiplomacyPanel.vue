@@ -55,11 +55,18 @@ function trade(sectId) {
         尚未与邻宗建立往来：需参悟《邻宗往来》，且宗门达到{{ REALMS[DIPLOMACY.MIN_REALM].name }}。
       </div>
       <template v-else>
+        <div v-if="state.upgrades.tradeRoutes" class="small diplomacy-auto">
+          <label><input type="checkbox" :checked="state.diplomacy.settings.auto" @change="actions.diplomacyAuto('auto', $event.target.checked)" /> 自动互市（每60秒）</label>
+          <select :value="state.diplomacy.settings.sectId" aria-label="自动互市宗门" @change="actions.diplomacyAuto('sectId', $event.target.value)"><option v-for="s in DIPLOMACY_SECTS" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+          <select :value="state.diplomacy.settings.batch" aria-label="自动互市批量" @change="actions.diplomacyAuto('batch', $event.target.value)"><option :value="1">每回1次</option><option :value="10">每回10次</option><option :value="100">每回100次</option></select>
+          <label>信符保留 <input class="qty" type="number" min="0" max="100000" :value="state.diplomacy.settings.warrantReserve" @change="actions.diplomacyAuto('warrantReserve', $event.target.value)" /></label>
+          <p class="dim">自动交易遵守炼制页逐项材料保留与信符保留，缺料跳过；长离线合并支付，机缘按期望估算，不积压欠账。</p>
+        </div>
         <div v-for="sect in DIPLOMACY_SECTS" :key="sect.id" class="diplomacy-sect">
           <div class="diplomacy-head">
             <span class="diplomacy-glyph">{{ sect.glyph }}</span>
             <span><b>{{ sect.name }}</b></span>
-            <span class="dim small" style="margin-left: 8px">{{ sect.desc }}</span>
+            <span class="dim small diplomacy-description">{{ sect.desc }}</span>
           </div>
           <table class="grid">
             <tbody>
@@ -81,11 +88,14 @@ function trade(sectId) {
           <div class="diplomacy-actions">
             <button
               class="btn primary"
-              :disabled="!previewOf(sect.id)?.warrantEnough || !previewOf(sect.id)?.affordable || !previewOf(sect.id)?.hasRoom"
+              :disabled="!previewOf(sect.id)?.unlocked || !previewOf(sect.id)?.warrantEnough || !previewOf(sect.id)?.affordable || !previewOf(sect.id)?.hasRoom"
               @click="trade(sect.id)"
             >
               互市
             </button>
+            <button class="btn" :disabled="!previewOf(sect.id)?.unlocked" @click="actions.diplomacyBatch(sect.id, 10)">互市×10</button>
+            <button class="btn" :disabled="!previewOf(sect.id)?.unlocked" @click="actions.diplomacyBatch(sect.id, 'max')">尽量互市（最多100）</button>
+            <span v-if="!previewOf(sect.id)?.unlocked" class="dim small">需{{ REALMS[sect.realm || 3].name }}</span>
             <span v-if="!previewOf(sect.id)?.warrantEnough" class="bad small">信符不足</span>
             <span v-else-if="!previewOf(sect.id)?.affordable" class="bad small">材料不足</span>
             <span v-else-if="!previewOf(sect.id)?.hasRoom" class="bad small">仓储已满</span>
@@ -99,8 +109,8 @@ function trade(sectId) {
 
 <style scoped>
 .diplomacy-sect {
-  padding: 6px 0;
-  border-top: 1px solid var(--border, #3a3a3a);
+  padding: 16px 0;
+  border-top: 1px solid var(--line-soft);
 }
 .diplomacy-sect:first-child {
   border-top: none;
@@ -108,9 +118,15 @@ function trade(sectId) {
 .diplomacy-head {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
+.diplomacy-description { flex-basis: 100%; line-height: 1.6; }
+.diplomacy-auto { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.diplomacy-auto label { display: inline-flex; align-items: center; gap: 6px; }
+.diplomacy-auto input.qty { width: 7em; }
+.diplomacy-auto p { flex-basis: 100%; margin: 0 0 8px; line-height: 1.6; }
 .diplomacy-glyph {
   font-size: 0.9em;
   color: var(--dim, #999);
@@ -118,7 +134,12 @@ function trade(sectId) {
 .diplomacy-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 6px;
+}
+@container content (max-width: 480px) {
+  .diplomacy-sect tr:first-child { display: grid; grid-template-columns: 3em minmax(0, 1fr); }
+  .diplomacy-sect tr + tr { display: grid; grid-template-columns: 3em minmax(0, 1fr); }
 }
 </style>

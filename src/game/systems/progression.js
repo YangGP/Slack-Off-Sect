@@ -177,7 +177,7 @@ export function lifeInsightOf(state) {
 
 /** 飞升的唯一条件：**渡劫期**。 */
 export function canAscend(state) {
-  return state.realm >= ASCEND_REALM_INDEX
+  return state.realm >= ASCEND_REALM_INDEX && !state.challenge?.active
 }
 
 /** 已经转世过几次 */
@@ -187,7 +187,7 @@ export function reincarnationsDone(state) {
 
 /** 转世的门槛：化神期（比飞升早得多） */
 export function canReincarnate(state) {
-  return state.realm >= REINCARNATE_REALM_INDEX
+  return state.realm >= REINCARNATE_REALM_INDEX && !state.challenge?.active
 }
 
 /**
@@ -199,7 +199,7 @@ export function settleKarma(state, derived, allowed) {
   const insight = moneyMax(ZERO, state.stats?.lifeInsight ?? ZERO)
   const base = insight.div(2000).sqrt()
   const realmFactor = money(1 + state.realm * 0.3)
-  const daoBonus = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_KARMA_GAIN_BONUS))
+  const daoBonus = ONE
   const ledgerBonus = ONE.plus(karmaShopBonuses(state).insightBonus)
   const gain = base.times(realmFactor).times(ONE.plus(derived.ascendBonus || 0)).times(daoBonus).times(ledgerBonus)
   return moneyMax(allowed ? ONE : ZERO, gain)
