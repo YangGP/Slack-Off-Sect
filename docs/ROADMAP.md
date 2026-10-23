@@ -1,6 +1,6 @@
 # 开发方向与待办
 
-更新：2026-10-23，当前代码 v0.424。当前规则见 [DESIGN](DESIGN.md)，最新重构讨论见 [轮回策划](REINCARNATION-REDESIGN.md)。本页是待办入口，不把设计决定当作已经实施。
+更新：2026-10-23，当前代码 v0.424。当前规则见 [DESIGN](DESIGN.md)，最新重构讨论见 [轮回策划](REINCARNATION-REDESIGN.md)，单局宗门推进段节奏见 [单局节奏设计](SINGLE-RUN-PACING.md)。本页是待办入口，不把设计决定当作已经实施。
 
 ## 当前优先：确定轮回与弟子培养的大方向
 
