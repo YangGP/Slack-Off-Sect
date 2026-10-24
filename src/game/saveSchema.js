@@ -1,5 +1,6 @@
 import { RESOURCE_MAP, RESOURCE_GROUPS } from '@/data/resources'
 import { BUILDING_MAP, WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS } from '@/data/buildings'
+import { STORAGE_MERGE_VERSION, STORAGE_MERGE_GROUPS } from '@/data/storage'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { CRAFT_MAP } from '@/data/crafts'
 import { ACHIEVEMENTS } from '@/data/achievements'
@@ -19,7 +20,7 @@ export const SAVE_VERSION = 3
 const CORE_SAVE_FIELDS = [
   'version', 'createdAt', 'lastTickAt', 'lastSaveAt', 'resources', 'seen', 'peak',
   'disciples', 'arrivalTimer', 'totalDays', 'treasureLevels', 'craftTimers', 'craftOrders',
-  'uncappedCraftVersion', 'warehouseCapacityVersion', 'legacyWarehouseCounts', 'industryVersion', 'qiLiquidVersion', 'alchemyProgressionVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
+  'uncappedCraftVersion', 'warehouseCapacityVersion', 'legacyWarehouseCounts', 'warehouseMergeVersion', 'legacyStorage', 'industryVersion', 'qiLiquidVersion', 'alchemyProgressionVersion', 'scriptureArchiveVersion', 'beastRetirementVersion', 'buildings', 'starterHutBuilt', 'starterHutStanding', 'upgrades',
   'upgradeEnabled', 'achievements', 'craftProgress', 'autoCraft', 'craftTargets', 'realm', 'legacyNineTurnPill',
   'karma', 'dao', 'habitabilityPenalty', 'starvationTimer', 'leaveTimer', 'buffs',
   'pendingChoice', 'affairs', 'log', 'logSeq', 'nextEventAt', 'stats', 'settings', 'analytics', 'ui',
@@ -57,12 +58,13 @@ const STATS_MONEY_KEYS = ['totalQi', 'totalInsight', 'totalFaith', 'lifeInsight'
 /** 结构冲突与单个数值损坏分开处理；浏览器加载／导入遇结构冲突时保护原档。 */
 export function assertSaveShape(data) {
   if (!isRecord(data)) throw new Error('存档必须是对象')
+  if (data.warehouseMergeVersion != null && ![0, STORAGE_MERGE_VERSION].includes(data.warehouseMergeVersion)) throw new Error('仓储合并标记无法兼容')
   if (Object.hasOwn(data, 'warehouseCapacityVersion') &&
       (!Number.isInteger(data.warehouseCapacityVersion) || data.warehouseCapacityVersion < 0)) {
     throw new Error('仓库容量标记无效')
   }
   for (const key of ['resources', 'buildings', 'disciples', 'stats', 'settings', 'ui',
-    'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets',
+    'peak', 'upgrades', 'upgradeEnabled', 'achievements', 'autoCraft', 'craftTargets', 'legacyStorage',
     'craftTimers', 'craftQueue', 'craftOrders', 'craftProgress', 'treasureLevels', 'affairs', 'faithProgression', 'karmaProgression', 'samsara', 'worlds', 'challenge', 'rebuild', 'legacyWarehouseCounts', ...moduleSaveKeys()]) {
     if (data[key] != null && !isRecord(data[key])) throw new Error(`存档结构冲突：${key}`)
   }
@@ -146,6 +148,13 @@ export function validateState(state, fresh) {
       return [id, out]
     }))
   result.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
+  result.warehouseMergeVersion = STORAGE_MERGE_VERSION
+  result.legacyStorage = Object.fromEntries(Object.keys(STORAGE_MERGE_GROUPS).flatMap(id => {
+    const entry = state.legacyStorage?.[id]
+    if (!isRecord(entry) || !isRecord(entry.storage)) return []
+    const count = Math.min(result.buildings[id]?.count || 0, Math.floor(safeNumber(entry.count)))
+    return count > 0 ? [[id, { count, storage: moneyMap(entry.storage, RESOURCE_MAP) }]] : []
+  }))
   result.legacyWarehouseCounts = Object.fromEntries(LEGACY_WAREHOUSE_IDS.map(id => [id,
     Math.min(result.buildings[id]?.count || 0, Math.floor(safeNumber(result.legacyWarehouseCounts?.[id])))]))
   result.upgrades = flags(result.upgrades, UPGRADE_MAP)

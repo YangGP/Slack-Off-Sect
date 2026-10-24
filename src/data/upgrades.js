@@ -23,7 +23,7 @@ import { HUNT_UPGRADES, HUNT_UPGRADE_ANCHORS } from '../modules/hunting/data.js'
 
 const CORE_CULTIVATION = [
   // ============ 早期营造研究：采矿场由研究解锁 ============
-  // 基础建筑链：聚灵阵 → 伐木场 → 茅屋 → 藏经阁 → 谷仓（免研究，猫国粮仓同位）→ 采矿场；
+  // 聚灵阵 → 茅屋，之后分别开放伐木场与藏经阁；藏经阁开放谷仓，采矿场需伐木场与开山取料。
   // 谷仓只是推荐先建（先存后采），不是采矿场的硬前置。
   // 灵机一有产出就有去处（突破一次 40 灵机；开山取料 60，攒近三分之一仓先买）。
   {
@@ -587,10 +587,9 @@ const CORE_CULTIVATION = [
     name: '土木术',
     glyph: '土',
     cost: { insight: 460, wood: 120, rock: 180 },
-    desc: '垒石为基、架木为梁，库房才立得住。',
-    effects: { unlockBuildings: ['warehouse'] },
-    note: '解锁建筑：库房',
-    effectDesc: '因此垒得起库房：基础物资存得住，才谈得上囤积。',
+    desc: '垒石为基、铁箍加固已有库房，每座库房的原料仓储提高50%。',
+    effects: { buildingStorageRatio: { warehouse: 0.5 } },
+    effectDesc: '强化库房：每座原料仓储 +50%，与同类工艺加成相加。',
     // 先取得矿料并掌握木作器械，再研究石基木架的营造与扩仓。
     // 门槛从 ×3 降到 ×1：炼铁炉按 1.3 涨价，第 3 座要 304 矿石，而这一阶段矿石上限只有
     // 250（要库房才能抬），库房又在本术之下 —— ×3 等于把土木术锁死。
@@ -601,10 +600,9 @@ const CORE_CULTIVATION = [
     name: '土木精要',
     glyph: '精',
     cost: { insight: 2400, wood: 600, plank: 8 },
-    desc: '掏空山腹而不塌，靠的不是蛮力，是懂得岩层怎么受力。',
-    effectDesc: '因此挖得出材料库：石殿分格存放营造原料与阵材。',
-    effects: { unlockBuildings: ['depot'] },
-    note: '解锁建筑：材料库',
+    desc: '重整库房梁架与料格，在原有建筑内承接大宗原料。',
+    effectDesc: '每座库房原料仓储 +400%，与土木术及仓储工艺加成相加，替代独立材料库。',
+    effects: { buildingStorageRatio: { warehouse: 4 } },
     // 研究按灵机费用与仓容推进；建筑、配方保留各自条件。
     needs: { upgrades: ['earthArt'], building: { id: 'warehouse', count: 1 } },
   },
@@ -744,10 +742,10 @@ const CORE_CULTIVATION = [
     name: '洞天福地',
     glyph: '福',
     cost: { insight: 48000, daoTreatise: 3 },
-    desc: '以空间节点锚定与内部折叠，在山上开一方小世界。解锁洞天与洞府。',
-    effectDesc: '因此开得出洞天与洞府：一方自成一界，装得下也住得下。',
-    effects: { unlockBuildings: ['grotto', 'caveDwelling'] },
-    needs: { upgrades: ['buildingCode', 'capacityRune'], building: { id: 'depot', count: 1 } },
+    desc: '深化已有储物空间的内部折叠，并用于修行居所。开放洞府，洞天每座仓储 +60%。',
+    effectDesc: '开放洞府并强化洞天，不再新增另一座通用仓库。',
+    effects: { unlockBuildings: ['caveDwelling'], buildingStorageRatio: { grotto: 0.6 } },
+    needs: { realm: 8, upgrades: ['buildingCode', 'capacityRune'], building: { id: 'warehouse', count: 1 } },
   },
   {
     id: 'longBreath',
@@ -852,7 +850,7 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['qiGazing', 'qiArt'], building: { id: 'spiritField', count: 1 } },
   },
   {
-    // 前期缓速（拆枢纽）：聚灵大阵、清风小院、典籍库不再挂本条，仅料场与「压制石材」承接主题；
+    // 前期缓速（拆枢纽）：聚灵大阵、清风小院、典籍库不再挂本条，库房与「压制石材」承接主题；
     // 费用定在满基础仓一档（200）——典籍库的石材造价反而压在本条之后，此前灵机仓容只有基础 200。
     id: 'quarryArt',
     name: '凿石要诀',

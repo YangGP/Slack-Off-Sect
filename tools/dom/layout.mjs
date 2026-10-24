@@ -286,7 +286,7 @@ export async function checkLayout(context) {
       after.filter((n) => before.includes(n)).join('|') === before.join('|'),
       `${before.slice(0, 4).join('/')} → ${after.slice(0, 4).join('/')}`,
     )
-    ok('可见基础建筑按用途排列（聚灵阵、伐木场在茅屋之前）', after.indexOf('聚灵阵') === 0 && after.indexOf('伐木场') > 0 && after.indexOf('伐木场') < after.indexOf('茅屋'), after.slice(0, 4).join('/'))
+    ok('可见基础建筑按开局顺序排列（聚灵阵、茅屋、伐木场）', after.indexOf('聚灵阵') === 0 && after.indexOf('茅屋') > 0 && after.indexOf('茅屋') < after.indexOf('伐木场'), after.slice(0, 4).join('/'))
     // 恢复成一个「部分买得起」的状态，后面的断言依赖这个
     state.resources.qi = qtBefore
     state.resources.wood = engine.money(0)

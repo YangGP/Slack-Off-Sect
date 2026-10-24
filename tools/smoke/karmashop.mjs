@@ -90,7 +90,7 @@ export function karmaShop({ ok, close, section }) {
     s.resources.qi = E.money(240)
     s.resources.wood = E.money(1000)
     s.buildings.spiritField = { count: 1, on: true }
-    s.buildings.lumberYard = { count: 1, on: true } // 茅屋要一座伐木场（基础链第三环）
+    s.buildings.lumberYard = { count: 1, on: true } // 生产夹具预建伐木场。
     E.recompute(s, d)
     ok('满足伐木场前置后实际建造茅屋成功', E.buyBuilding(s, d, 'hut', 1) === 1)
     const beforeSell = E.money(s.resources.qi)

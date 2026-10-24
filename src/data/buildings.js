@@ -47,7 +47,7 @@ const CORE_BUILDINGS = [
     priceRatio: 1.15,
     desc: '木架与料场齐备，樵夫采回的灵木在此归整，伐木更有章法。每座灵木产出 +10%，多座相加。',
     effects: { ratio: { wood: 0.1 } },
-    needs: { building: { id: 'spiritField', count: 1 } },
+    needs: { building: { id: 'hut', count: 1 } },
   },
   {
     id: 'quarry',
@@ -158,7 +158,7 @@ const CORE_BUILDINGS = [
     // 存气 120：两座茅屋即有 740 灵气上限，炼气破境（需 700）不必先绕采矿链建谷仓——
     // 参考猫国：粮仓便宜早得、上限不卡主线。谷仓仍是首座大仓（每座 +800）。
     effects: { maxDisciples: 2, storage: { qi: 120 } },
-    needs: { building: { id: 'lumberYard', count: 1 } },
+    needs: { building: { id: 'spiritField', count: 1 } },
   },
   {
     id: 'logHouse',
@@ -254,8 +254,7 @@ const CORE_BUILDINGS = [
     group: 'store',
     // 首仓学猫国粮仓：便宜（基础仓容六成）、免研究、排在采矿场之前 —— 先存后采，
     // 开山取料的 180 木也有仓容着落；
-    // 涨价率与料场同档：前 5~6 座便宜顺滑（筑基到金丹的灵气仓容主力），
-    // 之后单座迅速破千上万的木料——元婴起让位给玄库/洞天接力，不鼓励全程堆谷仓。
+    // 早期少量谷仓承接口粮缓冲，后续优先投资容量工艺，炼虚再由洞天接力。
     cost: { wood: 120 },
     priceRatio: 1.35,
     desc: '囤灵气如囤粮，也堆得下木料与草药 —— 荒年不至于饿着弟子。',
@@ -263,72 +262,22 @@ const CORE_BUILDINGS = [
     effects: { storage: { qi: 800, wood: 300, herb: 120 } },
     // 基础链第五环：藏经阁之后、采矿场之前（猫国粮仓同位，无需研究）。
     needs: { building: { id: 'library', count: 1 } },
-  },  {
-    // 早期补充仓储：在库房开放前缓解原料与灵石仓容，每项增量低于库房。
-    // 库房承担主要扩仓，料场的较高涨价率也避免长期替代库房。
-    id: 'materialYard',
-    name: '料场',
-    glyph: '料',
-    group: 'store',
-    cost: { wood: 150, cutStone: 50 },
-    priceRatio: 1.35,
-    desc: '平整出一片料场，原料按堆码放，另设石匣存放灵石。用于早期补充仓储，大量囤料需建库房。',
-    effects: { storage: { rock: 500, ore: 150, wood: 400, herb: 200, stone: 250 } },
-    needs: { upgrades: ['quarryArt'] },
   },
   {
     id: 'warehouse',
     name: '库房',
     glyph: '库',
     group: 'store',
-    // 石砌墙基、铁箍木架：矿石承重，灵石不掺和
-    cost: { wood: 150, cutStone: 50, ore: 60 },
-    priceRatio: 1.22,
-    desc: '石基铁箍木架，专存灵木、矿石、玄铁与灵草，另设少量石匣存放灵石 —— 丹药符箓另有去处。',
+    // 初建承接原料场，后续容量由土木精要与仓储工艺强化；建造成本不随升级追缴。
+    cost: { wood: 150, cutStone: 50 },
+    priceRatio: 1.25,
+    desc: '石基木架分类存放灵木、矿石、玄铁、灵石与灵草。土木精要和仓储工艺持续强化每座容量；加工品无需仓容。',
     // 库房只存**基础物资**：灵木 / 灵石 / 矿石 / 玄铁 / 灵草。
     // 原料保留挂机缓冲；灵石按矿井与点石成灵的实际流量分配，避免低速资源提前扩出数小时空仓。
     // 涨价率略高于采矿/伐木等产能建筑，批量扩容需与采集、加工扩产一起推进。
-    // 灵气上限归「谷仓」，灵机归藏经阁/讲经堂/观星台，丹药/符箓/法器/香火归各自的专属建筑。
+    // 灵气上限主要归谷仓，灵机归科研设施，香火与粒子归法藏；加工品无需仓容。
     effects: { storage: { wood: 1000, stone: 500, rock: 600, ore: 400, herb: 500 } },
-    needs: { upgrades: ['quarryArt', 'earthArt'] },
-  },
-  {
-    id: 'depot',
-    name: '材料库',
-    glyph: '殿',
-    group: 'store',
-    cost: { plank: 12, ore: 700, steel: 4 },
-    priceRatio: 1.25,
-    desc: '石殿分设料架与阵材格，专存灵木、灵石、矿石与玄铁；木板、玄钢等加工品无需仓容。',
-    effects: { storage: { wood: 5000, stone: 3000, rock: 3000, ore: 3000 } },
-    needs: { building: { id: 'warehouse', count: 1 }, upgrades: ['earthEssence'] },
-  },
-  {
-    // 中场仓储：填「材料库（金丹）↔ 洞天（合体）」之间的空档。
-    // 洞天要合体才开，而炼虚/合体破境要一大笔灵气与玄钢，光靠谷仓/材料库顶不住。
-    id: 'mysticVault',
-    name: '玄库',
-    glyph: '玄',
-    group: 'store',
-    cost: { spiritMortar: 20, cutStone: 1300, stone: 400, plank: 15, ore: 500, insight: 2000 },
-    priceRatio: 1.3,
-    desc: '混灵土固基、铁箍封边，专存大宗营造原料，兼收灵气 —— 洞天之前的主力仓。',
-    effects: {
-      storage: { qi: 15000, wood: 10000, rock: 10000, stone: 10000, ore: 10000, herb: 8000 },
-    },
-    needs: { realm: 5, upgrades: ['earthEssence'] },
-  },
-  {
-    id: 'medicineVault',
-    name: '药藏',
-    glyph: '药',
-    group: 'store',
-    cost: { spiritMortar: 8, plank: 6, arrayBase: 2, herb: 500 },
-    priceRatio: 1.22,
-    desc: '通风药架与封灵禁制专储灵草，每座增加6000灵草仓容。丹药与仙草等加工品无需仓容。',
-    effects: { storage: { herb: 6000 } },
-    // 金丹重排：仙草随凝链后移到元婴，药藏同档开放（金丹档的仓储由材料库前移承接）
-    needs: { realm: 5, upgrades: ['alchemyArt', 'woodworking'] },
+    needs: { upgrades: ['quarryArt'] },
   },
   {
     id: 'arcaneVault',
@@ -346,27 +295,13 @@ const CORE_BUILDINGS = [
     name: '洞天',
     glyph: '天',
     group: 'store',
-    // 洞天以复合建材承重、玄金储灵，避免继续堆基础木板与玄钢。
-    cost: { ironMortar: 40, arcaneGold: 10, cutStone: 7500, stone: 2400, runeStone: 40, insight: 10000, artifact: 30 },
-    priceRatio: 1.35,
-    desc: '洞天聚气、存放大宗营造原料并留住修行所得，兼有少量通用仓储；加工品无需仓容。',
-    effects: { storageAll: 12000, storage: { insight: 15000, qi: 75000, wood: 75000, stone: 75000, rock: 75000, ore: 75000, faith: 75000, qiParticle: 75000, yangParticle: 75000, yinParticle: 75000, qiEnergy: 20000, immortalForce: 20000 }, habitability: 5 },
-    upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
-    // 造价含玄金（来源《玄金熔炼》= realm 8），定为合体档；中后期扩仓由《广储库》承接（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
-    needs: { realm: 8, upgrades: ['grottoArt'] },
-  },
-  {
-    // 中后期仓储：填「玄库（炼虚）↔ 洞天（合体）」之间的扩仓空档（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
-    // 造价只用炼虚可得建材（玄铁混灵土/秘银等），不含炼虚还炼不出的玄金。
-    id: 'grandStore',
-    name: '广储库',
-    glyph: '广',
-    group: 'store',
-    cost: { ironMortar: 30, mithril: 20, plank: 20, cutStone: 5200, stone: 1600 }, // 待校准
+    // 炼虚先以秘银与玄铁混灵土锚定空间，不依赖合体才能取得的玄金；后续由洞天福地强化。
+    cost: { ironMortar: 30, mithril: 20, plank: 20, cutStone: 5200, stone: 1600 },
     priceRatio: 1.32,
-    desc: '广厦分格、铁架承重，大宗营造原料与粒子、仙灵力各有定额 —— 洞天之前的主力仓。',
-    effects: { storageAll: 4000, storage: { insight: 12000, qi: 50000, wood: 50000, stone: 50000, rock: 50000, ore: 50000, faith: 50000, qiParticle: 50000, yangParticle: 50000, yinParticle: 50000, qiEnergy: 15000, immortalForce: 12000 } },
-    needs: { realm: 7, upgrades: ['earthEssence'] }, // 待校准
+    desc: '锚定一方储物空间，承接后期原料、灵机、粒子与仙灵力。掌握洞天福地后每座仓储再提高60%；加工品无需仓容。',
+    effects: { storage: { insight: 16000, qi: 54000, wood: 54000, stone: 54000, rock: 54000, ore: 54000, herb: 4000, beastHide: 4000, beastBone: 4000, faith: 54000, qiParticle: 54000, yangParticle: 54000, yinParticle: 54000, qiEnergy: 19000, immortalForce: 14000 }, habitability: 5 },
+    upkeepQi: 1.2, upkeepEnergy: 0.012, powerMult: 1.6, // 环境调节随供能；仓储保留
+    needs: { realm: 7, upgrades: ['earthEssence'] },
   },
 
   // ============ 修行 ============
@@ -601,7 +536,7 @@ const CORE_BUILDINGS = [
     glyph: '分',
     group: 'wonder',
     // 阵要一直烧灵气：把灵气离析成灵气分子，是粒子链的第一步（灵气分子 → 偏极解离 → 正负灵子 → 湮灭）
-    // 元婴入门（工业滞后理论 1 境），容量由元婴玄库承接；重复扩建仍按比例涨价。
+    // 元婴入门（工业滞后理论 1 境），容量由库房与仓储工艺承接；重复扩建仍按比例涨价。
     cost: { crystal: 12, spiritTalisman: 6, cutStone: 7800, stone: 2400, insight: 16000, artifact: 40, arrayBase: 8 },
     priceRatio: 1.5,
     desc: '阵法从灵气中离析出相抱的灵气分子 —— 拆得越久，越像在跟天地借火。',
@@ -742,16 +677,17 @@ export const BUILDING_MAP = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]))
 
 /** 宗门列表按用途排列，同类建筑内按实际露面顺序（needs + 造价峰值）排列：
  * 同组新解锁项永远出现在本组已见项的末尾（从前往后填满），不会插到老条目上方；各筛选使用同一顺序。
- * 例外一：谷仓（属仓储组）插在采矿场之前 —— 基础链第五环，「先存后采」的软顺序由列表位置表达。
+ * 开局茅屋（属居所组）排在聚灵阵之后、伐木场之前，与基础解锁链一致。
+ * 例外一：谷仓（属仓储组）插在采矿场之前，「先存后采」的软顺序由列表位置表达。
  * 例外二：聚灵大阵（显形受石材峰值压制，先于药圃）与药圃（《灵植术》攒灵机）同在凿石后露面，两槽相邻、按常见先后排列。 */
 const CORE_BUILDING_DISPLAY_ORDER = [
   // 生产：基础采集与采石在前；聚灵大阵（石材峰值）先于药圃（《灵植术》）露面；矿业深加工（炼铁炉、灵石矿）解锁链经炼丹术，实际晚于药圃，排其后。
-  'spiritField', 'lumberYard', 'granary', 'quarry', 'gatheringArray', 'herbGarden', 'ironFurnace', 'spiritQuarry', 'crystalArray',
+  'spiritField', 'hut', 'lumberYard', 'granary', 'quarry', 'gatheringArray', 'herbGarden', 'ironFurnace', 'spiritQuarry', 'crystalArray',
   // 居所与宜居。
-  'hut', 'logHouse', 'mansion', 'caveDwelling',
+  'logHouse', 'mansion', 'caveDwelling',
   'livingCourt', 'communalHall', 'cleansingBath', 'quietGarden',
-  // 仓储：基础原料、建材、专藏、洞天。法藏为金丹档（先露面），玄库、药藏为元婴档，按露面顺序排前。
-  'materialYard', 'warehouse', 'depot', 'arcaneVault', 'mysticVault', 'medicineVault', 'grandStore', 'grotto',
+  // 仓储：基础库房、金丹法藏、炼虚洞天；谷仓保留在采矿场之前。
+  'warehouse', 'arcaneVault', 'grotto',
   // 修行：研读、典籍收存、讲经观星、静修历练。
   'library', 'scriptureArchive', 'academy', 'observatory', 'meditationPool', 'trialTower',
   // 炼造：按露面顺序排 —— 炼丹房最先；丹鼎露面受玄铁混灵土等造价材料约束。

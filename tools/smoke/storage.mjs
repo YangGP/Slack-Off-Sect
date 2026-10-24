@@ -12,6 +12,57 @@ import { describeEffects } from '../../src/game/effectsText.js'
 import { newGame } from './fixtures.mjs'
 import { autoCraftReserve } from '../../src/game/systems/craftingRules.js'
 import { discipleFactor, recruitCost } from '../../src/data/disciples.js'
+import { effectiveBuildingStorage } from '../../src/game/systems/economy.js'
+import { progressionDiagnostics } from '../progression-diagnostics.mjs'
+
+export function warehouseConsolidation({ ok, section }) {
+  section('四类仓储、工艺强化与旧档合并')
+  ok('仓储目录仅保留四类', BUILDINGS.filter(b => b.group === 'store').map(b => b.id).sort().join(',') === 'arcaneVault,granary,grotto,warehouse')
+  const { state: s, derived: d } = newGame()
+  s.buildings.warehouse = { count: 2, on: true }
+  s.buildings.granary = { count: 1, on: true }
+  E.recompute(s, d)
+  const before = d.max.wood, qi = d.max.qi, insight = d.max.insight
+  s.upgrades.earthEssence = true
+  E.recompute(s, d)
+  ok('土木精要按库房数量强化原料，不放大基础仓容或灵机', d.max.wood.eq(before.plus(8000)) && d.max.qi.eq(qi) && d.max.insight.eq(insight))
+  s.realm = 7
+  for (const [id, amount] of Object.entries(BUILDING_MAP.grotto.cost)) { s.resources[id] = E.money(amount); s.peak[id] = E.money(amount) }
+  ok('炼虚洞天不依赖合体工艺或玄金即可真实建造', !s.upgrades.grottoArt && E.isBuildingUnlocked(s, 'grotto') && E.buyBuilding(s, d, 'grotto') === 1)
+  const space = d.max.immortalForce
+  const diagnostic = progressionDiagnostics(s, d, { cost: { wood: E.money('1e12') } }).missing.find(row => row.resource === 'wood')
+  ok('采购诊断使用工艺强化后的新建容量', diagnostic.expansions.find(row => row.id === 'warehouse').gain === 5000)
+  s.upgrades.grottoArt = true
+  E.recompute(s, d)
+  ok('洞天福地强化已建空间容量', d.max.immortalForce.gt(space) && UPGRADE_MAP.grottoArt.effects.buildingStorageRatio.grotto === 0.6)
+
+  const old = createInitialState()
+  delete old.warehouseMergeVersion
+  old.buildings = Object.fromEntries(['warehouse', 'materialYard', 'depot', 'mysticVault', 'medicineVault', 'grandStore', 'grotto'].map(id => [id, { count: 1, on: true }]))
+  old.legacyWarehouseCounts = { depot: 1, mysticVault: 1 }
+  const original = JSON.stringify(old)
+  const merged = normalizeState(old)
+  ok('合并实体数量且不修改输入、不赠研究', merged.buildings.warehouse.count === 5 && merged.buildings.grotto.count === 2 && !merged.buildings.depot && JSON.stringify(old) === original && !merged.upgrades.earthEssence)
+  const raw = effectiveBuildingStorage(merged, 'warehouse')
+  ok('旧材料库与玄库历史扩仓权益一并保留', raw.wood.gte(26400) && raw.qi.gte(15000) && raw.herb.gte(14700))
+  const strengthened = effectiveBuildingStorage(merged, 'warehouse', 5)
+  ok('旧权益作为容量下限，不随新工艺重复叠乘', strengthened.wood.gte(raw.wood) && strengthened.wood.lt(raw.wood.times(5)) && strengthened.qi.eq(raw.qi))
+  const spaceRaw = effectiveBuildingStorage(merged, 'grotto')
+  ok('旧广储库与洞天的通用仓储折算不丢失', spaceRaw.insight.gte(43000) && spaceRaw.immortalForce.gte(40000) && spaceRaw.beastHide.gte(16000))
+  const again = parseImport(exportSave(normalizeState(merged)))
+  ok('保存读回不重复合并，金额与保留数量不变', again.buildings.warehouse.count === 5 && effectiveBuildingStorage(again, 'warehouse').wood.eq(raw.wood) && again.legacyStorage.warehouse.count === 5)
+  const converted = normalizeState({ buildings: { grandStore: { count: 1, on: true } } })
+  ok('旧广储库转入洞天默认不额外消耗供能', converted.buildings.grotto.count === 1 && !converted.buildings.grotto.on)
+  for (const id of Object.keys(again.resources)) again.resources[id] = E.money('1e20')
+  const ad = E.createDerived()
+  E.recompute(again, ad)
+  E.sellBuilding(again, ad, 'warehouse', 5)
+  again.upgrades.quarryArt = true
+  E.buyBuilding(again, ad, 'warehouse')
+  ok('拆除后重建不恢复旧仓容量权益', !again.legacyStorage.warehouse && effectiveBuildingStorage(again, 'warehouse').wood.eq(1000) && !effectiveBuildingStorage(again, 'warehouse').qi)
+  resetForReincarnation(merged, E.ZERO)
+  ok('轮回清空本世仓储保留权益', !Object.keys(merged.legacyStorage).length && !Object.keys(merged.buildings).length)
+}
 
 export function uncappedCrafting({ ok, close, section }) {
   section('转世生产、无限加工库存与旧档保留')
@@ -165,11 +216,11 @@ export function purchaseReachability({ ok, section }) {
     ok(
       '库房连续几座都买得起（自己抬高上限）',
       (() => {
-        let cap = RESOURCE_MAP.wood.baseMax + wh.effects.storageAll
+        let cap = RESOURCE_MAP.wood.baseMax + wh.effects.storage.wood
         for (let n = 1; n < 5; n++) {
           const need = wh.cost.wood * Math.pow(wh.priceRatio, n)
           if (need > cap) return false
-          cap += wh.effects.storageAll
+          cap += wh.effects.storage.wood
         }
         return true
       })(),
@@ -182,11 +233,11 @@ export function storageAndRefinement({ ok, close, section }) {
   {
     const { state: s, derived: d } = newGame()
     s.buildings.mansion = { count: 6, on: true }
-    s.buildings.depot = { count: 2, on: true }
+    s.buildings.warehouse = { count: 2, on: true }
     s.upgrades.caseStackArt = true
     E.recompute(s, d)
     ok('基础物资通用扩仓仍全额计入', E.moneyEq(d.max.wood,
-      E.money(RESOURCE_MAP.wood.baseMax).plus(6 * 200).plus(2 * BUILDING_MAP.depot.effects.storage.wood).plus(1200)))
+      E.money(RESOURCE_MAP.wood.baseMax).plus(6 * 200).plus(4 * BUILDING_MAP.warehouse.effects.storage.wood).plus(1200)))
     ok('稳定加工品不受仓容约束', ['plank', 'arrayBase', 'spiritArtifact', 'spiritTreasure'].every(id => !d.max[id].isFinite()))
     const pillBefore = d.max.pill
     s.buildings.alchemyRoom = { count: 1, on: true }

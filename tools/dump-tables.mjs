@@ -66,7 +66,7 @@ const effects = (e) => {
   if (e.storageRatio) out.push('仓容 ' + Object.entries(e.storageRatio).map(([k, v]) => `${res(k)} +${pct(v)}`).join(' '))
   if (e.buildingStorageRatio) out.push(Object.entries(e.buildingStorageRatio).map(([id, v]) =>
     `${BUILDINGS.find(b => b.id === id)?.name || id}自身仓容 +${pct(v)}`).join(' '))
-  if (e.storageAll) out.push(`通用仓储 +${e.storageAll}（成品按层级折算）`)
+  if (e.storageAll) out.push(`通用仓储 +${e.storageAll}（仅有限资源）`)
   if (e.maxDisciples) out.push(`弟子 +${e.maxDisciples}`)
   if (e.habitability) out.push(`宜居度 +${e.habitability}`)
   if (e.habitabilityPerHousing) out.push(`每个已入住名额宜居度 +${e.habitabilityPerHousing}（不超过居所容量）`)

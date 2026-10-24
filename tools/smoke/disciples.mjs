@@ -16,7 +16,7 @@ export function discipleArrivals({ ok, close, section }) {
     state.resources.wood = E.money(60)
     state.resources.qi = E.money(2000)
     state.buildings.spiritField = { count: 1, on: true }
-    state.buildings.lumberYard = { count: 1, on: true } // 茅屋要一座伐木场（基础链第三环）
+    state.buildings.lumberYard = { count: 1, on: true } // 生产夹具预建伐木场。
     state.buildings.granary = { count: 20, on: true } // 抬灵气上限，才买得起一次九座
     E.buyBuilding(state, derived, 'hut', 1) // 上限 2
     const interval = E.arrivalInterval(derived)

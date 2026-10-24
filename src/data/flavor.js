@@ -14,7 +14,6 @@ export const BUILDING_FLAVOR = {
   gatheringArray: '风都往山门里灌。',
   granary: '有粮，心就不慌。',
   warehouse: '堆到塞不下为止。',
-  depot: '整座山腹都是咱家的。',
   grotto: '小是小，装得下。',
   library: '书到用时方恨少。',
   academy: '长老一开口，弟子就打盹。',

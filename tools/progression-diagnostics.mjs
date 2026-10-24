@@ -16,7 +16,8 @@ export function progressionDiagnostics(state, derived, { cost: selectedCost = nu
   const expansionCandidates = (resource) => E.BUILDINGS
     .filter(b => isEntryEnabled(state, b) && (b.effects?.storage?.[resource] > 0 || b.effects?.storageAll > 0))
     .map(b => {
-      const direct = b.effects?.storage?.[resource] || 0
+      const multiplier = 1 + Object.keys(state.upgrades).reduce((sum, id) => sum + (state.upgrades[id] && state.upgradeEnabled?.[id] !== false ? E.UPGRADE_MAP[id]?.effects?.buildingStorageRatio?.[b.id] || 0 : 0), 0)
+      const direct = (b.effects?.storage?.[resource] || 0) * multiplier
       const viaAll = (b.effects?.storageAll || 0) * (RESOURCE_MAP[resource]?.storageWeight ?? 1)
       const gain = direct + viaAll
       const cost = E.buildingCost(state, b.id, 1)

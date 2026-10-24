@@ -19,7 +19,7 @@ const cases = {
     const blocked = progressionDiagnostics(state, stateDerived).missing.find(row => row.resource === 'qiParticle')
     assert.ok(blocked && blocked.capacityBlocked === true && blocked.full === false)
     assert.equal(blocked.capacity, 100)
-    state.buildings.grandStore = { count: 1, on: true }
+    state.buildings.grotto = { count: 1, on: true }
     E.recompute(state, stateDerived)
     const enough = progressionDiagnostics(state, stateDerived).missing.find(row => row.resource === 'qiParticle')
     assert.ok(enough && enough.capacityBlocked === false && enough.nextExpansionReason === 'capacity-sufficient')

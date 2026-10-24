@@ -184,8 +184,16 @@ export function describeBuildingEffects(meta, state, derived) {
   const energy = meta.upkeepEnergy != null && (meta.upkeepQi == null || entry?.power === 'energy' && state.upgrades.energyApplication)
   const powerMult = hasPower && energy ? meta.powerMult ?? 1 : 1
   const totalEffects = scaleEffectsForTotal(meta.effects, count, active * powerMult, !!meta.upkeep || hasPower)
-  if (totalEffects?.storage) totalEffects.storage = effectiveBuildingStorage(state, meta.id)
-  const unit = [...describeEffects(meta.effects), ...describeJobEffects(meta.id), ...describeProcessingEffects(meta.id)]
+  const unitEffects = { ...meta.effects }
+  if (totalEffects?.storage) {
+    const ratio = Object.keys(state.upgrades).reduce((sum, id) => sum + (state.upgrades[id] && state.upgradeEnabled?.[id] !== false ? UPGRADE_MAP[id]?.effects?.buildingStorageRatio?.[meta.id] || 0 : 0), 1)
+    unitEffects.storage = Object.fromEntries(Object.entries(meta.effects.storage).map(([id, amount]) => [id, money(amount).times(ratio)]))
+    totalEffects.storage = effectiveBuildingStorage(state, meta.id, ratio)
+  }
+  const unit = [...describeEffects(unitEffects), ...describeJobEffects(meta.id), ...describeProcessingEffects(meta.id)]
+  for (const id of Object.keys(totalEffects?.storage || {})) {
+    if (!Object.hasOwn(meta.effects.storage, id)) unit.push({ label: `${resourceName(id)} 上限`, value: '旧档保留', tone: 'muted', resource: id })
+  }
   const boostMult = meta.boost && entry?.boost === true && state.upgrades[meta.boost.upgrade]
     ? 1 + (meta.boost.multiplier - 1) * (derived.buildingSupply?.[meta.boost.id] ?? 0) : 1
   const total = [...describeEffects(totalEffects), ...describeJobEffects(meta.id, active, state.upgrades, boostMult), ...describeProcessingEffects(meta.id, active, derived)]

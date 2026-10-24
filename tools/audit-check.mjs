@@ -136,10 +136,10 @@ for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
 }
 
 // 复现合体材料容量不足：必须追踪尚未解锁的扩仓链。
-// v0.38 起中后期主扩仓由《广储库》(grandStore, realm 7) 承接，洞天退配合体档，故这里追踪广储库链。
+// 合并后由炼虚档洞天承接中后期扩仓，追踪空间建设链。
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
 blockedState.realm = 8
-blockedState.buildings.depot = { count: 2, on: true }
+blockedState.buildings.warehouse = { count: 10, on: true }
 // 此夹具隔离灵气分子仓容；灵机必须足以覆盖扩仓造价，由典籍库提供。
 blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MAP.scriptureArchive.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
@@ -147,11 +147,11 @@ blockedState.resources.qiParticle = E.money(100)
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
 assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need > blocked.have)
 assert.equal(blocked.need, E.moneyToNumber(E.realmCost(blockedState, blockedDerived, 9).qiParticle))
-assert.ok(blocked.expansions.some(b => b.id === 'grandStore' && !b.unlocked))
+assert.ok(blocked.expansions.some(b => b.id === 'grotto' && !b.unlocked))
 assert.equal(blocked.producer.id, 'splitArray')
 const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
 assert.ok(prerequisites.upgrades.has('earthEssence'))
-assert.ok(prerequisites.buildings.has('arcaneVault')) // 法藏现在提供有限粒子仓容，早于广储库解决此缺口
+assert.ok(prerequisites.buildings.has('arcaneVault')) // 法藏提供有限粒子仓容，早于洞天解决此缺口。
 
 // 满员、等待昂贵新住房时，凝晶研究的道札与上游纸料不能被常规建设抢走。
 // 凝晶工艺按知识费用重构只耗道札后，改以记录道札的投入验证同一留存逻辑。

@@ -109,7 +109,7 @@ export function incomeBreakdown({ ok, close, section }) {
     {
       const allowed = new Set([
         'spiritField', // 聚灵阵：聚气之法，起手就要引气
-        'hut', // 茅屋：伐木场之后的第一间居所（基础链第三环）
+        'hut', // 茅屋：聚灵阵之后的第一间居所。
         'lumberYard', // 伐木场：从"只有灵气"跨到"有木料"的那一步
         'library', // 藏经阁：以灵气养典籍
       ])

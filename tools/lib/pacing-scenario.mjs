@@ -219,7 +219,7 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
     },
     onBuildDecision: value => {
       buildDecision = value
-      pendingStorageMilestone = ['depot', 'mysticVault'].includes(value.selected) && !storageMilestones[value.selected]
+      pendingStorageMilestone = ['warehouse', 'grotto'].includes(value.selected) && !storageMilestones[value.selected]
         ? { id: value.selected, seconds: elapsed, before: snapshot() }
         : null
     },

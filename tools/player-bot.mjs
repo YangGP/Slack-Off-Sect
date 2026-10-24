@@ -48,9 +48,6 @@ export const PRIORITY = [
   'quietGarden',
   'observatory',
   'mansion',
-  'depot',
-  'mysticVault',
-  'medicineVault',
   'arcaneVault',
   'trialTower',
   'mountainArray',
@@ -371,7 +368,7 @@ export function createBot(state, derived, policy = {}) {
       else visitBuilding(project.id, project.count)
     }
     // 土木精要可在低境界掌握；建库前仍须追踪玄钢及其研究用法器。
-    if (!policy.onlyBreakthrough && state.upgrades.earthEssence && E.countOf(state, 'depot') === 0) visitBuilding('depot')
+    if (!policy.onlyBreakthrough && state.upgrades.earthEssence && E.countOf(state, 'warehouse') === 0) visitBuilding('warehouse')
     // 扩仓设施的建材也属于破境前置，不能只追踪破境配方。
     // 药藏改用混灵土后，忽略这条链会让机器人一直攒丹药却不研究建材。
     const canOpenForCapacity = (needs, res, path = new Set()) => {

@@ -18,7 +18,7 @@ function fixture() {
   for (const id of ['forge', 'workshop', 'talismanHall', 'alchemyRoom', 'crystalArray']) s.buildings[id] = { count: 1, on: true }
   s.buildings.warehouse = { count: 500, on: true }
   s.buildings.granary = { count: 500, on: true }
-  s.buildings.depot = { count: 500, on: true }
+  s.buildings.warehouse = { count: 2500, on: true }
   s.buildings.grotto = { count: 1, on: true }
   s.buildings.annihilationFurnace = { count: 4, on: true }
   E.recompute(s, d)

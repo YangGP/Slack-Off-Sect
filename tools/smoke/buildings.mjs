@@ -93,9 +93,8 @@ export function buildingActions({ ok, close, section }) {
   }
   {
     const { state, derived } = newGame()
-    // 基础链：茅屋要一座伐木场（伐木场自身要聚灵阵，此处一并补齐）
+    // 基础链：首屋只需聚灵阵，不依赖伐木场。
     state.buildings.spiritField = { count: 1, on: true }
-    state.buildings.lumberYard = { count: 1, on: true }
     state.resources.qi = E.money(1000)
     state.resources.wood = E.money(60)
     state.resources.stone = E.money(100)

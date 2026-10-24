@@ -4,7 +4,7 @@ import { createServer } from 'vite'
 import { readFileSync } from 'node:fs'
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
 
-const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', optimizeDeps: { noDiscovery: true, include: [] } })
 try {
   const { describeBuildingEffects, describeEffects } = await server.ssrLoadModule('/src/game/effectsText.js')
   const { createInitialState } = await server.ssrLoadModule('/src/game/state.js')
@@ -30,24 +30,26 @@ try {
   }
   const rows = id => describeBuildingEffects(BUILDING_MAP[id], state, derived)
   assert.equal(rows('annihilationFurnace')[0].value, fmtRate(money('0.045')))
-  state.buildings.depot = { count: 2, on: true }
-  state.legacyWarehouseCounts = { depot: 1, mysticVault: 1 }
-  assert.equal(rows('depot').find(row => row.label === '灵木 上限').total, '+15k')
+  state.buildings.warehouse = { count: 2, on: true }
+  state.legacyStorage = { warehouse: { count: 1, storage: { wood: money(14000) } } }
+  assert.equal(rows('warehouse').find(row => row.label === '灵木 上限').total, '+15k')
   assert.equal(fmtEffectPercent(0.0015), '0.15%')
   assert.notEqual(fmtEffectPercent(1e-10), '0%')
   derived.buildingSupply.spiritLockArray = 0.01
   state.buildings.spiritLockArray = { count: 1, on: true }
   assert.equal(rows('spiritLockArray').find(row => row.label === '灵气 产出').total, '+0.15%')
   state.buildings.quietGarden = { count: 1, on: true, power: 'energy' }
-  assert.equal(rows('quietGarden').find(row => row.label === '宜居度').total, '+22.4')
+  assert.equal(rows('quietGarden').find(row => row.label === '宜居度').total, '+22.40')
   state.buildings.quarry = { count: 2, on: true }
   const oreRow = () => rows('quarry').find(row => row.label === '矿工 额外产出')
-  assert.match(oreRow().value, /玄铁 \+0\.015\/秒·人（需《探矿术》）/)
+  assert.match(oreRow().value, /玄铁 \+0\.02\/秒·人（需《探矿术》）/)
   assert.match(oreRow().total, /玄铁 \+0\/秒·人/)
   state.upgrades.prospectStudy = true
   assert.equal(oreRow().total, oreRow().value)
-  state.buildings.mysticVault = { count: 1, on: true }
-  assert.equal(rows('mysticVault').find(row => row.label === '灵木 上限').total, '+15k')
+  state.upgrades.earthEssence = true
+  assert.equal(rows('warehouse').find(row => row.label === '灵木 上限').value, '+5k')
+  assert.equal(rows('warehouse').find(row => row.label === '灵木 上限').total, '+19k')
+  delete state.upgrades.earthEssence
   state.buildings.mountainArray = { count: 6, on: true }
   state.buildings.spiritLockArray = { count: 30, on: true }
   derived.buildingSupply.spiritLockArray = 1
@@ -55,15 +57,19 @@ try {
   assert.match(rows('spiritLockArray').find(row => row.label === '弟子灵气消耗').total, /^-85%/)
   state.buildings.splitArray.on = false
   assert.equal(rows('splitArray')[0].total, '0/秒')
-  state.buildings.depot.on = false
-  assert.equal(rows('depot').find(row => row.label === '灵木 上限').total, '+15k')
-  for (const meta of BUILDINGS) assert.ok(describeBuildingEffects(meta, state, derived).length, meta.id)
+  state.buildings.warehouse.on = false
+  assert.equal(rows('warehouse').find(row => row.label === '灵木 上限').total, '+15k')
+  for (const meta of BUILDINGS) {
+    // 天工坊通过配方前置开放合成，没有独立数值效果行。
+    if (meta.id === 'heavenWorkshop') assert.deepEqual(describeBuildingEffects(meta, state, derived), [])
+    else assert.ok(describeBuildingEffects(meta, state, derived).length, meta.id)
+  }
   assert.doesNotMatch(describeEffects({ storageAll: 1 })[0].text, /成品按层级/)
   const { descriptor, errors } = parse(readFileSync('src/components/BuildingButton.vue', 'utf8'))
   assert.deepEqual(errors, [])
   compileScript(descriptor, { id: 'building-text-check' })
   assert.deepEqual(compileTemplate({ source: descriptor.template.content, filename: 'BuildingButton.vue', id: 'building-text-check' }).errors, [])
-  console.log('建筑文本快速回归通过：54种建筑、产出/供能/供应、自用能、旧档仓容、上限、停用、小额百分比、宜居度、矿工研究副产及Vue编译。')
+  console.log(`建筑文本快速回归通过：${BUILDINGS.length}种建筑、产出/供能/供应、自用能、旧档仓容、工艺强化、上限、停用、小额百分比、宜居度、矿工研究副产及Vue编译。`)
 } finally {
   await server.close()
 }

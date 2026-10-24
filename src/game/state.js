@@ -13,6 +13,7 @@ import { KARMA_PERK_MAP, createKarmaProgression, normalizeKarmaProgression } fro
 import { decodeMoneyFields } from './moneyFields'
 import { createAnalyticsState } from './analyticsState'
 import { WAREHOUSE_CAPACITY_VERSION } from '@/data/buildings'
+import { STORAGE_MERGE_VERSION } from '@/data/storage'
 import { createSamsara, createWorlds, createChallenge, daoReward, rememberDisciple } from '@/data/samsara'
 
 /**
@@ -78,6 +79,8 @@ export function createInitialState(now = Date.now()) {
     uncappedCraftVersion: 1,
     warehouseCapacityVersion: WAREHOUSE_CAPACITY_VERSION,
     legacyWarehouseCounts: { depot: 0, mysticVault: 0 },
+    warehouseMergeVersion: STORAGE_MERGE_VERSION,
+    legacyStorage: {},
 
     buildings: {},
     // 兼容旧档免费首屋的拆除记录；新建首屋同样支付木料。
@@ -279,6 +282,8 @@ export function resetForRebirth(state, karmaGain, kind = 'ascension', options = 
     state.industryVersion = 1
     state.warehouseCapacityVersion = WAREHOUSE_CAPACITY_VERSION
     state.legacyWarehouseCounts = { depot: 0, mysticVault: 0 }
+    state.warehouseMergeVersion = STORAGE_MERGE_VERSION
+    state.legacyStorage = {}
     state.alchemyProgressionVersion = 1
     state.legacyNineTurnPill = false
     state.scriptureArchiveVersion = 1

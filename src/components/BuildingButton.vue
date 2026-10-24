@@ -130,8 +130,8 @@ onBeforeUnmount(clearHighlight)
 
         <CostRows :cost="price" />
 
-        <div class="tip-section">效果（每座基础值<template v-if="count">；括号为当前合计</template><template v-else>；建成后生效</template>）</div>
-        <div v-if="meta.effects?.storage" class="small dim">仓储合计为建筑定额，含旧档保留容量；比例扩仓另计。</div>
+        <div class="tip-section">效果（{{ meta.effects?.storage ? '新建每座定额' : '每座基础值' }}<template v-if="count">；括号为当前合计</template><template v-else>；建成后生效</template>）</div>
+        <div v-if="meta.effects?.storage" class="small dim">仓储已含针对本建筑的工艺强化与旧档保留容量；资源总仓容比例另计。</div>
         <!-- 一条效果一行：多资源的建筑（库房、谷仓…）不再挤成一长串 -->
         <div v-for="row in effectRows" :key="row.key" class="tip-row">
           <span class="k">{{ row.label }}</span>

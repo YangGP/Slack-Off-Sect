@@ -162,7 +162,7 @@ export function dataIntegrity({ ok, section }) {
       // 修真应用 · 营造（自技艺页迁入）
       'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
       // 土木工艺：专业制作增益（营造 / 石作成规，见 CRAFT-PROGRESSION.md#材料研究与兼容）
-      'masonryArt', 'stoneWorks',
+      'masonryArt', 'stoneWorks', 'earthArt', 'earthEssence', 'grottoArt',
       'tradeRoutes', // 定期互市制度同时改善共享执符岗位。
     ]
     const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))

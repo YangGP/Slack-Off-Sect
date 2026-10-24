@@ -16,6 +16,7 @@ export const MONEY_PATHS = [
   ['dao'],
   ['resources', '*'],
   ['peak', '*'],
+  ['legacyStorage', '*', 'storage', '*'],
   ['craftProgress', '*'],
   ['craftTargets', '*'],
   ['settings', 'craftReserves', '*'],

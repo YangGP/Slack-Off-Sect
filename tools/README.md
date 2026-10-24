@@ -2,6 +2,8 @@
 
 完整资源流水、检查点恢复与报告重建见 [资源测定记录](RESOURCE-RECORDING.md)。
 
+v0.425首飞测量复核：现有 `balance:track` 可复用推进、记录和报告框架，但尚未适配新的道果结算、年度培养及世界经营策略，不能直接把其结果作为现版首飞耗时。待适配项与测量口径见[完整飞升测定](BALANCE-TRACKING.md#v0425首飞测量复核)。
+
 日常使用 `package.json` 中的 npm 命令。`node tools/run.mjs --list` 列出需要 Vite SSR 构建的入口；运行器统一构建、转发参数和退出码，并用独立进程隔离临时数值修改。不要复制新的 `vite build && node` 命令。
 
 ## 检查
@@ -29,7 +31,6 @@
 | 命令示例 | 用途 |
 | --- | --- |
 | `npm run balance -- 24 0` | 参照玩家资源快照；小时数、仙缘，可继续指定种子和工业策略 |
-| `npm run audit -- stone 8 --cap=250` | 单资源流量、门槛与临时数值实验；实现复用 `audit-lib.mjs` |
 | `npm run audit:economy -- 6400` | 整件资源去向与假设仓容 |
 | `npm run audit:save -- "存档路径.txt"` | 只读重算存档：仓容、产出、超限、库房报价与破境需求 |
 | `npm run audit:crafts -- 24 0` | 加工链与指定研究的边际收益 |
@@ -37,13 +38,9 @@
 | `npm run audit:disciples -- 24` | 不同弟子培养策略对照 |
 | `npm run audit:buildings -- 5` | 指定境界内的建筑来源及仓容闭包；省略参数检查全境界 |
 | `npm run audit:sources` | 研究露出层次与材料来源层次；用于发现前后置循环 |
-| `npm run audit:power` | 固定阶段的电力供需和完整供应链 |
-| `npm run audit:pacing -- 72 0 0 1` | 小时数、仙缘、祭炼等级、事件种子；后续参数见 ENGINEERING |
 | `npm run audit:breakthrough -- power 12345 72` | 固定策略下的真实准备成本和强制突破结果实验 |
 | `npm run audit:breakthrough -- --paired --hours=1008 --seed=1 --outcomes=natural --aids=full --faith=growth --visits=three --lives=2` | P1同策略成对测量；记录真实飞升结算、身死、香火投资、决策与经济边际报价 |
 | `npm run audit:breakthrough -- --paired --hours=168 --seed=1 --faith=growth --visits=waking --decision-seconds=150 --batch-actions=12 --reserve=ready --wall-seconds=900` | 未主动转世的直飞基线：每日16小时在线、8小时睡眠离线，每150秒集中操作，观察最多7天 |
-| `npm run audit:breakthrough-risk` | 固定概率的有限状态模型，含倒退、死亡重置和护道减免 |
-| `npm run audit:review -- 72 12345 natural on` | 综合进度报告；小时数、种子、guaranteed/natural、自动分工 on/off |
 | `npm run balance:events -- 24 0` | 事件种子与应对策略对照 |
 | `npm run balance:visits -- 24` | 固定开局及随机流，不同上线频率对照 |
 | `npm run balance:track -- 0 12345` | 完整飞升测定：复用P1模拟器和资源记录器，实际飞升后输出阶段收支、阻塞、损失、节奏与检查点，见[说明](BALANCE-TRACKING.md) |

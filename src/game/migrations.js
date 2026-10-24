@@ -6,7 +6,8 @@ import { RECIPE_STATIONS } from '@/data/industry'
 import { EVENT_MAP, getEventLevel } from '@/data/events'
 import { ZERO, money, moneyClamp, moneyGt, moneyMax, moneyNonNegative } from './decimal'
 import { normalizeDisciples } from '@/data/disciples'
-import { WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS } from '@/data/buildings'
+import { WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS, LEGACY_STORAGE_DELTA } from '@/data/buildings'
+import { STORAGE_MERGE_VERSION, STORAGE_MERGE_GROUPS, PRE_MERGE_STORAGE, PRE_MERGE_STORAGE_ALL } from '@/data/storage'
 
 
 /** 旧档金额：损坏值回退 0，负数按 0 处理（与读档解码同口径）。 */
@@ -219,8 +220,48 @@ export function migrateState(state, fresh, { preferMembers = false } = {}) {
   merged.ui = { ...fresh.ui, ...(state.ui || {}) }
   retireInfusionAltar(merged)
   retireBeastTaming(merged, state)
+  mergeStorageBuildings(merged, state)
   // 读档保留增益，由在线/离线时间轴处理到期。
   return merged
+}
+
+/** 旧仓库合并为实体数量与每座保留定额；不发材料、不补研究，不反复累加。 */
+function mergeStorageBuildings(merged, original) {
+  if (original.warehouseMergeVersion === STORAGE_MERGE_VERSION) return
+  merged.legacyStorage = {}
+  const countOf = entry => Number.isFinite(entry?.count) ? Math.max(0, Math.floor(entry.count)) : 0
+  for (const [target, ids] of Object.entries(STORAGE_MERGE_GROUPS)) {
+    const count = Math.min(Number.MAX_SAFE_INTEGER, ids.reduce((sum, id) => sum + countOf(merged.buildings[id]), 0))
+    if (count > 0) {
+      const storage = {}
+      for (const id of ids) {
+        const n = countOf(merged.buildings[id])
+        const legacy = Math.min(n, merged.legacyWarehouseCounts[id] || 0)
+        for (const resource of RESOURCES) {
+          if (!Number.isFinite(resource.baseMax) || resource.isolatedStorage) continue
+          const base = (PRE_MERGE_STORAGE[id]?.[resource.id] || 0) + (PRE_MERGE_STORAGE_ALL[id] || 0) * (resource.storageWeight ?? 1)
+          const amount = money(base).times(n).plus(money(LEGACY_STORAGE_DELTA[id]?.[resource.id] || 0).times(legacy))
+          if (amount.gt(0)) storage[resource.id] = (storage[resource.id] || ZERO).plus(amount)
+        }
+      }
+      // 平均后向上取整，避免小数除不尽导致旧容量减少；保留量只绑定现有旧建筑。
+      merged.legacyStorage[target] = { count, storage: Object.fromEntries(Object.entries(storage).map(([id, total]) => [id, total.div(count).ceil()])) }
+      const previous = merged.buildings[target]
+      merged.buildings[target] = { ...(previous || {}), count, on: previous ? previous.on !== false : target !== 'grotto' }
+    }
+    for (const id of ids) if (id !== target) delete merged.buildings[id]
+  }
+  if (merged.rebuild?.buildings) {
+    const buildings = { ...merged.rebuild.buildings }
+    for (const [target, ids] of Object.entries(STORAGE_MERGE_GROUPS)) {
+      const total = ids.reduce((sum, id) => sum + countOf({ count: buildings[id] }), 0)
+      if (total) buildings[target] = Math.min(total, Number.MAX_SAFE_INTEGER)
+      for (const id of ids) if (id !== target) delete buildings[id]
+    }
+    merged.rebuild = { ...merged.rebuild, buildings }
+  }
+  merged.legacyWarehouseCounts = Object.fromEntries(LEGACY_WAREHOUSE_IDS.map(id => [id, 0]))
+  merged.warehouseMergeVersion = STORAGE_MERGE_VERSION
 }
 
 /**

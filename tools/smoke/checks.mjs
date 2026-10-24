@@ -26,6 +26,7 @@ export const smokeChecks = [
   samsara.samsaraLifecycle,
   startup.initialState,
   storage.uncappedCrafting,
+  storage.warehouseConsolidation,
   buildings.buildingActions,
   buildings.buildingMaintenanceCompatibility,
   buildings.spiritQuarryInfusion,

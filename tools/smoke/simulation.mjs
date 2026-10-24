@@ -46,13 +46,11 @@ export function playerBot({ ok, section }) {
     ok('能支付讲经前置后转向讲经堂，不永久堆典籍库', afterAssembly.prerequisites().upgrades.has('preachArt') && afterAssembly.prerequisites().buildings.has('academy'))
     s.realm = 7
     s.upgrades.earthEssence = true
-    s.buildings.depot = { count: 1, on: true }
-    // 材料库缩容后，需玄库才能容纳广储库所需的8000灵石。
-    s.buildings.mysticVault = { count: 1, on: true }
+    s.buildings.warehouse = { count: 10, on: true }
     E.recompute(s, d)
     for (const res of RESOURCES) s.resources[res.id] = d.max[res.id].isFinite() ? d.max[res.id] : E.money(UNCAPPED_CRAFTED_RESOURCES.has(res.id) ? 10000 : 0)
     E.recompute(s, d)
-    ok('必需仓储即使不在旧采购表中也能实际建造', bot.buildStep(0, null, [], new Map([['grandStore', 1]])) && E.countOf(s, 'grandStore') === 1)
+    ok('必需空间仓储可实际建造', bot.buildStep(0, null, [], new Map([['grotto', 1]])) && E.countOf(s, 'grotto') === 1)
     s.realm = 6
     for (const id of ['intuition', 'preachArt', 'crystalTheory', 'compositeRune', 'astrologyArt']) s.upgrades[id] = true
     E.recompute(s, d)
@@ -154,8 +152,8 @@ export function longRunningStability({ ok, section }) {
     state.resources.pill = E.money(500)
     state.resources.artifact = E.money(500)
     E.buyBuilding(state, derived, 'spiritField', 5) // 先有聚灵阵，伐木场、茅屋与藏经阁才立得住
-    E.buyBuilding(state, derived, 'lumberYard', 1) // 茅屋要一座伐木场（基础链第三环）
     E.buyBuilding(state, derived, 'hut', 5)
+    E.buyBuilding(state, derived, 'lumberYard', 1) // 首屋建成后开放伐木场。
     E.buyBuilding(state, derived, 'library', 2)
     E.recruitArrivals(state, derived, 200) // 等弟子自己来
     E.setJob(state, derived, 'farmer', 6)

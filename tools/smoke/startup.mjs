@@ -38,25 +38,24 @@ export function initialState({ ok, close, section }) {
     ok('聚灵阵产出灵气（春季 +20% 后 0.36/s）', close(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
     ok('有聚灵阵后点击收益提高到 2.8', close(E.clickGain(state, derived), 2.5 + E.BUILDING_MAP.spiritField.effects.prod.qi, 1e-9))
 
-    // 伐木场：基础链第二环（聚灵阵 → 伐木场 → 茅屋 → 藏经阁）。
+    // 开局先建居所，再开放伐木场；造价与原有峰值露出规则保持一致。
     const yard = E.BUILDING_MAP.lumberYard
-    ok('伐木场要一座聚灵阵，造价与茅屋同档（150 气 + 60 木）',
-      yard.needs?.building?.id === 'spiritField' && E.moneyEq(E.buildingCost(state, 'lumberYard').qi, 150))
-    state.resources.qi = E.money(150)
-    state.resources.wood = E.money(60)
-    E.trackPeak(state)
-    ok('材料齐了能建伐木场', E.buyBuilding(state, derived, 'lumberYard', 1) === 1)
-
-    // 茅屋：第三环，消耗灵气与灵木，并且要先有一座伐木场。
+    ok('伐木场要一座茅屋，造价仍为150气与60木',
+      yard.needs?.building?.id === 'hut' && E.moneyEq(E.buildingCost(state, 'lumberYard').qi, 150) && E.moneyEq(E.buildingCost(state, 'lumberYard').wood, 60))
     const hut = E.BUILDING_MAP.hut
     ok('首屋同样需要灵气150与灵木60', E.moneyEq(E.buildingCost(state, 'hut').qi, 150) && E.moneyEq(E.buildingCost(state, 'hut').wood, 60) && hut.cost.wood === 60)
-    ok('茅屋要一座伐木场（基础链第三环）', hut.needs?.building?.id === 'lumberYard', JSON.stringify(hut.needs))
+    ok('茅屋要一座聚灵阵（基础链第二环）', hut.needs?.building?.id === 'spiritField', JSON.stringify(hut.needs))
     state.resources.qi = E.money(150)
     state.resources.wood = E.money(60)
     state.resources.stone = E.money(4)
     E.trackPeak(state)
+    ok('有聚灵阵和材料时先开放茅屋，伐木场仍不可建', E.isBuildingUnlocked(state, 'hut') && !E.isBuildingUnlocked(state, 'lumberYard') && E.buyBuilding(state, derived, 'lumberYard', 1) === 0)
     ok('材料齐了能建茅屋', E.buyBuilding(state, derived, 'hut', 1) === 1)
     ok('茅屋把弟子上限抬到 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
+    ok('建成茅屋后开放伐木场', E.isBuildingUnlocked(state, 'lumberYard'))
+    state.resources.qi = E.money(150)
+    state.resources.wood = E.money(60)
+    ok('补齐材料后能建伐木场', E.buyBuilding(state, derived, 'lumberYard', 1) === 1)
 
     // 弟子住进来之后才有产出
     state.disciples.total = 2

@@ -1,6 +1,6 @@
 import { RESOURCES } from '@/data/resources'
 import { CONFIG } from '@/data/config'
-import { BUILDINGS, BUILDING_MAP, LEGACY_WAREHOUSE_IDS, LEGACY_STORAGE_DELTA } from '@/data/buildings'
+import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
 import { treasureMult, habitabilityEffects, jobOutputs, karmaMultipliers, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked, buildingBoostAvailable } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
@@ -21,17 +21,19 @@ import { registerStaticMoneyCache } from '../staticMoneyCache'
 
 const BUILDING_BOOST_MAP = Object.fromEntries(BUILDINGS.filter(b => b.boost).map(b => [b.boost.id, b.boost]))
 
-/** 两类仓库的有效定额：新容量×N + 旧制差额×min(N,旧数量)。 */
-export function effectiveBuildingStorage(state, id) {
+/** 工艺强化当前定额；旧容量只作仍保留旧建筑的下限，不再乘工艺。新建部分只用现行定额。 */
+export function effectiveBuildingStorage(state, id, ratio = 1) {
   const meta = BUILDING_MAP[id]
   if (!meta?.effects?.storage) return {}
   const count = Math.max(0, Math.floor(state.buildings?.[id]?.count || 0))
-  const legacy = LEGACY_WAREHOUSE_IDS.includes(id)
-    ? Math.min(count, Math.max(0, Math.floor(state.legacyWarehouseCounts?.[id] || 0)))
-    : 0
-  const delta = LEGACY_STORAGE_DELTA[id] || {}
-  return Object.fromEntries(Object.entries(meta.effects.storage).map(([res, amount]) => [res,
-    money(amount).times(count).plus(delta[res] ? money(delta[res]).times(legacy) : ZERO)]))
+  const legacy = state.legacyStorage?.[id]
+  const oldCount = Math.min(count, Math.max(0, Math.floor(legacy?.count || 0)))
+  const resources = new Set([...Object.keys(meta.effects.storage), ...Object.keys(legacy?.storage || {})])
+  return Object.fromEntries([...resources].map(res => {
+    const base = money(meta.effects.storage[res] || 0).times(ratio)
+    const extra = moneyMax(ZERO, money(legacy?.storage?.[res] || 0).minus(base))
+    return [res, base.times(count).plus(extra.times(oldCount))]
+  }))
 }
 
 /**
@@ -302,7 +304,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     const powMult = power ? power.mult : 1
     const countOnly = {}
     if (ef.storage) {
-      if (LEGACY_WAREHOUSE_IDS.includes(meta.id)) applyEffects({ storage: effectiveBuildingStorage(state, meta.id) }, 1, targets)
+      if (state.legacyStorage?.[meta.id]) applyEffects({ storage: effectiveBuildingStorage(state, meta.id) }, 1, targets)
       else countOnly.storage = ef.storage
     }
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
@@ -644,9 +646,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   for (const [id, value] of Object.entries(acc.buildingStorageRatio || {})) {
     const meta = BUILDING_MAP[id]
     if (!meta || !isEntryEnabled(state, meta)) continue
-    const storage = effectiveBuildingStorage(state, id)
+    const base = effectiveBuildingStorage(state, id)
+    const storage = effectiveBuildingStorage(state, id, 1 + value)
     for (const [res, amount] of Object.entries(storage)) {
-      max[res] = (max[res] ?? ZERO).plus(amount.times(value))
+      max[res] = (max[res] ?? ZERO).plus(amount.minus(base[res] || ZERO))
     }
   }
   for (const r of RESOURCES) {

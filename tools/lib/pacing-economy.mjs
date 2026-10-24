@@ -9,7 +9,7 @@ const investmentIds = [
   'mahayanaArt', 'energyCore', 'earthEssence', 'flowField',
 ]
 const facilityIds = ['alchemyRoom', 'pillFurnace', 'forge', 'workshop', 'library', 'scriptureArchive', 'observatory',
-  'mansion', 'depot', 'grandStore', 'grotto', 'caveDwelling', 'heavenTower',
+  'mansion', 'warehouse', 'arcaneVault', 'grotto', 'caveDwelling', 'heavenTower',
   'splitArray', 'polarizeArray', 'annihilationFurnace', 'harvestPlatform', 'immortalArray', 'karmaPool']
 const numbers = map => Object.fromEntries(Object.entries(map || {}).map(([id, value]) => [id, E.moneyToNumber(value)]))
 const difference = (after, before) => Object.fromEntries([...new Set([...Object.keys(after || {}), ...Object.keys(before || {})])]
@@ -92,7 +92,7 @@ export function measureSpecialization(seconds = 600) {
         state.realm = 9
         for (const entry of E.ALL_UPGRADES) if (entry.id !== id) state.upgrades[entry.id] = true
         for (const building of E.BUILDINGS) state.buildings[building.id] = { count: 1, on: true }
-        for (const buildingId of ['warehouse', 'granary', 'depot', 'grandStore']) state.buildings[buildingId].count = 1000
+        for (const buildingId of ['warehouse', 'granary', 'arcaneVault', 'grotto']) state.buildings[buildingId].count = 1000
         state.settings.recruitMode = 'manual'
         state.settings.craftReservePercent = 0
         E.recompute(state, derived)
