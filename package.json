@@ -30,6 +30,8 @@
     "balance:events": "node tools/run.mjs event-balance",
     "balance:visits": "node tools/run.mjs playstyles",
     "balance:track": "node tools/run.mjs balance-telemetry",
+    "balance:kittens": "node tools/kittens/first-reset.mjs",
+    "check:kittens": "node tools/kittens/check.mjs",
     "docs:tables": "node tools/dump-tables.mjs",
     "audit:save": "node tools/run.mjs economy-audit --save",
     "bench:craft": "node tools/run.mjs craft-performance",

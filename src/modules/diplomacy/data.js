@@ -65,10 +65,10 @@ export const DIPLOMACY_SECTS = [
   {
     // 秘银的炼虚前唯一稳定来源：定价偏高，只换不回，防止用基础资源套利。
     id: 'silverGorge',
-    realm: 6,
+    realm: 5,
     name: '银溪谷',
     glyph: '银',
-    desc: '谷中银脉丰而炉火弱，缺的是砌炉的灵石与锻炉的玄铁。愿以秘银换料。',
+    desc: '谷中银脉丰而炉火弱，缺的是砌炉的灵石与锻炉的玄铁。元婴起可换取少量秘银，催引宗门凝晶。',
     pays: { ore: 500, stone: 300 },
     gains: { mithril: 3 },
     fortune: [

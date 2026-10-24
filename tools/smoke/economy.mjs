@@ -145,8 +145,7 @@ export function incomeBreakdown({ ok, close, section }) {
       // 生效检查：建 1 座库房，基础物资的上限按表抬高，其它资源一律不动
       const { state: s4, derived: d4 } = newGame()
       s4.buildings.lumberYard = { count: 3, on: true }
-      s4.upgrades.earthArt = true // 库房现在挂在「土木术」后面
-      s4.upgrades.quarryArt = true // 砌基改用石材，需先会压制
+      s4.upgrades.quarryArt = true // 库房在凿石要诀后可建；本例不学额外扩仓工艺
       E.recompute(s4, d4)
       const before = { ...d4.max }
       s4.resources.wood = E.money(5000)

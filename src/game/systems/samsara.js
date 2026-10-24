@@ -3,7 +3,7 @@ import { cultivationRequired, newDisciple, recountDisciples } from '@/data/disci
 import { JOBS } from '@/data/jobs'
 import { ZERO, money, moneyMin } from '../decimal'
 import { gameRandom } from '../context'
-import { withResourceAction } from '../resourceObservation'
+import { setResourceValue, withResourceAction } from '../resourceObservation'
 import { addResource, canAfford, payCost, pushLog, checkNeeds } from './core'
 import { recompute } from './economy'
 import { resetForRebirth } from '../state'
@@ -26,7 +26,7 @@ export function buyDaoPerk(state, derived, id) {
   return withResourceAction(state, { type: 'buyDaoPerk', id }, () => {
     if (money(state.dao).gte(1)) state.samsara.automation = true
     state.dao = money(state.dao).minus(cost)
-    state.resources.dao = state.dao
+    setResourceValue(state, 'dao', state.dao, { source: 'samsara:buyDaoPerk' })
     state.samsara.spent = money(state.samsara.spent).plus(cost)
     state.samsara.levels[id] = daoLevel(state, id) + 1
     recompute(state, derived)

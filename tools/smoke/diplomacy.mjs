@@ -209,10 +209,15 @@ export function diplomacyTrade({ ok, section }) {
     // 4.4 缺失产物：秘银与灵晶只能高价少量换，不能替代产线
     {
       const { state: s, derived: d } = diplomacyReady()
+      s.realm = 4
       Object.assign(s.resources, {
         ore: E.money(2000), stone: E.money(2000), insight: E.money(3000), faith: E.money(500),
         warrant: E.money(DIPLOMACY.WARRANT_COST * 2),
       })
+      E.recompute(s, d)
+      const beforeWarrant = s.resources.warrant
+      ok('金丹仍不能提前换取秘银，失败不扣信符', !E.tradeWithSect(s, d, 'silverGorge').ok && E.moneyEq(s.resources.warrant, beforeWarrant))
+      s.realm = 5 // 元婴开放少量催化剂互市，本地提炼仍在炼虚。
       E.recompute(s, d)
       const silver = E.tradeWithSect(s, d, 'silverGorge')
       ok('银溪谷以玄铁灵石换秘银 3', silver.ok && E.moneyEq(s.resources.mithril, 3))

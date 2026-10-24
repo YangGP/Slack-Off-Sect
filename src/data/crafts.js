@@ -204,7 +204,7 @@ const CORE_CRAFTS = [
     primary: ['spiritLiquid'],
     cost: { spiritLiquid: 3, qi: 300, mithril: 0.01 },
     time: 5,
-    desc: '以固形纹约束结晶边界，灵液与灵气在秘银催引下凝成稳定晶核。基础口径为灵液 3、灵气 300、秘银 0.01；用于晶核凝炼阵、观星台与高级阵法。',
+    desc: '以固形纹约束结晶边界，灵液与灵气在秘银催引下凝成稳定晶核。基础口径为灵液 3、灵气 300、秘银 0.01；元婴起可从银溪谷换取催化剂，先凝晶、再建晶核凝炼阵扩产，后续用于观星台与高级阵法。',
     needs: { realm: 5, upgrades: ['crystalCraft'], building: { id: 'talismanHall', count: 1 } },
   },
   {

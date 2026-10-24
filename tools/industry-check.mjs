@@ -71,7 +71,8 @@ export function runIndustryChecks(E = Engine,
     s.buildings.forge.on = true
     s.resources.wood = E.money(0)
     E.recompute(s, d)
-    ok('维护断供时专业设备不能免费加工', d.processingCapacity.forge === 0)
+    ok('无灵木维护费的炼器坊不因灵木耗尽停机', d.processingCapacity.forge === oldCapacity * 2 &&
+      E.processingPlan(s, d).refineSteel.work > 0)
   }
   {
     const { state: s, derived: d } = setup()

@@ -13,7 +13,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { progressionDiagnostics } from '../progression-diagnostics.mjs'
 
-export const PACING_STRATEGY = 'p1-reincarnation-v9'
+export const PACING_STRATEGY = 'p1-reincarnation-v11'
 const epoch = Date.UTC(2026, 9, 18)
 const num = E.moneyToNumber
 const numbers = map => Object.fromEntries(Object.entries(map || {}).map(([id, value]) => [id, num(value)]))
@@ -346,7 +346,8 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
   }
   const allocateLabor = () => {
     const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
-    for (const job of E.JOBS) E.setJob(state, derived, job.id, 0)
+    // 保留机器人为进口渠道安排的执符使，避免活跃分工每分钟切断信符供给。
+    for (const job of E.JOBS) if (job.id !== 'huntPlanner') E.setJob(state, derived, job.id, 0)
     const farmer = E.JOBS.find(job => job.id === 'farmer')
     const perFarmer = farmer.base * (1 + (derived.jobRatio.farmer || 0)) * derived.discipleMult * num(derived.sourceFactor.qi)
     const deficit = E.moneyMax(0, derived.upkeep.times(0.1).minus(derived.netQi))
@@ -522,6 +523,7 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
     interactionCount, decisionCount, decisionSummary, trace, traceDropped, final: snapshot(), economy: economyAssessment(state, derived), recording, checkpointPath,
     runtimeState: control.includeRuntime ? capture() : undefined,
     boundaries: [`每${options.decisionSeconds}秒集中执行至多${options.batchActions}步；玩家即时制作；阶段项目按真实动作建设`,
+      '互市按本境可行来源补料；需要信符时暂停天赋自动分工，手动维持执符使；活跃分工保留该岗位',
       options.visits === 'waking' ? '每日前16小时在线、后8小时离线；不模拟工作等额外离开' : '共同开局15分钟，后续按指定上线窗口',
       'offline为有界近似；缺料／仓容时长按区间左端采样，不作精确因果分解',
       '只在真实飞升动作结算后记录ascensions；死亡与截止样本保留',

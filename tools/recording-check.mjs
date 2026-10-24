@@ -28,6 +28,25 @@ function fixture() {
 const observe = f => f.recorder.observe(f.state, f.derived, f.now, progressionDiagnostics(f.state, f.derived))
 const finish = f => f.recorder.finish(f.state, { elapsed: f.now, derived: f.derived })
 const cases = {
+  'dao-purchase'() {
+    const state = createInitialState(0), derived = E.createDerived()
+    state.dao = state.resources.dao = E.money('2.5')
+    state.samsara.shopOpen = true
+    E.recompute(state, derived)
+    const recorder = createResourceRecorder({ root: root(), sources: { fixture: 'dao-purchase' } })
+    recorder.setEnvironment(() => ({ lifeId: 1, currentRealm: state.realm, online: true }))
+    recorder.open(state, 0, derived)
+    setGameContext(state, { now: () => 0, resourceObserver: recorder.observer })
+    assert.equal(E.buyDaoPerk(state, derived, 'cultivation'), true)
+    assert.equal(state.dao.toString(), '1.5')
+    assert.ok(state.resources.dao.eq(state.dao))
+    assert.equal(state.samsara.spent.toString(), '1')
+    assert.equal(state.samsara.levels.cultivation, 1)
+    const { report } = recorder.finish(state, { elapsed: 0, derived })
+    assert.equal(report.accountingComplete, true)
+    assert.equal(report.totals.dao, '-1')
+    assert.ok(report.flows.some(row => row.resource === 'dao' && row.action?.type === 'buyDaoPerk' && row.negative === '1'))
+  },
   compact() {
     const f = fixture()
     for (let i = 0; i < 100; i++) assert.equal(E.setCraftTarget(f.state, f.derived, 'sawPlank', 25), false)

@@ -163,8 +163,10 @@ export function goldenCoreProduction({ ok, close, section }) {
     const recipe = CRAFT_MAP.condenseCrystal
     const beforeRate = E.eventResourceRate(s, d, 'crystal')
     const beforeYield = E.craftYield(d, recipe)
-    s.upgrades.crystalPolishing = true
-    E.recompute(s, d)
+    s.upgrades.precipitateTheory = true
+    Object.assign(s.resources, asMoney(UPGRADE_MAP.crystalPolishing.cost))
+    ok('元婴可实际参悟晶纹精修并支付知识与灵晶费用', E.research(s, d, 'crystalPolishing') &&
+      E.moneyIsZero(s.resources.insight) && E.moneyIsZero(s.resources.daoNote) && E.moneyIsZero(s.resources.crystal))
     ok('凝晶精修减少每份耗料并提高加工效率，单份收益不变', close(E.craftYield(d, recipe), beforeYield) && E.moneyEq(craftCost(d, recipe).qi, 240) && d.craftSpeedByRecipe.condenseCrystal === 0.25)
     d.rates = { qi: E.money(600), wood: E.money(80), ore: E.money(40), spiritLiquid: E.money(60), mithril: E.money('0.2') }
     const crystalRate = E.eventResourceRate(s, d, 'crystal')

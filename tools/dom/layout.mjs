@@ -228,6 +228,7 @@ export async function checkLayout(context) {
       state.buildings.lumberYard = { count: 3, on: true }
       state.buildings.warehouse = { count: 2, on: true } // 已建 2 座 → 提示里应出现「合计」
       state.resources.wood = engine.money(9999)
+      state.resources.cutStone = engine.money(9999)
       state.resources.stone = engine.money(9999)
       state.resources.ore = engine.money(9999)
       state.resources.herb = engine.money(9999)
@@ -249,9 +250,9 @@ export async function checkLayout(context) {
       ok('一行里不带逗号顿号堆叠（每行只有一项）', effectRows.every((r) => !r.includes('，') && !r.includes('、')), effectRows.join(' ｜ '))
       ok('库房不再给灵气 / 灵机 / 丹药 / 符箓 / 香火 / 法器 加上限', !/灵气 上限|灵机 上限|丹药 上限|符箓 上限|香火 上限|法器 上限/.test(tip.textContent), tip.textContent.replace(/\s+/g, ' ').slice(-120))
       ok('合计写在同一条里', effectRows.some((r) => r.includes('（合计')), effectRows.join(' ｜ '))
-      ok('悬停时高亮的正是这座建筑的造价（灵木 / 玄铁）', (() => {
+      ok('悬停时高亮的正是这座建筑的造价（灵木 / 石材）', (() => {
         const lit = [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim())
-        return lit.includes('灵木') && lit.includes('玄铁') && !lit.includes('灵气') && !lit.includes('灵石')
+        return lit.length === 2 && lit.includes('灵木') && lit.includes('石材')
       })(), [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim()).join(','))
       storeItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))
       await new Promise((r) => setTimeout(r, 60))

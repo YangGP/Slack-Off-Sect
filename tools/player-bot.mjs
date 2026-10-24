@@ -11,6 +11,7 @@ import { CONFIG } from '../src/data/config.js'
 import { ALL_UPGRADES, UPGRADE_MAP } from '../src/data/upgrades.js'
 import { UNCAPPED_CRAFTED_RESOURCES } from '../src/data/resources.js'
 import { CRAFTS, craftCost } from '../src/data/crafts.js'
+import { DIPLOMACY, DIPLOMACY_SECTS } from '../src/modules/diplomacy/data.js'
 import { ZERO, ceilMoney, money, moneyGt, moneyGte, moneyLt, moneyLte, moneyMax, moneyMin, moneySum } from '../src/game/decimal.js'
 
 
@@ -129,6 +130,54 @@ export function createBot(state, derived, policy = {}) {
     for (const [id, amount] of Object.entries(goals)) plan[id] = moneyMax(plan[id] ?? ZERO, amount)
     return plan
   }
+  // 只比较境界可行性；未学会但本境能学的工艺仍交给前置规划。
+  // 金丹通过星崖观补灵晶；元婴起可换少量秘银，转向本地凝晶。
+  const importRoute = resource => {
+    const exchange = id => DIPLOMACY_SECTS.find(sect => sect.gains[id] && state.realm >= (sect.realm || DIPLOMACY.MIN_REALM))
+    const canMake = (recipe, path) => (recipe.needs?.realm || 0) <= state.realm &&
+      Object.keys(recipe.cost).every(id => canSource(id, path))
+    const canSource = (id, path) => {
+      if (path.has(id)) return false
+      const recipe = CRAFTS.find(c => c.out === id)
+      return !recipe || !!exchange(id) || canMake(recipe, new Set([...path, id]))
+    }
+    const recipe = CRAFTS.find(c => c.out === resource)
+    return recipe && canMake(recipe, new Set([resource])) ? null : exchange(resource)
+  }
+  const importNeeds = () => {
+    const need = realmNeed() || {}
+    const demand = { crystal: need.crystal || ZERO, mithril: need.mithril || ZERO }
+    // 元婴起可凝晶、但秘银提炼仍未开放；少量滚动补料，不把全程催化剂提前买满。
+    if (state.realm >= 5 && moneyGt(need.crystal || ZERO, state.resources.crystal || ZERO)) demand.mithril = moneyMax(demand.mithril, 2)
+    return Object.entries(demand).filter(([resource, target]) => moneyLt(state.resources[resource] || ZERO, target))
+      .map(([resource, target]) => ({ resource, target, sect: importRoute(resource) })).filter(row => row.sect)
+  }
+  const ensureJob = id => {
+    if (!derived.unlockedJobs.includes(id) || (state.disciples.jobs[id] || 0) > 0) return
+    if (E.idleDisciples(state) === 0) {
+      const donor = Object.entries(state.disciples.jobs)
+        .filter(([job, count]) => job !== 'farmer' && count > 1)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+      if (donor) E.setJob(state, derived, donor[0], donor[1] - 1)
+    }
+    if (E.idleDisciples(state) > 0) E.setJob(state, derived, id, 1)
+  }
+  const tradeStep = () => {
+    const pending = importNeeds()
+    if (!pending.length || !E.isDiplomacyUnlocked(state)) return
+    if (!E.countOf(state, 'huntingCamp')) E.buyBuilding(state, derived, 'huntingCamp')
+    if (state.buildings.huntingCamp?.on === false) E.toggleBuilding(state, derived, 'huntingCamp')
+    ensureJob('huntPlanner')
+    // 每次决策最多一次互市，仍走真实信符、费用、境界和仓容校验。
+    for (const { sect } of pending) {
+      const quote = E.tradePreview(state, derived, sect.id)
+      if (quote.unlocked && quote.warrantEnough && quote.affordable && quote.hasRoom) {
+        E.tradeWithSect(state, derived, sect.id)
+        E.recompute(state, derived)
+        break
+      }
+    }
+  }
   const normalHabitability = () => derived.habitability - (state.habitabilityPenalty || 0)
   const comfortFloor = () => state.disciples.total + (state.realm >= 5 ? 100 : 40)
   const comfortCeiling = () => state.disciples.total + (state.realm >= 5 ? 120 : 60)
@@ -137,6 +186,8 @@ export function createBot(state, derived, policy = {}) {
   const wantsComfortUpgrade = (meta) => !comfortOnly(meta) || meta.effects.habitabilityPerHousing > 0 ||
     normalHabitability() + (meta.effects.habitability || 0) <= comfortCeiling()
   const wantsComfortBuilding = (meta) => !comfortOnly(meta) || normalHabitability() < comfortFloor()
+  const bootstrapTarget = () => E.countOf(state, 'hut') > 0 && E.countOf(state, 'quarry') === 0
+    ? ['lumberYard', 'library', 'granary', 'quarry'].find(id => E.countOf(state, id) === 0) : null
   const capacityDemand = (next, upgrades, buildings) => {
     const demand = { ...next }
     const include = cost => {
@@ -154,17 +205,14 @@ export function createBot(state, derived, policy = {}) {
   }
 
   function assignJobs() {
+    // 必需的互市岗位由参照玩家手动维持；暂停按天赋自动改岗，
+    // 否则下一跳会把刚调出的执符使送回原岗位，永远产不出信符。
+    if (importNeeds().length) state.settings.autoTalentJobs = false
     // 新设施只开放职位，不再自带原料。即使人口住满，也为新开放产业调配一人。
     for (const id of ['scholar', 'woodcutter', 'miner', 'herbalist', 'incenseKeeper']) {
-      if (!derived.unlockedJobs.includes(id) || (state.disciples.jobs[id] || 0) > 0) continue
-      if (E.idleDisciples(state) === 0) {
-        const donor = Object.entries(state.disciples.jobs)
-          .filter(([job, count]) => job !== 'farmer' && count > 1)
-          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
-        if (donor) E.setJob(state, derived, donor[0], donor[1] - 1)
-      }
-      if (E.idleDisciples(state) > 0) E.setJob(state, derived, id, 1)
+      ensureJob(id)
     }
+    if (importNeeds().length) ensureJob('huntPlanner')
     const idle = E.idleDisciples(state)
     if (idle <= 0) return
     // 派多少农民：按**基准口径**算，也就是「基准口粮 ÷ 阵徒基准产出」——
@@ -239,16 +287,21 @@ export function createBot(state, derived, policy = {}) {
       // 否则首屋涨价后会出现「没弟子→没灵机→不能参悟」的开局死锁。
       const housing = (meta?.effects?.maxDisciples || 0) > 0 &&
         state.disciples.total >= (derived.maxDisciples || 0)
+      // 攒灵气期间允许能在剩余等待内回本的聚灵阵，避免保留尾款把自己的供气投资也锁死。
+      const qiGap = money(reserveCost?.qi || ZERO).minus(state.resources.qi || ZERO)
+      const qiGain = id === 'spiritField' ? money(meta.effects.prod.qi).times(derived.sourceFactor.qi || 1) : ZERO
+      const qiSupport = qiGap.gt(0) && moneyGt(derived.netQi, 0) && qiGain.gt(0) &&
+        money(cost.qi).times(derived.netQi).lt(qiGap.times(qiGain))
       if (!required && !housing && !wantsComfortBuilding(meta)) { reject(id, 'comfort-target', cost); continue }
       const storageFix = shortRes.some((r) => (meta?.effects?.storage?.[r] || 0) > 0)
-      if (policy.onlyBreakthrough && !required && !storageFix) {
+      if (policy.onlyBreakthrough && !required && !storageFix && !qiSupport) {
         const support = ['hut', 'spiritField', 'lumberYard', 'library', 'granary', 'quarry'].includes(id) && E.countOf(state, id) === 0
         const comfort = comfortOnly(meta) && normalHabitability() < state.disciples.total
         if (!support && !housing && !comfort) { reject(id, 'optional-project', cost); continue }
       }
       // 床位不足时不能因为「在攒破境材料」把住房一起锁死：首屋现在要灵木，
       // 木料一旦被预留就再也买不起房，开局会永久停在无弟子状态。
-      if (reserveCost && !required && !housing && !storageFix && Object.keys(cost).some((k) =>
+      if (reserveCost && !required && !housing && !storageFix && !qiSupport && Object.keys(cost).some((k) =>
         moneyLt(money(state.resources[k] ?? ZERO).minus(cost[k]), reserveCost[k] ?? ZERO))) { reject(id, 'reserve', cost); continue }
       // 开局自举期：按基础链的书写顺序放行 —— 伐木场 → 藏经阁 → 谷仓 → 首座采矿场，
       // 其余吃木材的建筑先等一等，避免反复扩屋把开局木料花光。
@@ -259,18 +312,8 @@ export function createBot(state, derived, policy = {}) {
       // 而木材又被制作目标持续吃掉；于是"没采矿场 → 不许买任何吃木材的建筑 → 永远攒不出采矿场"，
       // 人口住满、房子盖不了，推演能从 24 小时一路平到 96 小时。
       // 例外 = 人口已住满、且这座建筑正是扩屋时放行：多一个人就多一份产出，扩屋永远是划算的。
-      const bootstrapLocked =
-        E.countOf(state, 'hut') > 0 &&
-        E.countOf(state, 'quarry') === 0 &&
-        !!cost.wood &&
-        id !==
-          (E.countOf(state, 'lumberYard') === 0
-            ? 'lumberYard'
-            : E.countOf(state, 'library') === 0
-              ? 'library'
-              : E.countOf(state, 'granary') === 0
-                ? 'granary'
-                : 'quarry')
+      const bootstrap = bootstrapTarget()
+      const bootstrapLocked = bootstrap && !!cost.wood && id !== bootstrap
       if (bootstrapLocked) {
         const housingCapped = state.disciples.total >= (derived.maxDisciples || 0)
         const isHousing = (E.BUILDING_MAP[id]?.effects?.maxDisciples || 0) > 0
@@ -290,7 +333,7 @@ export function createBot(state, derived, policy = {}) {
         bestScore = score
         bestId = id
       }
-      decisions?.push({ id, reason: 'eligible', cost, score, required, housing, storageFix })
+      decisions?.push({ id, reason: 'eligible', cost, score, required, housing, storageFix, qiSupport })
     }
     policy.onBuildDecision?.({ candidates: decisions, selected: bestId, reserveCost, shortRes })
     if (!bestId) return false
@@ -325,6 +368,13 @@ export function createBot(state, derived, policy = {}) {
     const visitResource = (res) => {
       if (resources.has(res)) return
       resources.add(res)
+      const imported = importRoute(res)
+      if (imported) {
+        visit('neighborContacts')
+        visitBuilding('huntingCamp')
+        for (const input of [...Object.keys(imported.pays), 'warrant']) visitResource(input)
+        return
+      }
       const recipe = CRAFTS.find(c => c.out === res)
       if (recipe) {
         visitNeeds(recipe.needs)
@@ -355,6 +405,9 @@ export function createBot(state, derived, policy = {}) {
       visitNeeds(u.needs)
       for (const res of Object.keys(u.cost || {})) visitResource(res)
     }
+    // 软建造顺序也是机器人自己的前置：首座伐木场不能被后续藏经阁的200灵气预留挡住。
+    const bootstrap = bootstrapTarget()
+    if (bootstrap) visitBuilding(bootstrap)
     // 金丹投资本身的材料前置也必须追踪，例如土木精要需要木板工艺。
     for (const id of ['flowField', 'earthEssence']) {
       if (policy.onlyBreakthrough) continue
@@ -404,28 +457,6 @@ export function createBot(state, derived, policy = {}) {
   }
 
   function act() {
-    // 4.4：秘银是凝晶催化剂。参考玩家在缺秘银时先解锁外交，再用富余玄铁／灵石去银溪谷换。
-    // 只换到够用即止，避免把建屋与炼器的玄铁掏空。
-    if (state.realm >= 5) {
-      const contact = UPGRADE_MAP.neighborContacts
-      if (!state.upgrades.neighborContacts && E.isUpgradeUnlocked(state, contact) && E.canAfford(state, contact.cost)) {
-        E.research(state, derived, 'neighborContacts')
-      }
-      if (E.isDiplomacyUnlocked(state) && E.countOf(state, 'huntingCamp') === 0) {
-        E.buyBuilding(state, derived, 'huntingCamp')
-        E.recompute(state, derived)
-      }
-      if (E.isDiplomacyUnlocked(state) && (state.disciples.jobs.huntPlanner || 0) < 1 && E.idleDisciples(state) > 0) {
-        E.setJob(state, derived, 'huntPlanner', 1)
-        E.recompute(state, derived)
-      }
-      if (E.isDiplomacyUnlocked(state) && moneyLt(state.resources.mithril ?? ZERO, money(2)) &&
-          moneyGte(state.resources.ore ?? ZERO, money(800)) && moneyGte(state.resources.stone ?? ZERO, money(500)) &&
-          moneyGte(state.resources.warrant ?? ZERO, money(50))) {
-        E.tradeWithSect(state, derived, 'silverGorge')
-        E.recompute(state, derived)
-      }
-    }
     if (derived.industrial && derived.autoCraftSpeedUnlocked) {
       for (const id of derived.availableCrafts) if (derived.autoCraftSpeeds[id] !== 5) E.setAutoCraftSpeed(state, derived, id, 5)
       const capacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0)
@@ -471,6 +502,11 @@ export function createBot(state, derived, policy = {}) {
       const inputs = res => {
         if (visited.has(res)) return
         visited.add(res)
+        const imported = importRoute(res)
+        if (imported) {
+          include({ ...imported.pays, warrant: DIPLOMACY.WARRANT_COST })
+          return
+        }
         const recipe = CRAFTS.find(c => c.out === res)
         if (!recipe) return
         // 份数是金额：缺口 ÷ 单份产出后向上取整，不能先转 Number。
@@ -626,6 +662,15 @@ export function createBot(state, derived, policy = {}) {
       }
     }
 
+    // 外交供给已就绪时保留一回换料费及目标成品，避免日常建设反复花掉灵机/香火。
+    const pendingImport = importNeeds()[0]
+    if (pendingImport && E.isDiplomacyUnlocked(state) && E.countOf(state, 'huntingCamp')) {
+      reserveCost = { ...(reserveCost || {}) }
+      for (const [res, amount] of Object.entries(pendingImport.sect.pays)) reserveCost[res] = moneyMax(reserveCost[res] || ZERO, amount)
+      reserveCost[pendingImport.resource] = moneyMax(reserveCost[pendingImport.resource] || ZERO, pendingImport.target)
+      reserveSource ||= { kind: 'trade', id: pendingImport.sect.id }
+    }
+
     // 攒研究/设施的成品时同时预留其上游投入，避免基础建设每轮花光木料，
     // 研究要的符箓永远做不出来。只追踪已开放配方，不虚构解锁或库存。
     if (reserveCost) {
@@ -634,6 +679,11 @@ export function createBot(state, derived, policy = {}) {
       const reserveInputs = (res, amount) => {
         if (moneyGte(state.resources[res] ?? ZERO, amount) || visited.has(res)) return
         visited.add(res)
+        const imported = importRoute(res)
+        if (imported) {
+          for (const [input, cost] of Object.entries(imported.pays)) reserveCost[input] = moneyMax(reserveCost[input] || ZERO, cost)
+          return
+        }
         const recipe = CRAFTS.find(c => c.out === res && E.isCraftUnlocked(state, c))
         if (!recipe) return
         // 缺口与份数都是金额：向上取整后按完整份额预留上游投入。
@@ -699,6 +749,7 @@ export function createBot(state, derived, policy = {}) {
     policy.onDecision?.({ reserveSource, reserveCost, shortRes, capacityNeed,
       research: researchDecision, requiredBuildings: Object.fromEntries(requiredBuildings), prerequisites: [...prereq] })
     buildStep(0, reserveCost, shortRes, requiredBuildings)
+    tradeStep()
 
     const housingNeed = state.disciples.total >= derived.maxDisciples
       ? ['hut', 'logHouse', 'mansion', 'caveDwelling'].filter(id => derived.unlockedBuildings.includes(id))

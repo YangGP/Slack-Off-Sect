@@ -100,7 +100,7 @@ createBot(observedClock.state, observedDerived, {
 createBot(silentClock.state, silentDerived).act()
 assert.deepEqual(observedClock.state, silentClock.state)
 assert.ok(buildObservation && reserveObservation)
-// 只差灵气时，显式修正策略必须停止普通支出；旧策略保留为对照，开局仍能自举。
+// 只差灵气时保护尾款，仅允许在剩余等待内回本的供气投资；开局仍能自举。
 const savingClock = createAuditContext(), savingDerived = E.createDerived()
 const saving = savingClock.state
 saving.realm = 2
@@ -111,10 +111,20 @@ E.recompute(saving, savingDerived)
 for (const id of Object.keys(saving.resources)) saving.resources[id] = E.money(100000)
 saving.resources.qi = E.money(500)
 let qiReserve = null
+let qiInvestment = E.ZERO, selectedInvestment = null
 createBot(saving, savingDerived, { protectBreakthrough: true, realmCost: () => ({ qi: 1700 }),
-  breakthrough: () => false, onDecision: row => { qiReserve = row.reserveSource } }).act()
+  breakthrough: () => false, onDecision: row => { qiReserve = row.reserveSource },
+  onBuildDecision: row => { selectedInvestment = row.candidates.find(candidate => candidate.id === row.selected) },
+  onBuildResult: row => {
+    if (!row.bought) return
+    assert.equal(row.id, 'spiritField', '攒灵气期间只允许供气设施使用尾款')
+    assert.ok(selectedInvestment?.qiSupport, '供气投资必须能在剩余等待内回本')
+    qiInvestment = qiInvestment.plus(E.money(row.cost.qi).times(row.bought))
+  },
+}).act()
 assert.equal(qiReserve?.kind, 'breakthrough')
-assert.ok(saving.resources.qi.eq(500), '齐备其余材料时，不得继续将灵气花到普通制作和可选建设')
+assert.ok(qiInvestment.gt(0), '正供气且可回本的夹具应实际进行供气投资')
+assert.ok(saving.resources.qi.eq(E.money(500).minus(qiInvestment)), '除已核对的供气投资外，不得将灵气花到普通制作和可选建设')
 const bootClock = createAuditContext(), bootDerived = E.createDerived()
 E.recompute(bootClock.state, bootDerived)
 createBot(bootClock.state, bootDerived, { protectBreakthrough: true }).act()
@@ -171,7 +181,9 @@ studying.resources.insight = E.money(10000)
 const daoNoteRecipe = CRAFT_MAP.recordDaoNote
 const copies = Math.ceil(10 / E.moneyToNumber(E.craftYield(studyDerived, daoNoteRecipe)))
 for (const [id, amount] of Object.entries(daoNoteRecipe.cost)) studying.resources[id] = E.moneyMax(studying.resources[id], E.money(amount).times(copies))
-const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false })
+// 此用例隔离凝晶知识备料；新增的互市前置由 botDiplomacy 单独覆盖。
+const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false,
+  allowUpgrade: upgrade => upgrade.id === 'crystalCraft' })
 studyBot.act()
 assert.ok(E.moneyGte(studying.resources.daoNote, 10), '研究所需道札应先于住房与其他加工留存')
 studyBot.act()

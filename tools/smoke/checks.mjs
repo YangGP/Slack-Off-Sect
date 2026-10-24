@@ -40,6 +40,8 @@ export const smokeChecks = [
   progression.researchAndAscension,
   events.randomEvents,
   saves.saveSerialization,
+  simulation.botDiplomacy,
+  simulation.botEarlyStorage,
   simulation.playerBot,
   simulation.longRunningStability,
   progression.reincarnation,
