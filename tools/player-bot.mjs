@@ -178,7 +178,7 @@ export function immortalInvestment(state, derived, need) {
     ...otherNeeds.map(([r, v]) => E.timeToAfford(state, derived, r, v)))
   const candidates = []
   for (const id of ['harvestPlatform', 'immortalArray']) {
-    const meta = E.BUILDING_MAP[id]
+    const meta = E.buildingMeta(state, id)
     if (!E.checkNeeds(state, meta.needs) || state.buildings[id]?.on === false) continue
     const cost = E.buildingCost(state, id, 1)
     if (Object.entries(cost).some(([r, v]) => moneyGt(v, derived.max[r] ?? ZERO))) continue
@@ -286,10 +286,10 @@ export function createBot(state, derived, policy = {}) {
     }
     for (const id of upgrades) {
       const u = E.UPGRADE_MAP[id]
-      if (u && E.isUpgradeUnlocked(state, u)) include(u.cost)
+      if (u && E.isUpgradeUnlocked(state, u)) include(E.researchCost(state, u))
     }
     for (const [id, count] of buildings) {
-      const b = E.BUILDING_MAP[id]
+      const b = E.buildingMeta(state, id)
       if (b && E.countOf(state, id) < count && E.checkNeeds(state, b.needs)) include(E.buildingCost(state, id, 1))
     }
     return demand
@@ -371,7 +371,7 @@ export function createBot(state, derived, policy = {}) {
       const id = candidates[idx]
       if (!derived.unlockedBuildings.includes(id)) { reject(id, 'locked'); continue }
       const cost = E.buildingCost(state, id, 1)
-      const meta = E.BUILDING_MAP[id]
+      const meta = E.buildingMeta(state, id)
       // 攒破境前置研究期间：先别买吃这些资源的建筑，把手头那份攒够再去点研究。
       const required = E.countOf(state, id) < (requiredBuildings.get(id) || 0)
       if (policy.particleInvestments && state.realm === 5 && id === 'splitArray' &&
@@ -412,17 +412,17 @@ export function createBot(state, derived, policy = {}) {
       const bootstrapLocked = bootstrap && !!cost.wood && id !== bootstrap
       if (bootstrapLocked) {
         const housingCapped = state.disciples.total >= (derived.maxDisciples || 0)
-        const isHousing = (E.BUILDING_MAP[id]?.effects?.maxDisciples || 0) > 0
+        const isHousing = (E.buildingMeta(state, id)?.effects?.maxDisciples || 0) > 0
         if (!(housingCapped && isHousing)) { reject(id, 'bootstrap', cost); continue }
       }
       if (moneyGt(cost.qi ?? ZERO, qiBudget)) { reject(id, 'qi-budget', cost); continue }
       if (!E.canAfford(state, cost)) { reject(id, 'materials', cost); continue }
       let score = idx + E.countOf(state, id) * 0.6
-      if (comfortOnly(E.BUILDING_MAP[id]) && normalHabitability() < comfortFloor()) score -= 500
+      if (comfortOnly(E.buildingMeta(state, id)) && normalHabitability() < comfortFloor()) score -= 500
       if (required) score -= 2000
       // 下一境要的资源超过当前上限时，优先盖能扩这块仓储的建筑，否则会永久卡在仓储上限。
       if (shortRes.length) {
-        const st = E.BUILDING_MAP[id]?.effects?.storage
+        const st = E.buildingMeta(state, id)?.effects?.storage
         if (st && shortRes.some((r) => (st[r] || 0) > 0)) score -= 1000
       }
       if (score < bestScore) {
@@ -458,7 +458,7 @@ export function createBot(state, derived, policy = {}) {
     }
     const visitBuilding = (id, count = 1) => {
       if (E.countOf(state, id) >= count || (buildings.get(id) || 0) >= count) return
-      const b = E.BUILDING_MAP[id]
+      const b = E.buildingMeta(state, id)
       if (!b) return
       buildings.set(id, count)
       visitNeeds(b.needs)
@@ -479,7 +479,7 @@ export function createBot(state, derived, policy = {}) {
         visitNeeds(recipe.needs)
         for (const input of Object.keys(recipe.cost)) visitResource(input)
       } else {
-        const producer = E.BUILDINGS.find(b => (b.effects?.prod?.[res] || 0) > 0)
+        const producer = E.BUILDINGS.map(b => E.buildingMeta(state, b.id)).find(b => (b.effects?.prod?.[res] || 0) > 0)
         if (producer) {
           visitBuilding(producer.id)
           for (const input of Object.keys(producer.upkeep || {})) visitResource(input)
@@ -533,7 +533,7 @@ export function createBot(state, derived, policy = {}) {
       }
       for (const requirement of [needs?.building, ...(needs?.buildings || [])].filter(Boolean)) {
         if (E.countOf(state, requirement.id) >= requirement.count) continue
-        const b = E.BUILDING_MAP[requirement.id]
+        const b = E.buildingMeta(state, requirement.id)
         const key = `building:${requirement.id}`
         if (!b || path.has(key) || moneyGt(E.buildingCost(state, b.id, 1)[res] ?? ZERO, derived.max[res] ?? ZERO)) return false
         if (!canOpenForCapacity(b.needs, res, new Set([...path, key]))) return false
@@ -542,13 +542,13 @@ export function createBot(state, derived, policy = {}) {
     }
     for (const [res, amount] of Object.entries(capacityDemand(next, chain, buildings))) {
       if (moneyLte(amount, derived.max[res] ?? ZERO)) continue
-      const expansion = E.BUILDINGS.filter(b => (b.needs?.realm == null || b.needs.realm <= state.realm) &&
+      const expansion = E.BUILDINGS.map(b => E.buildingMeta(state, b.id)).filter(b => (b.needs?.realm == null || b.needs.realm <= state.realm) &&
         ((b.effects?.storage?.[res] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
         .map(b => ({ id: b.id, cost: E.buildingCost(state, b.id, 1) }))
         // 优先选择前置能由当前目标仓容承接的设施，避免研究自锁；
         // 同时允许学习可支付的前置，不能永远堆典籍库而不开放讲经堂。
         // 目标仓库的建材若超仓，也必须追踪：capacityDemand会把它暴露为下一层扩仓需求。
-        .sort((a, b) => Number(canOpenForCapacity(E.BUILDING_MAP[b.id].needs, res)) - Number(canOpenForCapacity(E.BUILDING_MAP[a.id].needs, res)) ||
+        .sort((a, b) => Number(canOpenForCapacity(E.buildingMeta(state, b.id).needs, res)) - Number(canOpenForCapacity(E.buildingMeta(state, a.id).needs, res)) ||
           E.moneySum(Object.values(a.cost)).cmp(E.moneySum(Object.values(b.cost))))[0]
       if (expansion) visitBuilding(expansion.id, E.countOf(state, expansion.id) + 1)
     }
@@ -591,10 +591,10 @@ export function createBot(state, derived, policy = {}) {
       for (const [id, count] of requirements.buildings) if (E.countOf(state, id) < count) include(E.buildingCost(state, id, 1))
       for (const id of derived.availableUpgrades) {
         const u = E.UPGRADE_MAP[id]
-        if (u.effects?.storageRatio || u.effects?.buildingStorageRatio || (comfortOnly(u) && normalHabitability() < state.disciples.total)) include(u.cost)
+        if (u.effects?.storageRatio || u.effects?.buildingStorageRatio || (comfortOnly(u) && normalHabitability() < state.disciples.total)) include(E.researchCost(state, u))
       }
       for (const id of derived.unlockedBuildings) {
-        const b = E.BUILDING_MAP[id]
+        const b = E.buildingMeta(state, id)
         if (b.effects?.maxDisciples > 0 || (comfortOnly(b) && normalHabitability() < state.disciples.total)) include(E.buildingCost(state, id, 1))
       }
       const visited = new Set()
@@ -626,7 +626,7 @@ export function createBot(state, derived, policy = {}) {
         for (const [res, amount] of Object.entries(E.UPGRADE_MAP[id].cost)) demand[res] = moneyMax(demand[res] ?? ZERO, amount)
       }
       for (const id of derived.unlockedBuildings) {
-        if (!wantsComfortBuilding(E.BUILDING_MAP[id])) continue
+        if (!wantsComfortBuilding(E.buildingMeta(state, id))) continue
         for (const [res, amount] of Object.entries(E.buildingCost(state, id, 1))) demand[res] = moneyMax(demand[res] ?? ZERO, amount)
       }
       craftDemand = demand
@@ -653,7 +653,7 @@ export function createBot(state, derived, policy = {}) {
     // —— 财政：灵气要见底时，把吃灵气的建筑停掉；缓过来再开 ——
     // （维护费让「停用」变成一个真选择，勤快玩家当然会看账）
     if (E.countOf(state, 'hut') > 0) {
-      const qiEaters = E.BUILDINGS.filter((b) => b.upkeep?.qi).map((b) => b.id)
+      const qiEaters = E.BUILDINGS.map(b => E.buildingMeta(state, b.id)).filter((b) => b.upkeep?.qi).map((b) => b.id)
       const netBefore = derived.netQi
       const low = moneyLt(state.resources.qi ?? ZERO, 20) && moneyLt(netBefore, 0)
       const recovered = moneyGt(state.resources.qi ?? ZERO, (derived.max.qi ?? ZERO).times('0.5')) &&
@@ -694,7 +694,7 @@ export function createBot(state, derived, policy = {}) {
         const effects = E.UPGRADE_MAP[id]?.effects
         return shortRes.some(r => (effects?.storageRatio?.[r] || 0) > 0) ||
           Object.entries(effects?.buildingStorageRatio || {}).some(([building, ratio]) => ratio > 0 &&
-            E.countOf(state, building) > 0 && shortRes.some(r => (E.BUILDING_MAP[building]?.effects?.storage?.[r] || 0) > 0))
+            E.countOf(state, building) > 0 && shortRes.some(r => (E.buildingMeta(state, building)?.effects?.storage?.[r] || 0) > 0))
       }),
     )
     let reserveCost = null
@@ -717,7 +717,7 @@ export function createBot(state, derived, policy = {}) {
     // 必需设施也要攒首座费用；否则持续买普通建筑会把灵石等用料花光。
     if (!reserveCost) {
       for (const [id, count] of requiredBuildings) {
-        const b = E.BUILDING_MAP[id]
+        const b = E.buildingMeta(state, id)
         if (E.countOf(state, id) >= count || !E.checkNeeds(state, b.needs)) continue
         const cost = E.buildingCost(state, id, 1)
         if (Object.entries(cost).every(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)) && !E.canAfford(state, cost)) {
@@ -729,7 +729,7 @@ export function createBot(state, derived, policy = {}) {
     }
     // 下一境仓容不足时先攒扩仓建筑的用料，避免木材一直被加工成木板。
     if (!reserveCost && shortRes.length) {
-      const expansion = E.BUILDINGS.filter(b => E.checkNeeds(state, b.needs) &&
+      const expansion = E.BUILDINGS.map(b => E.buildingMeta(state, b.id)).filter(b => E.checkNeeds(state, b.needs) &&
         shortRes.some(r => (b.effects?.storage?.[r] || 0) > 0 || (b.effects?.storageAll || 0) > 0))
         .map(b => ({ id: b.id, cost: E.buildingCost(state, b.id, 1) }))
         .filter(({ cost }) => Object.entries(cost).every(([r, v]) => moneyLte(v, derived.max[r] ?? ZERO)))
@@ -815,6 +815,7 @@ export function createBot(state, derived, policy = {}) {
     }
     const ups = availableUpgrades
       .map((id) => ALL_UPGRADES.find((u) => u.id === id))
+      .map(u => u && ({ ...u, cost: E.researchCost(state, u) }))
       .filter(Boolean)
       .filter(u => !policy.allowUpgrade || policy.allowUpgrade(u))
       .filter(u => !policy.particleInvestments || state.realm !== 5 ||

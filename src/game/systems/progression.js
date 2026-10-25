@@ -1,7 +1,7 @@
 import { withResourceAction } from '../resourceObservation'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { recompute } from './economy'
-import { isUpgradeUnlocked, canAfford, pushLog, payCost, isTreasureForged, refineCost, treasureLevel, treasureMult, realmCost } from './core'
+import { isUpgradeUnlocked, canAfford, pushLog, payCost, isTreasureForged, refineCost, treasureLevel, treasureMult, realmCost, researchCost } from './core'
 import { BREAKTHROUGH, BREAKTHROUGH_AIDS, REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/realms'
 import { realmBaseChance } from '@/data/disciples'
 import { gameRandom, gameNow } from '../context'
@@ -34,11 +34,12 @@ export function research(state, derived, id) {
       pushLog(state, '《' + up.name + '》需在香火页以愿力修持。', 'bad')
       return false
     }
-    if (!canAfford(state, up.cost)) {
+    const cost = researchCost(state, up)
+    if (!canAfford(state, cost)) {
       pushLog(state, `推演《${up.name}》的材料不足。`, 'bad')
       return false
     }
-    payCost(state, up.cost)
+    payCost(state, cost)
     state.upgrades[id] = true
     autoAssignTalentJobs(state)
     pushLog(state, `参悟《${up.name}》`, 'good')

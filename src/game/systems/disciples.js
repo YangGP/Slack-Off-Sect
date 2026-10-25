@@ -9,7 +9,7 @@ import { gameRandom } from '../context'
 import { CONFIG } from '@/data/config'
 import { isModuleEnabled } from '@/data/modules'
 import { ONE, ZERO, money, moneyEq, moneyLt, moneyMax, moneySubtract, moneySum } from '../decimal'
-import { SAMSARA, daoLevel, discipleSpeed, rememberDisciple } from '@/data/samsara'
+import { SAMSARA, daoLevel, discipleSpeed, rememberDisciple, invitationCapacity } from '@/data/samsara'
 import { cultivationRate } from '@/data/disciples'
 
 /** 资源和培养名额有限时，手动批量与自动操作均优先重点弟子。 */
@@ -240,10 +240,10 @@ export function advanceDiscipleGrowth(state, derived, seconds) {
     if (auto) autoBreakthroughStep(state, derived)
   }
   if (remaining > 0) for (const member of state.disciples.members) cultivateDisciple(member, remaining, derived.trainingActive && !member.onMission, speed, loyaltySpeed)
-  if ((state.invitations ?? 3) < SAMSARA.invitationMax) {
+  if ((state.invitations ?? 3) < invitationCapacity(state)) {
     state.invitationTimer = (state.invitationTimer || 0) + seconds
     const gained = Math.floor(state.invitationTimer / SAMSARA.invitationSeconds)
-    state.invitations = Math.min(SAMSARA.invitationMax, (state.invitations || 0) + gained)
+    state.invitations = Math.min(invitationCapacity(state), (state.invitations || 0) + gained)
     state.invitationTimer %= SAMSARA.invitationSeconds
   } else state.invitationTimer = 0
 }
@@ -350,7 +350,7 @@ export function discipleAidPreview(state, member) {
   const meta = DISCIPLE_AIDS[target]
   // 材料是金额：数据表里是 Number，预览与实付共用同一份 Decimal 报价。
   const cost = meta
-    ? Object.fromEntries(Object.entries(meta.cost).map(([res, amount]) => [res, money(amount)]))
+    ? Object.fromEntries(Object.entries(meta.cost).map(([res, amount]) => [res, money(amount).times(1 - 0.02 * daoLevel(state, 'personalAidThrift'))]))
     : {}
   return { target, cost, bonus: meta?.bonus || 0, pending: (member.aidBonus || 0) > 0,
     available: !!meta, affordable: meta ? canAfford(state, cost) : false }

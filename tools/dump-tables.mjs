@@ -14,6 +14,10 @@ import { RESOURCES } from '../src/data/resources.js'
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/data/achievements.js'
 import { EVENTS, EVENT_LEVELS, getEventLevel } from '../src/data/events.js'
 import { PROCESSING_STATIONS, PROCESSING_STATION_MAP, RECIPE_STATIONS } from '../src/data/industry.js'
+import { PRODUCTION_STAGES } from '../src/data/productionStages.js'
+import { WORLD_FACILITIES, WORLD_FACILITY_MAP } from '../src/data/worldFacilities.js'
+import { WORLD_MAP, DAO_PERKS } from '../src/data/samsara.js'
+import { KARMA_PERKS } from '../src/data/karmaShop.js'
 
 const res = (id) => RESOURCES.find((r) => r.id === id)?.name || id
 
@@ -51,6 +55,9 @@ const needs = (n) => {
   if (n.upgrade) out.push(`《${uname(n.upgrade)}》`)
   if (n.upgrades) for (const u of n.upgrades) out.push(`《${uname(u)}》`)
   if (n.realm != null) out.push(`境界 ≥ ${REALMS[n.realm].name}`)
+  if (n.recipes) out.push(n.recipes.map(id => CRAFTS.find(c => c.id === id)?.name || id).join('、') + '配方已开放')
+  if (n.world) out.push(`${WORLD_MAP[n.world]?.name || n.world}采集点≥1`)
+  if (n.worldFacility) out.push(`建成${WORLD_FACILITY_MAP[n.worldFacility.id]?.name || n.worldFacility.id}`)
   if (n.ritual) for (const [id, level] of Object.entries(n.ritual)) out.push(`《${RITUALS.find(r => r.id === id)?.name || id}》≥ ${level} 级`)
   return out.join('、')
 }
@@ -148,7 +155,7 @@ emit('\n## A.5 技艺（自己练的手艺）\n')
 emit('| 技艺 | id | 花费 | 效果 | 解锁 |')
 emit('| --- | --- | --- | --- | --- |')
 for (const t of TECHNIQUES.filter((x) => x.kind !== 'treasure' && x.page !== 'faith')) {
-  emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${effects(t.effects)} | ${needs(t.needs)} |`)
+  emit(`| ${t.name} | \`${t.id}\` | ${cost(t.cost)} | ${effects(t.effects) || t.effectDesc || '—'} | ${needs(t.needs)} |`)
 }
 
 emit('\n## A.6 法宝（由修真解锁的器物）\n')
@@ -276,4 +283,26 @@ for (const station of PROCESSING_STATIONS) {
   const recipes = CRAFTS.filter(c => RECIPE_STATIONS[c.id] === station.id).map(c => c.name).join('、')
   emit(`| ${station.name} | ${base}${source} | ${recipes} |`)
 }
+emit('\n## 灵能生产阶段\n')
+emit('同类阶段切换清零数量，不退款、不自动重建。下表是高阶首座基础价；永久造价／涨价率权益另外应用。每座灵能维护随供给缩放，无灵气档。\n')
+emit('| 原ID | 高阶形态 | 首座基础价 | 涨价率 | 满供效果 | 灵能/小时 | 专业前置（另需炼虚与灵能营造） |')
+emit('| --- | --- | --- | --- | --- | --- | --- |')
+for (const [id, p] of Object.entries(PRODUCTION_STAGES)) {
+  const extra = p.secondaryBase ? `每矿工每座灵石${p.secondaryBase}/秒` : p.nurseryCapacity ? `每座育草容量${p.nurseryCapacity}` : ''
+  emit(`| \`${id}\` | ${p.name} | ${cost(p.cost)} | ${p.priceRatio} | ${[effects(p.effects), extra, p.upkeep ? '维护' + cost(p.upkeep) + '/秒' : ''].filter(Boolean).join('；')} | ${Math.round(p.upkeepEnergy * 3600000) / 1000} | ${p.upgrades.map(uname).join('、')} |`)
+}
+emit('\n## 小界专属设施\n')
+emit('| 设施 | id | 世界 | 建设材料 | 作用与代价 | 前置研究 |')
+emit('| --- | --- | --- | --- | --- | --- |')
+for (const f of WORLD_FACILITIES) emit(`| ${f.name} | \`${f.id}\` | ${WORLD_MAP[f.world].name} | ${cost(f.cost)} | ${f.desc} | ${uname(f.research)}，本界采集点≥1 |`)
+emit('\n分流取0／25%／50%预算，同界合计最多50%；实际流量由当段可支付产出及真实目标确定，不从库存抽取。新设施默认关闭，本世重置。\n')
+emit('\n## 仙途商店\n')
+emit('报价=首价×增长率^当前等级，小数完整支付；现有永久等级保留，新条目0级。道果区需永久开店资格。\n')
+emit('| 商品 | id | 货币 | 首价 | 增长 | 上限 | 效果 | 额外永久条件 |')
+emit('| --- | --- | --- | --- | --- | --- | --- | --- |')
+for (const p of KARMA_PERKS) {
+  const n = p.needs || {}, gate = [n.realm != null ? `本世境界≥${REALMS[n.realm].name}` : '', n.bestRealm != null ? `历史境界≥${REALMS[n.bestRealm].name}` : '', n.rebirths ? `转世/飞升≥${n.rebirths}` : '', n.ascensions ? `飞升≥${n.ascensions}` : '', n.worldBlueprint ? '任一世界图纸' : ''].filter(Boolean).join('、') || '无'
+  emit(`| ${p.name} | \`${p.id}\` | 仙缘 | ${p.baseCost} | ${p.growth} | ${p.max} | ${p.desc} | ${gate} |`)
+}
+for (const p of DAO_PERKS) emit(`| ${p.name} | \`${p.id}\` | 道果 | ${p.cost} | ${p.growth} | ${p.max} | ${p.desc} | 永久开店 |`)
 flush(process.argv[2] || 'docs/TABLES.md')

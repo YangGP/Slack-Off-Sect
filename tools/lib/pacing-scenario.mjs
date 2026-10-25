@@ -264,7 +264,7 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
     projects, resourceGoals, focusProjects: () => projects().some(p => E.countOf(state, p.id) < p.count),
     upgrades: () => options.faith === 'growth' && state.realm >= 4 ? ['vowPower'] : [],
     allowUpgrade: u => (options.faith === 'growth' || !FAITH_UPGRADE_MAP[u.id]) &&
-      (options.specialization === 'on' || !['steelBatching', 'artifactBatching', 'spiritArtifactBatching',
+      (options.specialization === 'on' || !['forgeBatchStandards', 'artifactBatching', 'spiritArtifactBatching',
         'pillBatching', 'condensePillBatching', 'nineTurnBatching'].includes(u.id)),
     onDecision: value => {
       decision = value

@@ -120,7 +120,7 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
 </script>
 
 <template>
-  <div class="faith-panel">
+  <div class="faith-panel activity-panel">
     <div v-if="state.samsara.automation" class="box">
       <div class="box-head">仙途开启</div>
       <div class="box-body"><p class="small">以道心发愿，永久开放仙途商店道果区。</p><button class="btn" :disabled="state.samsara.shopOpen || !canAfford(state, { daoHeart: 1 })" @click="actions.samsara('openDaoShop')">{{ state.samsara.shopOpen ? '已永久开启' : '开启 · 道心1' }}</button></div>
@@ -257,32 +257,40 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
   min-width: 0;
 }
 .faith-balances {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 6px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 4px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
 }
 .faith-balance {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-.faith-balance .k { font-size: 12px; color: var(--dim, #777); }
-.faith-balance b { font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
-.faith-convert {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  flex: 1 1 130px;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 2px 0;
 }
+.faith-balance .k { font-size: 13px; color: var(--dim); }
+.faith-balance b { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.faith-balance > .small { grid-column: 1 / -1; }
+.faith-convert {
+  display: block;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.faith-convert > .faith-card { display: grid; grid-template-columns: 5em minmax(0, 1fr); gap: 4px 12px; }
+.faith-convert .box-head { padding-top: 4px; }
 .faith-card { min-width: 0; }
-.faith-entry { padding: 6px 0; border-top: 1px solid var(--line, #e2dccb); min-width: 0; }
+.faith-entry { display: grid; grid-template-columns: 8em minmax(0, 1fr); align-items: baseline; gap: 2px 14px; padding: 8px 0; border-top: 1px solid var(--line-soft); min-width: 0; }
 .faith-entry:first-of-type { border-top: 0; }
 .faith-entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
-.faith-actions { padding: 4px 0 6px; }
-.faith-note { margin: 4px 0; overflow-wrap: anywhere; }
+.faith-entry > .faith-note, .faith-entry > .faith-actions { grid-column: 2; }
+.faith-actions { padding: 4px 0; }
+.faith-note { margin: 2px 0; line-height: 1.6; overflow-wrap: anywhere; }
 .faith-panel :deep(.btn-row) {
   flex-wrap: wrap;
   white-space: normal;
@@ -292,9 +300,11 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
   width: min(9em, 100%);
   min-width: 0;
 }
-.faith-panel :deep(.btn) { min-height: 32px; }
-.faith-panel :deep(.btn:focus-visible) { outline: 2px solid #7a5c2e; outline-offset: 2px; }
-@media (max-width: 420px) {
-  .faith-convert { grid-template-columns: 1fr; }
+.faith-panel :deep(.btn) { min-height: 28px; }
+.faith-panel :deep(.btn:focus-visible) { outline: 2px solid var(--link); outline-offset: 2px; }
+@container content (max-width: 480px) {
+  .faith-entry, .faith-convert > .faith-card { grid-template-columns: 1fr; }
+  .faith-entry > .faith-note, .faith-entry > .faith-actions { grid-column: 1; }
+  .faith-panel :deep(.btn) { min-height: 32px; }
 }
 </style>

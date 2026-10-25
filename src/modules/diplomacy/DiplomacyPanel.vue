@@ -13,11 +13,14 @@ import { isDiplomacyUnlocked, tradePreview } from '@/game/engine'
 import { ZERO } from '@/game/decimal'
 import { fmtAmount, fmtPercent } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
+import StableSelect from '@/components/StableSelect.vue'
 
 const unlocked = computed(() => isDiplomacyUnlocked(state))
 const fortunePct = computed(() => fmtPercent(tradePreview(state, derived, DIPLOMACY_SECTS[0].id)?.fortuneChance || 0))
 const warrant = computed(() => state.resources.warrant ?? ZERO)
 const warrantMax = computed(() => derived.max.warrant ?? ZERO)
+const sectOptions = DIPLOMACY_SECTS.map(sect => ({ value: sect.id, label: sect.name }))
+const batchOptions = [1, 10, 100].map(value => ({ value, label: `每回${value}次` }))
 
 function previewOf(sectId) {
   return tradePreview(state, derived, sectId)
@@ -41,7 +44,7 @@ function trade(sectId) {
 </script>
 
 <template>
-  <div class="box">
+  <div class="box activity-panel diplomacy-panel">
     <div class="box-head">
       <HoverTip label="宗门外交"><template #tip>
           <p>与邻宗互市：付出富余资源与信符，换回紧缺物资。每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚信符——与猎杀出征共用同一池子。</p>
@@ -57,14 +60,13 @@ function trade(sectId) {
       <template v-else>
         <div v-if="state.upgrades.tradeRoutes" class="small diplomacy-auto">
           <label><input type="checkbox" :checked="state.diplomacy.settings.auto" @change="actions.diplomacyAuto('auto', $event.target.checked)" /> 自动互市（每60秒）</label>
-          <select :value="state.diplomacy.settings.sectId" aria-label="自动互市宗门" @change="actions.diplomacyAuto('sectId', $event.target.value)"><option v-for="s in DIPLOMACY_SECTS" :key="s.id" :value="s.id">{{ s.name }}</option></select>
-          <select :value="state.diplomacy.settings.batch" aria-label="自动互市批量" @change="actions.diplomacyAuto('batch', $event.target.value)"><option :value="1">每回1次</option><option :value="10">每回10次</option><option :value="100">每回100次</option></select>
+          <StableSelect label="自动互市宗门" :model-value="state.diplomacy.settings.sectId" :options="sectOptions" @update:model-value="actions.diplomacyAuto('sectId', $event)" />
+          <StableSelect label="自动互市批量" :model-value="state.diplomacy.settings.batch" :options="batchOptions" @update:model-value="actions.diplomacyAuto('batch', $event)" />
           <label>信符保留 <input class="qty" type="number" min="0" max="100000" :value="state.diplomacy.settings.warrantReserve" @change="actions.diplomacyAuto('warrantReserve', $event.target.value)" /></label>
           <p class="dim">自动交易遵守炼制页逐项材料保留与信符保留，缺料跳过；长离线合并支付，机缘按期望估算，不积压欠账。</p>
         </div>
         <div v-for="sect in DIPLOMACY_SECTS" :key="sect.id" class="diplomacy-sect">
           <div class="diplomacy-head">
-            <span class="diplomacy-glyph">{{ sect.glyph }}</span>
             <span><b>{{ sect.name }}</b></span>
             <span class="dim small diplomacy-description">{{ sect.desc }}</span>
           </div>
@@ -109,37 +111,33 @@ function trade(sectId) {
 
 <style scoped>
 .diplomacy-sect {
-  padding: 16px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--line-soft);
 }
-.diplomacy-sect:first-child {
+.diplomacy-sect:first-of-type {
   border-top: none;
 }
 .diplomacy-head {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 4px 12px;
+  margin-bottom: 6px;
 }
-.diplomacy-description { flex-basis: 100%; line-height: 1.6; }
-.diplomacy-auto { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.diplomacy-description { min-width: 0; line-height: 1.6; }
+.diplomacy-auto { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding-bottom: 10px; }
 .diplomacy-auto label { display: inline-flex; align-items: center; gap: 6px; }
 .diplomacy-auto input.qty { width: 7em; }
-.diplomacy-auto p { flex-basis: 100%; margin: 0 0 8px; line-height: 1.6; }
-.diplomacy-glyph {
-  font-size: 0.9em;
-  color: var(--dim, #999);
-}
+.diplomacy-auto p { flex-basis: 100%; margin: 0; line-height: 1.6; }
 .diplomacy-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px 8px;
   margin-top: 6px;
 }
 @container content (max-width: 480px) {
-  .diplomacy-sect tr:first-child { display: grid; grid-template-columns: 3em minmax(0, 1fr); }
-  .diplomacy-sect tr + tr { display: grid; grid-template-columns: 3em minmax(0, 1fr); }
+  .diplomacy-sect tr { display: grid; grid-template-columns: 4em minmax(0, 1fr); }
+  .diplomacy-description { flex-basis: 100%; }
 }
 </style>

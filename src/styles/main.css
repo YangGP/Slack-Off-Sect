@@ -1468,6 +1468,117 @@ textarea {
 .processing-overview p { margin: 6px 0 0; }
 .processing-line { display: flex; flex-direction: column; gap: 3px; margin: 5px 0; overflow-wrap: anywhere; }
 
+/* 经营页：同一套文字行、轻分隔与紧凑操作，不叠加内容卡片。 */
+.activity-panel .box-head,
+.craft-full > .box-head {
+  padding-bottom: 6px;
+  font-size: 14px;
+}
+
+.activity-panel .box-sub {
+  margin: 12px 0 4px;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.activity-panel .btn,
+.craft-full .btn {
+  min-height: 28px;
+  padding: 3px 9px;
+  margin: 0;
+  border-radius: 0;
+}
+
+.activity-panel .btn.primary:disabled,
+.craft-full .btn.primary:disabled {
+  border-color: var(--line);
+  font-weight: 400;
+}
+
+.activity-panel select,
+.craft-full select {
+  min-height: 28px;
+  max-width: 100%;
+  border-radius: 0;
+}
+
+.activity-panel input,
+.craft-full input {
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-panel .grid {
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.activity-panel .grid td {
+  padding: 5px 8px 5px 0;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.activity-panel .grid .num {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.craft-full .craft-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.craft-full .craft-heading { order: 0; gap: 4px 12px; }
+.craft-full .craft-cost { order: 1; padding: 0; line-height: 1.6; }
+.craft-full .craft-controls { order: 2; gap: 6px 8px; }
+.craft-full .craft-status { order: 3; min-height: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.craft-full .craft-detail { order: 4; }
+.craft-full .craft-pin { margin-left: auto; }
+.craft-full .craft-heading .have { margin-left: 0; font-size: 12px; }
+.craft-full .craft-controls .sw { margin: 0 4px; }
+.craft-full .craft-controls > label { display: inline-flex; align-items: center; gap: 4px; }
+.craft-full .craft-controls input.qty { width: 5.5em; min-height: 28px; font-size: 13px; }
+.craft-full .craft-settings { gap: 6px 12px; padding-bottom: 6px; }
+.craft-full .craft-settings > .dim { flex-basis: auto; }
+
+.craft-full .filters {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.craft-full details > summary {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 0;
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.craft-full details > summary:hover { color: var(--text); }
+.craft-full details > summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.craft-full .craft-detail[open] { padding-top: 2px; }
+.craft-full details.processing-overview { margin: 6px 0; padding: 2px 0; }
+.craft-full details.processing-overview > div { padding: 5px 0; border-top: 1px solid var(--line-soft); align-items: baseline; justify-content: flex-start; }
+.craft-full details.processing-overview > div > span:first-child { min-width: 6em; }
+.craft-full details.processing-overview label { margin-left: auto; }
+
+@container content (max-width: 480px) {
+  .activity-panel .btn, .craft-full .btn { min-height: 32px; }
+  .craft-full .craft-heading { align-items: baseline; }
+  .craft-full .craft-heading .have { flex: 1 1 10em; }
+  .craft-full .craft-controls { row-gap: 8px; }
+  .craft-full details.processing-overview label { margin-left: 0; }
+}
+
 .offline-loading {
   position: fixed;
   inset: 0;

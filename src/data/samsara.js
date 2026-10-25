@@ -1,4 +1,5 @@
 import { ZERO, money, moneyNonNegative } from '../game/decimal.js'
+import { normalizeWorldFacilities } from './worldFacilities.js'
 
 /** 首版参数集中在此；半年首飞、年度培养仍需整局测量校准。 */
 export const SAMSARA = {
@@ -16,6 +17,12 @@ export const DAO_PERKS = [
   { id: 'hunt4', name: '灵兽苑图', max: 1, cost: 2, growth: 1, desc: '永久取得灵兽苑出征资格，本世仍需达到境界。' },
   { id: 'hunt5', name: '玄灵谷图', max: 1, cost: 4, growth: 1, desc: '永久取得玄灵谷出征资格，本世仍需达到境界。' },
   { id: 'hunt6', name: '荒古境图', max: 1, cost: 8, growth: 1, desc: '永久取得荒古境出征资格，本世仍需达到境界。' },
+  {"id":"measuredNurture","name":"育养有度","cost":1.5,"growth":1.6,"max":5,"desc":"弟子持续灵气口粮每级减少2%，最多10%；不改变逐出赔付。"},
+  {"id":"efficientMentoring","name":"传功有方","cost":1,"growth":1.6,"max":5,"desc":"传功实际灵气支出每级减少4%，速度不变。"},
+  {"id":"pillAssimilation","name":"丹华入脉","cost":2,"growth":1.8,"max":5,"desc":"内丹、灵髓内丹可补修为每级+5%，仅计实际补入贡献。"},
+  {"id":"peacefulRecovery","name":"静养复元","cost":1,"growth":1.6,"max":5,"desc":"新发生猎杀伤病时长每级减少5%；不改变现有倒计时。"},
+  {"id":"invitationReserve","name":"礼聘余裕","cost":2,"growth":2,"max":2,"desc":"礼聘机会容量每级+1；不补次数，不加快恢复。"},
+  {"id":"personalAidThrift","name":"护道节用","cost":1,"growth":1.6,"max":5,"desc":"个人护道材料每级减少2%，不提高护道效果，不含终极准备。"},
 ]
 export const DAO_PERK_MAP = Object.fromEntries(DAO_PERKS.map(p => [p.id, p]))
 export const WORLD_DEFS = [
@@ -34,27 +41,7 @@ export function worldNeedsMet(state, id) {
   return !!world && state.realm >= world.realm && state.buildings.heavenWorkshop?.count > 0 &&
     (id === 'spirit' || state.worlds.spirit.level > 0) && (id !== 'guard' || state.worlds.marrow.level > 0)
 }
-/** 只供界面收支快照使用；实际资源由驻守系统按结算段统一支付。 */
-export function worldFlow(state) {
-  const rates = {}, sources = {}, expenses = {}, cost = { qiEnergy: ZERO, heavenBrick: ZERO }
-  const active = WORLD_DEFS.filter(w => worldNeedsMet(state, w.id) && state.worlds[w.id].level && state.disciples.members.some(m => m.id === state.worlds[w.id].memberId))
-  for (const w of active) {
-    const n = Math.min(state.worlds[w.id].level, 1 + state.worlds[w.id].capacity)
-    cost.qiEnergy = cost.qiEnergy.plus(w.energy * n)
-    cost.heavenBrick = cost.heavenBrick.plus(w.maintenance * n)
-  }
-  let supply = 1
-  for (const [res, amount] of Object.entries(cost)) if (amount.gt(0)) supply = Math.min(supply, money(state.resources[res] || ZERO).div(amount).toNumber())
-  for (const w of active) {
-    const n = Math.min(state.worlds[w.id].level, 1 + state.worlds[w.id].capacity)
-    const value = money(w.rate * n * supply)
-    rates[w.out] = (rates[w.out] || ZERO).plus(value)
-    sources[w.out] ||= []
-    sources[w.out].push({ kind: 'world', id: w.id, label: w.name, value })
-  }
-  for (const [res, value] of Object.entries(cost)) if (value.gt(0)) expenses[res] = [{ kind: 'world', id: 'worlds', label: '世界驻守维护', value: value.times(-supply) }]
-  return { rates, sources, expenses, supply }
-}
+
 const count = (n, max = Number.MAX_SAFE_INTEGER) => Number.isFinite(n) ? Math.max(0, Math.min(max, Math.floor(n))) : 0
 const finite = n => Number.isFinite(n) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, n)) : 0
 
@@ -63,10 +50,12 @@ export function createSamsara() {
     blueprints: {}, records: [], nextRecordId: 1, completions: 0, lastVictory: null, worldSeed: 1 }
 }
 export function createWorlds() {
-  return Object.fromEntries(WORLD_DEFS.map(w => [w.id, { level: 0, capacity: 0, memberId: null, returnJob: null, exposure: 0, riskBudget: 1 }]))
+  return Object.fromEntries(WORLD_DEFS.map(w => [w.id, { level: 0, capacity: 0, memberId: null, returnJob: null, exposure: 0, riskBudget: 1, facilities: normalizeWorldFacilities(null, w.id) }]))
 }
 export function createChallenge() { return { active: false, target: 0, protection: 0, completed: false } }
 export function daoLevel(state, id) { return count(state.samsara?.levels?.[id], DAO_PERK_MAP[id]?.max || 0) }
+export function invitationCapacity(state) { return SAMSARA.invitationMax + daoLevel(state, 'invitationReserve') }
+export function huntInjurySeconds(state) { return SAMSARA.injurySeconds * (1 - 0.05 * daoLevel(state, 'peacefulRecovery')) }
 export function discipleSpeed(state) { return Math.pow(1.25, daoLevel(state, 'cultivation')) }
 export function loyaltyEfficiency(member) { return SAMSARA.loyaltyFloor + (1 - SAMSARA.loyaltyFloor) * (member.loyalty ?? 1) }
 export function daoReward(state) {
@@ -108,7 +97,7 @@ export function normalizeWorlds(raw, members) {
     const r = raw?.[w.id]
     if (!r || typeof r !== 'object') continue
     const memberId = members.some(m => m.id === r.memberId) && !used.has(r.memberId) ? r.memberId : null
-    result[w.id] = { level: count(r.level, 1000), capacity: count(r.capacity, 1000), memberId,
+    result[w.id] = { level: count(r.level, 1000), capacity: count(r.capacity, 1000), memberId, facilities: normalizeWorldFacilities(r.facilities, w.id),
       returnJob: typeof r.returnJob === 'string' ? r.returnJob : null, exposure: finite(r.exposure), riskBudget: Number.isFinite(r.riskBudget) ? Math.max(0, r.riskBudget) : 1 }
     if (memberId) used.add(memberId)
   }

@@ -6,7 +6,7 @@
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { buildingCost, canAfford, buildingBoostAvailable } from '@/game/engine'
+import { buildingCost, canAfford, buildingBoostAvailable, buildingMeta, productionStageReady } from '@/game/engine'
 import { describeBuildingEffects, describeNeeds } from '@/game/effectsText'
 import { fmt, fmtRate, fmtAmount, fmtEffectPercent } from '@/game/format'
 import { money } from '@/game/decimal'
@@ -20,28 +20,37 @@ const props = defineProps({
   meta: { type: Object, required: true },
 })
 
-const entry = computed(() => state.buildings[props.meta.id] || { count: 0, on: true })
+const meta = computed(() => buildingMeta(state, props.meta.id))
+const stageReady = computed(() => productionStageReady(state, props.meta.id))
+function changeStage() {
+  const next = entry.value.stage === 1 ? 0 : 1
+  const name = next ? '灵能' : '基础'
+  const first = buildingCost({ ...state, buildings: { ...state.buildings, [meta.value.id]: { count: 0, stage: next } } }, meta.value.id)
+  const label = Object.entries(first).map(([id, n]) => resourceName(id) + ' ' + fmtAmount(n)).join('、')
+  if (window.confirm('改为' + name + '阶段将清空本类现有' + count.value + '座，不返材料。需手动重建，首座价：' + label + '。继续？')) actions.setBuildingStage(meta.value.id, next)
+}
+const entry = computed(() => state.buildings[meta.value.id] || { count: 0, on: true })
 const count = computed(() => entry.value.count || 0)
 const enabled = computed(() => (entry.value.on === false ? 0 : count.value))
-const supply = computed(() => derived.buildingSupply?.[props.meta.id] ?? 1)
+const supply = computed(() => derived.buildingSupply?.[meta.value.id] ?? 1)
 const active = computed(() => enabled.value * supply.value)
-const boostAvailable = computed(() => buildingBoostAvailable(state, props.meta.id))
+const boostAvailable = computed(() => buildingBoostAvailable(state, meta.value.id))
 const boostOn = computed(() => entry.value.boost === true)
-const boostSupply = computed(() => derived.buildingSupply?.[props.meta.boost?.id] ?? 0)
-const boostCost = computed(() => Object.entries(props.meta.boost?.upkeep || {}).map(([res, n]) => `${resourceName(res)} ${fmtAmount(money(n).times(3600))}/小时·座`).join('、'))
-const hasPower = computed(() => props.meta.upkeepQi != null || props.meta.upkeepEnergy != null)
+const boostSupply = computed(() => derived.buildingSupply?.[meta.value.boost?.id] ?? 0)
+const boostCost = computed(() => Object.entries(meta.value.boost?.upkeep || {}).map(([res, n]) => `${resourceName(res)} ${fmtAmount(money(n).times(3600))}/小时·座`).join('、'))
+const hasPower = computed(() => meta.value.upkeepQi != null || meta.value.upkeepEnergy != null)
 // 只有「灵气基础 / 灵能高阶」两档都有的建筑才显示档位切换；只吃灵能（如聚仙阵）或只吃灵气的没有可切档。
-const hasPowerToggle = computed(() => props.meta.upkeepQi != null && props.meta.upkeepEnergy != null)
+const hasPowerToggle = computed(() => meta.value.upkeepQi != null && meta.value.upkeepEnergy != null)
 const energyReady = computed(() => !!state.upgrades.energyApplication)
 const powerMode = computed(() => (
-  props.meta.upkeepEnergy != null && entry.value.power === 'energy' && energyReady.value
+  meta.value.upkeepEnergy != null && entry.value.power === 'energy' && energyReady.value
     ? 'energy'
-    : props.meta.upkeepQi == null && props.meta.upkeepEnergy != null ? 'energy' : 'qi'
+    : meta.value.upkeepQi == null && meta.value.upkeepEnergy != null ? 'energy' : 'qi'
 ))
 const supplyPercent = computed(() => fmtEffectPercent(supply.value))
-const throughputMult = computed(() => props.meta.throughput ? derived.globalMult : 1)
+const throughputMult = computed(() => meta.value.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
-const price = computed(() => buildingCost(state, props.meta.id, 1))
+const price = computed(() => buildingCost(state, meta.value.id, 1))
 const affordable = computed(() => canAfford(state, price.value))
 /** 库存不足且费用超过仓容时，需要先扩仓。 */
 const overCap = computed(() => costBlocked(state, derived, price.value))
@@ -53,7 +62,7 @@ const overCap = computed(() => costBlocked(state, derived, price.value))
  */
 const effectRows = computed(() => {
   const visible = new Set(view.visibleResources.value.map(resource => resource.id))
-  return describeBuildingEffects(props.meta, state, derived).filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
+  return describeBuildingEffects(meta.value, state, derived).filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
     key: `${u.label}-${i}`,
     label: u.label,
     value: u.value,
@@ -61,8 +70,8 @@ const effectRows = computed(() => {
     tone: u.tone,
   }))
 })
-const conditions = computed(() => describeNeeds(props.meta.needs))
-const flavor = computed(() => BUILDING_FLAVOR[props.meta.id] || '')
+const conditions = computed(() => describeNeeds(meta.value.needs))
+const flavor = computed(() => BUILDING_FLAVOR[meta.value.id] || '')
 
 /**
  * 维护费逐条成行：这些建筑才有「停用」按钮，停用即停费。
@@ -72,7 +81,7 @@ function upkeepRate(unit, activeCount = 1, mult = 1) {
   return fmtRate(money(unit).times(activeCount).times(mult).negated())
 }
 const upkeepRows = computed(() =>
-  Object.entries(props.meta.upkeep || {}).map(([res, v]) => ({
+  Object.entries(meta.value.upkeep || {}).map(([res, v]) => ({
     key: res,
     label: resourceName(res),
     unit: upkeepRate(v),
@@ -85,7 +94,10 @@ const powerRow = computed(() => {
   if (!hasPower.value) return null
   const energy = powerMode.value === 'energy'
   const res = energy ? 'qiEnergy' : 'qi'
-  const unit = energy ? (props.meta.upkeepEnergy ?? 0) : (props.meta.upkeepQi ?? 0)
+  const nominal = energy ? (meta.value.upkeepEnergy ?? 0) : (meta.value.upkeepQi ?? 0)
+  const entries = derived.expenseSources?.[res] || []
+  const paid = entries.filter(e => e.id === meta.value.id).reduce((total, e) => total.plus(e.value.negated()), money(0))
+  const unit = active.value > 0 ? paid.div(active.value) : money(nominal)
   return {
     res,
     label: resourceName(res),
@@ -95,8 +107,8 @@ const powerRow = computed(() => {
 })
 
 function sell() {
-  if (window.confirm(`确定拆除一座${props.meta.name}吗？只返还一半材料。`)) {
-    actions.sell(props.meta.id, 1)
+  if (window.confirm(`确定拆除一座${meta.value.name}吗？只返还一半材料。`)) {
+    actions.sell(meta.value.id, 1)
   }
 }
 
@@ -110,6 +122,7 @@ onBeforeUnmount(clearHighlight)
 
 <template>
   <div class="build-item">
+    <button v-if="stageReady || entry.stage === 1" class="side-btn" @click="changeStage">{{ entry.stage === 1 ? '退回基础' : '灵能改造' }}</button>
     <HoverTip :width="380" @show="onTipShow" @hide="clearHighlight">
       <button
         class="build-btn"
@@ -129,6 +142,9 @@ onBeforeUnmount(clearHighlight)
         <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
 
         <CostRows :cost="price" />
+        <div v-if="entry.stage === 1" class="small dim">灵能阶段 · 改造清零重建；关闭仅停止运行。</div>
+        <div v-if="meta.secondaryBase" class="tip-row"><span>每矿工每座天然灵石</span><span>{{ fmtAmount(meta.secondaryBase * 3600) }}/小时；有效矿工 {{ fmt(derived.discipleJobWeights?.miner || 0) }}</span></div>
+        <div v-if="meta.nurseryCapacity" class="tip-row"><span>育草工位实际容量</span><span>{{ fmt(derived.processingCapacity?.nursery || 0) }}</span></div>
 
         <div class="tip-section">效果（{{ meta.effects?.storage ? '新建每座定额' : '每座基础值' }}<template v-if="count">；括号为当前合计</template><template v-else>；建成后生效</template>）</div>
         <div v-if="meta.effects?.storage" class="small dim">仓储已含针对本建筑的工艺强化与旧档保留容量；资源总仓容比例另计。</div>
@@ -177,7 +193,7 @@ onBeforeUnmount(clearHighlight)
           <div v-if="hasPower && enabled > 0" class="tip-row">
             <span class="k">供能档</span>
             <span class="v" :class="powerMode === 'energy' ? 'good' : 'muted'">
-              {{ powerMode === 'energy' ? '灵能高阶（主动效果 ×' + fmt(meta.powerMult || 1) + '，仓储、住额与工位容量不变）' : '灵气基础' }}
+              {{ entry.stage === 1 ? '灵能阶段（按实际供给运行）' : powerMode === 'energy' ? '灵能高阶（主动效果 ×' + fmt(meta.powerMult || 1) + '，仓储、住额与工位容量不变）' : '灵气基础' }}
             </span>
           </div>
           <div v-if="enabled === 0" class="tip-row">

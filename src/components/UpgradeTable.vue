@@ -7,7 +7,7 @@
  */
 import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible, isCostRevealed } from '@/game/engine'
+import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible, isCostRevealed, researchCost } from '@/game/engine'
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
@@ -43,12 +43,12 @@ const researchedIds = computed(() =>
 // 仓容只影响列表分组；已有库存能支付时仍允许参悟。仓容与存量都是金额，比较留在 Decimal 域。
 const capacityReady = (u) => {
   if (props.kind !== 'cultivation') return true
-  const cost = money(u.cost?.insight ?? ZERO)
+  const cost = money(researchCost(state, u)?.insight ?? ZERO)
   return moneyGte(moneyMax(derived.max.insight ?? ZERO, state.resources.insight ?? ZERO), cost)
 }
 const capacityLocked = computed(() => props.list
-  .filter((u) => availableIds.value.includes(u.id) && isCostRevealed(state, u.cost) && !capacityReady(u))
-  .sort((a, b) => money(a.cost.insight).cmp(money(b.cost.insight))))
+  .filter((u) => availableIds.value.includes(u.id) && isCostRevealed(state, researchCost(state, u)) && !capacityReady(u))
+  .sort((a, b) => money(a.cost.insight).cmp(money(b.cost.insight))).map(u => ({ ...u, cost: researchCost(state, u) })))
 
 /**
  * 「效果」列的文本。
@@ -64,8 +64,9 @@ const capacityLocked = computed(() => props.list
  * 而 `<tr>` 里只能放 `<td>` —— 包起来会破坏表格结构。转发事件既保住结构，
  * 又让玩家在行内任意位置（名称、等级、效果或花费）悬停都能看到同一条提示。
  */
-function rowEnter(ev, meta) {
-  if (meta?.cost) highlightCost(meta.cost)
+function rowEnter(ev, item) {
+  const cost = item?.cost || item?.meta?.cost
+  if (cost) highlightCost(cost)
   ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseenter'))
 }
 function rowLeave(ev) {
@@ -78,18 +79,18 @@ const available = computed(() =>
   availableIds.value
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
-    .filter((u) => isCostRevealed(state, u.cost))
+    .filter((u) => isCostRevealed(state, researchCost(state, u)))
     .filter(capacityReady)
     .map((u) => ({
-      meta: u,
-      affordable: canAfford(state, u.cost),
+      meta: { ...u, cost: researchCost(state, u) },
+      affordable: canAfford(state, researchCost(state, u)),
     })),
 )
 
 const locked = computed(() =>
   props.list
     .filter((u) => !state.upgrades[u.id] && !availableIds.value.includes(u.id))
-    .filter((u) => isProgressionVisible(state, u.needs, u.cost))
+    .filter((u) => isProgressionVisible(state, u.needs, researchCost(state, u)))
     .map((u) => ({
       meta: u,
       needs: describeNeeds(u.needs).join('，') || '条件未知',

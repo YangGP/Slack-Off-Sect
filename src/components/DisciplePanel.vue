@@ -4,6 +4,7 @@ import { state, derived, actions } from '@/game/store'
 import { JOBS } from '@/data/jobs'
 import { idleDisciples, nextArrivalIn, isManualRecruit, jobOutputs, discipleBreakthroughPreview, discipleDismissalPreview, discipleAidPreview, recruitPreview, canAfford } from '@/game/engine'
 import { REALMS } from '@/data/realms'
+import { invitationCapacity } from '@/data/samsara'
 import { cultivationRequired, cultivationRate, discipleFactor, discipleAnnualBaseUpkeep, discipleDismissalCost, discipleResidenceYears, discipleTrainingCost, SPIRITUAL_ROOTS, SPIRITUAL_ROOT_MAP, sortDisciples, RECRUIT_TIERS } from '@/data/disciples'
 import { TALENT_MAP, TALENT_TIERS, TALENT_TIER_MAP, talentBonus, talentMatches, talentDescription } from '@/data/talents'
 import { costLabel } from '@/game/pricing'
@@ -105,6 +106,7 @@ const floorOptions = [
 // 自动突破（需《因材施教》）：目标上限默认「不高于宗门」，可下调为止步具体境界。
 const capOptions = [{ value: 'sect', label: '不高于宗门' },
   ...REALMS.slice(1).map((realm, index) => ({ value: index + 1, label: `止步${realm.name}` }))]
+const scopeOptions = [{ value: 'focus', label: '仅重点名单' }, { value: 'all', label: '全部弟子' }]
 const sortOptions = [{ value: 'arrival', label: '入门先后' }, { value: 'progress', label: '进度优先' }, { value: 'rate', label: '速度优先' }]
 const roleOptions = computed(previous => {
   const options = [{ value: 'idle', label: '闲散' }, ...JOBS.filter(job => derived.unlockedJobs.includes(job.id)).map(job => ({ value: job.id, label: job.name }))]
@@ -137,7 +139,7 @@ const managementRows = computed(() => visible.value.map(member => {
     }).filter(Boolean),
     talentTier: [...TALENT_TIERS].reverse().find(tier => member.talents?.some(entry => TALENT_MAP[entry.id]?.tier === tier.id))?.name,
     mentored: member.mentored === true,
-    trainingCost: discipleTrainingCost(member, state.realm),
+    trainingCost: discipleTrainingCost(member, state.realm, state),
     aid: discipleAidPreview(state, member),
     rate: cultivationRate(member, derived.trainingActive && !member.onMission) * discipleSpeed(state), root: SPIRITUAL_ROOT_MAP[member.spiritualRoot],
     // 口粮与逐出费用都是金额：先在 Decimal 域分摊，界面只负责格式化。
@@ -317,7 +319,7 @@ function commitJob(jobId, event) {
 
       <div v-if="derived.recruitModeUnlocked" class="recruit-block">
         <div class="recruit-header">
-          <span class="recruit-heading">招募方式</span>
+          <span class="recruit-heading">招募方式</span><span class="small dim">礼聘机会 {{ state.invitations }}/{{ invitationCapacity(state) }} · 每6小时恢复1次</span>
           <div class="recruit-mode">
             <span :class="{ selected: !recruitManual }">自动前来</span>
             <button
@@ -356,9 +358,7 @@ function commitJob(jobId, event) {
           <span class="small dim">培养预算</span>
         </HoverTip>
         <label class="training-field"><span class="small dim">灵气底线</span>
-          <select :aria-label="'传功灵气底线'" :value="state.settings.trainingQiFloorSeconds" @change="actions.setSetting('trainingQiFloorSeconds', Number($event.target.value))">
-            <option v-for="option in floorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
+          <StableSelect label="传功灵气底线" :model-value="state.settings.trainingQiFloorSeconds" :options="floorOptions" @update:model-value="actions.setSetting('trainingQiFloorSeconds', $event)" />
         </label>
         <label class="sw"><input type="checkbox" aria-label="保留宗门破境材料" :checked="state.settings.sectBreakthroughReserve" @change="actions.setSetting('sectBreakthroughReserve', $event.target.checked)" />保留宗门破境材料</label>
         <label class="training-field"><span class="small dim">传功上限</span>
@@ -370,15 +370,10 @@ function commitJob(jobId, event) {
           <label class="sw"><input type="checkbox" aria-label="自动突破" :checked="state.settings.autoBreakthrough" @change="actions.setSetting('autoBreakthrough', $event.target.checked)" />自动突破</label>
         </HoverTip>
         <label class="training-field"><span class="small dim">人选</span>
-          <select :aria-label="'自动突破适用人选'" :value="state.settings.autoBreakthroughScope" @change="actions.setSetting('autoBreakthroughScope', $event.target.value)">
-            <option value="focus">仅重点名单</option>
-            <option value="all">全部弟子</option>
-          </select>
+          <StableSelect label="自动突破适用人选" :model-value="state.settings.autoBreakthroughScope" :options="scopeOptions" @update:model-value="actions.setSetting('autoBreakthroughScope', $event)" />
         </label>
         <label class="training-field"><span class="small dim">止步</span>
-          <select :aria-label="'自动突破目标上限'" :value="state.settings.autoBreakthroughCap" @change="actions.setSetting('autoBreakthroughCap', $event.target.value === 'sect' ? 'sect' : Number($event.target.value))">
-            <option v-for="option in capOptions" :key="String(option.value)" :value="option.value">{{ option.label }}</option>
-          </select>
+          <StableSelect label="自动突破目标上限" :model-value="state.settings.autoBreakthroughCap" :options="capOptions" @update:model-value="actions.setSetting('autoBreakthroughCap', $event)" />
         </label>
       </div>
       </details>

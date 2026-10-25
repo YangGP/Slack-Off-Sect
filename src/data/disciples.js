@@ -4,7 +4,7 @@ import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
 import { CONFIG } from './config'
 import { ZERO, money, moneyNonNegative } from '../game/decimal.js'
-import { SAMSARA } from './samsara.js'
+import { SAMSARA, daoLevel } from './samsara.js'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,
@@ -165,11 +165,11 @@ export function trainingBonus(member, trainingActive = false) {
 }
 
 /** 传功每秒灵气：按弟子有效境界递增；未受传功或本境已修满不收费。金额为 Decimal。 */
-export function discipleTrainingCost(member, sectRealm) {
+export function discipleTrainingCost(member, sectRealm, state = null) {
   if (member.onMission) return ZERO
   if (!member.mentored) return ZERO
   if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return ZERO
-  return money(DISCIPLE_TRAINING.qiPerSecond).times(discipleFactor(member, sectRealm))
+  return money(DISCIPLE_TRAINING.qiPerSecond).times(discipleFactor(member, sectRealm)).times(state ? 1 - 0.04 * daoLevel(state, 'efficientMentoring') : 1)
 }
 
 export function cultivationRate(member, trainingActive = false) {

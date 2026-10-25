@@ -1,5 +1,7 @@
 import { RESOURCE_MAP, RESOURCE_GROUPS } from '@/data/resources'
 import { BUILDING_MAP, WAREHOUSE_CAPACITY_VERSION, LEGACY_WAREHOUSE_IDS } from '@/data/buildings'
+import { buildingMeta, PRODUCTION_STAGES } from '@/data/productionStages'
+import { invitationCapacity } from '@/data/samsara'
 import { STORAGE_MERGE_VERSION, STORAGE_MERGE_GROUPS } from '@/data/storage'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { CRAFT_MAP } from '@/data/crafts'
@@ -112,7 +114,7 @@ export function validateState(state, fresh) {
   result.samsara = normalizeSamsara(result.samsara, result)
   result.worlds = normalizeWorlds(result.worlds, result.disciples.members)
   result.challenge = normalizeChallenge(result.challenge)
-  result.invitations = Math.floor(safeNumber(result.invitations, 3, 3))
+  result.invitations = Math.floor(safeNumber(result.invitations, 3, invitationCapacity(result)))
   result.invitationTimer = safeNumber(result.invitationTimer, 0, 21600)
   const plan = isRecord(result.rebuild) ? result.rebuild : fresh.rebuild
   result.rebuild = { active: plan.active === true, buildings: numericMap(plan.buildings, BUILDING_MAP, true),
@@ -140,10 +142,12 @@ export function validateState(state, fresh) {
     .map(([id, entry]) => {
       // 无运行成本（无物料维护且无持续供能）的建筑不允许停用：
       // 旧档停用后若该建筑的维护费被移除（如加工链），会永久卡在停用且无启用按钮，载入时统一归一为启用。
-      const meta = BUILDING_MAP[id]
+      const stage = PRODUCTION_STAGES[id] && entry.stage === 1 ? 1 : 0
+      const meta = buildingMeta({ buildings: { [id]: { stage } } }, id)
       const hasCost = !!(meta.upkeep || meta.upkeepQi != null || meta.upkeepEnergy != null)
       const out = { count: Math.floor(safeNumber(entry.count)), on: hasCost ? entry.on !== false : true }
-      if (entry.power === 'energy') out.power = 'energy'
+      if (PRODUCTION_STAGES[id]) out.stage = stage
+      if (!stage && entry.power === 'energy') out.power = 'energy'
       if (meta.boost) out.boost = entry.boost === true
       return [id, out]
     }))

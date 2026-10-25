@@ -228,8 +228,8 @@ const M2_NEW_IDS = [
   'spiritCanal', 'liquidIrrigation', 'veinInfuse',
   'etchTheory', 'infuseTheory', 'precipitateTheory', 'temperTheory',
   'liquidVault', 'runeVault', 'treasureVault',
-  'particleRecover', 'energyDrive',
-  'runeTools', 'crystalCalib', 'forgeApp',
+  'particleRecover', 'poweredProduction',
+  'runeTools', 'crystalCalib', 'forgeBatchStandards',
 ]
 const m2Gaps = rows.filter((r) => M2_NEW_IDS.includes(r.id) && (r.costGaps.length > 0 || r.upRound == null))
 

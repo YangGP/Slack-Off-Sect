@@ -17,6 +17,7 @@
  * 两者共用「灵机」货币与已学记录，也都用 `needs` 做门禁；`needs.upgrades` 可跨页引用。
  */
 import { TECHNIQUES } from './techniques.js'
+import { WORLD_RESEARCH } from './worldFacilities.js'
 import { FAITH_UPGRADES } from './faith.js'
 import { insertAfter } from './modules.js'
 import { HUNT_UPGRADES, HUNT_UPGRADE_ANCHORS } from '../modules/hunting/data.js'
@@ -496,15 +497,7 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['crystalTheory', 'shapeRune'], building: { id: 'talismanHall', count: 1 } },
   },
   // 自技艺页迁入（精研）
-  {
-    id: 'crystalPolishing',
-    name: '晶纹精修',
-    glyph: '琢',
-    cost: { insight: 12800, crystal: 8, daoNote: 16 },
-    desc: '精修固形纹排列，减少结晶损耗。凝晶每份耗料减少20%（保留小数成本），金丹起凝晶加工效率 +25%。',
-    effects: { craftCostReduction: { condenseCrystal: 0.2 }, craftSpeedByRecipe: { condenseCrystal: 0.25 } },
-    needs: { upgrades: ['precipitateTheory'] },
-  },
+
   {
     id: 'talismanLore',
     name: '符法精微',
@@ -619,16 +612,7 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['steelWorking', 'crystalTheory'] },
   },
   // 土木族工艺节点；暂时只保留混灵土与玄铁混灵土的制作增益。
-  {
-    id: 'masonryArt',
-    name: '营造技艺',
-    glyph: '艺',
-    cost: { insight: 1500 },
-    desc: '料有定尺、工有定法，调配与浇筑愈发熟练，同样的原料可制成更多建材。',
-    effectDesc: '混灵土与玄铁混灵土制作产出提高。',
-    effects: { craftBonusByResource: { spiritMortar: 0.1, ironMortar: 0.1 } },
-    needs: { upgrades: ['earthArt'], building: { id: 'warehouse', count: 1 } },
-  },
+
 
   // ============ 宗门经营：制度、招募、离线与试炼 ============
   {
@@ -949,9 +933,7 @@ const CORE_CULTIVATION = [
   },
 
   // ============ 宗门外交（可选模块贡献，见 modules/diplomacy） ============
-  { id: 'tradeRoutes', name: '互市定约', glyph: '贸', cost: { insight: 3000, daoNote: 20, stone: 300 },
-    needs: { realm: 4, upgrades: ['neighborContacts'] }, effects: { jobRatio: { huntPlanner: 0.25 } },
-    desc: '约定定期互市，执符使产出+25%，可开启每60秒自动交易并设置材料与信符保留。', note: '解锁自动互市', module: 'diplomacy' },
+
   // 与《主动招募》同型：规则型开关节点（effects.openTrade），不开建筑、不占仓容。
   {
     id: 'neighborContacts',
@@ -973,7 +955,7 @@ const CORE_CULTIVATION = [
 /** 核心修真 + 可选模块（猎杀）贡献的山野研究（按锚点插回原位，见 HUNT_UPGRADE_ANCHORS） */
 export const CULTIVATION = HUNT_UPGRADES.reduce(
   (list, u) => insertAfter(list, HUNT_UPGRADE_ANCHORS[u.id], [u]),
-  CORE_CULTIVATION,
+  [...CORE_CULTIVATION, ...WORLD_RESEARCH],
 )
 
 /** 两层合起来的完整列表：产出计算、解锁判定、文案都要用它 */

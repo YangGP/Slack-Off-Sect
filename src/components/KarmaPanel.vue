@@ -17,6 +17,8 @@ const balance = computed(() => money(state.karma ?? ZERO))
 const totalSpent = computed(() => money(state.karmaProgression?.totalSpent ?? ZERO))
 const rebirths = computed(() => rebirthCount(state))
 const daoRows = computed(() => DAO_PERKS.map(meta => ({ meta, cost: daoPerkCost(state, meta.id), level: daoLevel(state, meta.id) })))
+const perkGroup = id => ({ constructionLineage: '建设', artisanLegacy: '加工', powerCalibration: '供能', worldMaterialThrift: '小界', refinementInsight: '祭炼', archiveWorkflow: '知识' }[id] || '轮回与重建')
+const daoGroup = id => ({ measuredNurture: '供养', efficientMentoring: '传功', pillAssimilation: '资源培养', peacefulRecovery: '猎场', invitationReserve: '招募', personalAidThrift: '个人护道' }[id] || (id.startsWith('hunt') ? '猎场资格' : '成长'))
 /** 当前生效的修持效果汇总（只看等级，与余额无关）。 */
 const bonuses = computed(() => karmaShopBonuses(state))
 /** 头部乘区读派生层：宿慧/因果田等已在 recompute 里并入。 */
@@ -84,7 +86,7 @@ function missingText(missing) {
         <p class="small dim">修持与解锁跨世保留，不洗点。道果余额不影响生产和仙缘结算，首颗道果的自动化永久保留。</p>
         <div class="dao-list">
           <div v-for="row in daoRows" :key="row.meta.id" class="karma-entry">
-            <div class="karma-entry-head"><b>{{ row.meta.name }}</b><span class="small dim">{{ row.level }}/{{ row.meta.max }}</span></div>
+            <div class="karma-entry-head"><b>{{ row.meta.name }}</b><span class="small dim">{{ row.level }}/{{ row.meta.max }} · {{ daoGroup(row.meta.id) }}</span></div>
             <p class="small dim karma-note">{{ row.meta.desc }}</p>
             <button class="btn" :disabled="row.level >= row.meta.max || !moneyGte(state.dao, row.cost)" @click="actions.samsara('buyDaoPerk', row.meta.id)">{{ row.level >= row.meta.max ? '已圆满' : `修持 · ${fmtAmount(row.cost)} 道果` }}</button>
           </div>
@@ -99,7 +101,7 @@ function missingText(missing) {
       <div class="box-body">
         <div v-for="row in perkRows" :key="row.meta.id" class="small karma-entry">
           <div class="karma-entry-head">
-            <b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.meta.max }}
+            <b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.meta.max }} <span class="dim">· {{ perkGroup(row.meta.id) }}</span>
             <span v-if="row.level >= row.meta.max" class="good">已圆满</span>
           </div>
           <div class="dim karma-note">{{ row.meta.desc }}</div>

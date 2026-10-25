@@ -154,7 +154,7 @@ export function dataIntegrity({ ok, section }) {
     // 数值型研究来自材料工艺、主线成果、金丹增产及聚气纹。
     // 清单用于避免无意把通用技艺迁入修真页，符文原理见 docs/CRAFT-PROGRESSION.md。
     const MIGRATED_NUMERIC_IDS = [
-      'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft', 'crystalPolishing',
+      'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft',
       'mahayanaArt', 'qiRune', 'craftTempo', 'paperArt', 'paperWorks',
       // 主线数值节点：灵气纯化的纯度增益
       'qiPurify',
@@ -162,8 +162,8 @@ export function dataIntegrity({ ok, section }) {
       // 修真应用 · 营造（自技艺页迁入）
       'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
       // 土木工艺：专业制作增益（营造 / 石作成规，见 CRAFT-PROGRESSION.md#材料研究与兼容）
-      'masonryArt', 'stoneWorks', 'earthArt', 'earthEssence', 'grottoArt',
-      'tradeRoutes', // 定期互市制度同时改善共享执符岗位。
+      'stoneWorks', 'earthArt', 'earthEssence', 'grottoArt',
+
     ]
     const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
     ok(
@@ -175,8 +175,8 @@ export function dataIntegrity({ ok, section }) {
     ok('技艺页不再包含迁移节点', TECHNIQUES.every((t) => !MIGRATED_NUMERIC_IDS.includes(t.id)))
     const applications = ['breakthroughArt', 'waterworkshop', 'spiritSaw', 'spiritCultivation', 'swordFlight', 'spiritSmelting',
       'alchemyFire', 'flowField', 'spiritCanal', 'liquidIrrigation', 'veinInfuse', 'liquidVault', 'runeVault',
-      'treasureVault', 'particleRecover', 'energyDrive']
-    ok('16项应用增益在技艺页且不占修真页', applications.every(id =>
+      'treasureVault', 'particleRecover', 'poweredProduction', 'crystalPolishing', 'masonryArt', 'tradeRoutes']
+    ok('应用节点在技艺页且不占修真页', applications.every(id =>
       TECHNIQUES.some(u => u.id === id) && !CULTIVATION.some(u => u.id === id)))
     for (const id of applications) {
       const legacy = normalizeState({ upgrades: { [id]: true } })

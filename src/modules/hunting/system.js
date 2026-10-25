@@ -1,3 +1,4 @@
+import { huntInjurySeconds } from '@/data/samsara'
 import { withResourceAction } from '../../game/resourceObservation'
 import { setResourceValue } from '../../game/resourceObservation'
 import { HUNT, HUNT_FIELD_MAP, DEFAULT_HUNT_FIELD } from './data.js'
@@ -535,7 +536,7 @@ export function settleMission(state, derived, mission, { autoRepeat = true } = {
           rememberDisciple(state, member, '殒命·猎场')
           state.disciples.members = state.disciples.members.filter(m => m.id !== member.id)
           pushLog(state, `${member.name}在${riskField.name}猎杀中殒命。`, 'bad')
-        } else if (riskField.injury && huntRandom(hunting) < riskField.injury * (supplies ? 0.5 : 1)) member.injury = SAMSARA.injurySeconds
+        } else if (riskField.injury && huntRandom(hunting) < riskField.injury * (supplies ? 0.5 : 1)) member.injury = huntInjurySeconds(state)
       }
     }
     const gains = {}
@@ -675,7 +676,7 @@ export function advanceOfflineHunt(state, derived, dt, ctx = {}) {
         rememberDisciple(state, member, '殒命·猎场')
         state.disciples.members = state.disciples.members.filter(m => m.id !== row.id)
         pushLog(state, `${member.name}在${field.name}离线猎杀中殒命。`, 'bad')
-      } else if (injuredAt <= trips) member.injury = Math.max(0, SAMSARA.injurySeconds - (periods - injuredAt) * interval)
+      } else if (injuredAt <= trips) member.injury = Math.max(0, huntInjurySeconds(state) - (periods - injuredAt) * interval)
     }
     for (const [res, y] of Object.entries(totals)) {
       const sum = money(hunting.yieldRemainders[res] ?? ZERO).plus(y)

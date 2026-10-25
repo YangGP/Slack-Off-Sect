@@ -2,6 +2,10 @@ import { setResourceValue } from '../resourceObservation'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { BUILDING_MAP } from '@/data/buildings'
+import { buildingMeta } from '@/data/productionStages'
+import { CRAFT_MAP } from '@/data/crafts'
+import { worldNeedsMet } from '@/data/samsara'
+import { FAITH_UPGRADE_MAP } from '@/data/faith'
 import { atLeast } from '../numbers'
 import { Dec, MONEY_INFINITY, ONE, ZERO, money, moneyAvailable, moneyMax } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
@@ -168,20 +172,21 @@ export function jobOutputs(state, job, buildingSupply = {}) {
     if (!output.building || activeOf(state, output.building) > 0) outputs.push(output)
   }
   if (job.secondary) {
-    const active = activeOf(state, job.secondary.building)
-    const boost = BUILDING_MAP[job.secondary.building]?.boost
+    const meta = buildingMeta(state, job.secondary.building)
+    const active = activeOf(state, job.secondary.building) * (meta?.stage === 1 ? buildingSupply[job.secondary.building] ?? 0 : 1)
+    const boost = meta?.boost
     const boostMult = boost && buildingBoostAvailable(state, job.secondary.building) && state.buildings[job.secondary.building].boost === true
       ? 1 + (boost.multiplier - 1) * (buildingSupply[boost.id] ?? 0) : 1
     if (active > 0) outputs.push({
       ...job.secondary,
-      base: money(job.secondary.base).times(job.secondary.perBuilding ? active : 1).times(boostMult),
+      base: money(meta?.secondaryBase ?? job.secondary.base).times(job.secondary.perBuilding ? active : 1).times(boostMult),
     })
   }
   return outputs
 }
 
 export function buildingBoostAvailable(state, id) {
-  const boost = BUILDING_MAP[id]?.boost, entry = state.buildings[id]
+  const boost = buildingMeta(state, id)?.boost, entry = state.buildings[id]
   return !!boost && entry?.count > 0 && entry.on !== false && state.upgrades[boost.upgrade] === true
 }
 
@@ -210,6 +215,9 @@ export function checkNeeds(state, needs) {
     }
   }
   if (needs.realm != null && state.realm < needs.realm) return false
+  if (needs.recipes?.some(id => !CRAFT_MAP[id] || !isCraftUnlocked(state, CRAFT_MAP[id]))) return false
+  if (needs.world && ((state.worlds?.[needs.world]?.level || 0) < 1 || !worldNeedsMet(state, needs.world))) return false
+  if (needs.worldFacility && !state.worlds?.[needs.worldFacility.world]?.facilities?.[needs.worldFacility.id]?.built) return false
   return true
 }
 
@@ -221,7 +229,7 @@ export function checkNeeds(state, needs) {
  * 用历史峰值而不是当前值，是为了避免「把资源花光后建筑又消失」导致列表跳动（§14.4）。
  */
 export function isBuildingUnlocked(state, id) {
-  const meta = BUILDING_MAP[id]
+  const meta = buildingMeta(state, id)
   if (!meta) return false
   // 关闭的可选模块：其建筑视同未解锁（含已建成的），不展示、不可购买
   if (!isEntryEnabled(state, meta)) return false
@@ -361,14 +369,29 @@ export function buildingCostFrom(meta, from, count, discount = 0) {
 }
 
 export function buildingCost(state, id, count = 1) {
-  const meta = BUILDING_MAP[id]
+  const meta = pricedBuildingMeta(state, id)
   if (!meta) return {}
   return buildingCostFrom(meta, countOf(state, id), count, karmaShopBonuses(state).buildingDiscount)
 }
 
+export function pricedBuildingMeta(state, id) {
+  const meta = buildingMeta(state, id)
+  if (!meta) return null
+  const reduction = karmaShopBonuses(state).buildingPriceReduction
+  return reduction ? { ...meta, priceRatio: moneyMax('1.05', money(meta.priceRatio || 1.15).minus(reduction)).toNumber() } : meta
+}
+
+/** 所有研究显示和支付共用；法宝及香火不吃宿慧。 */
+export function researchCost(state, up) {
+  if (!up) return {}
+  const discount = up.kind === 'treasure' || Object.hasOwn(FAITH_UPGRADE_MAP, up.id) ? 0 : karmaShopBonuses(state).researchInsightDiscount
+  return Object.fromEntries(Object.entries(up.cost || {}).map(([res, n]) =>
+    [res, money(n).times(res === 'insight' ? 1 - discount : 1)]))
+}
+
 /** 在现有资源下最多能买几座（上限 cap 防止死循环） */
 export function maxAffordable(state, id, cap = 500) {
-  const meta = BUILDING_MAP[id]
+  const meta = pricedBuildingMeta(state, id)
   if (!meta) return 0
   const from = countOf(state, id)
   const discount = karmaShopBonuses(state).buildingDiscount
@@ -506,6 +529,7 @@ export function refineCost(state, id) {
       out[res] = (out[res] ?? ZERO).plus(money(amount).times(materialRatio))
     }
   }
+  if (out.insight) out.insight = out.insight.times(ONE.minus(karmaShopBonuses(state).refineInsightDiscount))
   return roundCost(out)
 }
 

@@ -52,6 +52,9 @@ export function karmaNeedsMet(state, needs) {
   if (!needs) return true
   if (needs.realm != null && state.realm < needs.realm) return false
   if (needs.rebirths != null && rebirthCount(state) < needs.rebirths) return false
+  if (needs.bestRealm != null && Math.max(state.realm, state.stats?.bestRealm || 0) < needs.bestRealm) return false
+  if (needs.ascensions != null && (state.stats?.ascensions || 0) < needs.ascensions) return false
+  if (needs.worldBlueprint && !Object.values(state.samsara?.blueprints || {}).some(Boolean)) return false
   return true
 }
 
@@ -65,6 +68,9 @@ export function karmaNeedsText(state, needs) {
   if (needs.rebirths != null && rebirthCount(state) < needs.rebirths) {
     out.push('转世/飞升 ≥ ' + needs.rebirths + ' 次')
   }
+  if (needs.bestRealm != null && Math.max(state.realm, state.stats?.bestRealm || 0) < needs.bestRealm) out.push('历史境界达到' + REALMS[needs.bestRealm]?.name)
+  if (needs.ascensions != null && (state.stats?.ascensions || 0) < needs.ascensions) out.push('普通飞升 ≥ ' + needs.ascensions + ' 次')
+  if (needs.worldBlueprint && !Object.values(state.samsara?.blueprints || {}).some(Boolean)) out.push('取得任一小界图纸')
   return out
 }
 
@@ -90,6 +96,13 @@ export function karmaShopBonuses(state) {
     insightBonus: 0,
     ascendBonus: 0,
     deathKeepBonus: 0,
+    researchInsightDiscount: 0,
+    buildingPriceReduction: 0,
+    stationCapacityRatio: 0,
+    productionEnergyDiscount: 0,
+    worldBuildingDiscount: 0,
+    refineInsightDiscount: 0,
+    knowledgeCraftSpeed: 0,
   }
   const levels = karmaSlice(state).levels || {}
   for (const meta of KARMA_PERKS) {
@@ -98,7 +111,7 @@ export function karmaShopBonuses(state) {
     for (const [key, per] of Object.entries(meta.effect)) {
       if (typeof per !== 'number') continue
       // 有界比例仍返回 Number，但先按十进制汇总，避免 0.05 × 3 的尾数进入金额乘区。
-      out[key] = money(out[key]).plus(money(per).times(level)).toNumber()
+      out[key] = money(out[key] || 0).plus(money(per).times(level)).toNumber()
     }
   }
   return out

@@ -19,6 +19,7 @@ import { MONEY_INFINITY, ZERO, moneyMax, moneyToRatio, requireFiniteMoney } from
 import { advanceDiscipleGrowth } from './disciples'
 import { SAMSARA, daoLevel, rememberDisciple } from '@/data/samsara'
 import { advanceWorlds, replenishChallenge, advanceRebuild } from './samsara'
+import { beginWorldSegment, endWorldSegment } from './worldRules'
 
 const energyDecay = state => Math.max(SAMSARA.qiDecayFloor, CONFIG.QI_ENERGY_DECAY * Math.pow(0.85, daoLevel(state, 'energyRetention')))
 
@@ -130,6 +131,8 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   if (!reuseEconomy || assignmentsChanged || !canReuseEconomy(state, derived, cap)) recompute(state, derived, cap)
   advanceDiscipleGrowth(state, derived, cap)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
+  if (derived.worldPlan?.rows.length && derived.worldPlan.seconds !== cap) recompute(state, derived, cap)
+  beginWorldSegment(state, derived, cap)
 
   // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。
   const qiDemand = moneyMax(ZERO, (derived.expense?.qi ?? ZERO).negated().times(cap))
@@ -149,7 +152,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
 
   // 1) 资源结算（灵气先算净产出）
   for (const r of RESOURCES) {
-    if (r.noProduction) continue
+    if (r.noProduction && !derived.expense?.[r.id]?.lt(0)) continue
     let rate = derived.rates[r.id] ?? ZERO
     // 出项：弟子的灵气口粮 + 带维护费建筑的持续消耗（停用即停费）
     if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id]) // expense 里是负数
@@ -252,6 +255,8 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   if (runAutoCraft(state, derived, cap) && (!reuseEconomy || !canReuseEconomy(state, derived, cap))) {
     recompute(state, derived, cap)
   }
+
+  if (endWorldSegment(state, derived)) recompute(state, derived, cap)
 
   // 6) 历法推进：天数累加
   //    一天 3 秒（见 CALENDAR.DAY_SECONDS），所以 1 节气只有 45 秒 —— 节气变化**不写纪事**
@@ -470,6 +475,8 @@ function approximateSegment(state, derived, segment, opts) {
     // 3) 按修满和调息边界推进培养；已开启自动突破遵守同一支付限制。
     advanceDiscipleGrowth(state, derived, dt)
     if (settleExpiredThreat(state, derived)) recompute(state, derived, dt)
+    if (derived.worldPlan?.rows.length && derived.worldPlan.seconds !== dt) recompute(state, derived, dt)
+    beginWorldSegment(state, derived, dt)
 
     // 4) 个人口粮按实际有效境界与减耗累计；断供时按口粮与维护共有的供给比例记账。
     const qiDemand = moneyMax(ZERO, (derived.expense?.qi ?? ZERO).negated().times(dt))
@@ -486,7 +493,7 @@ function approximateSegment(state, derived, segment, opts) {
     // 5) 资源结算：段首速率乘 dt 一次计入，受实际可用量与仓储限制，不出现负数。
     //    维护与加工共用同一份材料预算：两者都在这里按同一批库存封顶。
     for (const r of RESOURCES) {
-      if (r.noProduction || r.id === 'qiEnergy') continue
+      if (r.id === 'qiEnergy' || r.noProduction && !derived.expense?.[r.id]?.lt(0)) continue
       let rate = derived.rates[r.id] ?? ZERO
       if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id])
       if (rate.isZero()) {
@@ -589,6 +596,7 @@ function approximateSegment(state, derived, segment, opts) {
     const crafted = runAutoCraftTimers(state, derived, dt)
     const processed = derived.industrial ? runIndustrialCraftBatch(state, derived, dt, stats) : false
     if (crafted || processed) recompute(state, derived, dt)
+    if (endWorldSegment(state, derived)) recompute(state, derived, dt)
 
     // 11) 历法直接推进完整 dt（不穷举节气），凝灵诀按跨过的节气数批量估算。
     state.totalDays = dayTo

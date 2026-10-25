@@ -12,7 +12,10 @@ export function powerFixture({ chains = 1, mode = 'qi', core = false, gathering 
   for (const id of ['particleTheory', 'yinyangSplit', 'annihilationArt', 'energyApplication']) state.upgrades[id] = true
   for (const id of ['splitArray', 'polarizeArray', 'annihilationFurnace']) state.buildings[id] = { count: chains, on: true, power: 'qi' }
   if (core) state.upgrades.energyCore = true
-  if (gathering) state.upgrades.energyDrive = true
+  if (gathering) {
+    state.upgrades.poweredProduction = true
+    state.buildings.lumberYard = { count: 1, on: true, stage: 1 }
+  }
   if (homes) {
     for (const id of ['mansion', 'caveDwelling', 'quietGarden', 'trialTower', 'ancestorHall', 'grotto', 'spiritLockArray', 'heavenTower', 'karmaPool']) {
       state.buildings[id] = { count: 1, on: true, power: mode }
@@ -47,6 +50,6 @@ export function measurePower(options = {}, seconds = 600) {
   return { ...options, seconds, energyBefore, energy: s.resources.qiEnergy, fullSeconds, minSupply,
     output: d.rates.qiEnergy, maintenance: E.money(d.maintenance.qiEnergy), qiDraw: E.money(d.maintenance.qi),
     capacity: d.processingPowerCapacity, coreSupply: d.upgradeSupply.energyCore ?? null,
-    gatheringSupply: d.upgradeSupply.energyDrive ?? null,
+    gatheringSupply: d.buildingSupply.lumberYard ?? null,
     housing: d.maxDisciples, energyDecay: E.money(s.resources.qiEnergy).times(0.005) }
 }

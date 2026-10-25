@@ -124,6 +124,7 @@ export function effectRows(meta, describe) {
     for (const n of describe(numeric)) rows.push({ label: n.label || '参悟后', value: n.value || n.text, tone: n.tone })
   }
   for (const r of unlockRows(meta.id)) rows.push({ ...r, tone: 'good' })
+  if (!rows.length && meta.effectDesc) rows.push({ label: '作用', value: meta.effectDesc, tone: 'good' })
   return rows
 }
 
@@ -147,6 +148,7 @@ export function effectLine(meta, describe) {
   }
   const unlocks = unlockText(meta.id)
   if (unlocks) parts.push(unlocks)
+  if (!parts.length && meta.effectDesc) parts.push(meta.effectDesc)
   return parts.join('；')
 }
 

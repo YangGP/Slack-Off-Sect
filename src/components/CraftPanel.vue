@@ -15,10 +15,16 @@ import { CALENDAR } from '@/data/calendar'
 import HoverTip from './HoverTip.vue'
 import CostRows from './CostRows.vue'
 import CraftSpeedSelect from './CraftSpeedSelect.vue'
+import StableSelect from './StableSelect.vue'
 
 const props = defineProps({ compact: Boolean })
 const FILTERS = [{ id: 'all', name: '全部' }, { id: 'basic', name: '基础' }, { id: 'advanced', name: '进阶' }, { id: 'auto', name: '已选自动' }]
 const filter = computed(() => state.ui.craftFilter || 'all')
+const modeOptions = computed(() => [{ value: 'normal', label: '普通' },
+  ...(derived.autoCraftSpeedUnlocked ? [{ value: 'overload', label: '灵气超载' }] : []),
+  ...(derived.energyCraftUnlocked ? [{ value: 'energy', label: '灵能驱动' }] : [])])
+const reserveOptions = [0, 10, 20, 30, 50].map(value => ({ value, label: `${value}% 仓储` }))
+const priorityOptions = computed(() => unlockedRecipes.value.map(recipe => ({ value: recipe.id, label: recipe.name })))
 // 库存每帧刷新；编辑中的草稿不能被尚未提交的库存目标覆盖。
 const targetDrafts = reactive({})
 const reserveDrafts = reactive({})
@@ -187,16 +193,13 @@ const condenseStatus = computed(() => {
         <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方</span>
       </div>
       <div v-if="!compact" class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}</div>
-      <div v-if="!compact && derived.industrial" class="processing-overview small" aria-label="加工工位容量">
+      <details v-if="!compact && derived.industrial" class="processing-overview small" aria-label="加工工位容量">
+        <summary>加工工位与动力</summary>
         <div v-for="station in stationRows" :key="station.id">
           <span>{{ station.name }}</span>
           <span :class="station.capacity > 0 ? 'dim' : 'warn'">使用 {{ fmt(station.used) }} / {{ fmt(station.capacity + station.boost) }} 容量<span v-if="station.boost">（动力增加 {{ fmt(station.boost) }}）</span></span>
           <label v-if="derived.autoCraftSpeedUnlocked || derived.energyCraftUnlocked">驱动
-            <select :aria-label="`${station.name}驱动方式`" :value="station.mode" @change="actions.setProcessingMode(station.id, $event.target.value)">
-              <option value="normal">普通</option>
-              <option v-if="derived.autoCraftSpeedUnlocked" value="overload">灵气超载</option>
-              <option v-if="derived.energyCraftUnlocked" value="energy">灵能驱动</option>
-            </select>
+            <StableSelect :label="`${station.name}驱动方式`" :model-value="station.mode" :options="modeOptions" @update:model-value="actions.setProcessingMode(station.id, $event)" />
           </label>
           <span v-if="!station.drain.isZero()" class="dim">动力消耗 {{ perMinute(station.drain) }} {{ state.settings.processingModes[station.id] === 'energy' ? '灵能' : '灵气' }}/分</span>
           <span v-if="station.mode !== 'normal'" class="dim">{{ station.powerReason }}<template v-if="!station.boost"> · 普通加工</template></span>
@@ -209,7 +212,7 @@ const condenseStatus = computed(() => {
             </template></HoverTip>
           <span class="dim">冷却容量 {{ fmt(derived.processingCoolingCapacity) }} · 灵能供能容量 {{ fmt(derived.processingPowerCapacity) }}</span>
         </div>
-      </div>
+      </details>
       <div v-if="!compact && state.buildings.polarizeArray?.count" class="processing-overview small" aria-label="双极供料状态">
         <div><HoverTip label="双极分流"><template #tip><p>正负灵子同时分流，任一侧满仓时只补下游实际用量；断供则降载。</p></template></HoverTip> · 负荷 {{ fmtPercent(derived.buildingSupply.polarizeArray || 0) }}</div>
         <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resourceName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ perMinute(derived.rates[id]) }}/分 · 设施消耗 {{ expensePerMinute(derived.expense[id]) }}/分</span></div>
@@ -225,14 +228,10 @@ const condenseStatus = computed(() => {
             </template></HoverTip>
         </div>
         <label v-if="derived.daoAutomation">材料保留
-          <select :value="state.settings.craftReservePercent" @change="actions.setSetting('craftReservePercent', Number($event.target.value))">
-            <option v-for="n in [0, 10, 20, 30, 50]" :key="n" :value="n">{{ n }}% 仓储</option>
-          </select>
+          <StableSelect label="自动炼制材料保留" :model-value="state.settings.craftReservePercent" :options="reserveOptions" @update:model-value="actions.setSetting('craftReservePercent', $event)" />
         </label>
         <label v-if="derived.autoCraftUnlocked">优先
-          <select aria-label="优先配方" :value="state.settings.autoCraftPriority" @change="actions.setSetting('autoCraftPriority', $event.target.value)">
-            <option v-for="row in allRows" :key="row.meta.id" :value="row.meta.id">{{ row.meta.name }}</option>
-          </select>
+          <StableSelect label="优先配方" :model-value="state.settings.autoCraftPriority" :options="priorityOptions" @update:model-value="actions.setSetting('autoCraftPriority', $event)" />
         </label>
         <details>
           <summary>逐项保留材料</summary>
@@ -258,7 +257,7 @@ const condenseStatus = computed(() => {
         @show="highlightCost(row.cost)"
         @hide="clearHighlight"
       >
-        <div v-if="!compact" class="craft-line">
+        <div v-if="!compact" class="craft-line craft-heading">
           <span class="craft-name">{{ row.meta.name }}</span>
           <span class="have">{{ resourceName(row.meta.out) }} {{ fmtStock(row.have) }}<template v-if="!compact"> / {{ fmtStock(row.max) }}</template></span>
           <label v-if="!compact" class="craft-pin small"><input type="checkbox" :checked="state.settings.quickCrafts.includes(row.meta.id)" :aria-label="`${row.meta.name}快捷炼制`" @change="updateQuick(row.meta.id, $event)" />快捷</label>
@@ -268,14 +267,17 @@ const condenseStatus = computed(() => {
           <span class="dim"> → </span><span class="good">{{ resourceName(row.meta.out) }} {{ fmt(row.yield) }}</span>
           <span v-if="derived.craftBonusByResource[row.meta.out]" class="dim"> · 专业加成 +{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
         </div>
-        <div v-if="!compact && row.autoStatus.line" class="processing-line small" :data-processing="row.meta.id">
+        <details v-if="!compact && row.autoStatus.line" class="craft-detail small">
+          <summary>加工明细</summary>
+          <div class="processing-line" :data-processing="row.meta.id">
           <span>{{ row.autoStatus.line.name }} · 容量分配 {{ fmtPercent(row.autoStatus.line.share) }}</span>
           <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
           <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
           <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resourceName(res) }} {{ perMinuteCost(amount, row.autoStatus.perMinute) }}/分</template></span>
           <span class="dim">瓶颈：{{ bottlenecks[row.meta.id].reason }}</span>
           <span v-if="row.autoStatus.on && row.autoStatus.ready && bottlenecks[row.meta.id].inputs.length" class="dim">供料缺口：<template v-for="(input, index) in bottlenecks[row.meta.id].inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ perMinute(input.deficit) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
-        </div>
+          </div>
+        </details>
         <div v-if="!compact" class="craft-status small">
           <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
             {{ row.autoStatus.orderRemaining && !row.autoStatus.orderPaused ? '订单加工中' : '自动中' }} · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
@@ -291,7 +293,7 @@ const condenseStatus = computed(() => {
           <span v-if="!compact && yieldBonus(row)" class="dim"> · 小数累积 {{ progressPercent(row.progress) }}</span>
           <span v-if="row.autoStatus.orderRemaining" :class="row.autoStatus.orderPaused ? 'warn' : 'dim'">订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</span>
         </div>
-        <div class="craft-line">
+        <div class="craft-line craft-controls">
           <span v-if="compact" class="craft-name">{{ resourceName(row.meta.out) }}</span>
           <span v-if="compact" class="have">{{ fmtStock(row.have) }}</span>
           <button

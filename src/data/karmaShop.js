@@ -7,8 +7,8 @@
  * 关键口径：**已修持花掉的仙缘不再计入产出乘区**（karmaMultipliers 只吃余额），
  * 「囤加成 vs 买特权」是本系统的核心决策。
  *
- * 定价：道基共鸣/宿慧/梦息各买 3 级共 114 点，三条补满再需 201 点；
- * 全部条目按逐级向下取整计价合计 744 点。买满所需轮数取决于策略，尚未完成长期校准。
+ * 定价采用首价×增长率^已购等级，保留小数；新旧共14项。
+ * 买满所需轮数取决于经营策略，尚未完成长期校准。
  */
 
 import { ZERO, moneyNonNegative } from '../game/decimal.js'
@@ -18,7 +18,7 @@ export const KARMA_PROGRESSION_VERSION = 1
 /**
  * 永久修持条目。effect 为每级数值，规则层按等级线性求和：
  *   buildingDiscount 建筑造价折扣（乘算 (1-discount)，全游戏唯一建筑价格折扣层）
- *   karmaRatio       仙缘乘区固定加成（与因果通感同层相加）
+ *   researchInsightDiscount 普通研究直接灵机费用折扣
  *   offlineHours     离线收益上限（小时，与龟息功/定息法同层相加）
  *   storageRatio     有限容量加成（乘在仙缘仓储乘区之上）
  *   startKit         转世开局携带物资 { qi, insight }（每级固定数额）
@@ -35,8 +35,8 @@ export const KARMA_PERKS = [
   },
   {
     id: 'pastLifeWisdom', name: '宿慧', glyph: '慧', baseCost: 8, growth: 1.5, max: 5,
-    effect: { karmaRatio: 0.004 },
-    desc: '每级仙缘乘区固定 +0.4%（满级 +2%），与因果通感同层相加，不随仙缘点数缩放。',
+    effect: { researchInsightDiscount: 0.02 },
+    desc: '修真与普通技艺的直接灵机费用每级减少2%，最多10%；不含法宝、香火、配方或破境。',
     needs: {},
   },
   {
@@ -75,6 +75,12 @@ export const KARMA_PERKS = [
     desc: '每级冲关身死时保留的仙缘 +4 个百分点（满级由 50% 提至 62%），失败也不至于两手空空。',
     needs: {},
   },
+  {"id":"constructionLineage","name":"营造法统","glyph":"营","baseCost":120,"growth":2,"max":5,"effect":{"buildingPriceReduction":0.002},"needs":{"ascensions":1},"desc":"地面建筑涨价率每级降低0.002，最低1.05；含灵能阶段，不含小界。"},
+  {"id":"artisanLegacy","name":"百工传承","glyph":"百","baseCost":40,"growth":1.8,"max":5,"effect":{"stationCapacityRatio":0.05},"needs":{"bestRealm":4},"desc":"六类既有工位容量比例每级+5%，不赠基础工位。"},
+  {"id":"powerCalibration","name":"灵枢调校","glyph":"灵","baseCost":60,"growth":1.8,"max":5,"effect":{"productionEnergyDiscount":0.02},"needs":{"bestRealm":7},"desc":"五类高阶生产设施灵能维护每级减少2%，最多10%。"},
+  {"id":"worldMaterialThrift","name":"仙材节用","glyph":"仙","baseCost":80,"growth":1.8,"max":5,"effect":{"worldBuildingDiscount":0.02},"needs":{"worldBlueprint":true},"desc":"小界采集、承载及专属设施建设材料每级减少2%，不含维护和配方。"},
+  {"id":"refinementInsight","name":"祭器心得","glyph":"祭","baseCost":30,"growth":1.8,"max":5,"effect":{"refineInsightDiscount":0.03},"needs":{"bestRealm":4},"desc":"法宝祭炼灵机费用每级减少3%，不减炼成或其他材料。"},
+  {"id":"archiveWorkflow","name":"典藏工序","glyph":"典","baseCost":30,"growth":1.8,"max":5,"effect":{"knowledgeCraftSpeed":0.1},"needs":{"bestRealm":5},"desc":"道札、道论、阵图自动加工效率每级+10%，不改变每份用料与产出。"},
 ]
 
 export const KARMA_PERK_MAP = Object.fromEntries(KARMA_PERKS.map(entry => [entry.id, entry]))

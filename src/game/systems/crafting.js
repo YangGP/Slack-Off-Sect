@@ -1,3 +1,4 @@
+import { recordWorldWork, recordWorldBatchWork } from './worldRules'
 import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { floorNumber, atLeast } from '../numbers'
 import { MONEY_INFINITY, ONE, ZERO, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneyToCount, moneyToNumber } from '../decimal'
@@ -177,6 +178,7 @@ export function runIndustrialCraft(state, derived, dt, recipes) {
       timer.t = clamp(Number.isFinite(timer.t) ? timer.t : 0, 0, step)
       next = Math.min(next, Math.max(0, step - timer.t) / plan[recipe.id].speed)
     }
+    recordWorldWork(state, next, plan)
     remaining = Math.max(0, remaining - next)
     for (const [res, rate] of Object.entries(powerDrain)) if (rate.gt(0) && next > 0) {
       setResourceValue(state, res, moneyAvailable(state.resources[res] ?? ZERO, rate.times(next)), { source: 'systems/crafting.js:runIndustrialCraft' })
@@ -249,6 +251,7 @@ export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
     if (!active.length) break
     usedRounds++
     let realUsed = 0
+    const worldWork = {}
     let completed = false
     for (const recipe of active) {
       const info = plan[recipe.id]
@@ -307,6 +310,7 @@ export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
       if (count > 0) { made = true; completed = true }
       const consumed = Math.max(0, count * step + timer.t - before)
       const real = consumed / speed
+      worldWork[recipe.id] = real
       realUsed = Math.max(realUsed, real)
       // 动力只为这条线自己的真实加工时间扣除：停料与满仓的工位空转不烧动力。
       for (const [res, rate] of Object.entries(drain)) {
@@ -315,6 +319,7 @@ export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
         }
       }
     }
+    recordWorldBatchWork(state, worldWork)
     budgetLeft = Math.max(0, budgetLeft - realUsed)
     if (!completed) break
   }

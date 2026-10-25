@@ -5,7 +5,7 @@ import { gameNow, setGameContext } from '../../src/game/context.js'
 import { createInitialState } from '../../src/game/state.js'
 
 const investmentIds = [
-  'steelBatching', 'artifactBatching', 'spiritArtifactBatching', 'pillBatching', 'condensePillBatching', 'nineTurnBatching',
+  'forgeBatchStandards', 'artifactBatching', 'spiritArtifactBatching', 'pillBatching', 'condensePillBatching', 'nineTurnBatching',
   'mahayanaArt', 'energyCore', 'earthEssence', 'flowField',
 ]
 const facilityIds = ['alchemyRoom', 'pillFurnace', 'forge', 'workshop', 'library', 'scriptureArchive', 'observatory',
@@ -20,15 +20,15 @@ const difference = (after, before) => Object.fromEntries([...new Set([...Object.
 export function economyAssessment(state, derived) {
   // 研究/设施的增量在副本上求，绝不回写玩家状态、费用或已学字段。
   const quote = (kind, id) => {
-    const meta = kind === 'upgrade' ? E.UPGRADE_MAP[id] : E.BUILDING_MAP[id]
+    const meta = kind === 'upgrade' ? E.UPGRADE_MAP[id] : E.buildingMeta(state, id)
     if (!meta) return null
     const learned = kind === 'upgrade' ? !!state.upgrades[id] : E.countOf(state, id) > 0
-    const unlocked = kind === 'upgrade' ? E.isUpgradeUnlocked(state, meta) : E.isBuildingUnlocked(state, meta)
+    const unlocked = kind === 'upgrade' ? E.isUpgradeUnlocked(state, meta) : E.isBuildingUnlocked(state, id)
     // 无前置的假想增量没有决策价值；已拥有者仍可看边际贡献。
     if (!learned && !unlocked) return { kind, id, status: 'locked', name: meta.name }
     const copy = E.cloneRuntime(state), changed = E.createDerived()
     setGameContext(copy, { now: () => gameNow(state), random: () => { throw Error('边际报价不得抽签') } })
-    const cost = kind === 'upgrade' ? meta.cost : E.buildingCost(state, id, 1)
+    const cost = kind === 'upgrade' ? E.researchCost(state, meta) : E.buildingCost(state, id, 1)
     if (kind === 'upgrade') {
       if (learned) delete copy.upgrades[id]
       else copy.upgrades[id] = true
@@ -98,7 +98,7 @@ export function measureSpecialization(seconds = 600) {
         E.recompute(state, derived)
         for (const res of E.RESOURCES) if (Number.isFinite(res.baseMax) || E.CRAFTS.some(recipe => recipe.out === res.id)) state.resources[res.id] = E.money(10000000)
         E.recompute(state, derived) // 两组都按补料后的供给计算，避免仅购买组因 research 重算而恢复设施加成。
-        const cost = { ...upgrade.cost }
+        const cost = E.researchCost(state, upgrade)
         if (buy && !E.research(state, derived, id)) throw Error(`专精实验无法真实购买：${id}`)
         state.resources[recipe.out] = E.ZERO
         const beforeCraft = numbers(state.resources)

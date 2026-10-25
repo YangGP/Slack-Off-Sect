@@ -411,7 +411,7 @@ export const actions = {
     ui.debugPage = false
   },
   buy(id, count = 1) {
-    const meta = E.BUILDING_MAP[id]
+    const meta = E.buildingMeta(state, id)
     const n = E.buyBuilding(state, derived, id, count)
     if (n > 0) {
       afterAction(`建成 ${meta?.name} ×${n}`, 'good')
@@ -430,7 +430,7 @@ export const actions = {
   },
   sell(id, count = 1) {
     const n = E.sellBuilding(state, derived, id, count)
-    if (n > 0) afterAction(`拆除 ${E.BUILDING_MAP[id]?.name} ×${n}`, 'info')
+    if (n > 0) afterAction(`拆除 ${E.buildingMeta(state, id)?.name} ×${n}`, 'info')
     return n
   },
   toggle(id) {
@@ -439,13 +439,13 @@ export const actions = {
       toast('这座建筑没有维护费，停用只会白亏产出', 'bad')
       return null
     }
-    afterAction(`${E.BUILDING_MAP[id]?.name} ${on ? '启用' : '停用'}`, 'info')
+    afterAction(`${E.buildingMeta(state, id)?.name} ${on ? '启用' : '停用'}`, 'info')
     return on
   },
   setBuildingBoost(id, enabled) {
     const result = E.setBuildingBoost(state, derived, id, enabled)
     if (result === null) return false
-    afterAction(`${E.BUILDING_MAP[id]?.name} ${enabled ? '开启' : '关闭'}灵液注灵`, 'info')
+    afterAction(`${E.buildingMeta(state, id)?.name} ${enabled ? '开启' : '关闭'}灵液注灵`, 'info')
     saveNow()
     return true
   },
@@ -454,7 +454,13 @@ export const actions = {
       toast('尚不能接入灵能：需先参悟《灵能输配》', 'bad')
       return false
     }
-    afterAction(`${E.BUILDING_MAP[id]?.name} 供能改为${mode === 'energy' ? '灵能高阶' : '灵气基础'}`, 'info')
+    afterAction(`${E.buildingMeta(state, id)?.name} 供能改为${mode === 'energy' ? '灵能高阶' : '灵气基础'}`, 'info')
+    return true
+  },
+  setBuildingStage(id, stage) {
+    if (!E.setBuildingStage(state, derived, id, stage)) return false
+    afterAction('建筑阶段已切换，请按新造价手动重建。', 'info')
+    saveNow()
     return true
   },
   shiftJob(jobId, delta) {
@@ -830,6 +836,7 @@ export const actions = {
   samsara(name, ...args) {
     const allowed = { buyDaoPerk: E.buyDaoPerk, openDaoShop: E.openDaoShop, cultivateLoyalty: E.cultivateLoyalty,
       useCultivationItem: E.useCultivationItem, buildWorld: E.buildWorld, stationDisciple: E.stationDisciple,
+      buildWorldFacility: E.buildWorldFacility, configureWorldFacility: E.configureWorldFacility,
       finalPreparation: E.finalPreparation, beginChallenge: E.beginChallenge, prepareChallenge: E.prepareChallenge, resolveChallenge: E.resolveChallenge }
     if (!Object.hasOwn(allowed, name)) return false
     const snapshot = name === 'resolveChallenge' ? analytics.captureRun() : null
