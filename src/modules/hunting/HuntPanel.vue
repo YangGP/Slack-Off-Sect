@@ -15,9 +15,10 @@ import { ZERO, moneyGt } from '@/game/decimal'
 import { fmtAmount, fmtFixed, fmtPercent, fmtTime } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
 import StableSelect from '@/components/StableSelect.vue'
-import { daoLevel } from '@/data/samsara'
+import { isHuntUnlocked } from '@/game/engine'
 
-const fieldId = computed(() => state.hunting.settings.selectedFieldId)
+const visibleFields = computed(() => HUNT_FIELDS.filter(f => isHuntUnlocked(state, f.id)))
+const fieldId = computed(() => visibleFields.value.find(f => f.id === state.hunting.settings.selectedFieldId)?.id || visibleFields.value[0]?.id)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])
 const unlocked = computed(() => state.upgrades.wildHunting && state.buildings.huntingCamp?.on)
 const settings = computed(() => state.hunting.settings)
@@ -80,6 +81,7 @@ function setInterval(value) {
   <div class="box activity-panel hunt-panel">
     <div class="box-head">
       <HoverTip label="妖兽猎杀"><template #tip>
+          <p>猎场供宜居兽材、修为物品与培养消耗品；宗门成长资源由外交交换。受伤暂不能出征，但仍能自然修炼。</p>
           <p>可选择有猎杀天赋的弟子参与，普通弟子自动补足至多 {{ HUNT.TEAM_MAX }} 人；每次消耗 {{ cost }} 枚信符，不占用岗位、不改变生产。</p>
           <p>自动重复按固定间隔执行；间隔只改变频率，不改变单次奖励。</p>
           <p>信符与外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚。</p>
@@ -88,31 +90,26 @@ function setInterval(value) {
       <span class="hint">普通三猎场随境界开放，高级三猎场需道果资格</span>
     </div>
     <div class="box-body">
-      <p class="small dim">猎场供宜居兽材、修为物品与培养消耗品；宗门成长资源由外交交换。受伤暂不能出征，但仍能自然修炼。</p>
-      <label class="small hunt-supply"><input type="checkbox" :checked="settings.useSupply" @change="actions.huntSetSupply($event.target.checked)" /> 使用护身药散（每人一份，受伤率减半；死亡风险不变）</label>
+      <label v-if="unlocked" class="small hunt-supply"><input type="checkbox" :checked="settings.useSupply" @change="actions.huntSetSupply($event.target.checked)" /> <HoverTip label="使用护身药散" description="每人消耗一份，受伤率减半；死亡风险不变。" /></label>
       <div v-if="!unlocked" class="empty">
         尚未开放猎杀：需掌握《山野猎法》，并启用执符堂（筑基期）。
       </div>
-      <template v-else>
+      <template v-else-if="visibleFields.length">
         <div class="box-sub">猎场</div>
         <div class="hunt-fields">
           <button
-            v-for="f in HUNT_FIELDS"
+            v-for="f in visibleFields"
             :key="f.id"
             class="btn"
             :class="{ primary: f.id === fieldId }"
-            :disabled="state.realm < f.entryRealm || (f.perk && !daoLevel(state, f.perk))"
             @click="selectField(f.id)"
           >
-            {{ f.name }}
-            <span v-if="f.perk && !daoLevel(state, f.perk)" class="dim">（需道果解锁）</span>
+            <HoverTip :label="f.name" :description="f.desc" />
             <span class="dim">（宗门 ≥ {{ REALMS[f.entryRealm].name }}）</span>
           </button>
         </div>
-        <div class="small hunt-field-note" :class="field.death ? 'bad' : 'dim'">{{ field.desc }}</div>
 
-        <div class="box-sub">猎杀加成（已选 {{ selectedIds.length }} / {{ HUNT.TEAM_MAX }}）</div>
-        <p class="small dim">仅列出有猎杀天赋的弟子。普通弟子自动补位，未勾选的加成弟子不参与。</p>
+        <div class="box-sub"><HoverTip label="猎杀加成" description="仅列出有猎杀天赋的弟子。普通弟子自动补位，未勾选的加成弟子不参与。" />（已选 {{ selectedIds.length }} / {{ HUNT.TEAM_MAX }}）</div>
         <div v-if="!members.length" class="small dim">暂无有猎杀加成的弟子，仍可由普通弟子猎杀。</div>
         <div v-else class="hunt-members">
           <label v-for="m in members" :key="m.id" class="hunt-member" :class="{ on: m.selected }">
@@ -169,7 +166,7 @@ function setInterval(value) {
           <span v-if="!departCheck.ok" class="bad small">{{ departCheck.reason }}</span>
           <label class="small hunt-repeat">
             <input type="checkbox" :checked="settings.autoRepeat" @change="actions.huntSetAutoRepeat($event.target.checked)">
-            自动重复
+            <HoverTip label="自动重复" description="按固定间隔执行；失败周期跳过，不补发。" />
           </label>
         </div>
         <div v-if="settings.autoRepeat" class="hunt-autocfg">
@@ -178,7 +175,7 @@ function setInterval(value) {
             <input type="number" min="30" max="3600" step="30" :value="interval" style="width: 5.5em" @change="setInterval($event.target.value)">
             猎杀一次
           </label>
-          <span class="small dim">下次约 {{ fmtTime(remain) }} 后；失败周期跳过，不补发。</span>
+          <span class="small dim">下次约 {{ fmtTime(remain) }} 后</span>
         </div>
       </template>
     </div>

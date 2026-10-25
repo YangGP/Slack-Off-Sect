@@ -1,4 +1,5 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
 import { ref } from 'vue'
 import { state, derived, actions, ui, saveNow } from '@/game/store'
 import { fmtClock, fmtTime, fmt } from '@/game/format'
@@ -130,7 +131,7 @@ function doReset() {
     <div class="box-head">关于</div>
     <div class="box-body">
       <div class="kv"><span class="k">游戏</span><span class="v">摸鱼宗门 · Slack Off Sect</span></div>
-      <div class="kv"><span class="k">介绍</span><span class="v">以宗门飞升为轮回，以弟子成长为长期目标。以先飞升带动后飞升，最终达成人人飞升的目标。</span></div>
+      <div class="kv"><HoverTip label="介绍" :description="SECT_STORY.vow" /></div>
       <div class="kv">
         <span class="k">本次挂机</span><span class="v">{{ fmtTime(state.stats.playTime) }}</span>
       </div>

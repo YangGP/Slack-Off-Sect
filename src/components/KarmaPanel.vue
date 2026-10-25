@@ -1,4 +1,6 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
+import HoverTip from '@/components/HoverTip.vue'
 /**
  * 仙缘页：跨轮回保留的永久修持商店，仙缘计价。
  * 只做展示与动作入口；报价、门槛与扣费都在 systems/karmaShop.js。
@@ -49,27 +51,25 @@ function missingText(missing) {
 <template>
   <div class="karma-panel">
     <div class="box karma-overview">
-      <div class="box-head">仙途商店 · 仙缘区</div>
+      <div class="box-head"><HoverTip label="仙途商店 · 仙缘区"><template #tip>一世苦修留下的仙缘，可化作后来者脚下的路。可在此修持跨轮回保留的永久特权；
+          <b class="karma-warn">已修持花掉的仙缘不再计入产出与仓储加成</b>。留作根基，或用于传承，都须为下一世细作打算。</template></HoverTip></div>
       <div class="box-body">
-        <p class="small dim karma-note">
-          转世与飞升带走的因果。可在此修持跨轮回保留的永久特权；
-          <b class="karma-warn">已修持花掉的仙缘不再计入产出与仓储加成</b>——「囤加成」还是「买特权」，是每一轮轮回的核心抉择。
-        </p>
+
         <div class="karma-balances">
           <div class="karma-balance">
-            <span class="k">仙缘余额</span>
+            <HoverTip label="仙缘余额" description="计入产出乘区" />
             <b>{{ fmtAmount(balance) }}</b>
-            <span class="small dim">计入产出乘区</span>
+
           </div>
           <div class="karma-balance">
-            <span class="k">已修持投入</span>
+            <HoverTip label="已修持投入" description="跨轮回保留 · 不计加成" />
             <b>{{ fmtAmount(totalSpent) }}</b>
-            <span class="small dim">跨轮回保留 · 不计加成</span>
+
           </div>
           <div class="karma-balance">
-            <span class="k">轮迴</span>
+            <HoverTip label="轮迴" description="转世 + 飞升次数" />
             <b>{{ rebirths }}</b>
-            <span class="small dim">转世 + 飞升次数</span>
+
           </div>
         </div>
         <p class="small dim karma-note">
@@ -81,13 +81,11 @@ function missingText(missing) {
     </div>
 
     <div v-if="state.samsara.shopOpen" class="box">
-      <div class="box-head">道果区 · 余额 {{ fmtAmount(state.dao) }}</div>
+      <div class="box-head"><HoverTip label="道果区"><template #tip><p>{{ SECT_STORY.dao }}</p><p>修持跨世保留，不洗点。道果余额不影响生产和仙缘结算，自动化资格永久保留。</p></template></HoverTip> · 余额 {{ fmtAmount(state.dao) }}</div>
       <div class="box-body">
-        <p class="small dim">修持与解锁跨世保留，不洗点。道果余额不影响生产和仙缘结算，首颗道果的自动化永久保留。</p>
         <div class="dao-list">
           <div v-for="row in daoRows" :key="row.meta.id" class="karma-entry">
-            <div class="karma-entry-head"><b>{{ row.meta.name }}</b><span class="small dim">{{ row.level }}/{{ row.meta.max }} · {{ daoGroup(row.meta.id) }}</span></div>
-            <p class="small dim karma-note">{{ row.meta.desc }}</p>
+            <div class="karma-entry-head"><HoverTip :label="row.meta.name" :description="row.meta.desc" /><span class="small dim">{{ row.level }}/{{ row.meta.max }} · {{ daoGroup(row.meta.id) }}</span></div>
             <button class="btn" :disabled="row.level >= row.meta.max || !moneyGte(state.dao, row.cost)" @click="actions.samsara('buyDaoPerk', row.meta.id)">{{ row.level >= row.meta.max ? '已圆满' : `修持 · ${fmtAmount(row.cost)} 道果` }}</button>
           </div>
         </div>
@@ -101,10 +99,9 @@ function missingText(missing) {
       <div class="box-body">
         <div v-for="row in perkRows" :key="row.meta.id" class="small karma-entry">
           <div class="karma-entry-head">
-            <b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.meta.max }} <span class="dim">· {{ perkGroup(row.meta.id) }}</span>
+            <HoverTip :label="row.meta.name" :description="row.meta.desc" /> {{ row.level }}/{{ row.meta.max }} <span class="dim">· {{ perkGroup(row.meta.id) }}</span>
             <span v-if="row.level >= row.meta.max" class="good">已圆满</span>
           </div>
-          <div class="dim karma-note">{{ row.meta.desc }}</div>
           <div v-if="row.affordable && row.level < row.meta.max" class="small dim">购买后仙缘产出倍率 ×{{ fmt(row.productionAfter) }}，有限仓储 ×{{ fmt(row.storageAfter) }}<span v-if="row.productionAfter.lt(productionMult)" class="bad"> · 余额减少会降低当前产出，请结合权益选择</span></div>
           <div class="btn-row karma-actions">
             <span class="small">下一级 {{ fmtAmount(row.cost) }} 仙缘</span>
@@ -120,9 +117,9 @@ function missingText(missing) {
       </div>
     </div>
     <div class="box rebuild-section">
-      <div class="box-head">重建方案</div>
+      <div class="box-head"><HoverTip label="重建方案"><template #tip>沿用上一世建筑、研究与加工偏好，按真实前置和库存逐步重建，不改派弟子。</template></HoverTip></div>
       <div class="box-body small">
-        <p>沿用上一世建筑、研究与加工偏好，按真实前置和库存逐步重建，不改派弟子。</p>
+
         <button class="btn" :disabled="!Object.keys(state.rebuild.buildings).length" @click="actions.setRebuild(!state.rebuild.active)">{{ state.rebuild.active ? '暂停重建' : '启用重建' }}</button>
       </div>
     </div>

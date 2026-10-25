@@ -238,7 +238,7 @@ export function resolveChallenge(state, derived, reset = false) {
     for (const member of state.disciples.members) member.collectiveAscended = true
     state.samsara.completions++
     state.samsara.lastVictory = { target: state.challenge.target, life: (state.stats.ascensions || 0) + (state.stats.reincarnations || 0) + (state.stats.breakthroughDeaths || 0) + 1 }
-    pushLog(state, `全宗${state.challenge.target}名弟子飞升圆满。愿无一人被遗忘。`, 'good')
+    pushLog(state, `全宗${state.challenge.target}名弟子共渡天劫，飞升圆满。当年许下的同行之愿，今日终于走到天门前。`, 'good')
     return { success: true }
   }
   const karma = settleKarma(state, derived, true)

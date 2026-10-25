@@ -2,7 +2,9 @@
 /** 完整炼制页与左栏快捷炼制共用同一套操作、状态和悬停明细。 */
 import { computed, reactive } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
-import { CRAFTS, ADVANCED_CRAFT_OUTPUTS, craftCost } from '@/data/crafts'
+import { CRAFTS, craftCost } from '@/data/crafts'
+import { CRAFT_GROUPS, craftGroup, craftDisplayOrder } from '@/data/craftPresentation'
+import { BUILDING_MAP } from '@/data/buildings'
 import { PROCESSING_STATIONS } from '@/data/industry'
 import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, craftTarget, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck } from '@/game/engine'
 import { describeNeeds } from '@/game/effectsText'
@@ -18,13 +20,15 @@ import CraftSpeedSelect from './CraftSpeedSelect.vue'
 import StableSelect from './StableSelect.vue'
 
 const props = defineProps({ compact: Boolean })
-const FILTERS = [{ id: 'all', name: '全部' }, { id: 'basic', name: '基础' }, { id: 'advanced', name: '进阶' }, { id: 'auto', name: '已选自动' }]
-const filter = computed(() => state.ui.craftFilter || 'all')
+const FILTERS = computed(() => [{ id: 'all', name: '全部' },
+  ...CRAFT_GROUPS.filter(group => allRows.value.some(row => craftGroup(row.meta) === group.id && isCostRevealed(state, row.meta.cost))),
+  { id: 'auto', name: '已选自动' }])
+// 旧存档的基础／进阶筛选回落到全部，不修改存档结构。
+const filter = computed(() => FILTERS.value.some(f => f.id === state.ui.craftFilter) ? state.ui.craftFilter : 'all')
 const modeOptions = computed(() => [{ value: 'normal', label: '普通' },
   ...(derived.autoCraftSpeedUnlocked ? [{ value: 'overload', label: '灵气超载' }] : []),
   ...(derived.energyCraftUnlocked ? [{ value: 'energy', label: '灵能驱动' }] : [])])
 const reserveOptions = [0, 10, 20, 30, 50].map(value => ({ value, label: `${value}% 仓储` }))
-const priorityOptions = computed(() => unlockedRecipes.value.map(recipe => ({ value: recipe.id, label: recipe.name })))
 // 库存每帧刷新；编辑中的草稿不能被尚未提交的库存目标覆盖。
 const targetDrafts = reactive({})
 const reserveDrafts = reactive({})
@@ -94,7 +98,8 @@ const BATCHES = [
   { frac: 1, label: '全部' },
 ]
 
-const unlockedRecipes = computed(() => CRAFTS.filter(c => isCraftUnlocked(state, c)))
+const displayRecipes = [...CRAFTS].sort((a, b) => craftDisplayOrder(a) - craftDisplayOrder(b))
+const unlockedRecipes = computed(() => displayRecipes.filter(c => isCraftUnlocked(state, c)))
 const allRows = computed(() =>
   unlockedRecipes.value.filter(c => !props.compact || state.settings.quickCrafts.includes(c.id)).map((c) => {
     // 份数是金额：按钮可用性与「¼料 / ½料 / 全部」都用完整份数，不截成安全整数。
@@ -132,7 +137,7 @@ const rows = computed(() => {
   // 30% 峰值露出只约束完整炼制页；左栏快捷入口是玩家已固定的配方，不能因为还没见过费用资源就整块消失。
   if (props.compact) return allRows.value
   const revealed = allRows.value.filter(row => isCostRevealed(state, row.meta.cost))
-  return revealed.filter(row => filter.value === 'auto' ? row.auto : filter.value === 'basic' ? !ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : filter.value === 'advanced' ? ADVANCED_CRAFT_OUTPUTS.includes(row.meta.out) : true)
+  return revealed.filter(row => filter.value === 'auto' ? row.auto : filter.value === 'all' || craftGroup(row.meta) === filter.value)
 })
 
 // 完整页才显示瓶颈；快捷栏不计算，同一行的原因和缺口共享一次结果。
@@ -140,11 +145,27 @@ const bottlenecks = computed(() => Object.fromEntries(rows.value.filter(row => r
   .map(row => [row.meta.id, processingBottleneck(state, derived, row.meta.id, plan.value, row.autoStatus)])))
 
 const locked = computed(() =>
-  CRAFTS.filter((c) => !isCraftUnlocked(state, c) && isProgressionVisible(state, c.needs, c.cost)).map((c) => ({
+  displayRecipes.filter((c) => !isCraftUnlocked(state, c) && isProgressionVisible(state, c.needs, c.cost)).map((c) => ({
     meta: c,
     needs: describeNeeds(c.needs).join('，'),
   })),
 )
+
+function prioritySelected(row) {
+  return row.autoStatus.line ? row.autoStatus.line.weight > 1 : state.settings.autoCraftPriority === row.meta.id
+}
+function prioritize(row) {
+  if (row.autoStatus.line) actions.setCraftWeight(row.meta.id, prioritySelected(row) ? 1 : 3)
+  else actions.setSetting('autoCraftPriority', row.meta.id)
+}
+function capacityAdvice(row) {
+  const line = row.autoStatus.line
+  const reason = bottlenecks.value[row.meta.id]?.reason
+  if (!line || !['工位容量限制', '等待加工容量', '工位停用或维护断供'].includes(reason)) return ''
+  const station = PROCESSING_STATIONS.find(station => station.id === line.station)
+  const names = Object.keys(station?.buildings || {}).map(id => BUILDING_MAP[id]?.name || id).join('、')
+  return line.capacity <= 0 ? `${line.name}未供给，请检查${names}的启用与维护` : `工位不足，可扩建${names}`
+}
 
 function updateTarget(id, event) {
   // 库存目标是金额：输入框交出字符串，setCraftTarget 自己按金额域校验并转整数。
@@ -173,9 +194,9 @@ const condenseStatus = computed(() => {
   <div class="box" :class="compact ? 'craft-quick' : 'craft-full'">
     <div class="box-head">
       <HoverTip :label="compact ? '快捷炼制' : '炼制'"><template #tip>
-          <p>手动制作与批量按钮立即扣料并合成。自动制作需参悟《心有灵犀》或取得首颗道果；勾选配方后由总开关控制。快捷配方数量不限。</p>
+          <p>手动制作与批量按钮立即扣料并合成。勾选配方后由总开关控制。快捷配方数量不限。</p>
           <p>金丹起，自动产线共用专业设施容量；扩建增加工位，节料技艺减少每份投入，小数收益持续累积。</p>
-          <p>各配方可单独选择自动速限。实际速度受共享工位容量约束，提高速限会增加每分钟耗料，每份收益不变。参悟《疾炼法》解锁速限调整。</p>
+          <p>各配方可单独选择自动速限。实际速度受共享工位容量约束，提高速限会增加每分钟耗料，每份收益不变。</p>
           <p>分配权重越高，工位紧张时获得的容量越多；达标、满仓或缺料会释放容量，空闲容量自动分给其他产线。手动制作与节气满仓凝液不占常驻工位。</p>
           <p>库存达到目标后暂停，使用成品后自动补回；0表示不限。手动制作不受目标限制。旧存档的未完成订单继续加工，也可暂停或取消。</p>
           <p>新档默认保留知识中间产物：道札 20、道论 2、灵纸 10，避免顶层配方把上游抽干；旧档保持原值，可在逐项保留中改成其他数量（0 表示不保留）。</p>
@@ -183,18 +204,36 @@ const condenseStatus = computed(() => {
       <button v-if="compact" class="craft-open" @click="actions.setTab('craft')">全部配方 →</button>
     </div>
     <div class="box-body">
-      <div v-if="!compact" class="craft-settings small">
-        <label class="sw"><input type="checkbox" :checked="state.settings.autoCraftOn" @change="actions.setSetting('autoCraftOn', $event.target.checked)" />自动制作总开关</label>
-        <HoverTip title="全部自动" description="勾选全部已解锁配方，取消勾选则清除全部自动选择；不受筛选影响，总开关保持不变。">
-          <label class="sw">
-            <input type="checkbox" aria-label="全部自动" :checked="allAuto" :indeterminate.prop="someAuto && !allAuto" :disabled="!derived.autoCraftUnlocked" @change="actions.setAllAutoCraft($event.target.checked)" />全部自动
+      <section v-if="!compact" class="craft-automation">
+        <div class="box-sub"><HoverTip label="自动炼制"><template #tip>
+          <p>打开总开关，再勾选配方的自动。设置库存目标后，达标暂停，消耗后补回；0 表示不限。</p>
+          <p>材料保留量只限制自动炼制，手动制作可以使用保留材料。</p>
+        </template></HoverTip></div>
+        <div class="craft-settings small">
+          <label class="sw"><input type="checkbox" :checked="state.settings.autoCraftOn" @change="actions.setSetting('autoCraftOn', $event.target.checked)" />自动炼制总开关</label>
+          <HoverTip title="全部自动" description="选择全部已开放配方；不受筛选影响，总开关保持不变。">
+            <label class="sw"><input type="checkbox" aria-label="全部自动" :checked="allAuto" :indeterminate.prop="someAuto && !allAuto" :disabled="!derived.autoCraftUnlocked" @change="actions.setAllAutoCraft($event.target.checked)" />全部自动</label>
+          </HoverTip>
+          <span :class="state.settings.autoCraftOn ? 'dim' : 'warn'">{{ state.settings.autoCraftOn ? `已选 ${allRows.filter(row => row.auto).length} 个自动配方` : '总开关已暂停' }}</span>
+        </div>
+        <div v-if="derived.craftTargetsUnlocked" class="craft-settings small">
+        <label v-if="derived.daoAutomation">材料保留
+          <StableSelect label="自动炼制材料保留" :model-value="state.settings.craftReservePercent" :options="reserveOptions" @update:model-value="actions.setSetting('craftReservePercent', $event)" />
+        </label>
+        <details>
+          <summary>逐项保留材料</summary>
+          <label v-for="id in reserveResources" :key="id">{{ resourceName(id) }}
+            <input type="number" min="0" step="any" :aria-label="`${resourceName(id)}保留数量`"
+              :value="reserveDrafts[id] ?? reserveText(id)"
+              @input="reserveDrafts[id] = $event.target.value" @change="updateReserve(id, $event)" />
           </label>
-        </HoverTip>
-        <span class="dim">已解锁 {{ allRows.length }} / {{ CRAFTS.length }} 个配方</span>
-      </div>
-      <div v-if="!compact" class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}</div>
+        </details>
+        </div>
+        <details class="craft-advanced">
+          <summary>高级设置</summary>
+          <div class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}</div>
       <details v-if="!compact && derived.industrial" class="processing-overview small" aria-label="加工工位容量">
-        <summary>加工工位与动力</summary>
+        <summary>工位与动力</summary>
         <div v-for="station in stationRows" :key="station.id">
           <span>{{ station.name }}</span>
           <span :class="station.capacity > 0 ? 'dim' : 'warn'">使用 {{ fmt(station.used) }} / {{ fmt(station.capacity + station.boost) }} 容量<span v-if="station.boost">（动力增加 {{ fmt(station.boost) }}）</span></span>
@@ -218,38 +257,18 @@ const condenseStatus = computed(() => {
         <div v-for="id in ['yangParticle', 'yinParticle', 'qiEnergy']" :key="id"><span>{{ resourceName(id) }} {{ fmtStock(state.resources[id]) }} / {{ fmtStock(derived.max[id]) }}</span><span class="dim">产出 {{ perMinute(derived.rates[id]) }}/分 · 设施消耗 {{ expensePerMinute(derived.expense[id]) }}/分</span></div>
       </div>
       <div v-if="!compact && derived.autoCondenseLiquidUnlocked && !state.upgrades.qiLiquid" class="small dim">凝灵诀 · 需凝气化液</div>
-      <p v-if="!compact && derived.craftTargetsUnlocked" class="small dim">加工品无仓容上限。设置库存目标可让自动炼制达标暂停、消耗后补回；0表示持续加工。</p>
-      <div v-if="!compact && derived.craftTargetsUnlocked" class="small craft-settings">
-        <div class="good">
-          <HoverTip :label="derived.daoAutomation ? '道果统筹' : derived.autoCraftUnlocked ? '百工统筹' : '凝灵保留'"><template #tip>
-              <p>优先加工指定配方，自动炼制遵守材料保留量。首颗道果让重修时即可自动炼制。</p>
-              <p v-if="derived.daoAutomation">保留比例仅按有限仓储上限计算，与逐项保留取较高值。加工品无仓容限制，请设置逐项保留数量及库存目标。</p>
-              <p>逐项保留指定数量，扩仓不会改变保留量；0表示不保留。保留量仅约束自动炼制，手动制作可动用保留材料。</p>
-            </template></HoverTip>
-        </div>
-        <label v-if="derived.daoAutomation">材料保留
-          <StableSelect label="自动炼制材料保留" :model-value="state.settings.craftReservePercent" :options="reserveOptions" @update:model-value="actions.setSetting('craftReservePercent', $event)" />
-        </label>
-        <label v-if="derived.autoCraftUnlocked">优先
-          <StableSelect label="优先配方" :model-value="state.settings.autoCraftPriority" :options="priorityOptions" @update:model-value="actions.setSetting('autoCraftPriority', $event)" />
-        </label>
-        <details>
-          <summary>逐项保留材料</summary>
-          <label v-for="id in reserveResources" :key="id">{{ resourceName(id) }}
-            <input type="number" min="0" step="any" :aria-label="`${resourceName(id)}保留数量`"
-              :value="reserveDrafts[id] ?? reserveText(id)"
-              @input="reserveDrafts[id] = $event.target.value" @change="updateReserve(id, $event)" />
-          </label>
         </details>
-      </div>
+      </section>
       <div v-if="!compact" class="filters">
         <button v-for="f in FILTERS" :key="f.id" class="filter" :class="{ on: filter === f.id }" @click="state.ui.craftFilter = f.id">{{ f.name }}</button>
       </div>
       <div v-if="!rows.length" class="empty">{{ compact ? '前往炼制页选择快捷配方。' : '此筛选下没有可用配方。' }}</div>
 
+      <template v-for="(row, index) in rows" :key="row.meta.id">
+      <div v-if="!compact && (index === 0 || craftGroup(rows[index - 1].meta) !== craftGroup(row.meta))" class="box-sub craft-group-title">
+        {{ CRAFT_GROUPS.find(group => group.id === craftGroup(row.meta))?.name || '其他炼制' }}
+      </div>
       <HoverTip
-        v-for="row in rows"
-        :key="row.meta.id"
         tag="div"
         class="craft-row"
         :data-craft="row.meta.id"
@@ -267,9 +286,18 @@ const condenseStatus = computed(() => {
           <span class="dim"> → </span><span class="good">{{ resourceName(row.meta.out) }} {{ fmt(row.yield) }}</span>
           <span v-if="derived.craftBonusByResource[row.meta.out]" class="dim"> · 专业加成 +{{ fmtPercent(derived.craftBonusByResource[row.meta.out]) }}</span>
         </div>
-        <details v-if="!compact && row.autoStatus.line" class="craft-detail small">
-          <summary>加工明细</summary>
-          <div class="processing-line" :data-processing="row.meta.id">
+        <details v-if="!compact && (row.autoStatus.line || derived.autoCraftSpeedUnlocked)" class="craft-detail small">
+          <summary>高级设置</summary>
+          <div class="craft-settings">          <CraftSpeedSelect v-if="!compact && derived.autoCraftSpeedUnlocked"
+            :name="row.meta.name" :speed="derived.autoCraftSpeeds[row.meta.id]"
+            @change="actions.setAutoCraftSpeed(row.meta.id, $event)" />
+          <label v-if="!compact && row.autoStatus.line" class="small">分配权重
+            <input class="qty" type="number" min="1" max="100" step="1"
+              :aria-label="`${row.meta.name}加工分配权重`" :value="weightDrafts[row.meta.id] ?? row.autoStatus.line.weight"
+              @input="weightDrafts[row.meta.id] = $event.target.value" @change="updateWeight(row.meta.id, $event)" />
+          </label>
+</div>
+          <div v-if="row.autoStatus.line" class="processing-line" :data-processing="row.meta.id">
           <span>{{ row.autoStatus.line.name }} · 容量分配 {{ fmtPercent(row.autoStatus.line.share) }}</span>
           <span :class="row.autoStatus.on && !row.autoStatus.ready ? 'warn' : 'dim'">{{ row.autoStatus.on ? (row.autoStatus.ready ? '运行中' : row.autoStatus.reason) : '自动未启用' }}</span>
           <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
@@ -279,7 +307,8 @@ const condenseStatus = computed(() => {
           </div>
         </details>
         <div v-if="!compact" class="craft-status small">
-          <span v-if="row.autoStatus.on && row.autoStatus.ready" class="good">
+          <span v-if="row.auto && !state.settings.autoCraftOn && !row.autoStatus.on" class="warn">总开关已暂停</span>
+          <span v-else-if="row.autoStatus.on && row.autoStatus.ready" class="good">
             {{ row.autoStatus.orderRemaining && !row.autoStatus.orderPaused ? '订单加工中' : '自动中' }} · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
           </span>
           <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
@@ -289,7 +318,10 @@ const condenseStatus = computed(() => {
           >
             {{ condenseStatus }}
           </span>
-          <span v-if="!row.autoStatus.on && !(row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked)" class="dim">{{ outputFull(row) ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
+          <span v-if="!row.autoStatus.on && !(row.auto && !state.settings.autoCraftOn) && !(row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked)" class="dim">{{ outputFull(row) ? '成品满仓' : row.affordable ? '可制作' : '材料不足' }}</span>
+          <span v-if="row.autoStatus.on && row.autoStatus.ready" class="dim">{{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
+          <span v-if="row.autoStatus.on && row.autoStatus.line && capacityAdvice(row)" class="warn">{{ capacityAdvice(row) }}</span>
+          <span v-else-if="row.autoStatus.on && row.autoStatus.ready && bottlenecks[row.meta.id]?.inputs.length" class="warn">供料不足，正在消耗库存</span>
           <span v-if="!compact && yieldBonus(row)" class="dim"> · 小数累积 {{ progressPercent(row.progress) }}</span>
           <span v-if="row.autoStatus.orderRemaining" :class="row.autoStatus.orderPaused ? 'warn' : 'dim'">订单剩余 {{ row.autoStatus.orderRemaining }} 份{{ row.autoStatus.orderPaused ? ' · 已暂停' : '' }}</span>
         </div>
@@ -321,18 +353,13 @@ const condenseStatus = computed(() => {
             />
             自动
           </label>
+          <HoverTip v-if="!compact && derived.autoCraftUnlocked" title="优先生产" :description="row.autoStatus.line ? '工位紧张时优先分配容量；仍需勾选自动并备齐材料。' : '优先处理此配方；仍需勾选自动并备齐材料。'">
+            <button class="btn" :class="{ on: prioritySelected(row) }" :aria-pressed="prioritySelected(row)" :aria-label="`${row.meta.name}优先生产`" @click="prioritize(row)">{{ prioritySelected(row) ? '已优先' : '优先生产' }}</button>
+          </HoverTip>
           <template v-if="!compact && row.autoStatus.orderRemaining">
             <button class="btn" :aria-label="`${row.meta.name}${row.autoStatus.orderPaused ? '恢复' : '暂停'}订单`" @click="actions.manageCraftOrder(row.meta.id, row.autoStatus.orderPaused ? 'resume' : 'pause')">{{ row.autoStatus.orderPaused ? '恢复订单' : '暂停订单' }}</button>
             <button class="btn" :aria-label="`${row.meta.name}取消订单`" @click="actions.manageCraftOrder(row.meta.id, 'cancel')">取消订单</button>
           </template>
-          <CraftSpeedSelect v-if="!compact && derived.autoCraftSpeedUnlocked"
-            :name="row.meta.name" :speed="derived.autoCraftSpeeds[row.meta.id]"
-            @change="actions.setAutoCraftSpeed(row.meta.id, $event)" />
-          <label v-if="!compact && row.autoStatus.line" class="small">分配权重
-            <input class="qty" type="number" min="1" max="100" step="1"
-              :aria-label="`${row.meta.name}加工分配权重`" :value="weightDrafts[row.meta.id] ?? row.autoStatus.line.weight"
-              @input="weightDrafts[row.meta.id] = $event.target.value" @change="updateWeight(row.meta.id, $event)" />
-          </label>
           <label v-if="!compact && derived.craftTargetsUnlocked" class="small">目标
             <input class="qty" type="number" min="0" step="any" :value="targetDrafts[row.meta.id] ?? targetText(row.meta.id)"
               :aria-label="`${row.meta.name}库存目标`"
@@ -418,6 +445,7 @@ const condenseStatus = computed(() => {
           </div>
         </template>
       </HoverTip>
+      </template>
 
       <details class="fold" v-if="!compact && locked.length">
         <summary>尚未解锁的配方（{{ locked.length }} 个）</summary>
@@ -435,6 +463,11 @@ const condenseStatus = computed(() => {
 </template>
 
 <style scoped>
+.craft-automation { padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); }
+.craft-advanced { margin-top: 6px; }
+.craft-advanced > summary, .craft-detail > summary { cursor: pointer; color: var(--dim); }
+.craft-controls .btn.on { color: var(--link); border-color: var(--link); }
+.craft-group-title { margin-top: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); font-weight: 600; }
 .craft-auto-tip {
   display: grid;
   gap: 4px;

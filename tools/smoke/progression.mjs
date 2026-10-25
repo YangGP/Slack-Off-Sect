@@ -4,6 +4,37 @@ import { RESOURCES } from '../../src/data/resources.js'
 import { UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { CRAFTS } from '../../src/data/crafts.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../../src/data/realms.js'
+
+export function focusedRealmBills({ ok, section }) {
+  section('破境配方精简与实际支付')
+  const energy = ['qi', 'spiritLiquid', 'immortalForce']
+  const knowledge = ['insight', 'daoNote', 'daoTreatise', 'arrayDiagram']
+  for (let target = 1; target < REALMS.length; target++) {
+    const keys = Object.keys(REALMS[target].cost)
+    ok(`${REALMS[target].name}只有一种修为、知识及至多两种合成材料`,
+      keys.length <= 4 && keys.filter(id => energy.includes(id)).length === 1 && keys.filter(id => knowledge.includes(id)).length === 1)
+    const aids = BREAKTHROUGH_AIDS[target]
+    ok(`${REALMS[target].name}护道单项支付且编号不变`,
+      aids.every((aid, i) => Object.keys(aid.cost).length === 1 && aid.id === `${target}:${i}`))
+    for (const id of new Set([...keys, ...aids.flatMap(aid => Object.keys(aid.cost))])) {
+      const recipe = E.CRAFTS.find(c => c.out === id)
+      if (recipe) ok(`${id}在冲关前可生产`, (recipe.needs?.realm || 0) < target)
+    }
+    const s = createInitialState(), d = E.createDerived()
+    s.realm = target - 1
+    s.upgrades.breakthroughArt = true
+    E.recompute(s, d)
+    const options = Object.fromEntries(aids.map(aid => [aid.id, true]))
+    const quote = E.breakthroughPreview(s, d, options)
+    for (const [id, amount] of Object.entries(quote.cost)) s.resources[id] = E.money(amount)
+    const shortage = Object.keys(aids[0].cost)[0]
+    s.resources[shortage] = s.resources[shortage].minus(1)
+    const before = JSON.stringify(s.resources)
+    ok('缺一份护道材料时不扣款、不掷骰', !E.breakthrough(s, d, options, () => { throw Error('不应掷骰') }) && JSON.stringify(s.resources) === before)
+    s.resources[shortage] = s.resources[shortage].plus(1)
+    ok('基础折扣与护道合并报价按实扣款', E.breakthrough(s, d, options, () => 0) && s.realm === target && Object.keys(quote.cost).every(id => s.resources[id].eq(0)))
+  }
+}
 import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, successfulBreakthrough } from './fixtures.mjs'
@@ -368,7 +399,7 @@ export function breakthroughRisk({ ok, close, section }) {
     const [s, d] = setup(4)
     const all = Object.fromEntries(BREAKTHROUGH_AIDS[5].map(aid => [aid.id, true]))
     const p = E.breakthroughPreview(s, d, all)
-    ok('元婴护道叠加25个百分点且计入报价', close(p.chance, 0.85) && E.moneyEq(p.cost.faith, 250) && E.moneyEq(p.cost.immortalHerb, 8) && E.moneyEq(p.cost.arrayBase, 4) && E.moneyEq(p.cost.talisman, REALMS[5].cost.talisman + 20))
+    ok('元婴护道叠加25个百分点且计入报价', close(p.chance, 0.85) && E.moneyEq(p.cost.faith, 250) && E.moneyEq(p.cost.immortalHerb, 8) && E.moneyEq(p.cost.arrayBase, REALMS[5].cost.arrayBase + 8) && !p.cost.talisman)
     const [capped, cd] = setup(0)
     const earlyOptions = Object.fromEntries(BREAKTHROUGH_AIDS[1].map(aid => [aid.id, true]))
     ok('成功率最高99%', E.breakthroughPreview(capped, cd, earlyOptions).chance === 0.99)

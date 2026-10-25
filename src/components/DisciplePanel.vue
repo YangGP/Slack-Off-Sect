@@ -311,7 +311,7 @@ function commitJob(jobId, event) {
       </div>
       <div v-if="derived.leaveChance > 0" class="small bad">当前每次检查离开概率 {{ fmt(derived.leaveChance * 100) }}%。</div>
       <div class="small dim">
-        <template v-if="recruitManual">主动招募模式：停用自动前来，可用下方礼聘招募弟子。</template>
+        <template v-if="recruitManual"><HoverTip label="主动招募模式" description="停用自动前来，可用下方礼聘招募弟子。" /></template>
         <template v-else-if="derived.leaveChance > 0">宜居度不足，改善居住环境后恢复弟子前来。</template>
         <template v-else-if="waitNext === null">居所已满，扩建居所才会再有人来。</template>
         <template v-else>下一位弟子约 {{ fmtTime(waitNext) }}后到。</template>
@@ -445,7 +445,7 @@ function commitJob(jobId, event) {
           </HoverTip>
         </div>
         </details>
-        <span class="small dim">仅操作当前筛选结果中的所选弟子；更改筛选会清空选择。</span>
+        <HoverTip label="批量操作说明" description="仅操作当前筛选结果中的所选弟子；更改筛选会清空选择。" />
       </div>
       <div v-if="managementRows.length" class="member-list-region" role="region" aria-label="弟子管理列表">
         <table class="grid disciple-list">

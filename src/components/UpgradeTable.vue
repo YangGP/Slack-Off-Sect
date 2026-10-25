@@ -151,7 +151,9 @@ function kindName(meta) {
       </div>
 
       <!-- 已炼成的法宝：可以反复祭炼，每级效果 +30%、花费 ×1.7 递增 -->
-      <table v-if="forged.length" class="grid upgrade-table">
+      <details v-if="forged.length" class="fold">
+        <summary>已炼成的法宝（{{ forged.length }} 件）</summary>
+      <table class="grid upgrade-table">
         <colgroup><col class="upgrade-name" /><col /><col class="upgrade-action" /></colgroup>
         <thead>
           <tr>
@@ -230,6 +232,7 @@ function kindName(meta) {
           </tr>
         </tbody>
       </table>
+      </details>
 
       <table class="grid upgrade-table" v-if="available.length">
         <colgroup><col class="upgrade-name" /><col /><col class="upgrade-action" /></colgroup>
@@ -270,17 +273,13 @@ function kindName(meta) {
 
                   <CostRows :cost="item.meta.cost" />
 
-                  <div class="tip-section">效果</div>
-                  <!-- 数值、规则和解锁清单均按单个效果成行。 -->
-                  <div v-for="(row, ri) in effectRows(item.meta, describeEffects)" :key="ri" class="tip-row">
+                  <div v-if="effectRows(item.meta, describeEffects, false).length" class="tip-section">效果</div>
+                  <!-- 悬停提示只显示实际效果，不展示解锁清单。 -->
+                  <div v-for="(row, ri) in effectRows(item.meta, describeEffects, false)" :key="ri" class="tip-row">
                     <span class="k">{{ row.label }}</span>
                     <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
                   </div>
-                  <div v-if="item.meta.effectDesc" class="tip-note">{{ item.meta.effectDesc }}</div>
-                  <template v-if="describeNeeds(item.meta.needs).length">
-                    <div class="tip-section">条件</div>
-                    <div v-for="(condition, ci) in describeNeeds(item.meta.needs)" :key="ci" class="tip-condition">{{ condition }}</div>
-                  </template>
+                  <div v-if="item.meta.effectDesc && !/解锁|开放|开启|需.*《/.test(item.meta.effectDesc)" class="tip-note">{{ item.meta.effectDesc }}</div>
                 </template>
               </HoverTip>
             </td>
@@ -335,12 +334,12 @@ function kindName(meta) {
                   <template #tip>
                     <div class="tip-desc">{{ item.desc }}</div>
 
-                    <div class="tip-section">效果</div>
-                    <div v-for="(row, ri) in effectRows(item, describeEffects)" :key="ri" class="tip-row">
+                    <div v-if="effectRows(item, describeEffects, false).length" class="tip-section">效果</div>
+                    <div v-for="(row, ri) in effectRows(item, describeEffects, false)" :key="ri" class="tip-row">
                       <span class="k">{{ row.label }}</span>
                       <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
                     </div>
-                    <div v-if="item.effectDesc" class="tip-note">{{ item.effectDesc }}</div>
+                    <div v-if="item.effectDesc && !/解锁|开放|开启|需.*《/.test(item.effectDesc)" class="tip-note">{{ item.effectDesc }}</div>
                   </template>
                 </HoverTip>
               </td>

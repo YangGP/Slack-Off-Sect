@@ -1,4 +1,5 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
 import { computed, reactive, ref, watch } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, realmProductionBase } from '@/data/realms'
@@ -77,7 +78,7 @@ const ascendRealmOk = computed(() => state.realm >= ASCEND_REALM_INDEX)
 
 function ascend() {
   const ok = window.confirm(
-    `飞升会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gainText.value} 点仙缘与 ${fmtAmount(daoGain.value)} 颗道果（都是永久的）。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
+    `${SECT_STORY.ascension}\n\n飞升归来会重置资源、弟子、建筑、修真、技艺·法宝与境界，并获得 ${gainText.value} 点仙缘与 ${fmtAmount(daoGain.value)} 颗道果（都是永久的）。本世香火 ${fmt(state.resources.faith || ZERO)}、愿力 ${fmt(state.resources.vow || ZERO)} 与本世仪轨会清空；道心与永久修持保留，不会自动证心。首颗道果解锁自动炼制、配方优先与材料保留。确定吗？`,
   )
   if (ok) actions.ascend()
 }
@@ -166,7 +167,7 @@ function reincarnate() {
                 <span>{{ fmtAmount(state.dao ?? ZERO) }}</span>
                 <template #heading>道果<span class="tip-right">只有飞升给</span></template>
                 <template #tip>
-                  <div class="tip-desc">飞升时结下的道果，比仙缘更高一层。</div>
+                  <div class="tip-desc">{{ SECT_STORY.dao }}</div>
                   <p>用于仙途商店永久培养修持与高级猎场资格，余额不提高全局产出或仙缘结算。首颗道果的自动化永久保留。</p>
                 </template>
               </HoverTip>
@@ -274,9 +275,9 @@ function reincarnate() {
   <div class="box">
     <div class="box-head">
       <HoverTip label="转世与飞升"><template #tip>
+          <p>{{ SECT_STORY.ascension }}</p>
           <p>两者清空范围相同，都结算仙缘；飞升按弟子入宗后修为与同心度结算道果。转世并非飞升门槛。</p>
           <p>重置：资源、弟子、建筑、修真、技艺·法宝（含祭炼等级）、制作进度、境界。保留：成就、仙缘、道果、道心与永久修持、累计统计与宗门纪事。</p>
-          <p>首颗道果解锁「道果统筹」：重修时即可自动炼制，可指定优先配方并保留材料。</p>
         </template></HoverTip>
     </div>
     <div class="box-body">
@@ -320,10 +321,9 @@ function reincarnate() {
             <span class="v">{{ karmaEffectText(reincarnationEffects.before.karmaMult) }} → {{ karmaEffectText(reincarnationEffects.after.karmaMult) }}</span>
           </div>
           <div class="tip-row">
-            <span class="k">仙缘仓储加成</span>
+            <HoverTip label="仙缘仓储加成" description="仓储加成仅作用于有上限资源，加工品不受仓容限制。仅比较永久仙缘的加成；境界、建筑与研究需要重修，道心和永久修持保留。" />
             <span class="v">{{ karmaEffectText(reincarnationEffects.before.karmaStorageMult) }} → {{ karmaEffectText(reincarnationEffects.after.karmaStorageMult) }}</span>
           </div>
-          <p class="small dim">仓储加成仅作用于有上限资源，加工品不受仓容限制。仅比较永久仙缘的加成；境界、建筑与研究需要重修，道心和永久修持保留。</p>
           <p v-if="unusedDaoHeart" class="small">已有愿力可证心；请先前往香火页处理。转世会清空愿力，不会自动证心。</p>
         </template>
         <button class="btn" :disabled="!canReincarnate" @click="reincarnate">转世</button>
@@ -350,9 +350,8 @@ function reincarnate() {
     </div>
   </div>
   <div v-if="ascendRealmOk" class="box">
-    <div class="box-head">本次弟子贡献</div>
+    <div class="box-head"><HoverTip label="本次弟子贡献" description="只结算当前在宗成员：入宗后终身修为 × 同心度；离册者仅留名录。基础1颗另计，下列为贡献奖励的比例分摊。" /></div>
     <div class="box-body">
-      <p class="small">只结算当前在宗成员：入宗后终身修为 × 同心度；离册者仅留名录。基础1颗另计，下列为贡献奖励的比例分摊。</p>
       <div class="contribution-list"><div v-for="m in contributionRows" :key="m.id" class="small contribution-row"><span>{{ m.name }}</span><span class="dim">{{ fmt(m.lifetime) }} × {{ fmtPercent(m.loyalty) }}</span><span class="num">{{ fmtAmount(m.share) }} 道果</span></div></div>
       <div v-if="contributionPages > 1" class="btn-row"><button class="btn" :disabled="contributionPage <= 0" @click="contributionPage--">上一页</button><span>{{ Math.min(contributionPage, contributionPages - 1) + 1 }}/{{ contributionPages }}</span><button class="btn" :disabled="contributionPage >= contributionPages - 1" @click="contributionPage++">下一页</button></div>
     </div>

@@ -54,7 +54,7 @@ const CORE_JOBS = [
     glyph: '悟',
     desc: '静坐藏经阁，把万千念头熬成一点灵机。',
     resource: 'insight',
-    base: 0.02,
+    base: 0.05,
     needs: { building: { id: 'library', count: 1 } },
   },
   {

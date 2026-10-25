@@ -7,7 +7,7 @@
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
 import { buildingCost, canAfford, buildingBoostAvailable, buildingMeta, productionStageReady } from '@/game/engine'
-import { describeBuildingEffects, describeNeeds } from '@/game/effectsText'
+import { describeBuildingEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtAmount, fmtEffectPercent } from '@/game/format'
 import { money } from '@/game/decimal'
 import { costBlocked } from '@/game/pricing'
@@ -62,7 +62,7 @@ const overCap = computed(() => costBlocked(state, derived, price.value))
  */
 const effectRows = computed(() => {
   const visible = new Set(view.visibleResources.value.map(resource => resource.id))
-  return describeBuildingEffects(meta.value, state, derived).filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
+  return describeBuildingEffects(meta.value, state, derived).filter(row => row.tone !== 'unlock' && (!row.resource || visible.has(row.resource))).map((u, i) => ({
     key: `${u.label}-${i}`,
     label: u.label,
     value: u.value,
@@ -70,7 +70,6 @@ const effectRows = computed(() => {
     tone: u.tone,
   }))
 })
-const conditions = computed(() => describeNeeds(meta.value.needs))
 const flavor = computed(() => BUILDING_FLAVOR[meta.value.id] || '')
 
 /**
@@ -157,15 +156,10 @@ onBeforeUnmount(clearHighlight)
             >
           </span>
         </div>
-        <template v-if="conditions.length && !count">
-          <div class="tip-section">条件</div>
-          <div v-for="(condition, ci) in conditions" :key="ci" class="tip-condition">{{ condition }}</div>
-        </template>
-        <template v-if="meta.boost && count">
+        <template v-if="meta.boost && count && boostAvailable">
           <div class="tip-section">灵液注灵（独立增产开关）</div>
           <div class="tip-desc">每座消耗{{ boostCost }}，满供时矿工灵石采出 ×{{ meta.boost.multiplier }}；仅影响灵石采矿，基础采矿不依赖灵液。</div>
-          <div v-if="!boostAvailable" class="tip-desc">需参悟《注灵原理》后开启。</div>
-          <div v-else class="tip-row"><span class="k">当前状态</span><span class="v">{{ !boostOn ? '已关闭，不消耗灵液' : !state.disciples.jobs[meta.boost.job] ? '无人采矿，暂不耗液' : `已开启，供给${fmtEffectPercent(boostSupply)} · 灵石采出 ×${fmt(1 + (meta.boost.multiplier - 1) * boostSupply)}` }}</span></div>
+          <div class="tip-row"><span class="k">当前状态</span><span class="v">{{ !boostOn ? '已关闭，不消耗灵液' : !state.disciples.jobs[meta.boost.job] ? '无人采矿，暂不耗液' : `已开启，供给${fmtEffectPercent(boostSupply)} · 灵石采出 ×${fmt(1 + (meta.boost.multiplier - 1) * boostSupply)}` }}</span></div>
         </template>
         <template v-if="meta.upkeep || hasPower">
           <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>

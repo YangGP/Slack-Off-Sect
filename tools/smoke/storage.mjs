@@ -25,13 +25,13 @@ export function warehouseConsolidation({ ok, section }) {
   const before = d.max.wood, qi = d.max.qi, insight = d.max.insight
   s.upgrades.earthEssence = true
   E.recompute(s, d)
-  ok('土木精要按库房数量强化原料，不放大基础仓容或灵机', d.max.wood.eq(before.plus(8000)) && d.max.qi.eq(qi) && d.max.insight.eq(insight))
+  ok('土木精要按库房数量强化原料，不放大基础仓容或灵机', d.max.wood.eq(before.plus(3000)) && d.max.qi.eq(qi) && d.max.insight.eq(insight))
   s.realm = 7
   for (const [id, amount] of Object.entries(BUILDING_MAP.grotto.cost)) { s.resources[id] = E.money(amount); s.peak[id] = E.money(amount) }
   ok('炼虚洞天不依赖合体工艺或玄金即可真实建造', !s.upgrades.grottoArt && E.isBuildingUnlocked(s, 'grotto') && E.buyBuilding(s, d, 'grotto') === 1)
   const space = d.max.immortalForce
   const diagnostic = progressionDiagnostics(s, d, { cost: { wood: E.money('1e12') } }).missing.find(row => row.resource === 'wood')
-  ok('采购诊断使用工艺强化后的新建容量', diagnostic.expansions.find(row => row.id === 'warehouse').gain === 5000)
+  ok('采购诊断使用工艺强化后的新建容量', diagnostic.expansions.find(row => row.id === 'warehouse').gain === 2500)
   s.upgrades.grottoArt = true
   E.recompute(s, d)
   ok('洞天福地强化已建空间容量', d.max.immortalForce.gt(space) && UPGRADE_MAP.grottoArt.effects.buildingStorageRatio.grotto === 0.6)

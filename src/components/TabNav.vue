@@ -6,6 +6,8 @@ import { canAfford, faithUnlocked, idleDisciples, karmaShopUnlocked } from '@/ga
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { isModuleEnabled, insertAfter } from '@/data/modules'
 import { MODULE_UI } from '@/modules/uiRegistry'
+import { isHuntUnlocked, isDiplomacyUnlocked } from '@/game/engine'
+import { HUNT_FIELDS } from '@/modules/hunting/data'
 
 const CORE_TABS = [
   { id: 'sect', name: '宗门' },
@@ -36,6 +38,8 @@ const tabs = computed(() => {
   if (state.realm < 7) list = list.filter(t => t.id !== 'worlds')
   if (!(state.samsara.completions > 0)) list = list.filter(t => t.id !== 'memorial')
   for (const m of MODULE_UI) {
+    if (m.id === 'hunting' && !HUNT_FIELDS.some(f => isHuntUnlocked(state, f.id))) continue
+    if (m.id === 'diplomacy' && !isDiplomacyUnlocked(state)) continue
     if (!isModuleEnabled(state, m.id)) continue
     list = insertAfter(list, m.tab.after, [m.tab])
   }

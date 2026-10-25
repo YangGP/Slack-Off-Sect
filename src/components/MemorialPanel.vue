@@ -1,4 +1,6 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
+import HoverTip from '@/components/HoverTip.vue'
 import { computed, ref } from 'vue'
 import { state } from '@/game/store'
 import { REALMS } from '@/data/realms'
@@ -22,10 +24,10 @@ const visible = computed(() => {
 </script>
 <template>
   <div class="box">
-    <div class="box-head">门人名录</div>
+    <div class="box-head"><HoverTip label="门人名录"><template #tip><p>{{ SECT_STORY.memorial }}</p>名录跨轮回保留，仅供纪念。旧档从当前弟子起录；历史人物不重复参与道果结算。</template></HoverTip></div>
     <div class="box-body">
-      <p>愿无一人被遗忘。</p>
-      <p class="small dim">名录跨轮回保留，仅供纪念。旧档从当前弟子起录；历史人物不重复参与道果结算。</p>
+
+
       <div class="table-scroll" tabindex="0" role="region" aria-label="门人名录，可横向滚动">
       <table class="grid memorial-table"><thead><tr><th>世</th><th>姓名</th><th>境界</th><th>灵根</th><th>入宗后修为</th><th>同心</th><th>结局</th></tr></thead>
         <tbody><tr v-for="r in visible" :key="r.id"><td>{{ r.life }}</td><td>{{ r.name }}</td><td>{{ REALMS[r.realm]?.name }}</td><td>{{ SPIRITUAL_ROOT_MAP[r.root]?.name }}</td><td>{{ fmt(r.contribution) }}</td><td>{{ fmtPercent(r.loyalty) }}</td><td><span v-if="r.collectiveAscended && r.outcome !== '飞升圆满'">飞升圆满 · </span>{{ r.outcome }}</td></tr></tbody>

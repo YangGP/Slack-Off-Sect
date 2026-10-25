@@ -130,7 +130,7 @@ export function goldenCoreProduction({ ok, close, section }) {
     ok('灵流要诀给灵木与灵草各三成加成，与伐木要术及药圃加成相加，玄铁写在效果表内', close(d.rates.wood.div(baseRates.wood), 1.5 / 1.2) && close(d.rates.herb.div(baseRates.herb), 1.4 / 1.1) && UPGRADE_MAP.flowField.effects.ratio.ore === 0.3)
     s.buildings.warehouse = { count: 5, on: true }
     ok('阵基装配与库房强化可在金丹参悟', E.research(s, d, 'arrayAssembly') && E.research(s, d, 'earthEssence') && UPGRADE_MAP.earthEssence.needs.realm == null)
-    ok('土木精要强化库房而不再开放独立材料库', UPGRADE_MAP.earthEssence.effects.buildingStorageRatio.warehouse === 4 && !BUILDING_MAP.depot)
+    ok('土木精要强化库房而不再开放独立材料库', UPGRADE_MAP.earthEssence.effects.buildingStorageRatio.warehouse === 1.5 && !BUILDING_MAP.depot)
     const steelLearned = E.research(s, d, 'steelWorking')
     const steelExpected = E.craftYield(d, CRAFT_MAP.refineSteel).times(3)
     ok('淬玄工艺仍可正常备料', steelLearned && E.moneyEq(E.craft(s, d, 'refineSteel', { times: 3 }), steelExpected))

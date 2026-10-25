@@ -198,7 +198,7 @@ export const HUNT_UPGRADES = [
     id: 'beastMaterialArt',
     name: '兽材加工',
     glyph: '兽',
-    cost: { insight: 1500, beastHide: 40, beastBone: 40 },
+    cost: { insight: 2600, beastHide: 40, beastBone: 40 },
     desc: '熟皮硝骨、按纹取料，兽材才堪堪可用。开启《兽骨炼器》，为御寒灵裘备料。',
     effects: { unlockBuildings: [] },
     note: '开启配方：兽骨炼器',

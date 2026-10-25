@@ -380,7 +380,7 @@ const CORE_RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '飞升时按弟子入宗后修为与同心度结算，用于仙途商店永久培养修持；余额不提高产出或仙缘。',
+    desc: '舍下独自成仙之机，携回留给后来者的修行传承。飞升时按弟子入宗后修为与同心度结算，用于仙途商店永久培养修持；余额不提高产出或仙缘。',
   },
   {
     id: 'karma',

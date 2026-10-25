@@ -1,4 +1,5 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
 import { fmtCost, fmtAmount, fmtPercent, fmtTime } from '@/game/format'
@@ -11,6 +12,8 @@ import { CURRENT_VERSION } from '@/data/changelog'
 import { IS_DEV_PREVIEW } from '@/game/deployment'
 import { isModuleEnabled } from '@/data/modules'
 import { MODULE_UI } from '@/modules/uiRegistry'
+import { isHuntUnlocked, isDiplomacyUnlocked } from '@/game/engine'
+import { HUNT_FIELDS } from '@/modules/hunting/data'
 import ResourcePanel from './components/ResourcePanel.vue'
 import TabNav from './components/TabNav.vue'
 import SectPanel from './components/SectPanel.vue'
@@ -57,6 +60,8 @@ const panels = computed(() => {
   const out = { ...corePanels }
   if (!(state.samsara.completions > 0)) delete out.memorial
   for (const m of MODULE_UI) {
+    if (m.id === 'hunting' && !HUNT_FIELDS.some(f => isHuntUnlocked(state, f.id))) continue
+    if (m.id === 'diplomacy' && !isDiplomacyUnlocked(state)) continue
     if (isModuleEnabled(state, m.id)) out[m.tab.id] = m.panel
   }
   return out
@@ -305,7 +310,7 @@ function downloadLegacy() {
     </div>
     <div v-if="ui.saveRecoveryNotice" class="update-notice" role="status">{{ ui.saveRecoveryNotice }}</div>
     <div class="title-line">
-      摸鱼宗门<span class="sub">Slack Off Sect</span>
+      <HoverTip label="摸鱼宗门" :description="SECT_STORY.vow" /><span class="sub">Slack Off Sect</span>
       <span v-if="IS_DEV_PREVIEW" class="small warn">开发预览版 · dev1</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
     </div>

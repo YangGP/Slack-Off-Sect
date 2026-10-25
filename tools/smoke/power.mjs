@@ -51,7 +51,7 @@ export function immortalInvestmentFlow({ ok, section }) {
 }
 
 export function midgameReinvestment({ ok, close, section }) {
-  section('元婴首产、可选回投与单阵破境兼容')
+  section('元婴首产、可选回投与破境材料独立')
   const { state: s, derived: d } = newGame()
   s.realm = 5
   s.disciples.total = 4
@@ -75,12 +75,13 @@ export function midgameReinvestment({ ok, close, section }) {
     E.moneyIsZero(s.resources.qiParticle) && E.moneyEq(s.resources.insight, insight.minus(UPGRADE_MAP.particleRecover.cost.insight)) &&
     E.moneyEq(s.resources.daoTreatise, treatise.minus(UPGRADE_MAP.particleRecover.cost.daoTreatise)))
   ok('回用提高有效分子产量而不降低耗气', rate.gt(0) && close(d.rates.qiParticle, rate.times(1.3)) && E.moneyEq(d.expense.qi, upkeep))
-  const need = E.realmCost(s, d, 6)
+  // 分子回投仍服务后续工业需求，不再作为化神基础破境账单。
+  const need = { qiParticle: E.money(36000) }
   const quote = particleReinvestment(s, d, need)
   ok('备料缺口大且供气充足时建议扩阵，并计入全部真实报价', quote?.id === 'splitArray' &&
     quote.count === 2 && quote.savedSeconds > 0 && E.moneyEq(quote.cost.insight, E.buildingCost(s, 'splitArray', 1).insight), JSON.stringify(quote))
   s.resources.qiParticle = E.money(need.qiParticle).minus(1)
-  ok('临近破境时放弃已无回本机会的投资', particleReinvestment(s, d, need) === null)
+  ok('临近分子需求时放弃已无回本机会的投资', particleReinvestment(s, d, need) === null)
   s.resources.qiParticle = E.ZERO
   s.upgrades.dipoleChest = true
   const noQi = { ...d, netQi: E.ZERO }
@@ -104,8 +105,10 @@ export function midgameReinvestment({ ok, close, section }) {
   s.buildings.splitArray = { count: 1, on: true }
   E.recompute(s, d)
   for (const [id, amount] of Object.entries(E.realmCost(s, d, 6))) s.resources[id] = E.money(amount)
-  ok('不研究回用、只建一阵仍能真实突破化神', successfulBreakthrough(s, d) && s.realm === 6 &&
-    E.countOf(s, 'splitArray') === 1 && !s.upgrades.particleRecover)
+  delete s.buildings.splitArray
+  E.recompute(s, d)
+  ok('化神账单不强制分灵阵或分子回用', !E.realmCost(s, d, 6).qiParticle && successfulBreakthrough(s, d) && s.realm === 6 &&
+    E.countOf(s, 'splitArray') === 0 && !s.upgrades.particleRecover)
 }
 
 export function particleChain({ ok, close, section }) {

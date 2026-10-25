@@ -19,7 +19,13 @@ const unlocked = computed(() => isDiplomacyUnlocked(state))
 const fortunePct = computed(() => fmtPercent(tradePreview(state, derived, DIPLOMACY_SECTS[0].id)?.fortuneChance || 0))
 const warrant = computed(() => state.resources.warrant ?? ZERO)
 const warrantMax = computed(() => derived.max.warrant ?? ZERO)
-const sectOptions = DIPLOMACY_SECTS.map(sect => ({ value: sect.id, label: sect.name }))
+const visibleSects = computed(() => DIPLOMACY_SECTS.filter(sect => previewOf(sect.id)?.unlocked))
+const selectedSect = computed(() => visibleSects.value.some(sect => sect.id === state.diplomacy.settings.sectId)
+  ? state.diplomacy.settings.sectId : '')
+const sectOptions = computed(() => {
+  const options = visibleSects.value.map(sect => ({ value: sect.id, label: sect.name }))
+  return selectedSect.value ? options : [{ value: '', label: '请选择已解锁宗门', disabled: true }, ...options]
+})
 const batchOptions = [1, 10, 100].map(value => ({ value, label: `每回${value}次` }))
 
 function previewOf(sectId) {
@@ -59,16 +65,14 @@ function trade(sectId) {
       </div>
       <template v-else>
         <div v-if="state.upgrades.tradeRoutes" class="small diplomacy-auto">
-          <label><input type="checkbox" :checked="state.diplomacy.settings.auto" @change="actions.diplomacyAuto('auto', $event.target.checked)" /> 自动互市（每60秒）</label>
-          <StableSelect label="自动互市宗门" :model-value="state.diplomacy.settings.sectId" :options="sectOptions" @update:model-value="actions.diplomacyAuto('sectId', $event)" />
+          <label><input type="checkbox" :checked="state.diplomacy.settings.auto" @change="actions.diplomacyAuto('auto', $event.target.checked)" /> <HoverTip label="自动互市（每60秒）" description="自动交易遵守炼制页逐项材料保留与信符保留，缺料跳过；长离线合并支付，机缘按期望估算，不积压欠账。" /></label>
+          <StableSelect label="自动互市宗门" :model-value="selectedSect" :options="sectOptions" @update:model-value="actions.diplomacyAuto('sectId', $event)" />
           <StableSelect label="自动互市批量" :model-value="state.diplomacy.settings.batch" :options="batchOptions" @update:model-value="actions.diplomacyAuto('batch', $event)" />
           <label>信符保留 <input class="qty" type="number" min="0" max="100000" :value="state.diplomacy.settings.warrantReserve" @change="actions.diplomacyAuto('warrantReserve', $event.target.value)" /></label>
-          <p class="dim">自动交易遵守炼制页逐项材料保留与信符保留，缺料跳过；长离线合并支付，机缘按期望估算，不积压欠账。</p>
         </div>
-        <div v-for="sect in DIPLOMACY_SECTS" :key="sect.id" class="diplomacy-sect">
+        <div v-for="sect in visibleSects" :key="sect.id" class="diplomacy-sect">
           <div class="diplomacy-head">
-            <span><b>{{ sect.name }}</b></span>
-            <span class="dim small diplomacy-description">{{ sect.desc }}</span>
+            <HoverTip :label="sect.name" :description="sect.desc" />
           </div>
           <table class="grid">
             <tbody>

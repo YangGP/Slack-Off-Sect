@@ -10,6 +10,23 @@ import { unlockText, unlockGroups, unlockMismatches, effectLine, effectRows } fr
 import { describeEffects } from '../../src/game/effectsText.js'
 import { newGame } from './fixtures.mjs'
 
+export function researchCostProgression({ ok, section }) {
+  section('修真灵机费用沿直接研究前置递进')
+  const ids = new Set(CULTIVATION.map(u => u.id))
+  const inversions = CULTIVATION.flatMap(u =>
+    [...(u.needs?.upgrades || []), ...(u.needs?.upgrade ? [u.needs.upgrade] : [])]
+      .filter(id => ids.has(id) && u.cost.insight < UPGRADE_MAP[id].cost.insight)
+      .map(id => `${UPGRADE_MAP[id].name} → ${u.name}`))
+  ok('修真直接前置不存在灵机费用倒挂', inversions.length === 0, inversions.join('；'))
+  ok('开局营造与凿石仍在基础灵机仓容内',
+    UPGRADE_MAP.homePlanning.cost.insight <= 200 && UPGRADE_MAP.quarryArt.cost.insight <= 200)
+  const { state: s, derived: d } = newGame()
+  s.upgrades.qiPurify = true
+  s.resources.insight = E.money(UPGRADE_MAP.condenseArt.cost.insight)
+  E.recompute(s, d)
+  ok('凝灵诀按新报价支付且保留原资格', E.research(s, d, 'condenseArt') && s.resources.insight.eq(0))
+}
+
 export function researchVisibility({ ok, section }) {
   section('同类修真递进与显示门槛')
   {

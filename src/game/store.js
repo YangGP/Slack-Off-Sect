@@ -684,9 +684,9 @@ export const actions = {
     // 采集实际贡献道果，与 resetForAscension 的结算一致。
     analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain })
     analytics.beginRun('ascension', { debug: ui.debug === true })
-    E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtAmount(gain)} 点转世重修`, 'realm')
+    E.pushLog(state, `自【${name}】叩开天门，却未独去。携仙缘 ${fmtAmount(gain)} 点、道果 ${fmtAmount(daoGain)} 颗重返人间，再为同道开山门`, 'realm')
     saveNow()
-    toast(`飞升成功，获得仙缘 ${fmtAmount(gain)} 与 ${fmtAmount(daoGain)} 颗道果`, 'good')
+    toast(`飞升归来，携仙缘 ${fmtAmount(gain)} 与 ${fmtAmount(daoGain)} 颗道果`, 'good')
     return true
   },
   /** 事件弹窗：打开/关闭只影响会话 UI，不改变待决事件。 */

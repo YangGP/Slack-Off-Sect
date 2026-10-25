@@ -1,4 +1,5 @@
 <script setup>
+import HoverTip from '@/components/HoverTip.vue'
 import { computed, reactive } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { WORLD_DEFS } from '@/data/samsara'
@@ -32,18 +33,17 @@ function station(world) {
 </script>
 <template>
   <div class="box">
-    <div class="box-head">万千世界</div>
+    <div class="box-head"><HoverTip label="万千世界"><template #tip>天工坊合成仙材。一界一名驻守，驻守者让出岗位、继续自然修炼；达标安全，低境冒险。维护不足按供给比例停产，不损毁设施。灵能与天砖均需留存；召回停止驻守与风险，设施和库存随轮回清空。</template></HoverTip></div>
     <div class="box-body">
-      <p class="small dim">天工坊合成仙材。一界一名驻守，驻守者让出岗位、继续自然修炼；达标安全，低境冒险。维护不足按供给比例停产，不损毁设施。</p>
-      <p class="small">当前驻守供给 {{ fmtPercent(derived.worldFlow?.supply ?? 1) }}；灵能与天砖均需留存。召回停止驻守与风险，设施和库存随轮回清空。</p>
+
+      <p class="small">当前驻守供给 {{ fmtPercent(derived.worldFlow?.supply ?? 1) }}。</p>
       <section v-for="world in WORLD_DEFS" :key="world.id" class="world">
-        <div class="world-head"><b>{{ world.name }}</b><span class="small dim">{{ resourceName(world.out) }} · 宗门{{ REALMS[world.realm].name }}开放</span></div>
+        <div class="world-head"><HoverTip :label="world.name"><template #tip>安全驻守：{{ REALMS[world.safe].name }}；低境驻守有累计死亡风险，死亡减免无效。</template></HoverTip><span class="small dim">{{ resourceName(world.out) }} · 宗门{{ REALMS[world.realm].name }}开放</span></div>
         <div class="world-stats small">
           <div><span class="dim">采集 / 承载</span><b>{{ state.worlds[world.id].level }} / {{ 1 + state.worlds[world.id].capacity }} 级</b></div>
           <div><span class="dim">每级产出 / 小时</span><b class="good">{{ resourceName(world.out) }} {{ fmt(world.rate * 3600) }}</b></div>
           <div><span class="dim">每级维护 / 小时</span><span>灵能 {{ fmt(world.energy * 3600) }} · 天砖 {{ fmt(world.maintenance * 3600) }}</span></div>
         </div>
-        <p class="small dim">安全驻守：{{ REALMS[world.safe].name }}；低境驻守有累计死亡风险，死亡减免无效。</p>
         <div v-if="rowOf(world)" class="small world-account">
           <div>有效采集 {{ rowOf(world).n }} 级 · 闲置 {{ Math.max(0, state.worlds[world.id].level - rowOf(world).n) }} 级</div>
           <div>{{ resourceName(world.out) }}毛产 {{ fmtAmount(rowOf(world).gross.times(3600).div(derived.worldPlan.seconds)) }}／小时 · 分流 {{ fmtAmount(rowOf(world).gross.minus(rowOf(world).net).times(3600).div(derived.worldPlan.seconds)) }} · 净入库 {{ fmtAmount(rowOf(world).net.times(3600).div(derived.worldPlan.seconds)) }}</div>
@@ -53,8 +53,8 @@ function station(world) {
         </div>
         <div class="world-facilities">
           <div v-for="f in WORLD_FACILITIES.filter(f => f.world === world.id)" :key="f.id" class="facility small">
-            <b>{{ f.name }}</b><span class="dim"> · 单座设施</span>
-            <p class="dim">{{ f.desc }}</p>
+            <HoverTip :label="f.name" :description="f.desc" /><span class="dim"> · 单座设施</span>
+
             <template v-if="!state.worlds[world.id].facilities[f.id].built">
               <button class="btn" :disabled="!worldFacilityUnlocked(state, f.id) || !canAfford(state, worldFacilityCost(state, f.id))" @click="actions.samsara('buildWorldFacility', f.id)">建设</button>
               <span class="dim"> {{ label(worldFacilityCost(state, f.id)) }} · 需《{{ UPGRADE_MAP[f.research].name }}》</span>
