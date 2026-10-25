@@ -9,6 +9,104 @@ import { REALMS } from '../../src/data/realms.js'
 import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, successfulBreakthrough } from './fixtures.mjs'
+import { particleReinvestment, immortalInvestment, createBot } from '../player-bot.mjs'
+
+export function immortalInvestmentFlow({ ok, section }) {
+  section('仙灵力量产投资：解锁后真实购买、供能与临近冲关边界')
+  const { state: s, derived: d } = newGame()
+  s.realm = 9
+  s.upgrades.immortalDiscovery = s.upgrades.immortalIndustry = true
+  s.buildings = Object.fromEntries(Object.entries({ hut: 1, quarry: 1, spiritField: 1000,
+    scriptureArchive: 4000, warehouse: 100, arcaneVault: 40, grotto: 2,
+    splitArray: 20, polarizeArray: 10, annihilationFurnace: 10, harvestPlatform: 1 })
+    .map(([id, count]) => [id, { count, on: true }]))
+  E.recompute(s, d)
+  for (const r of RESOURCES) s.resources[r.id] = E.moneyMin(500000, d.max[r.id])
+  s.resources.immortalForce = E.ZERO
+  E.recompute(s, d)
+  const need = { immortalForce: 18000 }, before = JSON.stringify(s)
+  const quote = immortalInvestment(s, d, need)
+  ok('已解锁量产时比较有效产量并选择聚仙阵', quote?.id === 'immortalArray' && quote.rateAfter > quote.rateBefore)
+  ok('投资预测不修改真实状态或花费库存', JSON.stringify(s) === before)
+  const insight = E.money(s.resources.insight), rate = E.money(d.net.immortalForce)
+  let decision, built, buildDecision
+  const bot = createBot(s, d, { immortalInvestments: true, onlyBreakthrough: true,
+    realmCost: () => need, breakthrough: () => false, allowUpgrade: () => false,
+    onDecision: value => { decision = value }, onBuildResult: value => { built = value },
+    onBuildDecision: value => { buildDecision = value } })
+  bot.act()
+  ok('机器人突破预留期间仍实际支付材料建成可回本聚仙阵', E.countOf(s, 'immortalArray') === 1 &&
+    E.moneyEq(s.resources.insight, insight.minus(quote.cost.insight)) && E.moneyGt(d.net.immortalForce, rate),
+    JSON.stringify({ built, investment: decision?.investment, insight: s.resources.insight, count: E.countOf(s, 'immortalArray'),
+      required: decision?.requiredBuildings, candidate: buildDecision?.candidates.filter(c => c.id === 'immortalArray') }))
+  s.resources.immortalForce = E.money(18000).minus('0.001')
+  ok('临近冲关不再扩建', immortalInvestment(s, d, need) === null)
+  s.resources.immortalForce = E.ZERO
+  delete s.buildings.annihilationFurnace
+  E.recompute(s, d)
+  ok('有灵能库存但无法持续供能时不增建聚仙阵', immortalInvestment(s, d, need)?.id !== 'immortalArray')
+  delete s.buildings.splitArray
+  E.recompute(s, d)
+  ok('分子净额为负时不把库存支撑误当成可持续扩产', immortalInvestment(s, d, need) === null)
+}
+
+export function midgameReinvestment({ ok, close, section }) {
+  section('元婴首产、可选回投与单阵破境兼容')
+  const { state: s, derived: d } = newGame()
+  s.realm = 5
+  s.disciples.total = 4
+  s.disciples.jobs = { scholar: 4 }
+  s.upgrades.particleTheory = true
+  s.buildings = { spiritField: { count: 1000, on: true }, scriptureArchive: { count: 600, on: true },
+    arcaneVault: { count: 40, on: true }, warehouse: { count: 40, on: true } }
+  E.recompute(s, d)
+  for (const r of RESOURCES) s.resources[r.id] = E.moneyMin(200000, d.max[r.id])
+  s.resources.qiParticle = E.ZERO
+  ok('没有分灵阵时不能提前学习回用', !E.isUpgradeUnlocked(s, UPGRADE_MAP.particleRecover))
+  ok('首阵与灵子论无需自己的产物即可支付并实际建成', !BUILDING_MAP.splitArray.cost.qiParticle &&
+    !UPGRADE_MAP.particleTheory.cost.qiParticle && E.buyBuilding(s, d, 'splitArray', 1) && E.moneyIsZero(s.resources.qiParticle))
+  ok('首阵落地即可选学回用，不要求化神阴阳分灵', E.isUpgradeUnlocked(s, UPGRADE_MAP.particleRecover) && !s.upgrades.yinyangSplit)
+  ok('回用仍须真实支付首批分子', !E.research(s, d, 'particleRecover'))
+  s.resources.qiParticle = E.money(UPGRADE_MAP.particleRecover.cost.qiParticle)
+  E.recompute(s, d)
+  const rate = E.money(d.rates.qiParticle), upkeep = E.money(d.expense.qi)
+  const insight = E.money(s.resources.insight), treatise = E.money(s.resources.daoTreatise)
+  ok('回投实际扣除分子、灵机与道论', E.research(s, d, 'particleRecover') &&
+    E.moneyIsZero(s.resources.qiParticle) && E.moneyEq(s.resources.insight, insight.minus(UPGRADE_MAP.particleRecover.cost.insight)) &&
+    E.moneyEq(s.resources.daoTreatise, treatise.minus(UPGRADE_MAP.particleRecover.cost.daoTreatise)))
+  ok('回用提高有效分子产量而不降低耗气', rate.gt(0) && close(d.rates.qiParticle, rate.times(1.3)) && E.moneyEq(d.expense.qi, upkeep))
+  const need = E.realmCost(s, d, 6)
+  const quote = particleReinvestment(s, d, need)
+  ok('备料缺口大且供气充足时建议扩阵，并计入全部真实报价', quote?.id === 'splitArray' &&
+    quote.count === 2 && quote.savedSeconds > 0 && E.moneyEq(quote.cost.insight, E.buildingCost(s, 'splitArray', 1).insight), JSON.stringify(quote))
+  s.resources.qiParticle = E.money(need.qiParticle).minus(1)
+  ok('临近破境时放弃已无回本机会的投资', particleReinvestment(s, d, need) === null)
+  s.resources.qiParticle = E.ZERO
+  s.upgrades.dipoleChest = true
+  const noQi = { ...d, netQi: E.ZERO }
+  ok('供气不足时不建议新增分灵阵', particleReinvestment(s, noQi, need) === null)
+  s.upgrades.particleRecover = false
+  s.buildings.splitArray.count = 2
+  s.resources.qiParticle = E.money(UPGRADE_MAP.particleRecover.cost.qiParticle)
+  E.recompute(s, d)
+  ok('两阵之后仍可选择回用，研究不成为固定清单', particleReinvestment(s, d, need)?.id === 'particleRecover',
+    JSON.stringify({ quote: particleReinvestment(s, d, need), available: d.availableUpgrades.includes('particleRecover') }))
+  // 已学旧档不追缴新费用，也不依赖仍持有首阵；不做资源迁移。
+  s.realm = 6
+  s.upgrades.particleRecover = true
+  delete s.buildings.splitArray
+  s.resources.qiParticle = E.ZERO
+  const normalized = normalizeState(s)
+  E.recompute(normalized, d)
+  ok('化神旧档保留境界、已学回用与转世入口', normalized.realm === 6 && normalized.upgrades.particleRecover && E.canReincarnate(normalized))
+  s.realm = 5
+  s.upgrades.particleRecover = false
+  s.buildings.splitArray = { count: 1, on: true }
+  E.recompute(s, d)
+  for (const [id, amount] of Object.entries(E.realmCost(s, d, 6))) s.resources[id] = E.money(amount)
+  ok('不研究回用、只建一阵仍能真实突破化神', successfulBreakthrough(s, d) && s.realm === 6 &&
+    E.countOf(s, 'splitArray') === 1 && !s.upgrades.particleRecover)
+}
 
 export function particleChain({ ok, close, section }) {
   section('第二种驱动：灵子论 → 分灵 → 偏极 → 湮灭 → 灵能')

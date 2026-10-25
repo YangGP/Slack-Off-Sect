@@ -10,7 +10,7 @@ import { createResourceRecorder, rebuildResourceReport, loadMeasurementCheckpoin
 import { pack } from './lib/measurement-state.mjs'
 import { progressionDiagnostics } from './progression-diagnostics.mjs'
 import { settleEventOutcome } from '../src/game/systems/events.js'
-import { measurePacing } from './lib/pacing-scenario.mjs'
+import { measurePacing, configurePacingResume } from './lib/pacing-scenario.mjs'
 
 const root = () => mkdtempSync(join(tmpdir(), 'sect-recording-'))
 function fixture() {
@@ -236,7 +236,12 @@ const cases = {
     const b = measurePacing(options, () => {}, { stopAtSeconds: 150, recordRoot: root() })
     assert.equal(b.stopReason, 'interrupted')
     const cp = loadMeasurementCheckpoint(b.checkpointPath)
-    const c = measurePacing({}, () => {}, { resume: cp, includeRuntime: true })
+    const extended = configurePacingResume(cp, ['--total-wall-seconds=1200'])
+    const c = measurePacing({}, () => {}, { resume: extended, includeRuntime: true })
+    assert.ok(cp.simulator.wallSpent > 0)
+    assert.ok(c.cumulativeWallSeconds >= cp.simulator.wallSpent + c.wallSeconds)
+    assert.equal(cp.options.totalWallSeconds, 600)
+    assert.deepEqual(c.wallBudgetChanges.at(-1), extended.budgetChange)
     assert.deepEqual(pack(a.runtimeState.state), pack(c.runtimeState.state))
     assert.deepEqual(pack(a.runtimeState.derived), pack(c.runtimeState.derived))
     assert.deepEqual(a.runtimeState.eventRng, c.runtimeState.eventRng)

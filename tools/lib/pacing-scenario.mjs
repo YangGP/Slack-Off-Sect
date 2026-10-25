@@ -4,6 +4,7 @@ import { setGameContext, runtimeCounters, restoreRuntimeCounters } from '../../s
 import { CRAFTS, craftCost } from '../../src/data/crafts.js'
 import { CULTIVATION_MAP, FAITH_UPGRADE_MAP } from '../../src/data/faith.js'
 import { EVENT_MAP } from '../../src/data/events.js'
+import { daoReward } from '../../src/data/samsara.js'
 import * as E from '../../src/game/engine.js'
 import { createBot } from '../player-bot.mjs'
 import { economyAssessment } from './pacing-economy.mjs'
@@ -13,14 +14,14 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { progressionDiagnostics } from '../progression-diagnostics.mjs'
 
-export const PACING_STRATEGY = 'p1-reincarnation-v11'
+export const PACING_STRATEGY = 'p1-reincarnation-v13'
 const epoch = Date.UTC(2026, 9, 18)
 const num = E.moneyToNumber
 const numbers = map => Object.fromEntries(Object.entries(map || {}).map(([id, value]) => [id, num(value)]))
 const facilities = ['splitArray', 'polarizeArray', 'annihilationFurnace']
 const visitIntervals = { active: 120, quarter: 900, hourly: 3600, three: 28800, waking: 86400 }
 const argumentNames = {
-  wallSeconds: 'wall-seconds', traceLimit: 'trace-limit', decisionSeconds: 'decision-seconds',
+  wallSeconds: 'wall-seconds', totalWallSeconds: 'total-wall-seconds', traceLimit: 'trace-limit', decisionSeconds: 'decision-seconds',
   batchActions: 'batch-actions', reincarnateRealm: 'reincarnate-realm',
   reincarnatePreparation: 'reincarnate-preparation', stopRealm: 'stop-realm',
   sampleSeconds: 'sample-seconds', stopAfterReincarnation: 'stop-after-reincarnation',
@@ -29,7 +30,7 @@ const argumentKeys = Object.fromEntries(Object.entries(argumentNames).map(([key,
 
 export function pacingOptions(args = []) {
   const result = { hours: 168, seed: 1, outcomes: 'natural', aids: 'full', faith: 'off', visits: 'active',
-    events: 0, lives: 1, wallSeconds: 600, traceLimit: 1000, projects: 'stage', labor: 'reference', specialization: 'on', reserve: 'legacy', decisionSeconds: 5, batchActions: 1,
+    events: 0, lives: 1, wallSeconds: 600, totalWallSeconds: 0, traceLimit: 1000, projects: 'stage', labor: 'reference', specialization: 'on', reserve: 'legacy', decisionSeconds: 5, batchActions: 1,
     reincarnations: 0, reincarnateRealm: 6, reincarnatePreparation: 'none', stopRealm: 0, details: 'full', record: false,
     sampleSeconds: 1800, stopAfterReincarnation: false }
   for (const arg of args) {
@@ -40,12 +41,14 @@ export function pacingOptions(args = []) {
     if (typeof result[key] === 'boolean' && !['true', 'false', '1', '0'].includes(match[2])) throw Error(`无效布尔参数：${key}`)
     result[key] = typeof result[key] === 'boolean' ? (match[2] === '1' || match[2] === 'true') : typeof result[key] === 'number' ? Number(match[2]) : match[2]
   }
-  if (!Number.isFinite(result.hours) || result.hours <= 0 || result.hours > 3024 ||
+  if (!args.some(arg => arg.startsWith('--total-wall-seconds='))) result.totalWallSeconds = result.wallSeconds
+  if (!Number.isFinite(result.hours) || result.hours <= 0 || result.hours > 8760 ||
     !Number.isInteger(result.seed) || result.seed < 1 || result.seed > 0xffffffff ||
     !['natural', 'guaranteed'].includes(result.outcomes) || !['none', 'full'].includes(result.aids) ||
     !['off', 'growth'].includes(result.faith) || !Object.hasOwn(visitIntervals, result.visits) ||
     ![0, 1].includes(result.events) || !Number.isInteger(result.lives) || result.lives < 1 || result.lives > 5 ||
     !Number.isFinite(result.wallSeconds) || result.wallSeconds <= 0 || result.wallSeconds > 7200 ||
+    !Number.isFinite(result.totalWallSeconds) || result.totalWallSeconds <= 0 || result.totalWallSeconds > 604800 ||
     !Number.isInteger(result.traceLimit) || result.traceLimit < 0 || result.traceLimit > 10000 ||
     !['stage', 'none'].includes(result.projects) || !['reference', 'active'].includes(result.labor) ||
     !['on', 'off'].includes(result.specialization) || !['legacy', 'ready'].includes(result.reserve) ||
@@ -60,6 +63,30 @@ export function pacingOptions(args = []) {
     !Number.isInteger(result.sampleSeconds) || result.sampleSeconds < 60 || result.sampleSeconds > 1800 ||
     result.stopAfterReincarnation && (result.reincarnations < 1 || result.stopRealm > 0)) throw Error('测量参数超出允许范围')
   return result
+}
+
+/** 恢复只调整显式计算预算，不修改模拟状态、时钟、随机流或观察期限。 */
+export function configurePacingResume(checkpoint, args = []) {
+  const overrides = {}, allowed = new Set(['wall-seconds', 'total-wall-seconds'])
+  for (const arg of args) {
+    const match = /^--([a-z-]+)=(.+)$/.exec(arg)
+    if (!match || !allowed.has(match[1]) || Object.hasOwn(overrides, match[1])) throw Error('恢复仅允许唯一的单次／累计计算预算参数')
+    overrides[match[1]] = match[2]
+  }
+  const previousTotal = checkpoint.options.totalWallSeconds ?? checkpoint.options.wallSeconds
+  const options = pacingOptions(Object.entries({ ...checkpoint.options, totalWallSeconds: previousTotal,
+    ...Object.fromEntries(Object.entries(overrides).map(([key, value]) => [argumentKeys[key], Number(value)])) })
+    .map(([key, value]) => `--${argumentNames[key] || key}=${value}`))
+  if (options.totalWallSeconds < previousTotal) throw Error('恢复不能减少累计预算')
+  return { ...checkpoint, options, budgetChange: options.totalWallSeconds === previousTotal ? null : {
+    previousTotalWallSeconds: previousTotal, totalWallSeconds: options.totalWallSeconds,
+    atGameSeconds: checkpoint.simulator.elapsed, wallSpent: checkpoint.simulator.wallSpent } }
+}
+
+export function pacingBudgetReason(options, previousSpent, callSpent) {
+  if (previousSpent + callSpent >= options.totalWallSeconds) return 'total-wall-budget'
+  if (callSpent >= options.wallSeconds) return 'wall-budget'
+  return null
 }
 
 /** 阶段项目不依赖突破结果，成对样本共用；这里只表达玩家投资，不改游戏数据。 */
@@ -80,12 +107,29 @@ export function reincarnatePacingState(state, derived) {
   return gain
 }
 
+/** 与界面相同的真实飞升结算；贡献道果必须在清空弟子前读取。 */
+export function ascendPacingState(state, derived) {
+  if (!E.canAscend(state)) return null
+  const gain = E.ascensionGain(state, derived), daoGain = daoReward(state)
+  const expectedKarma = state.karma.plus(gain), expectedDao = state.dao.plus(daoGain)
+  const expectedCount = state.stats.ascensions + 1
+  resetForAscension(state, gain)
+  E.recompute(state, derived)
+  const verified = state.karma.eq(expectedKarma) && state.dao.eq(expectedDao) &&
+    state.resources.karma.eq(state.karma) && state.resources.dao.eq(state.dao) &&
+    state.stats.ascensions === expectedCount && state.realm === 0 && E.lifeInsightOf(state).isZero()
+  if (!verified) throw Error('飞升结算状态不一致，不能标记完成')
+  return { gain, daoGain, verified }
+}
+
 export function measurePacing(input = {}, progress = () => {}, control = {}) {
   const saved = control.resume?.simulator
   input = control.resume?.options || input
   const options = pacingOptions(Object.entries(input).map(([key, value]) =>
     `--${argumentNames[key] || key}=${value}`))
   const started = performance.now()
+  const wallBudgetChanges = [...(saved?.wallBudgetChanges || [])]
+  if (control.resume?.budgetChange) wallBudgetChanges.push(control.resume.budgetChange)
   let elapsed = 0, now = epoch, lastAttempt = -1, activeSeconds = 0, cappedSeconds = 0
   let life = 1, lifeStart = 0, stopReason = 'horizon'
   let previousObservation = null, previousTraceKey = null, nextDecisionAt = 0, interactionCount = 0
@@ -100,7 +144,17 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
   const exposure = {}, firstFacilities = {}, firstOutput = {}, faithActions = []
   const lastResourceReady = {}
   const continuousReady = {}
-  const decisionSummary = { reserveCounts: {}, researchSpending: {}, buildingSpending: {}, breakthroughSpending: {}, buildingsBought: {} }
+  const decisionSummary = { reserveCounts: {}, researchSpending: {}, buildingSpending: {}, breakthroughSpending: {}, buildingsBought: {}, particleInvestments: [], immortalInvestments: [] }
+  const recordInvestment = (quote, flow) => {
+    if (!quote) return
+    const immortal = quote.resource === 'immortalForce'
+    decisionSummary[immortal ? 'immortalInvestments' : 'particleInvestments'].push({ seconds: elapsed, realm: state.realm, life,
+      kind: quote.kind, id: quote.id, count: E.countOf(state, immortal ? quote.id : 'splitArray'), cost: numbers(quote.cost),
+      ...(immortal ? { immortalRateBefore: num(flow.immortalRateBefore), immortalRateAfter: num(flow.immortalRateAfter) }
+        : { particleRateBefore: num(flow.particleRateBefore), particleRateAfter: num(flow.particleRateAfter) }),
+      directSeconds: quote.directSeconds, estimatedSeconds: quote.estimatedSeconds,
+      estimatedSavedSeconds: quote.savedSeconds })
+  }
   const addSpending = (target, cost) => {
     for (const [id, amount] of Object.entries(cost || {})) target[id] = E.money(target[id]).plus(amount)
   }
@@ -204,6 +258,8 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
     return success
   }
   const bot = createBot(state, derived, { realmCost: need, breakthrough: attempt,
+    particleInvestments: options.projects === 'stage',
+    immortalInvestments: options.projects === 'stage',
     protectBreakthrough: options.reserve === 'ready',
     projects, resourceGoals, focusProjects: () => projects().some(p => E.countOf(state, p.id) < p.count),
     upgrades: () => options.faith === 'growth' && state.realm >= 4 ? ['vowPower'] : [],
@@ -215,7 +271,10 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
       const source = value.reserveSource
       const key = source ? `${source.kind}:${source.id || source.target}` : 'none'
       decisionSummary.reserveCounts[key] = (decisionSummary.reserveCounts[key] || 0) + 1
-      if (value.research?.purchased) { addSpending(decisionSummary.researchSpending, value.research.cost); lastProgressAt = elapsed }
+      if (value.research?.purchased) {
+        addSpending(decisionSummary.researchSpending, value.research.cost); lastProgressAt = elapsed
+        if (value.investment?.id === value.research.id) recordInvestment(value.investment, value.research)
+      }
     },
     onBuildDecision: value => {
       buildDecision = value
@@ -223,8 +282,11 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
         ? { id: value.selected, seconds: elapsed, before: snapshot() }
         : null
     },
-    onBuildResult: ({ id, cost, bought }) => {
+    onBuildResult: ({ id, cost, bought, particleRateBefore, particleRateAfter, immortalRateBefore, immortalRateAfter }) => {
       if (bought) {
+        if (decision?.investment?.kind === 'building' && decision.investment.id === id) {
+          recordInvestment(decision.investment, { particleRateBefore, particleRateAfter, immortalRateBefore, immortalRateAfter })
+        }
         decisionSummary.buildingsBought[id] = (decisionSummary.buildingsBought[id] || 0) + 1
         addSpending(decisionSummary.buildingSpending, cost)
         lastProgressAt = elapsed
@@ -364,17 +426,10 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
   }
   const ascend = () => {
     if (!E.canAscend(state)) return false
-    const gain = E.ascensionGain(state, derived)
-    const expectedKarma = state.karma.plus(gain), expectedDao = state.dao.plus(1)
-    const expectedCount = state.stats.ascensions + 1
-    const settlement = { seconds: elapsed, lifeSeconds: elapsed - lifeStart, life, gain: num(gain), before: snapshot(),
+    const settlement = { seconds: elapsed, lifeSeconds: elapsed - lifeStart, life, before: snapshot(),
       economy: economyAssessment(state, derived) }
-    resetForAscension(state, gain)
-    E.recompute(state, derived)
-    settlement.verified = state.karma.eq(expectedKarma) && state.dao.eq(expectedDao) &&
-      state.resources.karma.eq(state.karma) && state.resources.dao.eq(state.dao) &&
-      state.stats.ascensions === expectedCount && state.realm === 0 && E.lifeInsightOf(state).isZero()
-    if (!settlement.verified) throw Error('飞升结算状态不一致，不能标记完成')
+    const outcome = ascendPacingState(state, derived)
+    Object.assign(settlement, { gain: num(outcome.gain), daoGain: num(outcome.daoGain), verified: outcome.verified })
     life++; lifeStart = elapsed; previousObservation = null
     settlement.after = snapshot()
     ascensions.push(settlement)
@@ -398,7 +453,7 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
   const requestStop = () => { stopRequested = true }
   const complete = () => stopReason === 'ascensions' || stopReason === 'reincarnations'
   const capture = () => ({ state, derived, terminal: complete() || elapsed >= Math.floor(options.hours * 3600) || options.stopRealm > 0 && state.realm >= options.stopRealm, counters: { ...runtimeCounters(state) },
-    wallSpent: (saved?.wallSpent || 0) + (performance.now() - started) / 1000,
+    wallSpent: (saved?.wallSpent || 0) + (performance.now() - started) / 1000, wallBudgetChanges,
     eventRng: eventRandom.snapshot(), breakthroughRng: breakthroughRandom.snapshot(),
     nextCheckpoint, checkpointRealm,
     firstReach, firstReadiness, attempts, ascensions, reincarnations, deaths, checkpoints, trace, exposure, firstFacilities, firstOutput, faithActions, lastResourceReady, continuousReady, decisionSummary, firstAcquired, storageMilestones, elapsed, now, lastAttempt, activeSeconds, cappedSeconds, life, lifeStart, previousObservation, previousTraceKey, nextDecisionAt, interactionCount, traceDropped, decisionCount, buildDecision, decision, lastProgressAt, maxActionGapSeconds, pendingStorageMilestone, firstDaoHeart, spentFaith, spentVow, spentDaoHeart })
@@ -453,7 +508,8 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
   try {
   while (elapsed < total) {
     if (shouldStop()) break
-    if ((saved?.wallSpent || 0) + (performance.now() - started) / 1000 >= options.wallSeconds) { stopReason = 'wall-budget'; break }
+    const budgetReason = pacingBudgetReason(options, saved?.wallSpent || 0, (performance.now() - started) / 1000)
+    if (budgetReason) { stopReason = budgetReason; break }
     // 共同开局15分钟；后续每次上线2分钟，间隔从该共同开局结束起计算。
     const waking = options.visits === 'waking'
     const phase = waking ? elapsed % 86400 : elapsed < 900 ? 0 : (elapsed - 900 + 120) % interval
@@ -517,6 +573,7 @@ export function measurePacing(input = {}, progress = () => {}, control = {}) {
   return { strategy: PACING_STRATEGY, options, completed: complete(), stopReason,
     simulatedSeconds: elapsed, wallSeconds: (performance.now() - started) / 1000,
     cumulativeWallSeconds: (saved?.wallSpent || 0) + (performance.now() - started) / 1000,
+    wallBudgetChanges,
     activeSeconds, cappedSeconds, firstReach, firstReadiness, attempts, ascensions, reincarnations, deaths, checkpoints,
     firstFacilities, firstOutput, firstAcquired, storageMilestones, exposure, lastResourceReady, maxActionGapSeconds, firstDaoHeartSeconds: firstDaoHeart,
     faith: { spentFaith: num(spentFaith), spentVow: num(spentVow), spentDaoHeart: num(spentDaoHeart), actions: faithActions },

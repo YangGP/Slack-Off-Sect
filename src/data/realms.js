@@ -51,7 +51,8 @@ export const REALMS = [
     desc: '神识与灵能合一：灵子之云、之波、之势尽收眼底，山门内外如观掌纹。',
     // 灵晶在元婴开放，先掌握凝聚产业再化神；三境使用同一组材料。
     // 4.3：灵机尾款压到元婴可达仓容内，缺口改由知识材料承接（道札→道论→阵图）。
-    cost: { insight: 10000, qi: 18000, spiritLiquid: 5400, crystal: 2100, artifact: 4800, arrayBase: 600, daoNote: 400, daoTreatise: 40, qiParticle: 1200 },
+    // 元婴先建立本地凝聚与分灵，再在扩产、分子回用和直接备料之间选择。
+    cost: { insight: 10000, qi: 18000, spiritLiquid: 5400, crystal: 2100, artifact: 4800, arrayBase: 600, daoNote: 400, daoTreatise: 80, spiritTalisman: 240, qiParticle: 36000 },
   },
   {
     name: '炼虚期',

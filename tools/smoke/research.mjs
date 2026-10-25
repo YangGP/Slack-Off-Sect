@@ -18,7 +18,7 @@ export function researchVisibility({ ok, section }) {
       ['steelWorking', 'artifactLore'], ['conductionRune', 'guardRune'],
       ['conductionRune', 'capacityRune'], ['crystalCraft', 'precipitateTheory'],
       ['spiritCanal', 'liquidIrrigation'], ['spiritCanal', 'veinInfuse'],
-      ['incenseStudy', 'recruitDrive'], ['yinyangSplit', 'particleRecover'],
+      ['incenseStudy', 'recruitDrive'], ['particleTheory', 'particleRecover'],
       ['qiLiquid', 'breakthroughArt'], ['earthEssence', 'steelWorking'],
       ['arrayAssembly', 'waterworkshop'], ['steelWorking', 'beastMaterialArt'],
       ['paperArt', 'preachArt'], ['preachArt', 'incenseStudy'],

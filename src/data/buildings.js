@@ -539,7 +539,7 @@ const CORE_BUILDINGS = [
     // 元婴入门（工业滞后理论 1 境），容量由库房与仓储工艺承接；重复扩建仍按比例涨价。
     cost: { crystal: 12, spiritTalisman: 6, cutStone: 7800, stone: 2400, insight: 16000, artifact: 40, arrayBase: 8 },
     priceRatio: 1.5,
-    desc: '阵法从灵气中离析出相抱的灵气分子 —— 拆得越久，越像在跟天地借火。',
+    desc: '从灵气中离析出灵气分子，供化神备料与后续偏极。首产后可选分子回用或扩阵；扩阵提高产量，也增加耗气，临近破境时需比较回本。分子由法藏扩容。',
     effects: { prod: { qiParticle: 0.04 } },
     // 灵气基础 8/s；高阶维持 0.02 灵能/s，不超过一条基础湮灭链的净供能。
     upkeepQi: 8, upkeepEnergy: 0.02, powerMult: 1.6,

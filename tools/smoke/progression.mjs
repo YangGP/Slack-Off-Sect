@@ -7,6 +7,44 @@ import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS 
 import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, successfulBreakthrough } from './fixtures.mjs'
+import { daoReward } from '../../src/data/samsara.js'
+import { ascendPacingState, pacingOptions, configurePacingResume, pacingBudgetReason } from '../lib/pacing-scenario.mjs'
+
+export function pacingSettlementAndBudget({ ok, section }) {
+  section('长测真实飞升结算与累计预算恢复')
+  const { state: s, derived: d } = newGame()
+  ok('未到渡劫不能由测定器提前飞升', ascendPacingState(s, d) === null)
+  s.realm = ASCEND_REALM_INDEX
+  s.disciples.total = 1
+  s.stats.lifeInsight = E.money(200000)
+  s.dao = E.money('2.5')
+  E.recompute(s, d)
+  s.disciples.members[0].lifetimeCultivation = 360000
+  s.disciples.members[0].loyalty = 0.8
+  const reward = daoReward(s), karma = E.money(s.karma), gain = E.ascensionGain(s, d)
+  const settled = ascendPacingState(s, d)
+  ok('真实贡献奖励超过1时仍验证通过，包含既有小数余额', reward.gt(1) && settled.verified &&
+    settled.daoGain.eq(reward) && s.dao.eq(reward.plus('2.5')) && s.resources.dao.eq(s.dao))
+  ok('仙缘、计数与重置同时正确，不用虚构结算', s.karma.eq(karma.plus(gain)) && s.resources.karma.eq(s.karma) &&
+    s.stats.ascensions === 1 && s.realm === 0 && s.disciples.total === 0 && E.lifeInsightOf(s).isZero())
+  const options = pacingOptions(['--hours=8760', '--wall-seconds=10', '--total-wall-seconds=30'])
+  const cp = { options, simulator: { elapsed: 12345, wallSpent: 10 } }
+  const resumed = configurePacingResume(cp, ['--wall-seconds=5', '--total-wall-seconds=40'])
+  ok('半年以上观察期限可用，单次与累计预算分开', options.hours === 8760 &&
+    pacingBudgetReason(options, 0, 10) === 'wall-budget' && pacingBudgetReason(options, 20, 10) === 'total-wall-budget')
+  ok('续跑不清零历史用时或改变游戏状态，并记录显式扩容', resumed.simulator === cp.simulator && cp.simulator.wallSpent === 10 &&
+    cp.options.totalWallSeconds === 30 && resumed.options.totalWallSeconds === 40 && resumed.budgetChange.wallSpent === 10)
+  ok('新一轮运行时仍累计旧计算时长', pacingBudgetReason(resumed.options, 38, 2) === 'total-wall-budget' &&
+    pacingBudgetReason(resumed.options, 10, 5) === 'wall-budget')
+  const rejects = args => { try { configurePacingResume(cp, args); return false } catch { return true } }
+  ok('禁止通过续跑更改种子／期限、缩减累计预算或重复参数', rejects(['--seed=1']) &&
+    rejects(['--hours=9000']) && rejects(['--total-wall-seconds=20']) && rejects(['--wall-seconds=5', '--wall-seconds=6']))
+  let invalid = 0
+  for (const args of [['--wall-seconds=7201'], ['--total-wall-seconds=604801'], ['--hours=8761']]) {
+    try { pacingOptions(args) } catch { invalid++ }
+  }
+  ok('单次／累计预算和观察期限仍有上限', invalid === 3 && pacingOptions(['--wall-seconds=10']).totalWallSeconds === 10)
+}
 
 export function faithProgression({ ok, close, section }) {
   section('D7 香火兑换、加成与抗劫')
