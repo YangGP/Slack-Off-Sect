@@ -24,7 +24,7 @@ export function initialState({ ok, close, section }) {
     ok('开局宜居度20且没有额外全局加成', derived.habitability === 20 && derived.habitabilityMult === 1)
 
     // 点一下「吸取天地灵气」
-    // 前期按猫国力度收紧后：一次点击 +2.5，第一座聚灵阵 25 → 正好 10 下（猫国是 10 猫薄荷一座猫薄荷田）
+    // 基础 +2.5，第一座聚灵阵 25 → 正好 10 下；每座聚灵阵按其每秒基础产出（0.3）线性叠加点击收益
     ok('没有聚灵阵时每次点击 +2.5 灵气', close(E.clickGain(state, derived), 2.5, 1e-9))
     E.drawQi(state, derived)
     ok('吸取一次得到 2.5 灵气', close(state.resources.qi, 2.5, 1e-9))
@@ -36,18 +36,26 @@ export function initialState({ ok, close, section }) {
     E.trackPeak(state)
     ok('灵气够了就能建聚灵阵', E.buyBuilding(state, derived, 'spiritField', 1) === 1)
     ok('聚灵阵产出灵气（春季 +20% 后 0.36/s）', close(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
-    ok('有聚灵阵后点击收益提高到 3.0', close(E.clickGain(state, derived), 3, 1e-9))
+    ok('有聚灵阵后点击收益提高到 2.8', close(E.clickGain(state, derived), 2.5 + E.BUILDING_MAP.spiritField.effects.prod.qi, 1e-9))
 
-    // 茅屋：第一间同样消耗灵气与灵木，并且要先有一座聚灵阵。
+    // 开局先建居所，再开放伐木场；造价与原有峰值露出规则保持一致。
+    const yard = E.BUILDING_MAP.lumberYard
+    ok('伐木场要一座茅屋，造价仍为150气与60木',
+      yard.needs?.building?.id === 'hut' && E.moneyEq(E.buildingCost(state, 'lumberYard').qi, 150) && E.moneyEq(E.buildingCost(state, 'lumberYard').wood, 60))
     const hut = E.BUILDING_MAP.hut
-    ok('首屋同样需要灵气80与灵木20', E.moneyEq(E.buildingCost(state, 'hut').qi, 80) && E.moneyEq(E.buildingCost(state, 'hut').wood, 20) && hut.cost.wood === 20)
-    ok('茅屋要一座聚灵阵（第 1 分钟只有聚灵阵可选）', !!hut.needs?.building, JSON.stringify(hut.needs))
-    state.resources.qi = E.money(80)
-    state.resources.wood = E.money(20)
+    ok('首屋同样需要灵气150与灵木60', E.moneyEq(E.buildingCost(state, 'hut').qi, 150) && E.moneyEq(E.buildingCost(state, 'hut').wood, 60) && hut.cost.wood === 60)
+    ok('茅屋要一座聚灵阵（基础链第二环）', hut.needs?.building?.id === 'spiritField', JSON.stringify(hut.needs))
+    state.resources.qi = E.money(150)
+    state.resources.wood = E.money(60)
     state.resources.stone = E.money(4)
     E.trackPeak(state)
+    ok('有聚灵阵和材料时先开放茅屋，伐木场仍不可建', E.isBuildingUnlocked(state, 'hut') && !E.isBuildingUnlocked(state, 'lumberYard') && E.buyBuilding(state, derived, 'lumberYard', 1) === 0)
     ok('材料齐了能建茅屋', E.buyBuilding(state, derived, 'hut', 1) === 1)
     ok('茅屋把弟子上限抬到 2', derived.maxDisciples === 2, `实际 ${derived.maxDisciples}`)
+    ok('建成茅屋后开放伐木场', E.isBuildingUnlocked(state, 'lumberYard'))
+    state.resources.qi = E.money(150)
+    state.resources.wood = E.money(60)
+    ok('补齐材料后能建伐木场', E.buyBuilding(state, derived, 'lumberYard', 1) === 1)
 
     // 弟子住进来之后才有产出
     state.disciples.total = 2
@@ -56,7 +64,7 @@ export function initialState({ ok, close, section }) {
     ok('有阵徒之后灵气产出叠加', E.moneyGt(derived.rates.qi, 0.36), `实际 ${derived.rates.qi}`)
     ok(
       `灵气消耗按弟子数算（2 人 × ${CONFIG.DISCIPLE_UPKEEP}，凡体倍率 1.0）`,
-      close(derived.upkeep, 0.5, 1e-9),
+      close(derived.upkeep, CONFIG.DISCIPLE_UPKEEP * 2, 1e-9),
       `实际 ${derived.upkeep}`,
     )
 

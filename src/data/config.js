@@ -1,6 +1,6 @@
 /**
  * 全局数值配置 —— 所有平衡性常量集中在此，方便调参。
- * 灵感来自猫国建设者的 tick/资源/价格递增模型，但全部按“修仙宗门”重写。
+ * 包含时间步进、资源生产与价格递增等修仙宗门规则。
  */
 export const CONFIG = {
   // 仅削减宗门全局生产奖励，个人修炼与加工节拍沿用独立系数。
@@ -13,9 +13,9 @@ export const CONFIG = {
   // 自动存档间隔
   AUTOSAVE_MS: 20000,
   // 单次离线收益最多结算多少小时（可被修真提升）
-  OFFLINE_CAP_HOURS: 8,
-  // 每名弟子每秒消耗的灵气
-  DISCIPLE_UPKEEP: 0.25,
+  OFFLINE_CAP_HOURS: 12,
+  // 每名弟子每秒消耗的灵气（4.8：提高基准，使供养成为更实质的持续压力）
+  DISCIPLE_UPKEEP: 0.3,
   // 宗门规模成本：前20人不加费，此后每增加一人使全体口粮增加0.5%，额外最多100%。
   POPULATION_UPKEEP_FREE: 20,
   POPULATION_UPKEEP_PER_DISCIPLE: 0.005,
@@ -33,19 +33,33 @@ export const CONFIG = {
    */
   DISCIPLE_UPKEEP_REALM_EXP: 1,
   /** 每点仙缘的全局产出加成（转世/飞升带走的永久加成） */
-  KARMA_BONUS_PER_POINT: 0.04,
+  KARMA_BONUS_PER_POINT: 0.01,
   /**
-   * 仙缘加成的**软上限**（对标猫国领导力）：前 75% 不打折，剩下的渐近到上限 ——
-   * 也就是最多 +400%（这里 limit = 4）。取软上限而不是硬上限，是为了让「多刷几轮」
-   * 永远还有一点点收益，但不会线性膨胀把后期压平。见 docs/DESIGN.md §8.4。
+   * 仙缘加成的**软上限**（每点 +1%、上限 +200%）：
+   * 前 75% 不打折，剩下的渐近到上限 —— 也就是最多 +200%（这里 limit = 2）。
+   * 取软上限而不是硬上限，是为了让「多刷几轮」永远还有一点点收益，但不会线性膨胀把后期压平。
+   * 转世弧线（三转参考）：一转约 120 点 = +120%（60% 上限），二转边际约 +32%，三转后被动饱和、
+   * 由仙缘修持（karmaShop）接棒。见 docs/DESIGN.md §8.4。
    */
-  KARMA_BONUS_CAP: 4,
-  /** 仙缘仓储：每点线性 +0.15%，只作用于有限仓储；不改变产出倍率。 */
-  KARMA_STORAGE_PER_POINT: 0.0015,
-  /** 每颗道果的全局产出加成（道果是飞升才给的更高一层货币） */
-  DAO_PRODUCTION_BONUS: 0.05,
-  /** 每颗道果对「转世/飞升时能拿多少仙缘」的加成 —— 上层反哺下层 */
-  DAO_KARMA_GAIN_BONUS: 0.1,
+  KARMA_BONUS_CAP: 2,
+  /** 仙缘仓储：每点 +0.05%，只作用于有限仓储；不改变产出倍率。 */
+  KARMA_STORAGE_PER_POINT: 0.0005,
+  /**
+   * 仙缘仓储的软上限（+50%）：仓储经「灵机入库受仓容截断 → sqrt 结算」与仙缘所得形成反馈环，
+   * 必须与产出侧一样封顶，否则产出砍半后仓储会反客为主成为主膨胀通道。
+   */
+  KARMA_STORAGE_CAP: 0.5,
+  /** 4.3：每卷道论提供的临时灵机仓容；总加成不超过基础上限的 100%。 */
+  DAOTREATISE_INSIGHT_CAP: 2000,
+  /** 道果改为消费型培养货币；保留兼容常量，不提供余额增益。 */
+  DAO_PRODUCTION_BONUS: 0,
+  DAO_KARMA_GAIN_BONUS: 0,
+  /**
+   * 首次主动转世的仙缘结算倍率（4.6）：只对“一次都没转世”时的转世结算生效。
+   * 首转实测只有 21～22 点，累计首飞比直飞慢；提高这一次的结算，让首转真正值得。
+   * 不改变飞升结算，也不随转世次数重复生效。
+   */
+  FIRST_REINCARNATION_KARMA_MULT: 2,
   /**
    * 转世的参考次数（**不是飞升门槛**，只是界面上的参照）。
    *
@@ -67,11 +81,9 @@ export const CONFIG = {
   // （不设等级上限：指数成本自己封顶 —— 16 件法宝各炼到 10 级，累计需求约全树灵机总价的 57 倍）
   TREASURE_REFINE_STEP: 0.3,
   TREASURE_REFINE_RATIO: 1.7,
-  // 手动「吸取天地灵气」：每次点击得到多少灵气（每座聚灵阵再加一点，免得后期点着像挠痒）
+  // 手动「吸取天地灵气」：每次点击的基础灵气。
+  // 每座已建聚灵阵再按其每秒基础产出叠加点击收益（与建筑数据同源，改产出即同步改加成）。
   CLICK_QI_BASE: 2.5,
-  CLICK_QI_PER_FIELD: 0.5,
-  // 前20座保留原点击增长；此后按平方根增长，主动点击仍有用但不会线性膨胀。
-  CLICK_QI_FULL_FIELDS: 20,
   // 默认自动来人：有空房就每这么多秒自己来一名（可被《广开山门》缩短）；主动礼聘为可选模式
   DISCIPLE_ARRIVAL_SECONDS: 15,
   // 宜居度是点数；只限制产量倍率，不限制宜居度本身。
@@ -85,6 +97,9 @@ export const CONFIG = {
   HABITABILITY_LEAVE_INTERVAL: 60,
   HABITABILITY_LEAVE_CHANCE_PER_POINT: 0.02,
   HABITABILITY_LEAVE_CHANCE_CAP: 0.5,
+  // 宜居度减耗：独立于阵法减耗（consumeRatio）的一条生活线，只减不加。
+  HABITABILITY_UPKEEP_PER_POINT: 0.002,
+  HABITABILITY_UPKEEP_CAP: 0.2,
   // 灵气断供时每秒钟掉多少宜居度，以及恢复时的回升速度
   HABITABILITY_STARVE_RATE: 6,
   HABITABILITY_RECOVER_RATE: 2,
@@ -99,6 +114,7 @@ export const CONFIG = {
   AUTO_CONDENSE_RATIO: 0.5,
   // 日志上限
   LOG_LIMIT: 220,
+  LOG_DISPLAY_LIMIT: 100, // 纪事展示与存档保留最近100条；运行时缓冲上限另计。
   // 建筑、研究、技艺、法宝与配方渐进露出：每种费用资源的峰值均须达到基础费用的这个比例。
   BUILDING_UNLOCK_RATIO: 0.3,
   // 维护费供给迭代的收敛上限（防死循环）；供给不足时按实际比例缩放

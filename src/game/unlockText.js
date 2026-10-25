@@ -9,7 +9,7 @@
  *
  * 除了建筑，还顺带推导：
  *   · 哪些修真 / 技艺 / 法宝条目需要这个节点（`needs.upgrades`）
- *   · 哪些**配方**经由它解锁的建筑开放（一跳）
+ *   · 哪些配方直接以它为研究前置；不展开经建筑关联的后续配方
  */
 import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
 import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
@@ -61,20 +61,15 @@ for (const u of ALL_UPGRADES) {
   }
 }
 
-// ④ 配方：直接绑定工艺，或经由解锁的建筑开放（一跳）。
+// ④ 配方：只收录直接研究前置，不沿建筑门槛扩展间接关联。
 for (const c of CRAFTS) {
   for (const uid of [...(c.needs?.upgrades || []), ...(c.needs?.upgrade ? [c.needs.upgrade] : [])]) {
     bucket(uid).crafts.add(c.id)
   }
-  const gate = c.needs?.building?.id
-  if (!gate) continue
-  for (const uid of buildingGates(gate)) {
-    const e = bucket(uid)
-    if (e) e.crafts.add(c.id)
-  }
 }
 
 const nameOf = (id) => BUILDING_MAP[id]?.name || UPGRADE_MAP[id]?.name || CRAFT_MAP[id]?.name || id
+const boostUnlocks = id => BUILDINGS.filter(b => b.boost?.upgrade === id).map(b => b.boost.name)
 
 /** 结构化输出：{ buildings:[名], upgrades:[名], crafts:[名] } */
 export function unlockGroups(id) {
@@ -94,6 +89,8 @@ export function unlockText(id) {
   if (g.buildings.length) parts.push('解锁建筑：' + g.buildings.join('、'))
   if (g.crafts.length) parts.push('开放配方：' + g.crafts.join('、'))
   if (g.upgrades.length) parts.push('开启参悟：' + g.upgrades.join('、'))
+  const boosts = boostUnlocks(id)
+  if (boosts.length) parts.push('开放增产开关：' + boosts.join('、'))
   return parts.join('；')
 }
 
@@ -104,6 +101,7 @@ export function unlockRows(id) {
   for (const value of g.buildings) rows.push({ label: '解锁建筑', value })
   for (const value of g.crafts) rows.push({ label: '开放配方', value })
   for (const value of g.upgrades) rows.push({ label: '开启参悟', value })
+  for (const value of boostUnlocks(id)) rows.push({ label: '开放增产开关', value })
   return rows
 }
 
@@ -112,14 +110,18 @@ export function unlockRows(id) {
  * 数值 / 规则效果直接沿用 describeEffects 的 { label, value, tone }，
  * 解锁清单用 unlockRows —— 于是每一行都只有一件事。
  */
-export function effectRows(meta, describe) {
+export function effectRows(meta, describe, includeUnlocks = true) {
   const { unlockBuildings, ...numeric } = meta.effects || {}
   void unlockBuildings
   const rows = []
   if (describe) {
-    for (const n of describe(numeric)) rows.push({ label: n.label || '参悟后', value: n.value || n.text, tone: n.tone })
+    for (const n of describe(numeric)) {
+      if (!includeUnlocks && (n.tone === 'unlock' || /^(解锁|开放|开启)/.test(n.label || ''))) continue
+      rows.push({ label: n.label || '参悟后', value: n.value || n.text, tone: n.tone })
+    }
   }
-  for (const r of unlockRows(meta.id)) rows.push({ ...r, tone: 'good' })
+  if (includeUnlocks) for (const r of unlockRows(meta.id)) rows.push({ ...r, tone: 'good' })
+  if (!rows.length && meta.effectDesc && (includeUnlocks || !/解锁|开放|开启|需.*《/.test(meta.effectDesc))) rows.push({ label: '作用', value: meta.effectDesc, tone: 'good' })
   return rows
 }
 
@@ -143,6 +145,7 @@ export function effectLine(meta, describe) {
   }
   const unlocks = unlockText(meta.id)
   if (unlocks) parts.push(unlocks)
+  if (!parts.length && meta.effectDesc) parts.push(meta.effectDesc)
   return parts.join('；')
 }
 

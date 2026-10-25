@@ -69,7 +69,7 @@ export async function checkLayout(context) {
   ok('有筛选行（全部 / 可建造 / 已建成 …）', doc.querySelectorAll('.panel .filters .filter').length >= 4)
   {
     const snapshot = { ...state.resources }
-    state.resources.stone = engine.money(4.5) // 旧档/历史遗留的小数
+    state.resources.stone = engine.money(4.5) // 普通资源同样保留小数库存
     engine.recompute(state, derived)
     await new Promise((r) => setTimeout(r, 60))
     const stoneText =
@@ -77,7 +77,7 @@ export async function checkLayout(context) {
         .find((tr) => tr.textContent.includes('灵石'))
         ?.textContent.replace(/\s+/g, ' ')
         .trim() || ''
-    ok('左栏灵石不显示小数', !/灵石\s*4\.5/.test(stoneText) && /灵石\s*4[^.\d]/.test(stoneText), stoneText.slice(0, 40))
+    ok('左栏灵石显示小数库存', /灵石\s*4\.50/.test(stoneText), stoneText.slice(0, 40))
 
     state.resources.qi = engine.money(12.34)
     engine.recompute(state, derived)
@@ -89,11 +89,11 @@ export async function checkLayout(context) {
         .trim() || ''
     ok('连续资源仍然显示两位小数', /12\.34/.test(qiText), qiText.slice(0, 40))
 
-    // 左栏以外的地方只显示整数：悬停明细的存量、花费的「现有/需要」都不带小数点
+    // 悬停明细保留金额精度，大额库存使用缩写。
     {
       state.resources.qi = engine.money(1234.56)
       state.resources.stone = engine.money(7)
-      state.buildings.hut = { count: 3, on: true } // 第 4 座茅屋：灵气 149.6、灵石 4.29 → 显示应为整数
+      state.buildings.hut = { count: 3, on: true } // 第 4 座茅屋的递增成本保留小数
       engine.recompute(state, derived)
       await new Promise((r) => setTimeout(r, 60))
       const tipTrigger = [...doc.querySelectorAll('.left .tip-trigger')].find((el) =>
@@ -129,7 +129,7 @@ export async function checkLayout(context) {
       tipTrigger?.dispatchEvent(new window.MouseEvent('mouseleave'))
       await new Promise((r) => setTimeout(r, 60))
 
-      // 建筑悬停提示里的「价格」也要整数（第 4 座茅屋：灵气 297.91 → 298、灵石 14.9 → 15）
+      // 建筑价格直接显示实际小数成本（第 4 座茅屋：灵气 558.58、灵木 223.43，统一两位小数）。
       const hutItem = [...doc.querySelectorAll('.panel .build-item')].find((el) =>
         el.querySelector('.build-btn')?.textContent.includes('茅屋'),
       )
@@ -138,8 +138,8 @@ export async function checkLayout(context) {
       const priceTip = doc.querySelector('.tip')?.textContent.replace(/\s+/g, ' ').trim() || ''
       const priceSection = priceTip.slice(priceTip.indexOf('价格'), priceTip.indexOf('效果'))
       ok(
-        '建筑提示的价格里没有小数点（需求向上取整）',
-        priceSection.length > 0 && /灵气\s*298(?!\.)/.test(priceSection) && !/\d\.\d/.test(priceSection),
+        '建筑提示保留实际小数价格',
+        priceSection.length > 0 && /灵气\s*558\.58/.test(priceSection) && /灵木\s*223\.43/.test(priceSection),
         priceSection.slice(0, 60),
       )
       hutItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))
@@ -228,6 +228,7 @@ export async function checkLayout(context) {
       state.buildings.lumberYard = { count: 3, on: true }
       state.buildings.warehouse = { count: 2, on: true } // 已建 2 座 → 提示里应出现「合计」
       state.resources.wood = engine.money(9999)
+      state.resources.cutStone = engine.money(9999)
       state.resources.stone = engine.money(9999)
       state.resources.ore = engine.money(9999)
       state.resources.herb = engine.money(9999)
@@ -249,9 +250,9 @@ export async function checkLayout(context) {
       ok('一行里不带逗号顿号堆叠（每行只有一项）', effectRows.every((r) => !r.includes('，') && !r.includes('、')), effectRows.join(' ｜ '))
       ok('库房不再给灵气 / 灵机 / 丹药 / 符箓 / 香火 / 法器 加上限', !/灵气 上限|灵机 上限|丹药 上限|符箓 上限|香火 上限|法器 上限/.test(tip.textContent), tip.textContent.replace(/\s+/g, ' ').slice(-120))
       ok('合计写在同一条里', effectRows.some((r) => r.includes('（合计')), effectRows.join(' ｜ '))
-      ok('悬停时高亮的正是这座建筑的造价（灵木 / 玄铁）', (() => {
+      ok('悬停时高亮的正是这座建筑的造价（灵木 / 石材）', (() => {
         const lit = [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim())
-        return lit.includes('灵木') && lit.includes('玄铁') && !lit.includes('灵气') && !lit.includes('灵石')
+        return lit.length === 2 && lit.includes('灵木') && lit.includes('石材')
       })(), [...doc.querySelectorAll('.left .res-table tr.res-hl .res-name')].map((el) => el.textContent.trim()).join(','))
       storeItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseleave'))
       await new Promise((r) => setTimeout(r, 60))
@@ -286,7 +287,7 @@ export async function checkLayout(context) {
       after.filter((n) => before.includes(n)).join('|') === before.join('|'),
       `${before.slice(0, 4).join('/')} → ${after.slice(0, 4).join('/')}`,
     )
-    ok('可见基础建筑按用途排列（聚灵阵、伐木场在茅屋之前）', after.indexOf('聚灵阵') === 0 && after.indexOf('伐木场') > 0 && after.indexOf('伐木场') < after.indexOf('茅屋'), after.slice(0, 4).join('/'))
+    ok('可见基础建筑按开局顺序排列（聚灵阵、茅屋、伐木场）', after.indexOf('聚灵阵') === 0 && after.indexOf('茅屋') > 0 && after.indexOf('茅屋') < after.indexOf('伐木场'), after.slice(0, 4).join('/'))
     // 恢复成一个「部分买得起」的状态，后面的断言依赖这个
     state.resources.qi = qtBefore
     state.resources.wood = engine.money(0)

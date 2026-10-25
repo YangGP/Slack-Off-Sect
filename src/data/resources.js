@@ -49,7 +49,6 @@ const CORE_RESOURCES = [
     color: '#9fc7ff',
     baseMax: 150,
     desc: '含灵气的矿物。可从灵石矿开采，也可向石材灌入灵气制作；山下市集与阵道皆认它。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'spiritLiquid',
@@ -58,8 +57,7 @@ const CORE_RESOURCES = [
     color: '#8cd6e8',
     baseMax: 80,
     storageWeight: 0.04,
-    desc: '灵气凝成的液态精华，压在玉瓶里十年不散。凝晶与育仙草都以它为引。',
-    integer: true, // 整瓶计数：价格向上取整、数量不出现小数
+    desc: '灵气凝成的液态精华，压在玉瓶里十年不散。凝晶、育仙草和灵石矿的可选注灵增产都以它为引。',
   },
   {
     id: 'crystal',
@@ -68,7 +66,6 @@ const CORE_RESOURCES = [
     color: '#b7a7ff',
     baseMax: 30,
     storageWeight: 0.02,
-    integer: true,
     desc: '以符纹约束灵液凝成的稳定晶核。金丹后用于聚灵设施、观星与高级阵法。',
   },
   {
@@ -95,21 +92,38 @@ const CORE_RESOURCES = [
     baseMax: 50,
     storageWeight: 0.15,
     desc: '灵木刨出的精料。原木只配搭棚，正经殿宇的梁柱斗拱都要它。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+  },
+  {
+    id: 'cutStone',
+    name: '石材',
+    glyph: '砌',
+    color: '#c9c1b4',
+    baseMax: 60,
+    storageWeight: 0.15,
+    desc: '按纹理压制成块的营造石材。殿基、墙脚与塔身砌体都从它起。',
+  },
+  {
+    id: 'paper',
+    name: '灵纸',
+    glyph: '纸',
+    color: '#e3d6b8',
+    baseMax: 50,
+    storageWeight: 0.1,
+    desc: '灵木沤浆抄成的纸。记事、成册、起稿、刻符都先落在纸上——有纸，才留得住灵机。',
   },
   {
     id: 'daoNote', name: '道札', glyph: '札', color: '#d8c99f',
-    baseMax: 50, storageWeight: 0.04, integer: true,
+    baseMax: 50, storageWeight: 0.04,
     desc: '将研读与试验所得记在灵木书札上。用于中期研究、科研建设与汇编道论。',
   },
   {
     id: 'daoTreatise', name: '道论', glyph: '论', color: '#b5c8eb',
-    baseMax: 20, storageWeight: 0.015, integer: true,
+    baseMax: 20, storageWeight: 0.015,
     desc: '汇集道札、交互论证而成的理论成果。用于灵子研究、高级技艺与绘制阵图。',
   },
   {
     id: 'arrayDiagram', name: '阵图', glyph: '图', color: '#c6b5eb',
-    baseMax: 10, storageWeight: 0.005, integer: true,
+    baseMax: 10, storageWeight: 0.005,
     desc: '将道论落实为符纹、阵位与工序齐备的工程图。用于湮灭、仙灵研究和高级建设。',
   },
   {
@@ -120,7 +134,6 @@ const CORE_RESOURCES = [
     baseMax: 30,
     storageWeight: 0.04,
     desc: '玄铁反复折叠锻打，杂质尽去 —— 一剑之锋，从此有了骨。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'arrayBase',
@@ -129,8 +142,16 @@ const CORE_RESOURCES = [
     color: '#c9a87c',
     baseMax: 20,
     storageWeight: 0.03,
-    integer: true,
     desc: '木板搭骨、玄铁固结，导灵纹与固形纹直接刻入材料。金丹期宗门设施共用的阵法构件。',
+  },
+  {
+    id: 'runeStone',
+    name: '灵纹石',
+    glyph: '纹',
+    color: '#b9c7e8',
+    baseMax: 20,
+    storageWeight: 0.05,
+    desc: '石材上以灵纸起稿、再刻入导灵纹的营造构件。高塔与奇观的砌体用它承托阵纹。',
   },
   {
     id: 'spiritMortar',
@@ -139,7 +160,6 @@ const CORE_RESOURCES = [
     color: '#b8c4d0',
     baseMax: 100,
     storageWeight: 0.04,
-    integer: true,
     desc: '灵石研磨成粉，以灵液胶结成可浇筑、可刻纹的建材。用于地基、池壁与仓库。',
   },
   {
@@ -149,7 +169,6 @@ const CORE_RESOURCES = [
     color: '#b8c4d0',
     baseMax: 60,
     storageWeight: 0.025,
-    integer: true,
     desc: '以玄铁骨架增强混灵土，承受大型殿宇与阵法的结构负荷。',
   },
   {
@@ -159,7 +178,6 @@ const CORE_RESOURCES = [
     color: '#b8c4d0',
     baseMax: 30,
     storageWeight: 0.015,
-    integer: true,
     desc: '从矿石中提炼的储灵金属，适合容纳灵气与稳定灵子。用于储灵内衬和高级合金。',
   },
   {
@@ -169,7 +187,6 @@ const CORE_RESOURCES = [
     color: '#b8c4d0',
     baseMax: 20,
     storageWeight: 0.01,
-    integer: true,
     desc: '灵液浸炼玄铁与秘银形成的储灵合金，适合顶级器身、阵体和灵子设施。',
   },
   {
@@ -179,7 +196,6 @@ const CORE_RESOURCES = [
     color: '#b8c4d0',
     baseMax: 20,
     storageWeight: 0.008,
-    integer: true,
     desc: '秘银承托灵晶的有序结构，气机稳定、控制精确，是顶级阵眼与控制核心的材料。',
   },
   {
@@ -190,7 +206,6 @@ const CORE_RESOURCES = [
     baseMax: 20,
     storageWeight: 0.02,
     desc: '以灵泉与灵液培育，草叶上凝着露似的灵光。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'pill',
@@ -200,10 +215,9 @@ const CORE_RESOURCES = [
     baseMax: 50,
     storageWeight: 0.1,
     desc: '服之安神定气，助弟子破境。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
-    // 二级丹：补 pill 与 nineTurnPill 之间的断层（见 docs/MATERIAL-RESEARCH.md §1.2）。
+    // 二级丹：补 pill 与 nineTurnPill 之间的断层（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容）。
     // 承接元婴～化神的中阶研究费用与护道，使高阶丹不再只依赖一件法宝。
     id: 'condensePill',
     name: '凝元丹',
@@ -212,7 +226,6 @@ const CORE_RESOURCES = [
     baseMax: 30,
     storageWeight: 0.03,
     desc: '以元气凝形、君臣相济的二品灵丹，药力较丹药更纯，是元婴后常服的进境之物。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'nineTurnPill',
@@ -222,7 +235,6 @@ const CORE_RESOURCES = [
     baseMax: 10,
     storageWeight: 0.01,
     desc: '九转九炼，一炉只出数枚，是压箱底的救命物。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'talisman',
@@ -231,8 +243,7 @@ const CORE_RESOURCES = [
     color: '#ffe08a',
     baseMax: 50,
     storageWeight: 0.1,
-    desc: '以灵木符牌承载简单符文，注入灵气定形的成品。可镇妖避劫，也能换些香火钱。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
+    desc: '以灵纸起稿定形、刻入简单符文的成品。可镇妖避劫，也能换些香火钱。',
   },
   {
     id: 'spiritTalisman',
@@ -242,7 +253,6 @@ const CORE_RESOURCES = [
     baseMax: 15,
     storageWeight: 0.015,
     desc: '以玄钢符牌承载纳灵纹，灵液注灵、香火辅助定纹而成的高阶符。金属载体能承托更强气机。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'artifact',
@@ -252,7 +262,6 @@ const CORE_RESOURCES = [
     baseMax: 50,
     storageWeight: 0.06,
     desc: '御剑飞行的门面，也是宗门的战力。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'spiritArtifact',
@@ -262,7 +271,6 @@ const CORE_RESOURCES = [
     baseMax: 10,
     storageWeight: 0.01,
     desc: '玄钢加固法器，内部刻入相互协作的复合符文，器物开始自行运转气机。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'spiritTreasure',
@@ -273,7 +281,6 @@ const CORE_RESOURCES = [
     storageWeight: 0.003,
     // 它不是"某种材料炼上去"，而是三条进阶支线**合起来**才成的一件东西
     desc: '灵器为骨、九转丹为髓、灵符为纹 —— 三样缺一，都只是半件宝物。',
-    integer: true, // 整枚计数：价格向上取整、数量不出现小数
   },
   {
     id: 'qiParticle',
@@ -282,7 +289,6 @@ const CORE_RESOURCES = [
     color: '#c9b8ff',
     baseMax: 100,
     desc: '从灵气中离析、集中收集的稳定分子：正负两枚灵子相抱而成，其外中和。过偏极阵输入解离之力，才分出自由正负灵子。',
-    // 刻意不设 integer：灵气分子是"物理量"，本来就该连续
   },
   {
     id: 'yangParticle',
@@ -324,7 +330,6 @@ const CORE_RESOURCES = [
     color: '#fff2a8',
     baseMax: 400,
     storageWeight: 0.01,
-    integer: true,
     noProduction: true,
     desc: '以湮灭灵能反复固结秘银与灵符，刻成稳定的飞升阵印。不会逸散，用于渡劫准备。',
   },
@@ -375,7 +380,7 @@ const CORE_RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '飞升时结下的道果。每颗永久提升全局产出，并让下次转世或飞升的仙缘更多。',
+    desc: '舍下独自成仙之机，携回留给后来者的修行传承。飞升时按弟子入宗后修为与同心度结算，用于仙途商店永久培养修持；余额不提高产出或仙缘。',
   },
   {
     id: 'karma',
@@ -385,13 +390,13 @@ const CORE_RESOURCES = [
     baseMax: Infinity,
     hidden: true,
     noProduction: true,
-    desc: '转世与飞升带走的因果。每点仙缘永久提升全局产出与有限仓储容量。生产加成递减，仓储每点线性增加0.15%。',
+    desc: '转世与飞升带走的因果。每点仙缘永久提升全局产出与有限仓储容量；也可在「仙缘」页修持永久特权。产出每点 +1%（软上限 +200%），仓储每点 +0.05%（软上限 +50%）；已修持花掉的部分不计入加成。',
   },
 ]
 
 /** 稳定加工品可以累积；原料、粒子及能量仍由有限仓容约束。 */
 export const UNCAPPED_CRAFTED_RESOURCES = new Set([
-  'plank', 'daoNote', 'daoTreatise', 'arrayDiagram', 'steel', 'arrayBase',
+  'plank', 'cutStone', 'paper', 'daoNote', 'daoTreatise', 'arrayDiagram', 'steel', 'arrayBase', 'runeStone',
   'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver',
   'spiritLiquid', 'crystal', 'immortalHerb', 'pill', 'condensePill', 'nineTurnPill',
   'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure', 'ascensionSeal',
@@ -401,7 +406,12 @@ for (const resource of CORE_RESOURCES) {
 }
 
 /** 核心资源 + 可选模块（猎杀）贡献的资源，按锚点插回保持原顺序 */
-export const RESOURCES = insertAfter(CORE_RESOURCES, HUNT_RESOURCE_ANCHOR, HUNT_RESOURCES)
+const WORLD_RESOURCES = [
+  ['heavenBrick', '天砖', '砖'], ['worldBeam', '界梁', '梁'], ['worldCore', '界枢', '枢'],
+  ['clearMarrow', '清灵髓', '髓'], ['worldSand', '镇界砂', '砂'],
+].map(([id, name, glyph]) => ({ id, name, glyph, color: '#a3cfc0', baseMax: Infinity, noProduction: true,
+  desc: id === 'clearMarrow' ? '洗髓小界所得，用于渡劫弟子个人终极准备。' : id === 'worldSand' ? '护道小界所得，用于全宗集体渡劫。' : '天工坊合成的世界建设材料，本世消耗、轮回清空。' }))
+export const RESOURCES = [...insertAfter(CORE_RESOURCES, HUNT_RESOURCE_ANCHOR, HUNT_RESOURCES), ...WORLD_RESOURCES]
 
 export const RESOURCE_MAP = Object.fromEntries(RESOURCES.map((r) => [r.id, r]))
 
@@ -419,8 +429,9 @@ export const RESOURCE_GROUPS = [
   { id: 'faith', name: '香火修持', resources: ['faith', 'vow', 'daoHeart'] },
   { id: 'knowledge', name: '知识典籍', resources: ['daoNote', 'daoTreatise', 'arrayDiagram'] },
   { id: 'basic', name: '基础资源', resources: ['wood', 'rock', 'ore', 'herb', 'stone'] },
-  { id: 'materials', name: '加工材料', resources: ['plank', 'steel', 'arrayBase', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
+  { id: 'materials', name: '加工材料', resources: ['plank', 'cutStone', 'paper', 'steel', 'arrayBase', 'runeStone', 'spiritMortar', 'ironMortar', 'mithril', 'arcaneGold', 'crystalSilver', 'spiritLiquid', 'crystal', 'immortalHerb'] },
   { id: 'crafted', name: '丹符器物', resources: ['pill', 'condensePill', 'nineTurnPill', 'talisman', 'spiritTalisman', 'artifact', 'spiritArtifact', 'spiritTreasure'] },
-  { id: 'hunting', name: '猎杀物资', resources: ['beastHide', 'beastBone'] },
+  { id: 'hunting', name: '猎杀物资', resources: ['beastHide', 'beastBone', 'innerCore', 'spiritCore', 'spiritFur', 'healingHerb', 'huntSupply'] },
+  { id: 'worlds', name: '世界仙材', resources: ['heavenBrick', 'worldBeam', 'worldCore', 'clearMarrow', 'worldSand'] },
   { id: 'energy', name: '灵子与灵能', resources: ['qiParticle', 'yangParticle', 'yinParticle', 'qiEnergy', 'immortalForce', 'ascensionSeal'] },
 ]

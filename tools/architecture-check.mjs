@@ -208,22 +208,28 @@ export function runArchitectureChecks() {
     const seed = createInitialState(startAt)
     seed.dao = E.money(1)
     seed.settings.craftReservePercent = 0
+    // 刨板耗尽香火鼎的维护材料，验证「制作触发刷新 → 来客/事件读新值」。
+    // 符箓已改为耗纸，不再适合作为灵木断供夹具。
+    seed.settings.craftReserves = {}
     seed.buildings = { hut: { count: 40, on: true }, incenseCauldron: { count: 1, on: true },
-      talismanHall: { count: 1, on: true } }
+      workshop: { count: 1, on: true } }
+    seed.upgrades.woodworking = true
     seed.disciples.total = 72
-    Object.assign(seed.resources, { qi: E.money(1000), wood: E.money('125.32') })
+    Object.assign(seed.resources, { qi: E.money(1000), wood: E.money('175.12') })
     seed.arrivalTimer = 14
-    seed.autoCraft.drawTalisman = true
-    seed.craftTimers.drawTalisman = { t: 1, made: 0 }
+    seed.autoCraft.sawPlank = true
+    seed.craftTimers.sawPlank = { t: 0.5, made: 0 }
     markAchievements(seed)
     const state = normalizeState(seed), derived = E.createDerived()
+    let expectedPlankYield
     withGameContext(state, { now: () => startAt, random: () => 0.9 }, () => {
       E.recompute(state, derived)
+      expectedPlankYield = E.craftYield(derived, E.CRAFT_MAP.sawPlank)
       assert.equal(derived.leaveChance, 0)
       if (offlineMode) E.simulateOffline(state, derived, 1, { startAt })
       else E.tick(state, derived, 1, { startAt, events: false })
     })
-    assert.ok(E.moneyEq(state.resources.talisman, 1))
+    assert.ok(E.moneyEq(state.resources.plank, expectedPlankYield))
     assert.ok(E.moneyIsZero(state.resources.wood))
     assert.equal(state.disciples.total, 72)
     assert.equal(state.stats.recruits, 0)

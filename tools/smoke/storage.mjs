@@ -12,6 +12,57 @@ import { describeEffects } from '../../src/game/effectsText.js'
 import { newGame } from './fixtures.mjs'
 import { autoCraftReserve } from '../../src/game/systems/craftingRules.js'
 import { discipleFactor, recruitCost } from '../../src/data/disciples.js'
+import { effectiveBuildingStorage } from '../../src/game/systems/economy.js'
+import { progressionDiagnostics } from '../progression-diagnostics.mjs'
+
+export function warehouseConsolidation({ ok, section }) {
+  section('四类仓储、工艺强化与旧档合并')
+  ok('仓储目录仅保留四类', BUILDINGS.filter(b => b.group === 'store').map(b => b.id).sort().join(',') === 'arcaneVault,granary,grotto,warehouse')
+  const { state: s, derived: d } = newGame()
+  s.buildings.warehouse = { count: 2, on: true }
+  s.buildings.granary = { count: 1, on: true }
+  E.recompute(s, d)
+  const before = d.max.wood, qi = d.max.qi, insight = d.max.insight
+  s.upgrades.earthEssence = true
+  E.recompute(s, d)
+  ok('土木精要按库房数量强化原料，不放大基础仓容或灵机', d.max.wood.eq(before.plus(3000)) && d.max.qi.eq(qi) && d.max.insight.eq(insight))
+  s.realm = 7
+  for (const [id, amount] of Object.entries(BUILDING_MAP.grotto.cost)) { s.resources[id] = E.money(amount); s.peak[id] = E.money(amount) }
+  ok('炼虚洞天不依赖合体工艺或玄金即可真实建造', !s.upgrades.grottoArt && E.isBuildingUnlocked(s, 'grotto') && E.buyBuilding(s, d, 'grotto') === 1)
+  const space = d.max.immortalForce
+  const diagnostic = progressionDiagnostics(s, d, { cost: { wood: E.money('1e12') } }).missing.find(row => row.resource === 'wood')
+  ok('采购诊断使用工艺强化后的新建容量', diagnostic.expansions.find(row => row.id === 'warehouse').gain === 2500)
+  s.upgrades.grottoArt = true
+  E.recompute(s, d)
+  ok('洞天福地强化已建空间容量', d.max.immortalForce.gt(space) && UPGRADE_MAP.grottoArt.effects.buildingStorageRatio.grotto === 0.6)
+
+  const old = createInitialState()
+  delete old.warehouseMergeVersion
+  old.buildings = Object.fromEntries(['warehouse', 'materialYard', 'depot', 'mysticVault', 'medicineVault', 'grandStore', 'grotto'].map(id => [id, { count: 1, on: true }]))
+  old.legacyWarehouseCounts = { depot: 1, mysticVault: 1 }
+  const original = JSON.stringify(old)
+  const merged = normalizeState(old)
+  ok('合并实体数量且不修改输入、不赠研究', merged.buildings.warehouse.count === 5 && merged.buildings.grotto.count === 2 && !merged.buildings.depot && JSON.stringify(old) === original && !merged.upgrades.earthEssence)
+  const raw = effectiveBuildingStorage(merged, 'warehouse')
+  ok('旧材料库与玄库历史扩仓权益一并保留', raw.wood.gte(26400) && raw.qi.gte(15000) && raw.herb.gte(14700))
+  const strengthened = effectiveBuildingStorage(merged, 'warehouse', 5)
+  ok('旧权益作为容量下限，不随新工艺重复叠乘', strengthened.wood.gte(raw.wood) && strengthened.wood.lt(raw.wood.times(5)) && strengthened.qi.eq(raw.qi))
+  const spaceRaw = effectiveBuildingStorage(merged, 'grotto')
+  ok('旧广储库与洞天的通用仓储折算不丢失', spaceRaw.insight.gte(43000) && spaceRaw.immortalForce.gte(40000) && spaceRaw.beastHide.gte(16000))
+  const again = parseImport(exportSave(normalizeState(merged)))
+  ok('保存读回不重复合并，金额与保留数量不变', again.buildings.warehouse.count === 5 && effectiveBuildingStorage(again, 'warehouse').wood.eq(raw.wood) && again.legacyStorage.warehouse.count === 5)
+  const converted = normalizeState({ buildings: { grandStore: { count: 1, on: true } } })
+  ok('旧广储库转入洞天默认不额外消耗供能', converted.buildings.grotto.count === 1 && !converted.buildings.grotto.on)
+  for (const id of Object.keys(again.resources)) again.resources[id] = E.money('1e20')
+  const ad = E.createDerived()
+  E.recompute(again, ad)
+  E.sellBuilding(again, ad, 'warehouse', 5)
+  again.upgrades.quarryArt = true
+  E.buyBuilding(again, ad, 'warehouse')
+  ok('拆除后重建不恢复旧仓容量权益', !again.legacyStorage.warehouse && effectiveBuildingStorage(again, 'warehouse').wood.eq(1000) && !effectiveBuildingStorage(again, 'warehouse').qi)
+  resetForReincarnation(merged, E.ZERO)
+  ok('轮回清空本世仓储保留权益', !Object.keys(merged.legacyStorage).length && !Object.keys(merged.buildings).length)
+}
 
 export function uncappedCrafting({ ok, close, section }) {
   section('转世生产、无限加工库存与旧档保留')
@@ -19,15 +70,15 @@ export function uncappedCrafting({ ok, close, section }) {
   s.realm = 10
   s.karma = E.money(100)
   E.recompute(s, d)
-  ok('23种稳定加工品无仓容，原料、猎物与粒子仍有限', UNCAPPED_CRAFTED_RESOURCES.size === 23 &&
+  ok('26种稳定加工品无仓容，原料、猎物与粒子仍有限', UNCAPPED_CRAFTED_RESOURCES.size === 26 &&
     [...UNCAPPED_CRAFTED_RESOURCES].every(id => !d.max[id].isFinite()) &&
     ['qi', 'insight', 'faith', 'wood', 'stone', 'beastHide', 'qiParticle', 'qiEnergy', 'immortalForce', 'warrant'].every(id => d.max[id].isFinite()))
-  ok('100仙缘生产4.5倍、有限仓储1.15倍，信符独立', d.karmaMult.eq(4.5) && d.karmaStorageMult.eq(1.15) && d.max.warrant.eq(100))
+  ok('100仙缘生产2倍、有限仓储1.05倍，信符独立', d.karmaMult.eq(2) && d.karmaStorageMult.eq('1.05') && d.max.warrant.eq(100))
   ok('渡劫全局境界5.5倍，个人系数仍10倍', d.realmProductionMult === 5.5 && discipleFactor({ realm: 10 }, 10) === 10)
   s.faithProgression.cultivation.realmDevotion = 10
   E.recompute(s, d)
   ok('万民归心强化削减后的奖励，口粮基准不叠加修持', d.realmProductionMult === 10 && d.realmBaseProductionMult === 5.5)
-  ok('招募按削减后的口粮基准报价', recruitCost({ qi: 100 }, 10).qi === 550)
+  ok('招募按削减后的口粮基准报价', E.moneyEq(recruitCost({ qi: 100 }, 10).qi, 550))
   s.dao = E.money(1)
   s.settings.craftReservePercent = 20
   s.settings.craftReserves.plank = E.money(7)
@@ -165,11 +216,11 @@ export function purchaseReachability({ ok, section }) {
     ok(
       '库房连续几座都买得起（自己抬高上限）',
       (() => {
-        let cap = RESOURCE_MAP.wood.baseMax + wh.effects.storageAll
+        let cap = RESOURCE_MAP.wood.baseMax + wh.effects.storage.wood
         for (let n = 1; n < 5; n++) {
           const need = wh.cost.wood * Math.pow(wh.priceRatio, n)
           if (need > cap) return false
-          cap += wh.effects.storageAll
+          cap += wh.effects.storage.wood
         }
         return true
       })(),
@@ -177,22 +228,22 @@ export function purchaseReachability({ ok, section }) {
   }
 }
 
-export function storageAndRefinement({ ok, section }) {
+export function storageAndRefinement({ ok, close, section }) {
   section('分层仓储、点击与进阶祭炼')
   {
     const { state: s, derived: d } = newGame()
     s.buildings.mansion = { count: 6, on: true }
-    s.buildings.depot = { count: 2, on: true }
+    s.buildings.warehouse = { count: 2, on: true }
     s.upgrades.caseStackArt = true
     E.recompute(s, d)
     ok('基础物资通用扩仓仍全额计入', E.moneyEq(d.max.wood,
-      E.money(RESOURCE_MAP.wood.baseMax).plus(6 * 200).plus(2 * BUILDING_MAP.depot.effects.storage.wood).plus(1200)))
+      E.money(RESOURCE_MAP.wood.baseMax).plus(6 * 200).plus(4 * BUILDING_MAP.warehouse.effects.storage.wood).plus(1200)))
     ok('稳定加工品不受仓容约束', ['plank', 'arrayBase', 'spiritArtifact', 'spiritTreasure'].every(id => !d.max[id].isFinite()))
     const pillBefore = d.max.pill
     s.buildings.alchemyRoom = { count: 1, on: true }
     E.recompute(s, d)
     ok('专属成品仓储不被通用折算削弱', E.moneyEq(d.max.pill, pillBefore))
-    ok('整枚资源容量是整数', RESOURCES.filter(r => r.integer && Number.isFinite(r.baseMax)).every(r => E.money(d.max[r.id]).isInteger()))
+    ok('资源目录不再标记强制整数', RESOURCES.every(r => !Object.hasOwn(r, 'integer')))
     const old = normalizeState({ ...s, resources: { ...s.resources, nineTurnPill: E.money(1000) } })
     E.recompute(old, d)
     E.addResource(old, 'nineTurnPill', 10, d.max.nineTurnPill)
@@ -201,9 +252,9 @@ export function storageAndRefinement({ ok, section }) {
     E.tick(old, d, 1, { events: false })
     ok('旧档超额成品可正常消费', E.moneyEq(old.resources.nineTurnPill, 1007))
     s.buildings.spiritField = { count: 5, on: true }
-    ok('开局点击收益保留', E.moneyEq(E.clickGain(s, d), 5))
+    ok('五座聚灵阵点击收益按每秒基础产出线性叠加（4.0）', close(E.clickGain(s, d), 2.5 + 5 * E.BUILDING_MAP.spiritField.effects.prod.qi, 1e-9))
     s.buildings.spiritField.count = 45
-    ok('多聚灵阵点击仍增益但小于原线性收益', E.moneyGt(E.clickGain(s, d), 7.5) && E.moneyLt(E.clickGain(s, d), 25))
+    ok('多聚灵阵点击收益继续线性叠加（16）', close(E.clickGain(s, d), 2.5 + 45 * E.BUILDING_MAP.spiritField.effects.prod.qi, 1e-9))
     s.upgrades.flyingSword = true
     s.treasureLevels.flyingSword = 1
     ok('低层祭炼不要求尚未需要的进阶材料', E.moneyIsZero(E.refineCost(s, 'flyingSword').spiritArtifact))
@@ -217,7 +268,7 @@ export function storageAndRefinement({ ok, section }) {
     s.resources.spiritArtifact = denied.spiritArtifact
     E.refineTreasure(s, d, 'flyingSword')
     ok('祭炼实际扣除进阶材料并提升层数', E.moneyIsZero(s.resources.spiritArtifact) && E.moneyIsZero(s.resources.steel) && s.treasureLevels.flyingSword === 3)
-    ok('进阶用料随层数增长并整枚计价', E.moneyEq(E.refineCost(s, 'flyingSword').spiritArtifact, 2))
+    ok('进阶用料随层数增长并保留小数', E.moneyEq(E.refineCost(s, 'flyingSword').spiritArtifact, '1.7'))
     ok('仙草增加可重复消费去向', UPGRADE_MAP.alchemyCauldron.refine.materials.immortalHerb > 0)
   }
 }

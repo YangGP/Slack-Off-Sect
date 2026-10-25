@@ -1,7 +1,8 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { state, derived, view, ui, actions } from '@/game/store'
-import { fmtCost, fmtInt, fmtPercent, fmtTime } from '@/game/format'
+import { fmtCost, fmtAmount, fmtPercent, fmtTime } from '@/game/format'
 import { enough } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { moneyIsPositive } from '@/game/decimal'
@@ -11,6 +12,8 @@ import { CURRENT_VERSION } from '@/data/changelog'
 import { IS_DEV_PREVIEW } from '@/game/deployment'
 import { isModuleEnabled } from '@/data/modules'
 import { MODULE_UI } from '@/modules/uiRegistry'
+import { isHuntUnlocked, isDiplomacyUnlocked } from '@/game/engine'
+import { HUNT_FIELDS } from '@/modules/hunting/data'
 import ResourcePanel from './components/ResourcePanel.vue'
 import TabNav from './components/TabNav.vue'
 import SectPanel from './components/SectPanel.vue'
@@ -20,6 +23,9 @@ import SkillPanel from './components/SkillPanel.vue'
 import CraftPanel from './components/CraftPanel.vue'
 import RealmPanel from './components/RealmPanel.vue'
 import FaithPanel from './components/FaithPanel.vue'
+import KarmaPanel from './components/KarmaPanel.vue'
+import WorldPanel from './components/WorldPanel.vue'
+import MemorialPanel from './components/MemorialPanel.vue'
 import AchievementPanel from './components/AchievementPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugPanel from './components/DebugPanel.vue'
@@ -41,6 +47,9 @@ const corePanels = {
   skills: SkillPanel,
   craft: CraftPanel,
   faith: FaithPanel,
+  karma: KarmaPanel,
+  worlds: WorldPanel,
+  memorial: MemorialPanel,
   realm: RealmPanel,
   achievements: AchievementPanel,
   settings: SettingsPanel,
@@ -49,7 +58,10 @@ const corePanels = {
 /** 核心面板 + 已启用模块贡献的面板（模块关闭时不挂载） */
 const panels = computed(() => {
   const out = { ...corePanels }
+  if (!(state.samsara.completions > 0)) delete out.memorial
   for (const m of MODULE_UI) {
+    if (m.id === 'hunting' && !HUNT_FIELDS.some(f => isHuntUnlocked(state, f.id))) continue
+    if (m.id === 'diplomacy' && !isDiplomacyUnlocked(state)) continue
     if (isModuleEnabled(state, m.id)) out[m.tab.id] = m.panel
   }
   return out
@@ -298,7 +310,7 @@ function downloadLegacy() {
     </div>
     <div v-if="ui.saveRecoveryNotice" class="update-notice" role="status">{{ ui.saveRecoveryNotice }}</div>
     <div class="title-line">
-      摸鱼宗门<span class="sub">Slack Off Sect</span>
+      <HoverTip label="摸鱼宗门" :description="SECT_STORY.vow" /><span class="sub">Slack Off Sect</span>
       <span v-if="IS_DEV_PREVIEW" class="small warn">开发预览版 · dev1</span>
       <a class="github-link" href="https://github.com/YangGP/Slack-Off-Sect" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开项目 GitHub 仓库">GitHub ↗</a>
     </div>
@@ -340,7 +352,7 @@ function downloadLegacy() {
           <span v-if="derived.leaveChance > 0" class="bad">（有离开风险）</span>
         </span>
         <span>全局 <b>×{{ derived.globalMult.toFixed(2) }}</b>（加成 +{{ fmtPercent(derived.ratioAll) }}）</span>
-        <span v-if="karmaPositive">仙缘 <b>{{ fmtInt(state.karma) }}</b></span>
+        <span v-if="karmaPositive">仙缘 <b>{{ fmtAmount(state.karma) }}</b></span>
         <span>挂机 <b>{{ fmtTime(state.stats.playTime) }}</b></span>
       </div>
     </div>

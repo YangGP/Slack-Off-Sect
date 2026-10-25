@@ -2,13 +2,30 @@ import { createInitialState, normalizeState } from '../../src/game/state.js'
 import * as E from '../engine-fixture.mjs'
 import { RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
-import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP, CULTIVATION_STAGE_OF, CULTIVATION_STAGES } from '../../src/data/upgrades.js'
+import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { CRAFT_MAP } from '../../src/data/crafts.js'
 import { ASCEND_REALM_INDEX } from '../../src/data/realms.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { unlockText, unlockGroups, unlockMismatches, effectLine, effectRows } from '../../src/game/unlockText.js'
 import { describeEffects } from '../../src/game/effectsText.js'
 import { newGame } from './fixtures.mjs'
+
+export function researchCostProgression({ ok, section }) {
+  section('修真灵机费用沿直接研究前置递进')
+  const ids = new Set(CULTIVATION.map(u => u.id))
+  const inversions = CULTIVATION.flatMap(u =>
+    [...(u.needs?.upgrades || []), ...(u.needs?.upgrade ? [u.needs.upgrade] : [])]
+      .filter(id => ids.has(id) && u.cost.insight < UPGRADE_MAP[id].cost.insight)
+      .map(id => `${UPGRADE_MAP[id].name} → ${u.name}`))
+  ok('修真直接前置不存在灵机费用倒挂', inversions.length === 0, inversions.join('；'))
+  ok('开局营造与凿石仍在基础灵机仓容内',
+    UPGRADE_MAP.homePlanning.cost.insight <= 200 && UPGRADE_MAP.quarryArt.cost.insight <= 200)
+  const { state: s, derived: d } = newGame()
+  s.upgrades.qiPurify = true
+  s.resources.insight = E.money(UPGRADE_MAP.condenseArt.cost.insight)
+  E.recompute(s, d)
+  ok('凝灵诀按新报价支付且保留原资格', E.research(s, d, 'condenseArt') && s.resources.insight.eq(0))
+}
 
 export function researchVisibility({ ok, section }) {
   section('同类修真递进与显示门槛')
@@ -18,10 +35,10 @@ export function researchVisibility({ ok, section }) {
       ['steelWorking', 'artifactLore'], ['conductionRune', 'guardRune'],
       ['conductionRune', 'capacityRune'], ['crystalCraft', 'precipitateTheory'],
       ['spiritCanal', 'liquidIrrigation'], ['spiritCanal', 'veinInfuse'],
-      ['incenseStudy', 'recruitDrive'], ['yinyangSplit', 'particleRecover'],
+      ['incenseStudy', 'recruitDrive'], ['particleTheory', 'particleRecover'],
       ['qiLiquid', 'breakthroughArt'], ['earthEssence', 'steelWorking'],
       ['arrayAssembly', 'waterworkshop'], ['steelWorking', 'beastMaterialArt'],
-      ['arrayAssembly', 'preachArt'], ['preachArt', 'incenseStudy'],
+      ['paperArt', 'preachArt'], ['preachArt', 'incenseStudy'],
     ]
     for (const [previous, next] of edges) {
       const { state: s } = newGame()
@@ -78,19 +95,18 @@ export function researchUnlocks({ ok, section }) {
       JSON.stringify(BUILDING_MAP.gatheringArray.needs),
     )
 
-    // 界面按研究分组排序，同组保持节点数据顺序。
+    // 界面按数据文件顺序展示：锚点保证模块节点插回原位而不是掉到列表末尾。
     const ids = CULTIVATION.map((u) => u.id)
-    const unstaged = ids.filter((id) => !CULTIVATION_STAGE_OF[id])
-    ok('每个修真节点都归入研究分组（灵气五章、心法、材料与经营）', unstaged.length === 0, unstaged.join(','))
-    const groupedIds = CULTIVATION_STAGES.flatMap(stage => stage.ids)
-    ok('研究分组不重复收录节点或引用失效节点', groupedIds.length === new Set(groupedIds).size &&
-      groupedIds.every(id => ids.includes(id)))
     ok(
-      '第一章是「观气」（灵源考 + 观气法同章且在最前）',
-      ids[0] === 'qiOrigin' &&
-        CULTIVATION_STAGE_OF.qiGazing?.index === CULTIVATION_STAGE_OF.qiOrigin?.index &&
-        CULTIVATION_STAGE_OF.qiOrigin?.index === 0,
-      ids.slice(0, 4).join(','),
+      '列表以基础建筑研究开头，其后紧接主线「观气」章（灵源考 → 观气法 → 灵气测定 → 凝气化液）',
+      ids.slice(0, 6).join(',') === 'openMine,qiOrigin,qiGazing,qiMeasure,qiLiquid,liquidArt',
+      ids.slice(0, 6).join(','),
+    )
+    ok(
+      '猎杀研究按锚点插回原位（山野猎法在引泉净水后、兽材加工在石作规制后）',
+      ids[ids.indexOf('waterSanitation') + 1] === 'wildHunting' &&
+        ids[ids.indexOf('stoneWorks') + 1] === 'beastMaterialArt',
+      `${ids[ids.indexOf('waterSanitation') + 1]},${ids[ids.indexOf('stoneWorks') + 1]}`,
     )
     ok('修真节点数量（A 项铺满时间线后应不少于 28）', CULTIVATION.length >= 28, String(CULTIVATION.length))
   }

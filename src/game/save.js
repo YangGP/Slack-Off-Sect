@@ -1,10 +1,11 @@
 import { normalizeState, createInitialState } from './state'
 import { SAVE_VERSION, SAVE_FIELDS, isRecord } from './saveSchema'
-import { ZERO, floorMoney, moneyNonNegative } from './decimal'
+import { ZERO, moneyNonNegative } from './decimal'
 import { cloneRuntime } from './clone'
 import { encodeMoneyFields } from './moneyFields'
 import { D7_RULESET } from '@/data/faith'
 import { STORAGE_PREFIX } from './deployment'
+import { CONFIG } from '@/data/config'
 
 export { SAVE_VERSION, D7_RULESET }
 
@@ -21,7 +22,7 @@ const browserStorage = () => typeof localStorage !== 'undefined' ? localStorage 
  */
 export function serialize(state, now = Date.now()) {
   const copy = Object.fromEntries(SAVE_FIELDS.filter(key => key in state).map(key => [key,
-    key === 'log' ? cloneRuntime(state.log.slice(0, 60)) : cloneRuntime(state[key]),
+    key === 'log' ? cloneRuntime(state.log.slice(0, CONFIG.LOG_DISPLAY_LIMIT)) : cloneRuntime(state[key]),
   ]))
   copy.lastSaveAt = now
   copy.version = SAVE_VERSION
@@ -137,7 +138,7 @@ export function restoreSave(data, { now = Date.now(), allowRecovery = true } = {
     // 结构冲突时只继承永久货币：按金额域安全解码，不经 Number 或 MAX_SAFE_INTEGER 夹取。
     // 恢复分支绕过 validateState，必须在这里做非负清洗，否则 '-5' 会让仙缘变负（旧 safeNumber 会夹到 0）。
     state.karma = moneyNonNegative(data.karma ?? data.resources?.karma, ZERO)
-    state.dao = floorMoney(moneyNonNegative(data.dao ?? data.resources?.dao, ZERO))
+    state.dao = moneyNonNegative(data.dao ?? data.resources?.dao, ZERO)
     state.resources.karma = state.karma
     state.resources.dao = state.dao
     state.__recoveryNotice = `旧存档无法完整兼容，已保留仙缘 ${state.karma.toString()} 与道果 ${state.dao.toString()}，其余进度重新开始。`

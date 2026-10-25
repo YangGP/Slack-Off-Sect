@@ -1,3 +1,4 @@
+import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { isEventInRealm, EVENTS, EVENT_MAP, getEventLevel } from '@/data/events'
 import { gameNow, gameRandom, notifyGameEvent } from '../context'
 import { CRAFTS, craftTime, craftCost } from '@/data/crafts'
@@ -5,10 +6,11 @@ import { isCraftUnlocked, canAfford, clamp, addResource, pushLog } from './core'
 import { RECIPE_STATIONS } from '@/data/industry'
 import { craftYield } from './craftingRules'
 import { RESOURCE_MAP } from '@/data/resources'
-import { MONEY_INFINITY, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyClamp, moneyGt, moneyMax, moneyMin, moneyToNumber } from '../decimal'
+import { MONEY_INFINITY, ZERO, money, moneyAvailable, moneyClamp, moneyGt, moneyMax, moneyMin, moneyToNumber } from '../decimal'
 import { CONFIG } from '@/data/config'
 import { newDisciple, recountDisciples, SPIRITUAL_ROOT_MAP } from '@/data/disciples'
 import { isModuleEnabled } from '@/data/modules'
+import { fmtAmount } from '../format'
 
 export function eventEligible(state, event) {
   if (!isEventInRealm(event, state.realm)) return false
@@ -96,7 +98,7 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     const amount = moneyMax(floorCost, eventResourceRate(state, derived, res).times(cost.seconds))
     const cap = moneyMax(floorCost, money(derived.max[res] ?? ZERO).times('0.1'))
     const bounded = moneyMin(amount, cap)
-    required[res] = RESOURCE_MAP[res]?.integer ? ceilMoney(bounded) : bounded
+    required[res] = bounded
   }
   const affordable = canAfford(state, required)
   const resources = new Set([
@@ -104,65 +106,64 @@ export function eventOutcome(state, derived, spec, disasterPercent = spec.disast
     ...(spec.disaster?.resources || []), ...Object.keys(spec.lootRate || {}), ...Object.keys(spec.boundedLoss || {}),
   ])
   for (const res of resources) {
-    const integer = RESOURCE_MAP[res]?.integer
-    // 整枚计数的资源在损失与奖励口径上先向下取整，与 addResource 的入库口径一致。
-    const whole = (amount) => integer ? floorMoney(amount) : amount
     const have = state.resources[res] ?? ZERO
-    const fixed = moneyMin(have, whole(money(spec.cost?.[res] ?? 0).plus(required[res] ?? ZERO)))
-    const share = whole(have.minus(fixed).times(spec.costShare?.[res] || 0))
+    const fixed = moneyMin(have, money(spec.cost?.[res] ?? 0).plus(required[res] ?? ZERO))
+    const share = have.minus(fixed).times(spec.costShare?.[res] || 0)
     const remaining = have.minus(fixed).minus(share)
     const guard = clamp((derived.disasterGuard || 0) + (derived.disasterGuardByResource?.[res] || 0), 0, 0.8)
     const disaster = spec.disaster?.resources.includes(res)
-      ? whole(remaining.times(disasterPercent).times(1 - guard)) : ZERO
-    const boundedLoss = whole(moneyMin(remaining, money(spec.boundedLoss?.[res] ?? 0).times(1 - guard)))
+      ? remaining.times(disasterPercent).times(1 - guard) : ZERO
+    const boundedLoss = moneyMin(remaining, money(spec.boundedLoss?.[res] ?? 0).times(1 - guard))
     const lost = fixed.plus(share).plus(disaster).plus(boundedLoss)
     // 单次奖励上限是仓容的固定份额；无上限仓容用金额域的哨兵，时间域的 Infinity 不跨域套用。
     const rewardCap = money(derived.max[res] ?? MONEY_INFINITY).times(CONFIG.EVENT_REWARD_STORAGE_SHARE)
     const offered = spec.lootRate?.[res] != null
-      ? whole(moneyMin(rewardCap, moneyMax(money(spec.floor?.[res] ?? 0),
-        eventResourceRate(state, derived, res).times(spec.lootRate[res])))) : ZERO
+      ? moneyMin(rewardCap, moneyMax(money(spec.floor?.[res] ?? 0),
+        eventResourceRate(state, derived, res).times(spec.lootRate[res]))) : ZERO
     const room = moneyMax(ZERO, money(derived.max[res] ?? MONEY_INFINITY).minus(have.minus(lost)))
-    const gained = moneyMin(offered, whole(room))
+    const gained = moneyMin(offered, room)
     rows.push({ res, lost, gained, overflow: offered.minus(gained) })
   }
-  const recruits = Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
+  const recruits = state.challenge?.active ? 0 : Math.min(Math.max(0, derived.maxDisciples - state.disciples.total), spec.recruit || 0)
   return { rows, recruits, required, affordable }
 }
 
 export function settleEventOutcome(state, derived, spec, text, kind, source) {
-  const range = spec.disaster?.lossPercent || [0, 0]
-  const pct = range[0] + gameRandom(state) * (range[1] - range[0])
-  const outcome = eventOutcome(state, derived, spec, pct)
-  const parts = []
-  // 纪事文案里的金额：到显示边界才转 Number 四舍五入，不参与结算。
-  const logAmount = (value) => Math.round(moneyToNumber(value))
-  for (const row of outcome.rows) {
-    // 损失在 eventOutcome 里已按库存夹过；扣减仍走金额助手的「不足归零」，库存不会变负。
-    state.resources[row.res] = moneyAvailable(state.resources[row.res] ?? ZERO, row.lost)
-    if (moneyGt(row.lost, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} -${logAmount(row.lost)}`)
-    const gained = addResource(state, row.res, row.gained, derived.max[row.res])
-    if (moneyGt(gained, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} +${logAmount(gained)}`)
-    if (moneyGt(row.overflow, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} ${logAmount(row.overflow)} 装不下`)
-  }
-  if (spec.disaster || spec.boundedLoss) {
-    state.stats.disasters += 1
-    if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
+  return withResourceAction(state, { type: 'settleEventOutcome', id: kind }, () => {
+    const range = spec.disaster?.lossPercent || [0, 0]
+    const pct = range[0] + gameRandom(state) * (range[1] - range[0])
+    const outcome = eventOutcome(state, derived, spec, pct)
+    const parts = []
+    const logAmount = fmtAmount
     for (const row of outcome.rows) {
-      const extra = derived.disasterGuardByResource?.[row.res] || 0
-      if (extra > 0 && (spec.disaster?.resources.includes(row.res) || spec.boundedLoss?.[row.res])) {
-        const total = clamp((derived.disasterGuard || 0) + extra, 0, 0.8)
-        parts.push(`${RESOURCE_MAP[row.res].name}符阵护持合计 ${Math.round(total * 100)}%`)
+      // 损失在 eventOutcome 里已按库存夹过；扣减仍走金额助手的「不足归零」，库存不会变负。
+      setResourceValue(state, row.res, moneyAvailable(state.resources[row.res] ?? ZERO, row.lost), { source: 'systems/events.js:settleEventOutcome' })
+      if (moneyGt(row.lost, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} -${logAmount(row.lost)}`)
+      const gained = addResource(state, row.res, row.gained, derived.max[row.res])
+      if (moneyGt(gained, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} +${logAmount(gained)}`)
+      if (moneyGt(row.overflow, ZERO)) parts.push(`${RESOURCE_MAP[row.res].name} ${logAmount(row.overflow)} 装不下`)
+    }
+    if (spec.disaster || spec.boundedLoss) {
+      state.stats.disasters += 1
+      if (derived.disasterGuard > 0) parts.push(`大阵挡下 ${Math.round(derived.disasterGuard * 100)}%`)
+      for (const row of outcome.rows) {
+        const extra = derived.disasterGuardByResource?.[row.res] || 0
+        if (extra > 0 && (spec.disaster?.resources.includes(row.res) || spec.boundedLoss?.[row.res])) {
+          const total = clamp((derived.disasterGuard || 0) + extra, 0, 0.8)
+          parts.push(`${RESOURCE_MAP[row.res].name}符阵护持合计 ${Math.round(total * 100)}%`)
+        }
       }
     }
-  }
-  if (outcome.recruits > 0) {
-    for (let i = 0; i < outcome.recruits; i++) state.disciples.members.push(newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') }))
-    recountDisciples(state.disciples)
-    state.stats.recruits += outcome.recruits
-    parts.push(`弟子 +${outcome.recruits}`)
-    parts.push(state.disciples.members.slice(-outcome.recruits).map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、'))
-  } else if (spec.recruit) parts.push('居所已满，无法收徒')
-  pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
+    if (outcome.recruits > 0) {
+      for (let i = 0; i < outcome.recruits; i++) state.disciples.members.push(newDisciple(state.disciples, null, { includeHunting: isModuleEnabled(state, 'hunting') }))
+      recountDisciples(state.disciples)
+      state.stats.recruits += outcome.recruits
+      parts.push(`弟子 +${outcome.recruits}`)
+      parts.push(state.disciples.members.slice(-outcome.recruits).map(member => SPIRITUAL_ROOT_MAP[member.spiritualRoot].name).join('、'))
+    } else if (spec.recruit) parts.push(state.challenge?.active ? '全员挑战期间不接收普通来客' : '居所已满，无法收徒')
+    pushLog(state, parts.length ? `${text}（${parts.join('，')}）` : text, kind, source)
+
+  })
 }
 
 export function applyEventEffects(state, derived, spec, text, kind, source) {
@@ -243,26 +244,29 @@ export function fireEvent(state, derived, ev = null) {
  * 选项的 effect 就是一份小事件声明，与普通事件共用同一套机制。
  */
 export function resolveChoice(state, derived, index) {
-  const pending = state.pendingChoice
-  if (!pending) return null
-  const event = EVENT_MAP[pending.id]
-  if (event?.threat && gameNow(state) >= pending.deadline) {
-    return settleExpiredThreat(state, derived)
-  }
-  const opt = event?.options?.[index]
-  if (!event || !opt) return null
-  if (!eventOutcome(state, derived, opt.effect || {}).affordable) return null
-  state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
-  applyEventEffects(
-    state,
-    derived,
-    opt.effect || {},
-    `${event.name}·${opt.label}：${opt.desc}`,
-    'event',
-    event,
-  )
-  state.pendingChoice = null
-  return event
+  return withResourceAction(state, { type: 'resolveChoice', id: null }, () => {
+    const pending = state.pendingChoice
+    if (!pending) return null
+    const event = EVENT_MAP[pending.id]
+    if (event?.threat && gameNow(state) >= pending.deadline) {
+      return settleExpiredThreat(state, derived)
+    }
+    const opt = event?.options?.[index]
+    if (!event || !opt) return null
+    if (!eventOutcome(state, derived, opt.effect || {}).affordable) return null
+    state.stats.choicesMade = (state.stats.choicesMade || 0) + 1
+    applyEventEffects(
+      state,
+      derived,
+      opt.effect || {},
+      `${event.name}·${opt.label}：${opt.desc}`,
+      'event',
+      event,
+    )
+    state.pendingChoice = null
+    return event
+
+  })
 }
 
 /** 已有威胁到期只结算一次；离线期间不抽取新的事务。 */

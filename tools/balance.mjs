@@ -1,7 +1,7 @@
 import { setGameContext } from '../src/game/context.js'
 /**
  * 平衡性推演：模拟一个「勤快但不精算」的玩家，看看节奏是否合理。
- * 玩家策略在 tools/player-bot.mjs 里（与 tools/resource-audit.mjs 共用，保证两边结论一致）。
+ * 玩家策略在 tools/player-bot.mjs 里（与长测脚本共用，保证结论一致）。
  *
  * 用法：
  *   npm run balance -- [小时数] [初始仙缘]

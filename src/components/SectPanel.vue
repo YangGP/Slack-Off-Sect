@@ -1,12 +1,12 @@
 <script setup>
 /**
- * 宗门页：筛选行 + 建筑按钮网格（猫国式的中间内容区）。
+ * 宗门页：筛选行 + 建筑按钮网格。
  *
  * 吸取天地灵气是开局的手动来源，原料由弟子采集。
  */
 import { computed } from 'vue'
 import { state, derived, view, actions } from '@/game/store'
-import { BUILDINGS, BUILDING_GROUPS, BUILDING_DISPLAY_ORDER } from '@/data/buildings'
+import { BUILDINGS, BUILDING_GROUPS, BUILDING_DISPLAY_ORDER, BUILDING_MAP } from '@/data/buildings'
 import {
   isBuildingUnlocked,
   canAfford,
@@ -55,6 +55,11 @@ const buildingOrder = new Map(BUILDING_DISPLAY_ORDER.map((id, index) => [id, ind
 const showCore = computed(() => filter.value === 'all' || filter.value === 'affordable')
 
 const gain = computed(() => clickGain(state, derived))
+/** 聚灵阵对点击的加成说明：每座按其每秒基础产出叠加，数值与建筑数据同源 */
+const fieldClickHint = computed(() => {
+  const perField = BUILDING_MAP.spiritField.effects.prod.qi
+  return `每座聚灵阵 +${fmt(perField)}（其每秒基础产出），多座线性叠加`
+})
 /** 已解锁的建筑（未解锁的还没露面） */
 const unlocked = computed(() => BUILDINGS.filter((b) => isBuildingUnlocked(state, b.id)))
 
@@ -89,7 +94,7 @@ const tabs = computed(() => [
   </div>
 
   <div class="build-grid">
-    <!-- 核心按钮 1：吸取天地灵气（照猫国的「采集猫薄荷」放在建筑列表最前面） -->
+    <!-- 核心按钮 1：吸取天地灵气，放在建筑列表最前面 -->
     <div v-if="showCore" class="build-item">
       <HoverTip :width="300">
         <button class="build-btn" :class="{ poor: !showCore }" @click="actions.drawQi()">
@@ -107,7 +112,7 @@ const tabs = computed(() => [
           </div>
           <div class="tip-row">
             <span class="k">聚灵阵加持</span>
-            <span class="v">前{{ CONFIG.CLICK_QI_FULL_FIELDS }}座每座 +{{ fmt(CONFIG.CLICK_QI_PER_FIELD) }}，之后增益递减</span>
+            <span class="v">{{ fieldClickHint }}</span>
           </div>
           <div class="tip-row">
             <span class="k">已吸取</span>

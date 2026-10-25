@@ -29,7 +29,7 @@ const bonus = computed(() => fmtPercent(done.value.length * ACHIEVEMENT_REWARD))
     <div class="box-body">
       <div class="ach-list">
         <div v-for="a in done" :key="a.id" class="ach-item done">
-          <span class="name">{{ a.name }}</span> — {{ a.desc }}
+          <HoverTip :label="a.name" :description="a.desc" />
         </div>
       </div>
       <div v-if="!done.length" class="empty">还没有达成任何成就。</div>
@@ -38,7 +38,7 @@ const bonus = computed(() => fmtPercent(done.value.length * ACHIEVEMENT_REWARD))
         <summary>尚未达成（{{ todo.length }} 条）</summary>
         <div class="ach-list" style="padding-top: 4px">
           <div v-for="a in todo" :key="a.id" class="ach-item">
-            <span class="name">{{ a.name }}</span> — {{ a.desc }}
+            <HoverTip :label="a.name" :description="a.desc" />
           </div>
         </div>
         <div v-if="!todo.length" class="empty">所有成就都已达成，你已是传说。</div>

@@ -8,6 +8,7 @@
  */
 import { createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
+import { JSDOM } from 'jsdom'
 import App from '../src/App.vue'
 import { state, derived, ui } from '../src/game/store.js'
 import * as E from './engine-fixture.mjs'
@@ -109,7 +110,14 @@ try {
     state.resources.vow = E.money(10000)
     E.recompute(state, derived)
     const html = await renderToString(createSSRApp(App))
-    ok('转世预览显示永久仙缘生产与仓储变化', html.includes('仙缘产出加成') && html.includes('仙缘仓储加成') && html.includes('+40.00%') && html.includes('加工品不受仓容限制') && !html.includes('NaN'))
+    // 说明在悬浮后才挂载；只检查默认可见的标签与收益，避免依赖标签间的HTML长度。
+    const dom = new JSDOM(html)
+    const rows = [...dom.window.document.querySelectorAll('.tip-row')]
+    const benefit = label => rows.find(row => row.textContent.includes(label))?.querySelector('.v')?.textContent.trim() || ''
+    ok('转世预览显示永久仙缘生产与仓储变化',
+      /^\+10\.00%\s*→\s*\+\d+\.\d{2}%$/.test(benefit('仙缘产出加成')) &&
+      /^\+0\.50%\s*→\s*\+\d+\.\d{2}%$/.test(benefit('仙缘仓储加成')) && !html.includes('NaN'))
+    dom.window.close()
     ok('现成愿力可证心时显示提醒且不自动兑换', html.includes('已有愿力可证心') && state.resources.vow.eq(10000) && state.karma.eq(10))
     state.resources.vow = E.money(9999)
     const noAttest = await renderToString(createSSRApp(App))

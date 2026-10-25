@@ -1,11 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { state, derived, actions } from '@/game/store'
+import { state, actions } from '@/game/store'
 import { fmtClock, fmtTime } from '@/game/format'
-import { EVENT_MAP, EVENT_LEVEL_MAP, getEventLevel } from '@/data/events'
-import { eventOutcome } from '@/game/engine'
-import { eventPreview } from '@/game/eventPreview'
-import HoverTip from './HoverTip.vue'
+import { EVENT_LEVEL_MAP } from '@/data/events'
+import { CONFIG } from '@/data/config'
 
 const FILTERS = [
   { id: 'all', name: '全部' },
@@ -17,21 +15,13 @@ const FILTERS = [
 ]
 const filter = ref('all')
 const keyword = ref('')
-const log = computed(() => state.log)
+const log = computed(() => state.log.slice(0, CONFIG.LOG_DISPLAY_LIMIT))
 const filteredLog = computed(() => {
   const query = keyword.value.trim().toLocaleLowerCase()
   return log.value.filter((item) =>
     (filter.value === 'all' || (item.kind || 'info') === filter.value)
     && (!query || item.text.toLocaleLowerCase().includes(query)),
   )
-})
-const pending = computed(() => {
-  const p = state.pendingChoice
-  return p ? EVENT_MAP[p.id] : null
-})
-const threatTime = computed(() => {
-  state.stats.playTime // 主循环刷新倒计时。
-  return Math.max(0, ((state.pendingChoice?.deadline || 0) - Date.now()) / 1000)
 })
 const peaceTime = computed(() => {
   state.stats.playTime
@@ -44,7 +34,7 @@ const peaceTime = computed(() => {
     <div class="box-head">
       宗门纪事
       <button class="link" style="margin-left: 8px" @click="actions.clearLog()">清空纪事</button>
-      <span class="hint">显示 {{ filteredLog.length }} / {{ log.length }} 条</span>
+      <span class="hint">最近{{ CONFIG.LOG_DISPLAY_LIMIT }}条 · 显示 {{ filteredLog.length }} / {{ log.length }} 条</span>
     </div>
     <div class="filters log-filters" aria-label="纪事类型筛选">
       <button
@@ -59,21 +49,6 @@ const peaceTime = computed(() => {
       <button v-if="filter !== 'all' || keyword" class="filter" @click="filter = 'all'; keyword = ''">重置</button>
     </div>
     <div v-if="peaceTime > 0" class="small good">药圃安宁 · 还有 {{ fmtTime(peaceTime) }}，妖兽暂不再来。</div>
-    <!-- 普通来访可谢绝；已有威胁按期限默认防守。 -->
-    <div v-if="pending" class="choice">
-      <div class="choice-head">
-        <span class="good"><HoverTip label="抉择"><template #tip><p>单次每种资源奖励最多为仓储的20%；满仓部分无法领取，交易用料按预览支付。</p></template></HoverTip></span>
-        <span class="dim small">{{ getEventLevel(pending).label }} · {{ pending.name }}</span>
-      </div>
-      <div class="small dim" style="padding: 2px 0 4px">{{ pending.text }}</div>
-      <div v-if="pending.threat" class="small dim">还有 {{ fmtTime(threatTime) }} · 到期依现有阵法防守，不主动消耗成品。</div>
-      <div v-for="(opt, i) in pending.options" :key="opt.label" class="choice-row">
-        <button class="btn primary" :disabled="!eventOutcome(state, derived, opt.effect || {}).affordable" @click="actions.resolveChoice(i)">{{ opt.label }}</button>
-        <span class="small dim">{{ opt.desc }}</span>
-        <div class="small choice-preview">{{ eventPreview(state, derived, opt.effect) }}</div>
-      </div>
-    </div>
-
     <div class="log">
       <div v-if="!log.length" class="empty">山中清静，暂无大事。</div>
       <div v-else-if="!filteredLog.length" class="empty">没有符合筛选条件的纪事。</div>

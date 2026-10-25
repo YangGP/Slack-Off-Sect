@@ -30,6 +30,7 @@ const arrivalState = computed(() => {
       </div>
       <div class="tip-row"><span class="k">弟子岗位</span><span class="v" :class="derived.discipleMult < 1 ? 'bad' : ''">×{{ derived.discipleMult.toFixed(2) }}{{ derived.discipleMult < 1 ? ' · 拥挤减产' : ' · 正常' }}</span></div>
       <div class="tip-row"><span class="k">弟子岗位综合倍率</span><span class="v">×{{ (derived.habitabilityMult * derived.discipleMult).toFixed(2) }}</span></div>
+      <div class="tip-row"><span class="k">弟子口粮减耗</span><span class="v good">−{{ fmtPercent(derived.habitabilityUpkeepReduction || 0, 1) }}（最多 −{{ fmtPercent(CONFIG.HABITABILITY_UPKEEP_CAP) }}）</span></div>
       <div class="tip-row"><span class="k">弟子离开概率</span><span class="v" :class="derived.leaveChance > 0 ? 'bad' : ''">{{ fmtPercent(derived.leaveChance, 1) }} / {{ fmtTime(CONFIG.HABITABILITY_LEAVE_INTERVAL) }}</span></div>
       <div class="tip-row"><span class="k">弟子前来</span><span class="v">{{ arrivalState }}</span></div>
       <div class="tip-section">宜居度来源</div>
@@ -39,6 +40,7 @@ const arrivalState = computed(() => {
       <div class="tip-row"><span class="k">断供惩罚</span><span class="v" :class="state.habitabilityPenalty < 0 ? 'bad' : ''">{{ fmt(state.habitabilityPenalty) }}</span></div>
       <div class="tip-section">规则</div>
       <div class="tip-desc">宜居度低于0，每点全局减产1%；超过弟子数+{{ CONFIG.HABITABILITY_BONUS_MARGIN }}后，每点增产{{ fmtPercent(CONFIG.HABITABILITY_GAIN_PER_POINT, 2) }}，增减幅度最多{{ fmtPercent(CONFIG.HABITABILITY_GLOBAL_CAP) }}。</div>
+      <div class="tip-desc">宜居度高于基础值 {{ CONFIG.HABITABILITY_BASE }} 后，每点使弟子口粮减少 {{ fmtPercent(CONFIG.HABITABILITY_UPKEEP_PER_POINT, 2) }}，最多 −{{ fmtPercent(CONFIG.HABITABILITY_UPKEEP_CAP) }}；低于基础值不额外加耗。该减耗与锁灵阵等阵法减耗各自独立。</div>
       <div class="tip-desc">弟子不少于20人且宜居度低于弟子数−20时，岗位产出减半。弟子不少于50人且宜居度低于弟子数−50时，每60秒按缺口×2%的概率离开1人（最高50%），期间暂停来人。</div>
       <div class="tip-flavor">宜居度维持在弟子数+40～60，可获得5%～10%的全局增产；清风小院和膳养堂可改善起居。综合倍率包含宜居度与岗位拥挤的影响；长期断供仍会独立导致弟子离开。</div>
     </template>

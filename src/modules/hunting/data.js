@@ -5,8 +5,7 @@
  * `RESOURCES / JOBS / BUILDINGS / CRAFTS / CULTIVATION / TECHNIQUES`，
  * 顺序用锚点插回，保证 `*_MAP` 与展示顺序与拆分前一致。
  *
- * 每条目录项带 `module: 'hunting'`：模块关闭时，core 的解锁函数与 economy
- * 的累加循环会据此让它们失效（见 src/data/modules.js、src/game/moduleRegistry.js）。
+ * 每条目录项以 module 声明代码归属；猎杀始终启用，研究与境界门槛独立判定。
  *
  * 完整公式见 docs/BEAST-SYSTEM.md §4。
  */
@@ -42,16 +41,27 @@ export const HUNT_FIELDS = [
   {
     id: 'foothills',
     name: '山麓',
-    desc: '近山的缓坡与溪谷，普通妖兽出没。皮骨可作起居与护具之料。',
+    desc: '近山缓坡，皮骨用于起居陈设，偶得内丹帮助弟子修炼。安全猎场。',
     unlocked: true,
     entryRealm: 3,
     minDiscipleRealm: 0,
     recommendRealm: 3,
     baseDuration: 60,
     successBase: 0.9,
-    baseYield: { beastHide: 0.24, beastBone: 0.16 },
+    baseYield: { beastHide: 0.24, beastBone: 0.16, innerCore: 0.0005 },
     advancedYield: null,
   },
+  { id: 'deepwoods', name: '深山', entryRealm: 4, minDiscipleRealm: 3, recommendRealm: 4, baseDuration: 60, successBase: 0.85,
+    baseYield: { beastHide: 0.15, innerCore: 0.002, healingHerb: 0.01 }, injury: 0.03, desc: '内丹与疗养草较多；受伤暂不能再次猎杀，无死亡风险。' },
+  { id: 'forbidden', name: '禁地', entryRealm: 6, minDiscipleRealm: 4, recommendRealm: 6, baseDuration: 60, successBase: 0.8,
+    baseYield: { beastBone: 0.3, innerCore: 0.003, healingHerb: 0.03 }, injury: 0.05, desc: '常规培养补给产地；受伤暂不能再次猎杀，无死亡风险。' },
+  { id: 'spiritGarden', name: '灵兽苑', perk: 'hunt4', entryRealm: 6, minDiscipleRealm: 5, recommendRealm: 6, baseDuration: 60, successBase: 0.85,
+    baseYield: { spiritFur: 0.02, beastHide: 0.3, healingHerb: 0.02 }, injury: 0.03, desc: '高级宜居兽材的安全来源，适合长期经营。' },
+  { id: 'mysticValley', name: '玄灵谷', perk: 'hunt5', entryRealm: 8, minDiscipleRealm: 6, recommendRealm: 8, baseDuration: 60, successBase: 0.8,
+    baseYield: { spiritCore: 0.001, innerCore: 0.003, spiritFur: 0.01 }, injury: 0.06, desc: '高级培养内丹的安全来源，无死亡风险。' },
+  { id: 'ancientWilds', name: '荒古境', perk: 'hunt6', entryRealm: 9, minDiscipleRealm: 8, recommendRealm: 9, baseDuration: 60, successBase: 0.85,
+    baseYield: { spiritCore: 0.003, spiritFur: 0.04, healingHerb: 0.04 }, injury: 0.08, death: 0.0005,
+    desc: '高危：每名弟子每次猎杀0.05%死亡风险，死亡减免不生效；产物均有安全来源。' },
 ]
 
 export const HUNT_FIELD_MAP = Object.fromEntries(HUNT_FIELDS.map((f) => [f.id, f]))
@@ -65,14 +75,20 @@ export const DEFAULT_HUNT_FIELD = HUNT_FIELDS[0].id
 
 /** 资源：灵兽皮、灵兽骨（信符已抽成核心资源；禁区/深山材料待实现） */
 export const HUNT_RESOURCES = [
+  ...[
+    ['innerCore', '内丹', '丹', '直接补指定弟子的本境修为，不能越境。'],
+    ['spiritCore', '灵髓内丹', '髓', '高级修为物品，仍受宗门境界上限限制。'],
+    ['spiritFur', '灵绒', '绒', '高级起居陈设的建设与维护材料。'],
+    ['healingHerb', '疗养草', '药', '可合成猎杀补给，降低受伤率。'],
+    ['huntSupply', '护身药散', '散', '启用补给后，每名出征弟子消耗一份，本次受伤概率减半；不降低死亡率。'],
+  ].map(([id, name, glyph, desc]) => ({ id, name, glyph, desc, color: '#b3c78a', baseMax: Infinity, noProduction: true, module: 'hunting' })),
   {
     id: 'beastHide',
     name: '灵兽皮',
     glyph: '皮',
     color: '#d0a878',
     baseMax: 0,
-    integer: true,
-    desc: '山麓妖兽的皮，柔韧耐磨。可作暖裘居室的衬垫与护具。',
+    desc: '山麓妖兽的皮，柔韧耐磨，可作暖裘居室衬垫。',
     module: 'hunting',
   },
   {
@@ -81,7 +97,6 @@ export const HUNT_RESOURCES = [
     glyph: '骨',
     color: '#e0d6c2',
     baseMax: 0,
-    integer: true,
     desc: '妖兽的骨，含灵气而不易碎。可炼器，也可入建材。',
     module: 'hunting',
   },
@@ -106,17 +121,19 @@ export const HUNT_JOBS = [
 
 /** 建筑：执符堂、暖裘居室 */
 export const HUNT_BUILDINGS = [
+  { id: 'spiritFurCourt', name: '灵绒静舍', glyph: '绒', group: 'living', cost: { spiritFur: 30, cutStone: 200, plank: 100 }, priceRatio: 1.4,
+    desc: '以灵绒布置静舍，每座宜居度+12；持续消耗灵绒，不增加住额。', effects: { habitability: 12 }, upkeep: { spiritFur: 0.002 }, needs: { realm: 6 }, module: 'hunting' },
   {
     id: 'huntingCamp',
     name: '执符堂',
     glyph: '符',
     group: 'hunt',
-    cost: { wood: 500, rock: 200, stone: 60 },
+    cost: { wood: 500, cutStone: 50, stone: 60 },
     priceRatio: 1.35,
     desc: '临山而设的堂口，执符使在此开具宗门差遣凭信，入山猎妖与邻宗互市都从这里起行。',
     // 信符仓容单独配置，不套通用仓储加成；兽皮兽骨按普通材料计容。
     effects: { storage: { warrant: 300, beastHide: 200, beastBone: 150 } },
-    needs: { realm: 3, upgrades: ['wildHunting'] },
+    needs: { realm: 3, upgrades: ['quarryArt', 'wildHunting'] },
     moduleAny: ['hunting', 'diplomacy'],
   },
   {
@@ -124,12 +141,12 @@ export const HUNT_BUILDINGS = [
     name: '暖裘居室',
     glyph: '裘',
     group: 'living',
-    cost: { wood: 300, rock: 100, beastHide: 40, beastBone: 20 },
+    cost: { wood: 300, cutStone: 25, beastHide: 40, beastBone: 20 },
     priceRatio: 1.35,
     desc: '以兽皮为壁、兽骨为架的保暖陈设。不增加住额，靠持续供给兽皮维持暖意。',
     effects: { habitability: 4 },
     upkeep: { beastHide: 0.1 },
-    needs: { realm: 3, upgrades: ['wildHunting'], building: { id: 'logHouse', count: 1 } },
+    needs: { realm: 3, upgrades: ['quarryArt', 'wildHunting'], building: { id: 'logHouse', count: 1 } },
     module: 'hunting',
   },
 ]
@@ -142,6 +159,8 @@ export const HUNT_BUILDING_GROUP = { id: 'hunt', name: '猎杀', hint: '执符�
 
 /** 配方：兽骨炼器 */
 export const HUNT_CRAFTS = [
+  { id: 'makeHuntSupply', name: '调配护身药散', out: 'huntSupply', amount: 1, tier: 1, cost: { healingHerb: 2, herb: 20 }, time: 5,
+    needs: { realm: 4, upgrades: ['wildHunting'] }, desc: '减少本次猎杀受伤风险，不影响死亡风险。', module: 'hunting' },
   {
     id: 'forgeArtifactBone',
     name: '兽骨炼器',
@@ -160,13 +179,13 @@ export const HUNT_CRAFTS = [
 /** 配方插回锚点：保持拆分前位于「原淬炼法器」之后 */
 export const HUNT_CRAFT_ANCHOR = 'forgeArtifact'
 
-/** 修真研究：山野猎法、兽材加工（属 CULTIVATION，末尾追加） */
+/** 修真研究：山野猎法、兽材加工（属 CULTIVATION，按锚点插回原位） */
 export const HUNT_UPGRADES = [
   {
     id: 'wildHunting',
     name: '山野猎法',
     glyph: '猎',
-    cost: { insight: 300, wood: 200, stone: 30 },
+    cost: { insight: 700 },
     desc: '循兽迹、辨兽性，定下设伏与合围的门道。可营建执符堂，并布置暖裘居室；执符堂开出的信符也供邻宗互市使用。',
     effects: { unlockBuildings: ['huntingCamp', 'warmFurChamber'] },
     note: '解锁建筑：执符堂、暖裘居室',
@@ -179,7 +198,7 @@ export const HUNT_UPGRADES = [
     id: 'beastMaterialArt',
     name: '兽材加工',
     glyph: '兽',
-    cost: { insight: 1500, beastHide: 40, beastBone: 40 },
+    cost: { insight: 2600, beastHide: 40, beastBone: 40 },
     desc: '熟皮硝骨、按纹取料，兽材才堪堪可用。开启《兽骨炼器》，为御寒灵裘备料。',
     effects: { unlockBuildings: [] },
     note: '开启配方：兽骨炼器',
@@ -188,6 +207,16 @@ export const HUNT_UPGRADES = [
     module: 'hunting',
   },
 ]
+
+/**
+ * 修真研究插回锚点：与分段拆分前的展示位置一致——
+ * 山野猎法在「宗门制度」段（引泉净水之后），兽材加工在「工艺与规制」段（石作规制之后）。
+ * 研究列表按数据顺序展示，锚点保证删除分段后两个节点不掉到页面底部。
+ */
+export const HUNT_UPGRADE_ANCHORS = {
+  wildHunting: 'waterSanitation',
+  beastMaterialArt: 'stoneWorks',
+}
 
 /** 技艺：识踪诀、踏山步、筹猎章、剥取法（属 TECHNIQUES） */
 export const HUNT_TECHNIQUES = [
@@ -208,7 +237,7 @@ export const HUNT_TECHNIQUES = [
     cost: { insight: 200, stone: 20 },
     desc: '踏石无声，翻山如履平地。猎杀信符消耗 −10%，不改变外交费用。',
     effects: { huntCostReduction: 0.1 },
-    needs: { upgrades: ['wildHunting'] },
+    needs: { upgrades: ['beastTracking'] },
     module: 'hunting',
   },
   {
@@ -218,7 +247,7 @@ export const HUNT_TECHNIQUES = [
     cost: { insight: 350, wood: 300 },
     desc: '把弓弩、干粮、缚索列成册子，行前清点不遗漏。执符使开符速度 +25%。',
     effects: { jobRatio: { huntPlanner: 0.25 } },
-    needs: { upgrades: ['wildHunting'] },
+    needs: { upgrades: ['mountainStep'] },
     module: 'hunting',
   },
   {

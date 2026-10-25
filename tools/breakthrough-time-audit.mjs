@@ -24,7 +24,16 @@ import { createBot } from './player-bot.mjs'
 // 新成对测量保留独立参数与报告，旧模式及历史报告口径不变。
 if (process.argv[2] === '--paired') {
   const { measurePacing, pacingOptions } = await import('./lib/pacing-scenario.mjs')
-  const options = pacingOptions(process.argv.slice(3))
+  const resumeArg = process.argv.slice(3).find(arg => arg.startsWith('--resume='))
+  const { loadMeasurementCheckpoint } = await import('./lib/resource-recorder.mjs')
+  if (resumeArg && process.argv.slice(3).some(arg => arg !== resumeArg && !arg.startsWith('--wall-seconds='))) throw Error('续跑只允许调整累计墙钟预算，不允许修改游戏或策略参数')
+  const resumed = resumeArg ? loadMeasurementCheckpoint(resumeArg.slice(9)) : null
+  const wallArgs = process.argv.slice(3).filter(arg => arg.startsWith('--wall-seconds='))
+  if (resumed && wallArgs.length) {
+    if (wallArgs.length !== 1) throw Error('重复的墙钟预算参数')
+    resumed.options.wallSeconds = pacingOptions(wallArgs).wallSeconds
+  }
+  const options = resumed?.options || pacingOptions(process.argv.slice(3))
   const baseline = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     node: process.version,
     files: Object.fromEntries(['tools/breakthrough-time-audit.mjs', 'tools/player-bot.mjs',
@@ -39,7 +48,7 @@ if (process.argv[2] === '--paired') {
     const { snapshot, ...progress } = entry
     fs.writeFileSync(`${directory}/progress.json`, JSON.stringify({ completed: false, status: 'running', options, baseline, ...progress, snapshot }))
     console.log(JSON.stringify({ progress }))
-  })
+  }, { resume: resumed })
   result.baseline = baseline
   fs.writeFileSync(`${directory}/result.json`, JSON.stringify(result, null, 2))
   fs.writeFileSync(`${directory}/progress.json`, JSON.stringify({ completed: result.completed, status: result.stopReason, simulatedSeconds: result.simulatedSeconds }))
@@ -167,8 +176,8 @@ const prepare = () => {
   }
   for (const [id, amount] of Object.entries(need())) fill(id, amount)
 }
-// Same active labor policy as pacing-audit.mjs; avoids stockpiling crafted aids without
-// assigning enough scholars and incense keepers to actually finance the breakthrough.
+// 与旧 pacing 审计相同的主动分工策略；避免只囤护道材料、
+// 不派足悟道者与香火执事来支撑破境开销。
 const allocateLabor = () => {
   const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
   for (const job of E.JOBS) E.setJob(s, d, job.id, 0)

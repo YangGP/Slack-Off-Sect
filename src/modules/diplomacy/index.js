@@ -13,4 +13,6 @@ export default {
   createState: system.createDiplomacyState,
   normalizeState: system.normalizeDiplomacyState,
   deactivate: system.deactivateDiplomacy,
+  advance: system.advanceDiplomacy,
+  advanceOffline: (state, derived, dt) => system.advanceDiplomacy(state, derived, dt, { approximate: true }),
 }

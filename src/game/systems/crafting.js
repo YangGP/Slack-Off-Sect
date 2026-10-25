@@ -1,5 +1,7 @@
+import { recordWorldWork, recordWorldBatchWork } from './worldRules'
+import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { floorNumber, atLeast } from '../numbers'
-import { MONEY_INFINITY, ONE, ZERO, ceilMoney, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneyToCount, moneyToNumber } from '../decimal'
+import { MONEY_INFINITY, ONE, ZERO, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneyToCount, moneyToNumber } from '../decimal'
 import { maxCraftable, maxCraftableMoney, materialCopiesMoney, isAutoCrafting, EPS, autoCraftReserve, craftTarget, canAutoCraft, processingPlan, processingFuelReserve, hasCraftOrder, canProcessCraft, clickGain, craftYield } from './craftingRules'
 import { CRAFT_MAP, CRAFTS, autoCraftTime, craftCost, craftTime } from '@/data/crafts'
 import { RECIPE_STATIONS, PROCESSING_STATIONS, PROCESSING_MODES } from '@/data/industry'
@@ -46,39 +48,47 @@ export function manageCraftOrder(state, derived, recipeId, action) {
 }
 
 /**
- * 把一次制作的产出累进 craftProgress，返回**实际入库金额**（Decimal）。
+ * 制作产出直接入库，小数不再留待凑整；兼容旧运行状态中尚未入库的余量。
  * 产出份数是金额，不在这里转安全整数；次数统计仍是 Number，单独按上限累加。
  */
 export function addCraftGain(state, derived, recipe, gain, copies = ONE) {
-  const acc = (state.craftProgress[recipe.id] ?? ZERO).plus(gain)
-  const whole = acc.floor()
-  state.craftProgress[recipe.id] = acc.minus(whole)
-  let made = ZERO
-  if (whole.gt(0)) {
-    made = addResource(state, recipe.out, whole, derived.max[recipe.out] ?? MONEY_INFINITY)
-    state.stats.crafted[recipe.out] = (state.stats.crafted[recipe.out] ?? ZERO).plus(whole)
-  }
-  state.stats.craftCount = Math.min(Number.MAX_SAFE_INTEGER,
-    (state.stats.craftCount || 0) + moneyToCount(copies))
-  return made
+  return withResourceAction(state, { type: 'addCraftGain', id: recipe.id, copies: copies.toString(), offered: gain.toString() }, () => {
+    const acc = (state.craftProgress[recipe.id] ?? ZERO).plus(gain)
+    delete state.craftProgress[recipe.id]
+    let made = ZERO
+    if (acc.gt(0)) {
+      made = addResource(state, recipe.out, acc, derived.max[recipe.out] ?? MONEY_INFINITY)
+      state.stats.crafted[recipe.out] = (state.stats.crafted[recipe.out] ?? ZERO).plus(acc)
+    }
+    state.stats.craftCount = Math.min(Number.MAX_SAFE_INTEGER,
+      (state.stats.craftCount || 0) + moneyToCount(copies))
+    return made
+
+  })
 }
 
 export function setProcessingMode(state, derived, stationId, mode) {
-  if (!derived.industrial || !PROCESSING_STATIONS.some(s => s.id === stationId) || !PROCESSING_MODES.includes(mode)) return false
-  if (mode === 'overload' && !derived.autoCraftSpeedUnlocked || mode === 'energy' && !derived.energyCraftUnlocked) return false
-  state.settings.processingModes ||= {}
-  state.settings.processingModes[stationId] = mode
-  recompute(state, derived)
-  return true
+  return withResourceAction(state, { type: 'setProcessingMode', id: stationId, value: mode }, () => {
+    if (!derived.industrial || !PROCESSING_STATIONS.some(s => s.id === stationId) || !PROCESSING_MODES.includes(mode)) return false
+    if (mode === 'overload' && !derived.autoCraftSpeedUnlocked || mode === 'energy' && !derived.energyCraftUnlocked) return false
+    state.settings.processingModes ||= {}
+    state.settings.processingModes[stationId] = mode
+    recompute(state, derived)
+    return true
+
+  })
 }
 
 export function setCraftWeight(state, derived, recipeId, value) {
-  if (!derived.industrial || !Object.hasOwn(RECIPE_STATIONS, recipeId) || !isCraftUnlocked(state, CRAFT_MAP[recipeId]) ||
-      !Number.isInteger(value) || value < 1 || value > 100) return false
-  state.settings.craftWeights ||= {}
-  state.settings.craftWeights[recipeId] = value
-  recompute(state, derived)
-  return true
+  return withResourceAction(state, { type: 'setCraftWeight', id: recipeId, value }, () => {
+    if (!derived.industrial || !Object.hasOwn(RECIPE_STATIONS, recipeId) || !isCraftUnlocked(state, CRAFT_MAP[recipeId]) ||
+        !Number.isInteger(value) || value < 1 || value > 100) return false
+    state.settings.craftWeights ||= {}
+    state.settings.craftWeights[recipeId] = value
+    recompute(state, derived)
+    return true
+
+  })
 }
 
 /**
@@ -168,9 +178,10 @@ export function runIndustrialCraft(state, derived, dt, recipes) {
       timer.t = clamp(Number.isFinite(timer.t) ? timer.t : 0, 0, step)
       next = Math.min(next, Math.max(0, step - timer.t) / plan[recipe.id].speed)
     }
+    recordWorldWork(state, next, plan)
     remaining = Math.max(0, remaining - next)
     for (const [res, rate] of Object.entries(powerDrain)) if (rate.gt(0) && next > 0) {
-      state.resources[res] = moneyAvailable(state.resources[res] ?? ZERO, rate.times(next))
+      setResourceValue(state, res, moneyAvailable(state.resources[res] ?? ZERO, rate.times(next)), { source: 'systems/crafting.js:runIndustrialCraft' })
       made = true
     }
     let completed = false
@@ -209,7 +220,7 @@ function outputRoomCopies(state, derived, recipe, cap) {
   const progress = state.craftProgress[recipe.id] ?? ZERO
   if (!gain.isFinite() || gain.lte(0)) return 0
   if (have.gte(cap)) return 0
-  return moneyToCount(moneyMax(ZERO, ceilMoney(cap.minus(have)).minus(progress).div(gain).ceil()))
+  return moneyToCount(moneyMax(ZERO, cap.minus(have).minus(progress).div(gain).ceil()))
 }
 
 /**
@@ -240,6 +251,7 @@ export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
     if (!active.length) break
     usedRounds++
     let realUsed = 0
+    const worldWork = {}
     let completed = false
     for (const recipe of active) {
       const info = plan[recipe.id]
@@ -298,14 +310,16 @@ export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
       if (count > 0) { made = true; completed = true }
       const consumed = Math.max(0, count * step + timer.t - before)
       const real = consumed / speed
+      worldWork[recipe.id] = real
       realUsed = Math.max(realUsed, real)
       // 动力只为这条线自己的真实加工时间扣除：停料与满仓的工位空转不烧动力。
       for (const [res, rate] of Object.entries(drain)) {
         if (rate.gt(EPS) && real > 0) {
-          state.resources[res] = moneyAvailable(state.resources[res] ?? ZERO, rate.times(real))
+          setResourceValue(state, res, moneyAvailable(state.resources[res] ?? ZERO, rate.times(real)), { source: 'systems/crafting.js:runIndustrialCraftBatch' })
         }
       }
     }
+    recordWorldBatchWork(state, worldWork)
     budgetLeft = Math.max(0, budgetLeft - realUsed)
     if (!completed) break
   }
@@ -320,35 +334,38 @@ export function runIndustrialCraftBatch(state, derived, dt, stats = null) {
  * 与《心有灵犀》的常驻自动制作互不冲突：那是照节奏一直做，这只在节气收盈余。
  */
 export function runAutoCondense(state, derived) {
-  if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
-  const qiMax = derived.max.qi ?? MONEY_INFINITY
-  const qi = state.resources.qi ?? ZERO
-  if (!atLeast(qi, qiMax)) return false
-  const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
-  const recipe = CRAFT_MAP.condenseLiquid
-  if (!isCraftUnlocked(state, recipe)) return false
-  const cost = craftCost(derived, recipe)
-  const qiCost = cost.qi ?? ONE
-  if (!qiCost.gt(0)) return false
-  // 一次触发最多凝多少份：仓内比例 ÷ 单份灵气，金额域向下取整。
-  // 纯公式结算，不逐份循环 —— 大额超仓库存不能把浏览器卡住。
-  let copies = moneyMax(ZERO, qi.times(ratio).div(qiCost)).floor()
-  if (!copies.gt(0)) return false
-  // 每份的完整代价按可用库存（扣除保留量）封顶，与旧版逐份检查的口径一致。
-  for (const [res, amount] of Object.entries(cost)) {
-    if (!amount.gt(0)) continue
-    copies = moneyMin(copies, moneyMax(ZERO, moneyAvailable(state.resources[res] ?? ZERO,
-      autoCraftReserve(state, derived, res)).div(amount).floor()))
-  }
-  if (!copies.gt(0)) return false
-  // 库存目标与成品仓容交给共享结算的 cap；count 是金额，用 Decimal 明确判断成功。
-  const target = craftTarget(state, derived, recipe.id)
-  const cap = target.gt(0) ? moneyMin(target, derived.max[recipe.out] ?? MONEY_INFINITY)
-    : (derived.max[recipe.out] ?? MONEY_INFINITY)
-  const { count } = settleCraftCopies(state, derived, recipe, copies, cap)
-  if (!count.gt(0)) return false
-  recompute(state, derived)
-  return true
+  return withResourceAction(state, { type: 'runAutoCondense', id: null }, () => {
+    if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
+    const qiMax = derived.max.qi ?? MONEY_INFINITY
+    const qi = state.resources.qi ?? ZERO
+    if (!atLeast(qi, qiMax)) return false
+    const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
+    const recipe = CRAFT_MAP.condenseLiquid
+    if (!isCraftUnlocked(state, recipe)) return false
+    const cost = craftCost(derived, recipe)
+    const qiCost = cost.qi ?? ONE
+    if (!qiCost.gt(0)) return false
+    // 一次触发最多凝多少份：仓内比例 ÷ 单份灵气，金额域向下取整。
+    // 纯公式结算，不逐份循环 —— 大额超仓库存不能把浏览器卡住。
+    let copies = moneyMax(ZERO, qi.times(ratio).div(qiCost)).floor()
+    if (!copies.gt(0)) return false
+    // 每份的完整代价按可用库存（扣除保留量）封顶，与旧版逐份检查的口径一致。
+    for (const [res, amount] of Object.entries(cost)) {
+      if (!amount.gt(0)) continue
+      copies = moneyMin(copies, moneyMax(ZERO, moneyAvailable(state.resources[res] ?? ZERO,
+        autoCraftReserve(state, derived, res)).div(amount).floor()))
+    }
+    if (!copies.gt(0)) return false
+    // 库存目标与成品仓容交给共享结算的 cap；count 是金额，用 Decimal 明确判断成功。
+    const target = craftTarget(state, derived, recipe.id)
+    const cap = target.gt(0) ? moneyMin(target, derived.max[recipe.out] ?? MONEY_INFINITY)
+      : (derived.max[recipe.out] ?? MONEY_INFINITY)
+    const { count } = settleCraftCopies(state, derived, recipe, copies, cap)
+    if (!count.gt(0)) return false
+    recompute(state, derived)
+    return true
+
+  })
 }
 
 /**
@@ -362,70 +379,82 @@ export function runAutoCondense(state, derived) {
  * settleCraftCopies，与普通凝液配方共享同一份材料预算，并遵守解锁、总开关、保留量与目标。
  */
 export function runAutoCondenseBatch(state, derived, dayFrom, dayTo, dt) {
-  if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
-  const triggers = termCrossings(dayFrom, dayTo)
-  if (triggers <= 0) return false
-  const recipe = CRAFT_MAP.condenseLiquid
-  if (!isCraftUnlocked(state, recipe)) return false
-  const cost = craftCost(derived, recipe)
-  const qiCost = cost.qi ?? ZERO
-  const cap = derived.max.qi ?? ZERO
-  if (!qiCost.gt(0) || !cap.gt(0)) return false
-  const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
-  // 份数是金额：每次触发能凝多少份由满仓比例决定，与节气数相乘后仍不转 Number。
-  const perTrigger = moneyMax(ZERO, cap.times(ratio).div(qiCost)).floor()
-  if (!perTrigger.gt(0)) return false
-  const netRate = (derived.rates.qi ?? ZERO).plus(derived.expense?.qi ?? ZERO)
-  const heads = moneyMax(ZERO, (state.resources.qi ?? ZERO).plus(moneyMax(ZERO, netRate).times(dt)))
-  if (heads.lt(cap)) return false // 段内到不了满仓，凝灵诀不动手
-  const sustainable = moneyMax(ZERO, heads.div(qiCost.times(perTrigger))).floor()
-  let copies = perTrigger.times(moneyMin(money(triggers), sustainable))
-  if (!copies.gt(0)) return false
-  const target = craftTarget(state, derived, recipe.id)
-  if (target.gt(0) && (state.resources[recipe.out] ?? ZERO).gte(target)) return false
-  const capOut = target.gt(0) ? moneyMin(target, derived.max[recipe.out] ?? MONEY_INFINITY)
-    : (derived.max[recipe.out] ?? MONEY_INFINITY)
-  for (const [res, amount] of Object.entries(cost)) {
-    if (amount.gt(0)) {
-      copies = moneyMin(copies, moneyAvailable(state.resources[res] ?? ZERO,
-        autoCraftReserve(state, derived, res)).div(amount).floor())
+  return withResourceAction(state, { type: 'runAutoCondenseBatch', id: null }, () => {
+    if (!derived.autoCondenseLiquidUnlocked || !state.settings.autoCraftOn) return false
+    const triggers = termCrossings(dayFrom, dayTo)
+    if (triggers <= 0) return false
+    const recipe = CRAFT_MAP.condenseLiquid
+    if (!isCraftUnlocked(state, recipe)) return false
+    const cost = craftCost(derived, recipe)
+    const qiCost = cost.qi ?? ZERO
+    const cap = derived.max.qi ?? ZERO
+    if (!qiCost.gt(0) || !cap.gt(0)) return false
+    const ratio = clamp(CONFIG.AUTO_CONDENSE_RATIO, 0, 1)
+    // 份数是金额：每次触发能凝多少份由满仓比例决定，与节气数相乘后仍不转 Number。
+    const perTrigger = moneyMax(ZERO, cap.times(ratio).div(qiCost)).floor()
+    if (!perTrigger.gt(0)) return false
+    const netRate = (derived.rates.qi ?? ZERO).plus(derived.expense?.qi ?? ZERO)
+    const heads = moneyMax(ZERO, (state.resources.qi ?? ZERO).plus(moneyMax(ZERO, netRate).times(dt)))
+    if (heads.lt(cap)) return false // 段内到不了满仓，凝灵诀不动手
+    const sustainable = moneyMax(ZERO, heads.div(qiCost.times(perTrigger))).floor()
+    let copies = perTrigger.times(moneyMin(money(triggers), sustainable))
+    if (!copies.gt(0)) return false
+    const target = craftTarget(state, derived, recipe.id)
+    if (target.gt(0) && (state.resources[recipe.out] ?? ZERO).gte(target)) return false
+    const capOut = target.gt(0) ? moneyMin(target, derived.max[recipe.out] ?? MONEY_INFINITY)
+      : (derived.max[recipe.out] ?? MONEY_INFINITY)
+    for (const [res, amount] of Object.entries(cost)) {
+      if (amount.gt(0)) {
+        copies = moneyMin(copies, moneyAvailable(state.resources[res] ?? ZERO,
+          autoCraftReserve(state, derived, res)).div(amount).floor())
+      }
     }
-  }
-  if (!copies.gt(0)) return false
-  return settleCraftCopies(state, derived, recipe, copies, capOut).count.gt(0)
+    if (!copies.gt(0)) return false
+    return settleCraftCopies(state, derived, recipe, copies, capOut).count.gt(0)
+
+  })
 }
 
 export function setAutoCraftSpeed(state, derived, recipeId, speed) {
-  if (!Object.hasOwn(CRAFT_MAP, recipeId)) return false
-  const recipe = CRAFT_MAP[recipeId]
-  if (!derived.autoCraftSpeedUnlocked || !recipe || !isCraftUnlocked(state, recipe) || !CONFIG.AUTO_CRAFT_SPEEDS.includes(speed)) return false
-  const fraction = clamp((state.craftTimers[recipeId]?.t || 0) / autoCraftTime(recipe, derived), 0, 1)
-  state.settings.autoCraftSpeeds ||= {}
-  state.settings.autoCraftSpeeds[recipeId] = speed
-  recompute(state, derived)
-  // 工位计时保存已完成的基础加工秒数，调速与改分配无需改写进度。
-  if (state.craftTimers[recipeId] && !(derived.industrial && RECIPE_STATIONS[recipeId])) state.craftTimers[recipeId].t = fraction * autoCraftTime(recipe, derived)
-  return true
+  return withResourceAction(state, { type: 'setAutoCraftSpeed', id: recipeId, value: speed }, () => {
+    if (!Object.hasOwn(CRAFT_MAP, recipeId)) return false
+    const recipe = CRAFT_MAP[recipeId]
+    if (!derived.autoCraftSpeedUnlocked || !recipe || !isCraftUnlocked(state, recipe) || !CONFIG.AUTO_CRAFT_SPEEDS.includes(speed)) return false
+    const fraction = clamp((state.craftTimers[recipeId]?.t || 0) / autoCraftTime(recipe, derived), 0, 1)
+    state.settings.autoCraftSpeeds ||= {}
+    state.settings.autoCraftSpeeds[recipeId] = speed
+    recompute(state, derived)
+    // 工位计时保存已完成的基础加工秒数，调速与改分配无需改写进度。
+    if (state.craftTimers[recipeId] && !(derived.industrial && RECIPE_STATIONS[recipeId])) state.craftTimers[recipeId].t = fraction * autoCraftTime(recipe, derived)
+    return true
+
+  })
 }
 
 export function setCraftTarget(state, derived, recipeId, value) {
-  if (!derived.craftTargetsUnlocked || !CRAFT_MAP[recipeId]) return false
-  // 库存目标是金额（整数库存），不是循环次数：字符串直接按金额域解析，不先转 Number、
-  // 也不套安全整数上限。非法值 / 负数 / 非有限值拒绝，不污染旧目标。
-  let target
-  try { target = money(value) } catch { return false }
-  if (!target.isFinite() || target.isNegative()) return false
-  state.craftTargets ||= {}
-  state.craftTargets[recipeId] = floorMoney(target)
-  return true
+  return withResourceAction(state, { type: 'setCraftTarget', id: recipeId, value }, () => {
+    if (!derived.craftTargetsUnlocked || !CRAFT_MAP[recipeId]) return false
+    // 库存目标是金额（整数库存），不是循环次数：字符串直接按金额域解析，不先转 Number、
+    // 也不套安全整数上限。非法值 / 负数 / 非有限值拒绝，不污染旧目标。
+    let target
+    try { target = money(value) } catch { return false }
+    if (!target.isFinite() || target.isNegative()) return false
+    state.craftTargets ||= {}
+    state.craftTargets[recipeId] = target
+    return true
+
+  })
 }
 
 /** 执行一次「吸取天地灵气」，返回这次吸到多少（金额） */
 export function drawQi(state, derived) {
-  const gain = clickGain(state, derived)
-  addResource(state, 'qi', gain, derived.max.qi ?? MONEY_INFINITY)
-  state.stats.clicks = (state.stats.clicks || 0) + 1
-  return gain
+  return withResourceAction(state, { type: 'drawQi', id: null }, () => {
+    const gain = clickGain(state, derived)
+    addResource(state, 'qi', gain, derived.max.qi ?? MONEY_INFINITY)
+    state.stats.clicks = (state.stats.clicks || 0) + 1
+    return gain
+
+  })
 }
 
 /**
@@ -433,66 +462,77 @@ export function drawQi(state, derived) {
  * 份数（times/count）是**金额**：纯公式结算，不逐份循环，也不截成安全整数。
  */
 export function settleCraftCopies(state, derived, recipe, times, cap = derived.max[recipe.out] ?? MONEY_INFINITY) {
-  const empty = { made: ZERO, count: ZERO }
-  let want
-  try { want = money(times) } catch { return empty }
-  if (!want.isFinite() || !want.gt(0)) return empty
-  const have = state.resources[recipe.out] ?? ZERO
-  const gain = craftYield(derived, recipe)
-  const progress = state.craftProgress[recipe.id] ?? ZERO
-  const limit = money(cap)
-  if (!have.isFinite() || !limit.gt(have) || have.gte(limit) ||
-      !gain.isFinite() || gain.lte(0) || !progress.isFinite()) return empty
-  // 原来逐份扣料、累计小数并在满仓后停下。直接算出触及上限的那一份，
-  // 保留最后一份的溢出和进度规则，避免大批制作阻塞浏览器主线程。
-  const roomCopies = moneyMax(ZERO, ceilMoney(limit.minus(have)).minus(progress).div(gain).ceil())
-  const count = moneyMin(floorMoney(want), materialCopiesMoney(state, derived, recipe), roomCopies)
-  if (!count.isFinite() || !count.gt(0)) return empty
-  payCost(state, craftCost(derived, recipe), count)
-  const made = addCraftGain(state, derived, recipe, gain.times(count), count)
-  return { made, count }
+  return withResourceAction(state, { type: 'settleCraftCopies', id: recipe.id }, () => {
+    const empty = { made: ZERO, count: ZERO }
+    let want
+    try { want = money(times) } catch { return empty }
+    if (!want.isFinite() || !want.gt(0)) return empty
+    const have = state.resources[recipe.out] ?? ZERO
+    const gain = craftYield(derived, recipe)
+    const progress = state.craftProgress[recipe.id] ?? ZERO
+    const limit = money(cap)
+    if (!have.isFinite() || !limit.gt(have) || have.gte(limit) ||
+        !gain.isFinite() || gain.lte(0) || !progress.isFinite()) return empty
+    // 制作批次数仍取整，产出允许小数；最后一批超出仓容的部分按实际容量截断。
+    const roomCopies = moneyMax(ZERO, limit.minus(have).minus(progress).div(gain).ceil())
+    const count = moneyMin(floorMoney(want), materialCopiesMoney(state, derived, recipe), roomCopies)
+    if (!count.isFinite() || !count.gt(0)) return empty
+    payCost(state, craftCost(derived, recipe), count)
+    const made = addCraftGain(state, derived, recipe, gain.times(count), count)
+    return { made, count }
+
+  })
 }
 
 export function craft(state, derived, recipeId, { silent = false, times = 1 } = {}) {
-  const recipe = CRAFTS.find((c) => c.id === recipeId)
-  if (!recipe || !isCraftUnlocked(state, recipe)) return ZERO
-  const { made } = settleCraftCopies(state, derived, recipe, times)
-  if (made.gt(0)) {
-    if (!silent) {
-      pushLog(
-        state,
-        `${recipe.name}：得到 ${RESOURCE_MAP[recipe.out].name} ×${fmtAmount(made)}`,
-        'good',
-      )
+  return withResourceAction(state, { type: 'craft', id: recipeId }, () => {
+    const recipe = CRAFTS.find((c) => c.id === recipeId)
+    if (!recipe || !isCraftUnlocked(state, recipe)) return ZERO
+    const { made } = settleCraftCopies(state, derived, recipe, times)
+    if (made.gt(0)) {
+      if (!silent) {
+        pushLog(
+          state,
+          `${recipe.name}：得到 ${RESOURCE_MAP[recipe.out].name} ×${fmtAmount(made)}`,
+          'good',
+        )
+      }
+      recompute(state, derived)
     }
-    recompute(state, derived)
-  }
-  return made
+    return made
+
+  })
 }
 
 /** 批量切换全部已解锁配方，不受界面筛选影响，总开关保持不变。 */
 export function setAllAutoCraft(state, derived, enabled) {
-  if (enabled && !derived.autoCraftUnlocked) return false
-  if (enabled) {
-    for (const recipe of CRAFTS) {
-      if (isCraftUnlocked(state, recipe)) state.autoCraft[recipe.id] = true
+  return withResourceAction(state, { type: 'setAllAutoCraft', id: null }, () => {
+    if (enabled && !derived.autoCraftUnlocked) return false
+    if (enabled) {
+      for (const recipe of CRAFTS) {
+        if (isCraftUnlocked(state, recipe)) state.autoCraft[recipe.id] = true
+      }
+    } else {
+      for (const id of Object.keys(state.autoCraft)) state.autoCraft[id] = false
     }
-  } else {
-    for (const id of Object.keys(state.autoCraft)) state.autoCraft[id] = false
-  }
-  pushLog(state, enabled ? '全部已解锁配方自动制作已开启' : '全部自动制作已取消', 'info')
-  return true
+    pushLog(state, enabled ? '全部已解锁配方自动制作已开启' : '全部自动制作已取消', 'info')
+    return true
+
+  })
 }
 
 export function toggleAutoCraft(state, derived, recipeId) {
-  if (!derived.autoCraftUnlocked) return false
-  state.autoCraft[recipeId] = !state.autoCraft[recipeId]
-  pushLog(
-    state,
-    `${CRAFTS.find((c) => c.id === recipeId)?.name || recipeId} 自动制作已${
-      state.autoCraft[recipeId] ? '开启' : '关闭'
-    }`,
-    'info',
-  )
-  return state.autoCraft[recipeId]
+  return withResourceAction(state, { type: 'toggleAutoCraft', id: recipeId }, () => {
+    if (!derived.autoCraftUnlocked) return false
+    state.autoCraft[recipeId] = !state.autoCraft[recipeId]
+    pushLog(
+      state,
+      `${CRAFTS.find((c) => c.id === recipeId)?.name || recipeId} 自动制作已${
+        state.autoCraft[recipeId] ? '开启' : '关闭'
+      }`,
+      'info',
+    )
+    return state.autoCraft[recipeId]
+
+  })
 }

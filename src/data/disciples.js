@@ -3,11 +3,20 @@ import { JOBS } from './jobs'
 import { CALENDAR, DAYS_PER_YEAR } from './calendar'
 import { birthTalents, talentRandom, normalizeTalents, talentBonus } from './talents'
 import { CONFIG } from './config'
-import { ZERO, ceilMoney, money, moneyNonNegative } from '../game/decimal.js'
+import { ZERO, money, moneyNonNegative } from '../game/decimal.js'
+import { SAMSARA, daoLevel } from './samsara.js'
 
 export const DISCIPLE_GROWTH = {
   rate: 1,
-  hours: [1, 3, 8, 16, 24, 36, 48, 72, 96, 120],
+  // 分段目标3/27/105/230天：三灵根、无传功、仅宗门及时开放下一境。
+  // 先反推重修期望，再用固定种子0xdecafbad的一万组几何失败样本校准分段中位。
+  // 资源等待、额外宗门指导与整局节奏另测，不是固定倒计时。
+  hours: [1, 3, 8, 16, 24, 36, 48, 72, 96, 120].map((weight, index, old) => {
+    const group = index < 4 ? [0, 4, 72] : index < 6 ? [4, 6, 648] : index < 8 ? [6, 8, 2520] : [8, 10, 5520]
+    const p = realmBaseChance(index + 1) * 0.5
+    const medianScale = [1.058, 1.0731, 1.1199, 1.1428][index < 4 ? 0 : index < 6 ? 1 : index < 8 ? 2 : 3]
+    return medianScale * group[2] * weight / old.slice(group[0], group[1]).reduce((a, b) => a + b, 0) / (1 + 0.2 * (1 - p) / p)
+  }),
   successFactor: 0.5,
   guidance: 0.1,
   costFactor: 0.01,
@@ -41,7 +50,7 @@ export const DISCIPLE_DISMISSAL = { yearSeconds: DAYS_PER_YEAR * CALENDAR.DAY_SE
 /**
  * 主动招募：按「礼聘」档位花费资源，立即招募一名弟子（见 docs/DISCIPLE-PROGRESSION.md §2.5）。
  * 档位越高，花费越多、越容易刷出高品级天赋，起点境界也越高。数值均为试调。
- * realmWeights 为「相对宗门境界的偏移」权重（下标即偏移，0 = 与宗门同境）；宗门越高、档位越高，抽到的起点境界越高。
+ * 礼聘品质改善天赋与普通来客分布；稀有最高境界另受永久招募上限限制。
  */
 export const RECRUIT_TIERS = [
   { id: 'small', name: '薄礼', glyph: '薄', qi: 300, cost: {}, realmWeights: [4, 8, 18, 28, 42],
@@ -73,22 +82,25 @@ const clampRealm = value => Math.max(0, Math.min(REALMS.length - 1, value))
 /** 招募花费：灵气随宗门境界倍率缩放，附加材料为固定值。 */
 export function recruitCost(tier, sectRealm) {
   const mult = realmProductionBase(REALMS[sectRealm]?.mult ?? 1)
-  const cost = { qi: Math.max(1, Math.ceil((tier.qi || 0) * mult)) }
+  const cost = { qi: money(tier.qi || 0).times(mult) }
   for (const [id, amount] of Object.entries(tier.cost || {})) if (amount > 0) cost[id] = amount
   return cost
 }
 
-/** 起点境界的可能区间（供界面展示）：最低为宗门下移最大偏移，最高为宗门境界。 */
-export function recruitRealmRange(tier, sectRealm) {
-  const maxOffset = Math.max(0, (tier.realmWeights?.length || 1) - 1)
-  return { min: clampRealm(sectRealm - maxOffset), max: clampRealm(sectRealm) }
+/** 起点境界区间：初始最高低宗门五境，永久购买逐步提升，永远不能招同境。 */
+export function recruitRealmRange(tier, sectRealm, upgrade = 0) {
+  return { min: 0, max: clampRealm(sectRealm - Math.max(1, 5 - upgrade)) }
 }
 
 /** 用存档内独立的招募序列抽取起点境界：宗门越高、档位越高则起点越高。 */
-export function rollRecruitRealm(data, tier, sectRealm) {
-  const weights = tier.realmWeights
-  if (!weights?.length) return clampRealm(sectRealm)
-  return clampRealm(sectRealm - weightedIndex(weights, () => recruitRandom(data)))
+export function rollRecruitRealm(data, tier, sectRealm, upgrade = 0) {
+  const max = recruitRealmRange(tier, sectRealm, upgrade).max
+  if (!max) return 0
+  // 最高档独立稀有事件；普通来人偏低境，不随礼聘无限靠近宗门。
+  const rareChance = tier?.id === 'grand' ? 0.008 : tier?.id === 'thick' ? 0.004 : 0.002
+  if (recruitRandom(data) < rareChance) return max
+  const ordinary = tier?.id === 'grand' ? [20, 35, 30, 15] : tier?.id === 'thick' ? [10, 25, 35, 30] : [5, 15, 30, 50]
+  return Math.max(0, max - 1 - weightedIndex(ordinary, () => recruitRandom(data)))
 }
 
 export function discipleResidenceYears(member) {
@@ -104,9 +116,9 @@ export function discipleAnnualBaseUpkeep(member, sectRealm) {
     .times(DISCIPLE_DISMISSAL.yearSeconds)
 }
 
-/** 逐出费用（灵气）：年基础口粮 ×（已满年数 + 1），逐人向上取整。 */
+/** 逐出费用（灵气）：年基础口粮 ×（已满年数 + 1），小数完整保留。 */
 export function discipleDismissalCost(member, sectRealm) {
-  return ceilMoney(discipleAnnualBaseUpkeep(member, sectRealm).times(discipleResidenceYears(member) + 1))
+  return discipleAnnualBaseUpkeep(member, sectRealm).times(discipleResidenceYears(member) + 1)
 }
 
 export const SPIRITUAL_ROOTS = [
@@ -147,16 +159,17 @@ function recruitRandom(data) {
 
 /** 传功加速：本人受传功、本境未修满，且整批传功处于供给中时生效。 */
 export function trainingBonus(member, trainingActive = false) {
-  if (!trainingActive || !member.mentored) return 0
+  if (!trainingActive || !member.mentored || member.onMission) return 0
   if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return 0
   return DISCIPLE_TRAINING.speed
 }
 
 /** 传功每秒灵气：按弟子有效境界递增；未受传功或本境已修满不收费。金额为 Decimal。 */
-export function discipleTrainingCost(member, sectRealm) {
+export function discipleTrainingCost(member, sectRealm, state = null) {
+  if (member.onMission) return ZERO
   if (!member.mentored) return ZERO
   if ((member.cultivation || 0) >= cultivationRequired(member.realm)) return ZERO
-  return money(DISCIPLE_TRAINING.qiPerSecond).times(discipleFactor(member, sectRealm))
+  return money(DISCIPLE_TRAINING.qiPerSecond).times(discipleFactor(member, sectRealm)).times(state ? 1 - 0.04 * daoLevel(state, 'efficientMentoring') : 1)
 }
 
 export function cultivationRate(member, trainingActive = false) {
@@ -200,6 +213,8 @@ export function newDisciple(data, spiritualRoot = null, { legacy = false, realm 
   return { id, name: surnames[(id * 7) % surnames.length] + names[(id * 11) % names.length],
     realm: clampRealm(realm | 0), cultivation: 0, roleId: null, cooldown: 0,
     residenceSeconds: 0, totalQiConsumed: ZERO, mentored: false, aidBonus: 0, focus: false,
+    lifetimeCultivation: 0, loyalty: legacy ? 1 : realm > 0 ? Math.max(0.15, 0.6 - realm * 0.04) : 0.7,
+    injury: 0, finalReady: false, collectiveAscended: false,
     spiritualRoot: spiritualRoot || rollSpiritualRoot(() => rootRandom(data)),
     talents: legacy ? [] : birthTalents(() => talentRandom(data), quality, { includeHunting }) }
 }
@@ -236,14 +251,19 @@ export function syncDisciples(data, { defaultRoot = null, legacy = false } = {})
 }
 
 export function normalizeDisciples(data, { preferMembers = false } = {}) {
+  const legacyGrowth = data.cultivationVersion !== 1
   const seen = new Set()
   data.members = (Array.isArray(data.members) ? data.members : []).filter(member =>
     member && Number.isSafeInteger(member.id) && member.id > 0 && !seen.has(member.id) && seen.add(member.id))
     .map(member => {
       const realm = Number.isInteger(member.realm) ? Math.max(0, Math.min(REALMS.length - 1, member.realm)) : 0
+      const oldNeed = ([1, 3, 8, 16, 24, 36, 48, 72, 96, 120][realm] || 0) * 3600
+      const current = Number.isFinite(member.cultivation) ? Math.max(0, member.cultivation) : 0
+      const cultivation = Math.min(cultivationRequired(realm), legacyGrowth && oldNeed > 0 ? current / oldNeed * cultivationRequired(realm) : current)
+      const legacyLifetime = DISCIPLE_GROWTH.hours.slice(0, realm).reduce((a, b) => a + b * 3600, 0) + cultivation
       return { id: member.id, name: typeof member.name === 'string' && member.name.trim() ? member.name.slice(0, 40) : `弟子${member.id}`,
         realm, roleId: JOBS.some(job => job.id === member.roleId) ? member.roleId : null,
-        cultivation: Number.isFinite(member.cultivation) ? Math.max(0, Math.min(cultivationRequired(realm), member.cultivation)) : 0,
+        cultivation,
         cooldown: Number.isFinite(member.cooldown) ? Math.max(0, Math.min(DISCIPLE_GROWTH.cooldown, member.cooldown)) : 0,
         residenceSeconds: Number.isFinite(member.residenceSeconds) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.residenceSeconds)) : 0,
         // 个人口粮累计是金额：损坏值回退 0，按 Decimal 归一化，不再截断到 MAX_SAFE_INTEGER。
@@ -252,6 +272,11 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
         mentored: member.mentored === true,
         aidBonus: Number.isFinite(member.aidBonus) ? Math.max(0, Math.min(0.2, member.aidBonus)) : 0,
         focus: member.focus === true,
+        lifetimeCultivation: legacyGrowth ? legacyLifetime : Number.isFinite(member.lifetimeCultivation) ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, member.lifetimeCultivation)) : 0,
+        loyalty: Number.isFinite(member.loyalty) ? Math.max(0, Math.min(1, member.loyalty)) : 1,
+        injury: Number.isFinite(member.injury) ? Math.max(0, Math.min(86400, member.injury)) : 0,
+        finalReady: realm === 10 && member.finalReady === true,
+        collectiveAscended: realm === 10 && member.collectiveAscended === true,
         talents: normalizeTalents(member.talents) }
     })
   data.nextId = data.members.reduce((next, member) => Math.max(next, member.id + 1),
@@ -262,19 +287,26 @@ export function normalizeDisciples(data, { preferMembers = false } = {}) {
   data.recruitSeed = Number.isInteger(data.recruitSeed) && data.recruitSeed >= 0 && data.recruitSeed <= 4294967295
     ? data.recruitSeed : (data.rootSeed ^ 0x1b873593) >>> 0
   data.talentVersion = 2
+  data.cultivationVersion = 1
   if (preferMembers) recountDisciples(data)
   else syncDisciples(data, { defaultRoot: 'triple', legacy: true })
+  data.peak = Math.max(Number.isSafeInteger(data.peak) ? Math.min(100000, Math.max(0, data.peak)) : 0, data.members.length)
 }
 
-export function cultivateDisciple(member, seconds, trainingActive = false) {
+export function cultivateDisciple(member, seconds, trainingActive = false, speed = 1, loyaltySpeed = 1) {
   member.residenceSeconds = Math.min(Number.MAX_SAFE_INTEGER, (member.residenceSeconds || 0) + seconds)
   member.cooldown = Math.max(0, member.cooldown - seconds)
-  member.cultivation = Math.min(cultivationRequired(member.realm), member.cultivation + seconds * cultivationRate(member, trainingActive))
+  member.injury = Math.max(0, (member.injury || 0) - seconds)
+  member.loyalty = Math.min(1, (member.loyalty ?? 1) + seconds * loyaltySpeed / (SAMSARA.loyaltyDays * 86400 * (1 + member.realm * 0.2)))
+  const before = member.cultivation || 0
+  member.cultivation = Math.min(cultivationRequired(member.realm), before + seconds * cultivationRate(member, trainingActive) * speed)
+  member.lifetimeCultivation = Math.min(Number.MAX_SAFE_INTEGER, (member.lifetimeCultivation || 0) + Math.max(0, member.cultivation - before))
 }
 
 /** 个体记录是运行时权威状态；总人数和岗位数量仅作兼容视图。 */
 export function recountDisciples(data) {
   data.total = data.members.length
+  data.peak = Math.max(data.peak || 0, data.total)
   for (const job of JOBS) data.jobs[job.id] = 0
   for (const member of data.members) {
     if (member.roleId && Object.hasOwn(data.jobs, member.roleId)) data.jobs[member.roleId]++

@@ -5,6 +5,8 @@ import { CRAFT_MAP, craftTime } from '../src/data/crafts.js'
 import { PROCESSING_STATIONS } from '../src/data/industry.js'
 
 let checks = 0
+// 固定供料的负荷回归默认观察一分钟；十分钟稳态测量按需显式运行。
+const duration = process.argv.includes('--full') ? 600 : 60
 function assert(label, condition) {
   if (!condition) throw new Error(label)
   checks++
@@ -16,7 +18,7 @@ function fixture() {
   for (const id of ['forge', 'workshop', 'talismanHall', 'alchemyRoom', 'crystalArray']) s.buildings[id] = { count: 1, on: true }
   s.buildings.warehouse = { count: 500, on: true }
   s.buildings.granary = { count: 500, on: true }
-  s.buildings.depot = { count: 500, on: true }
+  s.buildings.warehouse = { count: 2500, on: true }
   s.buildings.grotto = { count: 1, on: true }
   s.buildings.annihilationFurnace = { count: 4, on: true }
   E.recompute(s, d)
@@ -28,20 +30,22 @@ function fixture() {
   E.recompute(s, d)
   return { s, d }
 }
-function run(mode, seconds = 600, adjust = () => {}) {
+function run(mode, seconds = duration, adjust = () => {}) {
   const { s, d } = fixture()
   adjust(s, d)
   E.recompute(s, d)
   assert(`valid mode ${mode}`, E.setProcessingMode(s, d, 'forge', mode))
   let chargedQi = E.money(0), chargedEnergy = E.money(0), boostedSeconds = 0
+  let validStocks = true
   for (let i = 0; i < seconds; i++) {
     const line = E.processingPlan(s, d).refineSteel
     if (line.boost > 0) boostedSeconds++
     chargedQi = chargedQi.plus(line.powerDrain.qi ?? E.ZERO)
     chargedEnergy = chargedEnergy.plus(line.powerDrain.qiEnergy ?? E.ZERO)
     E.tick(s, d, 1, { events: false, offline: true })
-    assert('stocks stay finite and nonnegative', Object.values(s.resources).every(n => E.moneyFinite(n) && !n.isNegative()))
+    validStocks &&= Object.values(s.resources).every(n => E.moneyFinite(n) && !n.isNegative())
   }
+  assert('stocks stay finite and nonnegative throughout the scenario', validStocks)
   const timer = s.craftTimers.refineSteel || { made: 0, t: 0 }
   return { mode, seconds, output: E.moneyToNumber(s.resources.steel), processingSeconds: +(timer.made * craftTime(CRAFT_MAP.refineSteel, d) + timer.t).toFixed(4), boostedSeconds,
     estimatedExtraQi: +E.moneyToNumber(chargedQi).toFixed(4), estimatedExtraEnergy: +E.moneyToNumber(chargedEnergy).toFixed(4), energyLeft: +E.moneyToNumber(s.resources.qiEnergy).toFixed(4) }
@@ -50,8 +54,9 @@ function run(mode, seconds = 600, adjust = () => {}) {
 const sustained = ['normal', 'overload', 'energy'].map(mode => run(mode))
 assert('overload performs more processing than normal', sustained[1].processingSeconds > sustained[0].processingSeconds * 1.9)
 assert('sustained energy performs more processing than normal', sustained[2].processingSeconds > sustained[0].processingSeconds * 1.9)
-const noSupply = run('energy', 600, (s) => { s.buildings.annihilationFurnace.on = false; s.resources.qiEnergy = E.money(5) })
-assert('fuel-starved line continues normal work', noSupply.processingSeconds >= sustained[0].processingSeconds && noSupply.processingSeconds < sustained[2].processingSeconds)
+const noSupply = run('energy', duration, (s) => { s.buildings.annihilationFurnace.on = false; s.resources.qiEnergy = E.money(5) })
+assert('fuel-starved line boosts first and then continues normal work', noSupply.processingSeconds > sustained[0].processingSeconds &&
+  noSupply.processingSeconds < sustained[2].processingSeconds && noSupply.boostedSeconds < duration)
 
 const { s, d } = fixture()
 for (const id of ['sawPlank', 'drawTalisman', 'refinePill', 'condenseLiquid']) {
@@ -104,13 +109,15 @@ polar.s.resources.yangParticle = polar.d.max.yangParticle
 polar.s.resources.yinParticle = E.money(0)
 const initialYang = polar.s.resources.yangParticle
 let lowestLoad = 1, highestLoad = 0
-for (let i = 0; i < 600; i++) {
+let withinStorage = true
+for (let i = 0; i < duration; i++) {
   E.tick(polar.s, polar.d, 1, { events: false, offline: true })
   lowestLoad = Math.min(lowestLoad, polar.d.buildingSupply.polarizeArray)
   highestLoad = Math.max(highestLoad, polar.d.buildingSupply.polarizeArray)
-  assert('full side stays within storage', polar.s.resources.yangParticle.lte(initialYang.plus('1e-6')))
+  withinStorage &&= polar.s.resources.yangParticle.lte(initialYang.plus('1e-6'))
 }
+assert('full side stays within storage throughout the scenario', withinStorage)
 assert('imbalanced pair can still feed annihilation', polar.d.rates.qiEnergy.gt(0) && !polar.s.resources.yinParticle.isNegative())
 
 console.log(JSON.stringify({ checks, sustained, noSupply, shared: { powerCapacity: d.processingPowerCapacity, coolingCapacity: d.processingCoolingCapacity, coolingUsed, load, overloadCoolingUsed: coldUsed },
-  paired: { seconds: 600, lowestLoad, highestLoad, initialYang: E.moneyToNumber(initialYang), finalYang: E.moneyToNumber(polar.s.resources.yangParticle), finalYin: E.moneyToNumber(polar.s.resources.yinParticle), energyRate: E.moneyToNumber(polar.d.rates.qiEnergy) } }, null, 2))
+  paired: { seconds: duration, lowestLoad, highestLoad, initialYang: E.moneyToNumber(initialYang), finalYang: E.moneyToNumber(polar.s.resources.yangParticle), finalYin: E.moneyToNumber(polar.s.resources.yinParticle), energyRate: E.moneyToNumber(polar.d.rates.qiEnergy) } }, null, 2))

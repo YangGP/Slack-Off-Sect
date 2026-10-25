@@ -141,13 +141,12 @@ export function huntingLoop(harness) {
   state.resources.beastBone = E.ZERO
   state.hunting.yieldRemainders = {}
   E.departHunt(state, derived, { teamIds: [gifted.id] })
-  ok('单人猎杀实际结算含1.5倍天赋，整数与余量准确', E.moneyEq(state.resources.beastHide, 7) && E.moneyEq(state.resources.beastBone, 5) &&
-    E.money(state.hunting.yieldRemainders.beastHide).gt(0))
+  ok('单人猎杀含1.5倍天赋，小数直接入库', E.moneyGte(state.resources.beastHide, 7) && E.moneyGte(state.resources.beastBone, 5) && state.hunting.yieldRemainders.beastHide === undefined)
   state.upgrades.mountainStep = true
   E.recompute(state, derived)
   const warrantBefore = state.resources.warrant
   E.departHunt(state, derived, { teamIds: [gifted.id] })
-  ok('踏山步费用预览与实际一致，原ID仍生效', E.huntCost(derived) === 90 && E.moneyEq(warrantBefore.minus(state.resources.warrant), 90))
+  ok('踏山步费用预览与实际一致，原ID仍生效', E.moneyEq(E.huntCost(derived), 90) && E.moneyEq(warrantBefore.minus(state.resources.warrant), 90))
   state.resources.beastHide = derived.max.beastHide
   E.departHunt(state, derived, { teamIds: [gifted.id] })
   ok('即时猎杀满仓不超容', E.moneyEq(state.resources.beastHide, derived.max.beastHide))
@@ -160,7 +159,7 @@ export function huntingLoop(harness) {
   ok('退境后不能猎杀', !E.departHunt(state, derived).ok)
   state.realm = 3
   state.settings.modules.hunting = false
-  ok('模块关闭不能新猎杀', !E.departHunt(state, derived).ok)
+  ok('旧关闭标记不影响猎杀解锁', E.isHuntUnlocked(state, 'foothills'))
   state.settings.modules.hunting = true
   state.karma = E.money(500)
   E.recompute(state, derived)

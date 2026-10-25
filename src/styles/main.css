@@ -1,6 +1,6 @@
 /* ============================================================
    摸鱼宗门 · 样式
-   参照猫国建设者的界面观感：
+   界面观感：
    白底、细灰线、单一内容边框、文字与数字为主，
    没有卡片头、圆角、渐变、阴影、斑马纹与进度条。
    ============================================================ */
@@ -85,7 +85,7 @@ select option {
 }
 
 .wrap {
-  max-width: 1380px;
+  max-width: 1560px;
   margin: 0 auto;
   padding: 10px 16px 40px;
   height: 100dvh;
@@ -381,8 +381,8 @@ select option {
 
 .cols {
   display: grid;
-  grid-template-columns: 284px minmax(0, 1fr) 300px;
-  gap: 18px;
+  grid-template-columns: 300px minmax(0, 1fr) 248px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -415,7 +415,7 @@ select option {
 
 @media (max-width: 1279px) {
   .cols {
-    grid-template-columns: 284px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 160px);
   }
   .right {
@@ -424,32 +424,44 @@ select option {
 }
 
 @media (max-width: 879px) {
+  html, body, #app { height: auto; min-height: 100%; overflow: visible; }
+  .wrap { height: auto; min-height: 100dvh; padding: 10px 12px 52px; }
   .cols {
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: visible;
   }
   .left, .main, .right {
     flex: 0 0 auto;
     width: 100%;
   }
   .left {
-    height: 55dvh;
+    order: 1;
+    overflow: visible;
   }
   .main {
-    height: 75dvh;
+    order: 0;
   }
   .right {
-    max-height: 45dvh;
+    order: 2;
+    max-height: 320px;
   }
+  .left > .box:first-child { max-height: 320px; }
+  .main > .panel { height: auto; min-height: 55dvh; overflow: visible; }
+  .main > .panel-craft { display: block; }
+  .main .craft-full > .box-body { overflow: visible; }
 }
 
-/* 中列唯一的一层边框（对应猫国中间那个大框） */
+/* 中列内容区唯一的一层边框 */
 .panel {
   border: 1px solid var(--line);
   padding: 10px 14px 14px;
   height: 100%;
   overflow: auto;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: content;
+  scrollbar-gutter: stable;
 }
 
 .panel-craft {
@@ -489,10 +501,22 @@ select option {
 }
 
 .box-head {
-  color: var(--dim);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: var(--text);
   font-size: 14px;
-  padding-bottom: 3px;
+  font-weight: 600;
+  padding-bottom: 8px;
 }
+
+.box-head .hint { font-weight: 400; }
+.panel .box + .box { padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.panel .box:last-child { margin-bottom: 0; }
+.box-body > p { margin: 0 0 10px; line-height: 1.65; }
+.box-body > p:last-child { margin-bottom: 0; }
+.box-body > .btn-row + p { margin-top: 10px; }
 
 .box-head .hint {
   color: var(--faint);
@@ -590,9 +614,12 @@ table.grid th {
 }
 
 table.grid td {
-  padding: 3px 6px 3px 0;
+  padding: 7px 10px 7px 0;
   vertical-align: middle;
 }
+
+.table-scroll { width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.table-scroll:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 table.grid.bare th,
 table.grid.bare td {
@@ -659,11 +686,15 @@ table.grid.bare td {
 
 .kv .k {
   color: var(--dim);
+  flex-shrink: 0;
 }
 
 .kv .v {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 /* ------------------------------ 按钮 ------------------------------ */
@@ -674,14 +705,20 @@ table.grid.bare td {
   padding: 5px 12px;
   cursor: pointer;
   margin-right: 4px;
+  min-height: 30px;
+  max-width: 100%;
+  line-height: 1.4;
+  font-size: 13px;
 }
+
+.btn:focus-visible, .side-btn:focus-visible, .build-btn:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 .btn:hover:not(:disabled) {
   border-color: var(--text);
 }
 
 .btn:disabled {
-  color: #b9b9b9;
+  color: #8a8a8a;
   border-color: var(--line);
   cursor: default;
 }
@@ -703,8 +740,28 @@ table.grid.bare td {
 }
 
 .btn-row {
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  white-space: normal;
 }
+
+.btn-row > .btn { margin: 0; }
+
+input[type="number"], input[type="text"] {
+  max-width: 100%;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+input:focus-visible, textarea:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 input.qty {
   width: 56px;
@@ -726,7 +783,10 @@ label.sw {
   color: var(--dim);
   font-size: 14px;
   margin-right: 12px;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: normal;
 }
 
 input[type="checkbox"] {
@@ -889,7 +949,7 @@ input[type="checkbox"] {
 
 .ach-item {
   break-inside: avoid;
-  padding: 1px 0;
+  padding: 8px 0;
   font-size: 14px;
   color: var(--faint);
 }
@@ -917,6 +977,7 @@ details.fold > summary {
   color: var(--dim);
   font-size: 14px;
   list-style: none;
+  padding: 6px 0;
 }
 
 details.fold > summary:hover {
@@ -1185,6 +1246,7 @@ details.fold[open] > summary::before {
   margin-right: 0;
   padding: 1px 3px;
   font-size: 12px;
+  min-height: 22px;
 }
 
 .craft-row .craft-name {
@@ -1354,20 +1416,6 @@ textarea {
   }
 }
 
-/* 修真表的段标题行：五段主线（见 docs/RESEARCH.md） */
-.grid tbody tr.stage-row td {
-  padding-top: 12px;
-  padding-bottom: 2px;
-  border-top: 1px solid var(--line);
-  color: var(--dim);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-}
-.grid tbody tr.stage-row:first-child td {
-  border-top: none;
-  padding-top: 2px;
-}
-
 /* 参悟表：操作列右对齐 */
 .grid th.right,
 .grid td.right {
@@ -1377,9 +1425,6 @@ textarea {
 /* 参悟表：极轻的行悬停 —— 提示挂在「花费」上，悬停反馈帮玩家找到它 */
 .grid tbody tr:hover td {
   background: #fbfbfb;
-}
-.grid tbody tr.stage-row:hover td {
-  background: transparent;
 }
 
 /* 花费项之间的分隔符：以前多项挤在一起（「感悟 40灵木 120」） */
@@ -1422,6 +1467,117 @@ textarea {
 .processing-overview > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
 .processing-overview p { margin: 6px 0 0; }
 .processing-line { display: flex; flex-direction: column; gap: 3px; margin: 5px 0; overflow-wrap: anywhere; }
+
+/* 经营页：同一套文字行、轻分隔与紧凑操作，不叠加内容卡片。 */
+.activity-panel .box-head,
+.craft-full > .box-head {
+  padding-bottom: 6px;
+  font-size: 14px;
+}
+
+.activity-panel .box-sub {
+  margin: 12px 0 4px;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.activity-panel .btn,
+.craft-full .btn {
+  min-height: 28px;
+  padding: 3px 9px;
+  margin: 0;
+  border-radius: 0;
+}
+
+.activity-panel .btn.primary:disabled,
+.craft-full .btn.primary:disabled {
+  border-color: var(--line);
+  font-weight: 400;
+}
+
+.activity-panel select,
+.craft-full select {
+  min-height: 28px;
+  max-width: 100%;
+  border-radius: 0;
+}
+
+.activity-panel input,
+.craft-full input {
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-panel .grid {
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.activity-panel .grid td {
+  padding: 5px 8px 5px 0;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.activity-panel .grid .num {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.craft-full .craft-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.craft-full .craft-heading { order: 0; gap: 4px 12px; }
+.craft-full .craft-cost { order: 1; padding: 0; line-height: 1.6; }
+.craft-full .craft-controls { order: 2; gap: 6px 8px; }
+.craft-full .craft-status { order: 3; min-height: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.craft-full .craft-detail { order: 4; }
+.craft-full .craft-pin { margin-left: auto; }
+.craft-full .craft-heading .have { margin-left: 0; font-size: 12px; }
+.craft-full .craft-controls .sw { margin: 0 4px; }
+.craft-full .craft-controls > label { display: inline-flex; align-items: center; gap: 4px; }
+.craft-full .craft-controls input.qty { width: 5.5em; min-height: 28px; font-size: 13px; }
+.craft-full .craft-settings { gap: 6px 12px; padding-bottom: 6px; }
+.craft-full .craft-settings > .dim { flex-basis: auto; }
+
+.craft-full .filters {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.craft-full details > summary {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 0;
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.craft-full details > summary:hover { color: var(--text); }
+.craft-full details > summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.craft-full .craft-detail[open] { padding-top: 2px; }
+.craft-full details.processing-overview { margin: 6px 0; padding: 2px 0; }
+.craft-full details.processing-overview > div { padding: 5px 0; border-top: 1px solid var(--line-soft); align-items: baseline; justify-content: flex-start; }
+.craft-full details.processing-overview > div > span:first-child { min-width: 6em; }
+.craft-full details.processing-overview label { margin-left: auto; }
+
+@container content (max-width: 480px) {
+  .activity-panel .btn, .craft-full .btn { min-height: 32px; }
+  .craft-full .craft-heading { align-items: baseline; }
+  .craft-full .craft-heading .have { flex: 1 1 10em; }
+  .craft-full .craft-controls { row-gap: 8px; }
+  .craft-full details.processing-overview label { margin-left: 0; }
+}
 
 .offline-loading {
   position: fixed;
@@ -1477,3 +1633,20 @@ textarea {
 }
 @keyframes loading-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
+
+/* 库存不足且费用超过仓容上限：此时等待也无法凑够，标红并加 * */
+.build-btn.over-cap {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.tip-row .k.blocked {
+  color: var(--bad);
+}
+
+.cap-star {
+  margin-left: 2px;
+  color: var(--bad);
+  font-weight: 700;
+  cursor: help;
+}

@@ -14,8 +14,11 @@ import { hasHuntTalent, talentBonus, TALENT_MAP } from '@/data/talents'
 import { ZERO, moneyGt } from '@/game/decimal'
 import { fmtAmount, fmtFixed, fmtPercent, fmtTime } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
+import StableSelect from '@/components/StableSelect.vue'
+import { isHuntUnlocked } from '@/game/engine'
 
-const fieldId = computed(() => state.hunting.settings.selectedFieldId)
+const visibleFields = computed(() => HUNT_FIELDS.filter(f => isHuntUnlocked(state, f.id)))
+const fieldId = computed(() => visibleFields.value.find(f => f.id === state.hunting.settings.selectedFieldId)?.id || visibleFields.value[0]?.id)
 const field = computed(() => HUNT_FIELD_MAP[fieldId.value] || HUNT_FIELDS[0])
 const unlocked = computed(() => state.upgrades.wildHunting && state.buildings.huntingCamp?.on)
 const settings = computed(() => state.hunting.settings)
@@ -48,6 +51,7 @@ const departCheck = computed(() => canDepart(state, derived, fieldId.value, team
 const cost = computed(() => huntCost(derived))
 const lastOutcome = computed(() => state.hunting.lastOutcome)
 const interval = computed(() => settings.value.autoIntervalSeconds || HUNT.AUTO_INTERVAL_DEFAULT)
+const intervalOptions = [60, 120, 300, 600].map(value => ({ value, label: `${value} 秒` }))
 const remain = computed(() => Math.max(0, interval.value - (settings.value.elapsedSeconds || 0)))
 const expectedGainRows = computed(() => Object.entries(preview.value?.expectedGains || {})
   .map(([res, amount]) => ({ res, name: resourceName(res), text: fmtFixed(amount),
@@ -74,39 +78,38 @@ function setInterval(value) {
 </script>
 
 <template>
-  <div class="box">
+  <div class="box activity-panel hunt-panel">
     <div class="box-head">
       <HoverTip label="妖兽猎杀"><template #tip>
+          <p>猎场供宜居兽材、修为物品与培养消耗品；宗门成长资源由外交交换。受伤暂不能出征，但仍能自然修炼。</p>
           <p>可选择有猎杀天赋的弟子参与，普通弟子自动补足至多 {{ HUNT.TEAM_MAX }} 人；每次消耗 {{ cost }} 枚信符，不占用岗位、不改变生产。</p>
           <p>自动重复按固定间隔执行；间隔只改变频率，不改变单次奖励。</p>
           <p>信符与外交共用：每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚。</p>
           <p>兽材按整数入库，不足 1 的部分跨次累计。</p>
         </template></HoverTip>
-      <span class="hint">首轮只开放山麓；来袭关联尚未启用</span>
+      <span class="hint">普通三猎场随境界开放，高级三猎场需道果资格</span>
     </div>
     <div class="box-body">
+      <label v-if="unlocked" class="small hunt-supply"><input type="checkbox" :checked="settings.useSupply" @change="actions.huntSetSupply($event.target.checked)" /> <HoverTip label="使用护身药散" description="每人消耗一份，受伤率减半；死亡风险不变。" /></label>
       <div v-if="!unlocked" class="empty">
         尚未开放猎杀：需掌握《山野猎法》，并启用执符堂（筑基期）。
       </div>
-      <template v-else>
+      <template v-else-if="visibleFields.length">
         <div class="box-sub">猎场</div>
         <div class="hunt-fields">
           <button
-            v-for="f in HUNT_FIELDS"
+            v-for="f in visibleFields"
             :key="f.id"
             class="btn"
             :class="{ primary: f.id === fieldId }"
-            :disabled="state.realm < f.entryRealm"
             @click="selectField(f.id)"
           >
-            {{ f.name }}
+            <HoverTip :label="f.name" :description="f.desc" />
             <span class="dim">（宗门 ≥ {{ REALMS[f.entryRealm].name }}）</span>
           </button>
         </div>
-        <div class="small dim" style="padding: 4px 0">{{ field.desc }}</div>
 
-        <div class="box-sub">猎杀加成（已选 {{ selectedIds.length }} / {{ HUNT.TEAM_MAX }}）</div>
-        <p class="small dim">仅列出有猎杀天赋的弟子。普通弟子自动补位，未勾选的加成弟子不参与。</p>
+        <div class="box-sub"><HoverTip label="猎杀加成" description="仅列出有猎杀天赋的弟子。普通弟子自动补位，未勾选的加成弟子不参与。" />（已选 {{ selectedIds.length }} / {{ HUNT.TEAM_MAX }}）</div>
         <div v-if="!members.length" class="small dim">暂无有猎杀加成的弟子，仍可由普通弟子猎杀。</div>
         <div v-else class="hunt-members">
           <label v-for="m in members" :key="m.id" class="hunt-member" :class="{ on: m.selected }">
@@ -161,26 +164,24 @@ function setInterval(value) {
             猎杀一次
           </button>
           <span v-if="!departCheck.ok" class="bad small">{{ departCheck.reason }}</span>
-          <label class="small" style="margin-left: auto">
+          <label class="small hunt-repeat">
             <input type="checkbox" :checked="settings.autoRepeat" @change="actions.huntSetAutoRepeat($event.target.checked)">
-            自动重复
+            <HoverTip label="自动重复" description="按固定间隔执行；失败周期跳过，不补发。" />
           </label>
         </div>
         <div v-if="settings.autoRepeat" class="hunt-autocfg">
           <label class="small">每
-            <select :value="interval" @change="setInterval($event.target.value)">
-              <option v-for="n in [60, 120, 300, 600]" :key="n" :value="n">{{ n }} 秒</option>
-            </select>
+            <StableSelect label="自动猎杀间隔" :model-value="interval" :options="intervalOptions" @update:model-value="setInterval($event)" />
             <input type="number" min="30" max="3600" step="30" :value="interval" style="width: 5.5em" @change="setInterval($event.target.value)">
             猎杀一次
           </label>
-          <span class="small dim">下次约 {{ fmtTime(remain) }} 后；失败周期跳过，不补发。</span>
+          <span class="small dim">下次约 {{ fmtTime(remain) }} 后</span>
         </div>
       </template>
     </div>
   </div>
 
-  <div class="box" v-if="unlocked">
+  <div class="box activity-panel hunt-history" v-if="unlocked">
     <div class="box-head">上次猎杀</div>
     <div class="box-body">
       <div v-if="!lastOutcome" class="empty">还没有猎杀记录。</div>
@@ -217,11 +218,24 @@ function setInterval(value) {
 </template>
 
 <style scoped>
-.hunt-fields { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
-.hunt-autocfg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
-.hunt-members { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 0; }
-.hunt-member { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.hunt-member.on { color: #d8b98a; }
-.hunt-bonus-results { display: grid; gap: 4px; padding: 8px 0; }
-.hunt-actions { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.hunt-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px 0; }
+.hunt-fields .btn { margin: 0; padding: 5px 8px; text-align: left; font-weight: 400; }
+.hunt-fields .btn.primary { color: var(--link); border-color: var(--link); }
+.hunt-fields .btn > span { display: block; margin-top: 2px; font-size: 12px; }
+.hunt-supply, .hunt-repeat { display: inline-flex; align-items: baseline; gap: 4px; }
+.hunt-field-note { padding: 4px 0 8px; line-height: 1.6; }
+.hunt-autocfg { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding: 4px 0; }
+.hunt-members { display: flex; flex-direction: column; padding: 2px 0; }
+.hunt-member { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.hunt-member > span:first-of-type { min-width: 5em; }
+.hunt-member.on { color: var(--link); }
+.hunt-bonus-results { display: grid; gap: 4px; padding: 6px 0; }
+.hunt-actions { display: flex; align-items: center; gap: 6px 12px; padding: 10px 0 4px; flex-wrap: wrap; }
+@container content (max-width: 560px) {
+  .hunt-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hunt-panel .grid tr { display: grid; grid-template-columns: 6em minmax(0, 1fr); }
+}
+@container content (max-width: 320px) {
+  .hunt-fields { grid-template-columns: 1fr; }
+}
 </style>

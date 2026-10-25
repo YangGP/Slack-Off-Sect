@@ -10,6 +10,7 @@ import { CRAFTS } from '../src/data/crafts.js'
 import { JOBS } from '../src/data/jobs.js'
 import { REALMS, ASCEND_REALM_INDEX } from '../src/data/realms.js'
 import { HUNT, HUNT_FIELDS } from '../src/modules/hunting/data.js'
+import { DIPLOMACY, DIPLOMACY_SECTS } from '../src/modules/diplomacy/data.js'
 
 export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
   if (!Number.isInteger(realmCeiling) || realmCeiling < 0 || realmCeiling > ASCEND_REALM_INDEX) throw Error('境界上限需为 0–10 的整数')
@@ -30,9 +31,10 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
     }
   }
   for (const entry of [...ALL_UPGRADES, ...CRAFTS, ...REALMS]) requireCost(entry.cost)
+  for (const sect of DIPLOMACY_SECTS) requireCost({ ...sect.pays, warrant: DIPLOMACY.WARRANT_COST })
   for (const building of BUILDINGS) {
     for (const [id, value] of Object.entries(building.cost)) {
-      requireCost({ [id]: E.money(value).times(E.money(building.priceRatio || 1).pow(targetCount(building) - 1)).ceil() })
+      requireCost({ [id]: E.money(value).times(E.money(building.priceRatio || 1).pow(targetCount(building) - 1)) })
     }
   }
   const fits = (cost) => Object.entries(cost || {}).every(([id, amount]) =>
@@ -65,6 +67,17 @@ export function auditReachability(realmCeiling = ASCEND_REALM_INDEX) {
         for (const res of Object.keys(field.baseYield)) {
           if (sources.has(res)) continue
           sources.add(res)
+          changed = true
+        }
+      }
+    }
+    // 固定互市产出是稳定来源；随机结缘奖励不计入可达性。
+    if (E.isDiplomacyUnlocked(state) && sources.has('warrant') && E.moneyGte(derived.max.warrant, DIPLOMACY.WARRANT_COST)) {
+      for (const sect of DIPLOMACY_SECTS) {
+        if (!fits(sect.pays)) continue
+        for (const [id, amount] of Object.entries(sect.gains)) {
+          if (!E.moneyIsPositive(amount) || sources.has(id)) continue
+          sources.add(id)
           changed = true
         }
       }

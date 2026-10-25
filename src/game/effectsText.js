@@ -8,7 +8,13 @@ import { JOBS, JOB_MAP } from '@/data/jobs'
 import { REALMS } from '@/data/realms'
 import { PROCESSING_STATIONS, PROCESSING_STATION_MAP } from '@/data/industry'
 import { CRAFT_MAP } from '@/data/crafts'
-import { fmt, fmtPercent } from './format'
+import { buildingMeta } from '@/data/productionStages'
+import { WORLD_MAP } from '@/data/samsara'
+import { WORLD_FACILITY_MAP } from '@/data/worldFacilities'
+import { CONFIG } from '@/data/config'
+import { effectiveBuildingStorage } from './systems/economy'
+import { money, moneyMax, ZERO } from './decimal'
+import { fmt, fmtAmount, fmtEffectPercent as fmtPercent, fmtRate } from './format'
 
 /**
  * 按“已建成数量 count / 启用数量 active”把建筑效果折算成当前总贡献。
@@ -109,11 +115,11 @@ export function describeEffects(ef) {
       }
     }
   }
-  if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（成品按层级折算）`, 'muted')
+  if (ef.storageAll) push('通用仓储', `+${fmt(ef.storageAll)}（仅作用于有仓容限制的资源，信符除外）`, 'muted')
   if (ef.maxDisciples) push('弟子上限', `+${ef.maxDisciples}`, 'good')
-  if (ef.habitability) push('宜居度', `+${ef.habitability}`, 'good')
-  if (ef.habitabilityPerHousing) push('宜居度 / 已入住名额', `+${ef.habitabilityPerHousing}`, 'good')
-  if (ef.consumeRatio) push('弟子灵气消耗', `-${fmtPercent(ef.consumeRatio)}`, 'good')
+  if (ef.habitability) push('宜居度', `+${fmtAmount(ef.habitability)}`, 'good')
+  if (ef.habitabilityPerHousing) push('宜居度 / 已入住名额', `+${fmtAmount(ef.habitabilityPerHousing)}`, 'good')
+  if (ef.consumeRatio) push('弟子灵气消耗', `-${fmtPercent(Math.min(ef.consumeRatio, CONFIG.UPKEEP_REDUCTION_CAP))}（各来源合计最多减免${fmtPercent(CONFIG.UPKEEP_REDUCTION_CAP)}）`, 'good')
   if (ef.craftBonus) push('制作产出', `+${fmtPercent(ef.craftBonus)}`, 'good')
   if (ef.craftBonusByResource) {
     for (const [res, value] of Object.entries(ef.craftBonusByResource)) {
@@ -127,12 +133,12 @@ export function describeEffects(ef) {
     push(`${CRAFT_MAP[id]?.name || id} 加工效率（金丹起）`, `+${fmtPercent(value)}`, 'good', CRAFT_MAP[id]?.out)
   }
   for (const [id, value] of Object.entries(ef.craftCostReduction || {})) {
-    push(`${CRAFT_MAP[id]?.name || id} 每份耗料`, `-${fmtPercent(value)}（整枚向上取整）`, 'good', CRAFT_MAP[id]?.out)
+    push(`${CRAFT_MAP[id]?.name || id} 每份耗料`, `-${fmtPercent(value)}（保留小数）`, 'good', CRAFT_MAP[id]?.out)
   }
   if (ef.huntSuccessBonus) push('猎杀成功率', `+${Math.round(ef.huntSuccessBonus * 100)} 个百分点`, 'good')
   if (ef.huntYieldBonus) push('猎杀收获', `+${fmtPercent(ef.huntYieldBonus)}`, 'good')
   if (ef.huntCostReduction) push('猎杀信符消耗', `-${fmtPercent(ef.huntCostReduction)}`, 'good')
-  if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(ef.disasterGuard)}`, 'good')
+  if (ef.disasterGuard) push('灾害损失', `-${fmtPercent(Math.min(ef.disasterGuard, CONFIG.DISASTER_GUARD_CAP))}（各来源合计最多减免${fmtPercent(CONFIG.DISASTER_GUARD_CAP)}）`, 'good')
   if (ef.disasterGuardByResource) {
     for (const [res, value] of Object.entries(ef.disasterGuardByResource)) {
       push(`${resourceName(res)} 灾损额外减免`, `${fmtPercent(value)}（合计上限80%）`, 'good', res)
@@ -163,13 +169,50 @@ export function describeEffects(ef) {
   return out
 }
 
-export function describeProcessingEffects(buildingId, count = 1) {
+export function describeProcessingEffects(buildingId, count = 1, derived = {}, meta = null) {
   const out = PROCESSING_STATIONS.filter(station => station.buildings[buildingId]).map(station => ({
-    label: `${station.name} 容量（金丹起）`, value: `+${fmt(station.buildings[buildingId] * count)}`,
+    label: `${station.name} 容量（金丹起）`, value: `+${fmt((buildingId === 'herbGarden' ? meta?.nurseryCapacity ?? station.buildings[buildingId] : station.buildings[buildingId]) * count * (1 + (derived.processingCapacityRatio?.[station.id] || 0)))}`,
     tone: 'good',
   }))
-  if (buildingId === 'crystalArray') out.push({ label: '冷却回路容量', value: `+${fmt(2 * count)}（可由冷凝换热提升）`, tone: 'good' })
+  if (buildingId === 'crystalArray') out.push({ label: '冷却回路额外容量', value: `+${fmt(2 * count * (1 + (derived.processingCoolingRatio || 0)))}（另计工位容量提供的冷却）`, tone: 'good' })
   return out
+}
+
+/** 建筑单座基础效果与当前合计；金额产出复用经济结算的资源倍率。 */
+export function describeBuildingEffects(meta, state, derived) {
+  meta = buildingMeta(state, meta.id) || meta
+  const entry = state.buildings[meta.id]
+  const count = entry?.count || 0
+  const active = entry?.on === false ? 0 : count * (derived.buildingSupply?.[meta.id] ?? 1)
+  const hasPower = meta.upkeepQi != null || meta.upkeepEnergy != null
+  const energy = meta.upkeepEnergy != null && (meta.upkeepQi == null || entry?.power === 'energy' && state.upgrades.energyApplication)
+  const powerMult = hasPower && energy ? meta.powerMult ?? 1 : 1
+  const totalEffects = scaleEffectsForTotal(meta.effects, count, active * powerMult, !!meta.upkeep || hasPower)
+  const unitEffects = { ...meta.effects }
+  if (totalEffects?.storage) {
+    const ratio = Object.keys(state.upgrades).reduce((sum, id) => sum + (state.upgrades[id] && state.upgradeEnabled?.[id] !== false ? UPGRADE_MAP[id]?.effects?.buildingStorageRatio?.[meta.id] || 0 : 0), 1)
+    unitEffects.storage = Object.fromEntries(Object.entries(meta.effects.storage).map(([id, amount]) => [id, money(amount).times(ratio)]))
+    totalEffects.storage = effectiveBuildingStorage(state, meta.id, ratio)
+  }
+  const unit = [...describeEffects(unitEffects), ...describeJobEffects(meta.id, 1, null, 1, meta), ...describeProcessingEffects(meta.id, 1, {}, meta)]
+  for (const id of Object.keys(totalEffects?.storage || {})) {
+    if (!Object.hasOwn(meta.effects.storage, id)) unit.push({ label: `${resourceName(id)} 上限`, value: '旧档保留', tone: 'muted', resource: id })
+  }
+  const boostMult = meta.boost && entry?.boost === true && state.upgrades[meta.boost.upgrade]
+    ? 1 + (meta.boost.multiplier - 1) * (derived.buildingSupply?.[meta.boost.id] ?? 0) : 1
+  const total = [...describeEffects(totalEffects), ...describeJobEffects(meta.id, active, state.upgrades, boostMult, meta), ...describeProcessingEffects(meta.id, active, derived, meta)]
+  return unit.map((row) => {
+    const res = row.resource
+    if (res && meta.effects?.prod?.[res] != null && row.label === `${resourceName(res)} 产出`) {
+      const selfUse = money(meta.selfUse?.[res] ?? 0)
+      const base = money(meta.effects.prod[res])
+      const current = moneyMax(ZERO, base.times(active).times(powerMult).minus(selfUse.times(active)))
+        .times(derived.sourceFactor?.[res] ?? 1)
+      return { ...row, label: `${resourceName(res)} ${meta.selfUse?.[res] ? '净供能（已扣炉内自用）' : '产出'}`,
+        value: fmtRate(moneyMax(ZERO, base.minus(selfUse))), total: count ? fmtRate(current) : '' }
+    }
+    return { ...row, total: count ? total.find(item => item.label === row.label)?.value || '0' : '' }
+  })
 }
 
 /**
@@ -179,7 +222,7 @@ export function describeProcessingEffects(buildingId, count = 1) {
  *
  * count 用于「每座叠加」的副产出（如灵石矿让矿工产灵石）：传已启用数量即可得到合计值。
  */
-export function describeJobEffects(buildingId, count = 1) {
+export function describeJobEffects(buildingId, count = 1, upgrades = null, boostMult = 1, meta = null) {
   const out = []
   if (!buildingId) return out
   const push = (label, value, tone, resource) => out.push({ label, value, text: `${label} ${value}`.trim(), tone, ...(resource ? { resource } : {}) })
@@ -192,15 +235,17 @@ export function describeJobEffects(buildingId, count = 1) {
     }
     // 由本建筑开启的额外产出（按人数结算，不随建筑座数叠加）
     for (const output of job.additionalOutputs || []) {
-      if (output.building === buildingId) {
-        push(`${job.name} 额外产出`, `${resourceName(output.resource)} +${fmt(output.base)}/秒·人`, 'good', output.resource)
+      if (output.building === buildingId || (!output.building && output.upgrade && (job.building === buildingId || job.needs?.building?.id === buildingId))) {
+        const available = count > 0 && (!output.upgrade || upgrades == null || upgrades[output.upgrade])
+        const condition = output.upgrade ? `（需《${UPGRADE_MAP[output.upgrade]?.name || output.upgrade}》）` : ''
+        push(`${job.name} 额外产出`, `${resourceName(output.resource)} +${fmt(available ? output.base : 0)}/秒·人${condition}`, 'good', output.resource)
       }
     }
     // 本建筑让该职位多加的副产出（灵石矿 → 矿工产灵石，可多座叠加）
     const sec = job.secondary
     if (sec && sec.building === buildingId) {
-      const base = sec.base * (sec.perBuilding ? count : 1)
-      push(`${job.name} 额外产出`, `${resourceName(sec.resource)} +${fmt(base)}/秒·人`, 'good', sec.resource)
+      const base = (meta?.secondaryBase ?? sec.base) * (sec.perBuilding ? count : 1) * boostMult
+      push(`${job.name} 额外产出`, `${resourceName(sec.resource)} +${fmtAmount(base)}/秒·人`, 'good', sec.resource)
     }
   }
   return out
@@ -230,5 +275,8 @@ export function describeNeeds(needs) {
     for (const u of needs.upgrades) out.push(`需参悟《${UPGRADE_MAP[u]?.name || u}》`)
   }
   if (needs.realm != null) out.push(`需境界达到 ${REALMS[needs.realm]?.name || needs.realm}`)
+  if (needs.recipes) for (const id of needs.recipes) out.push(`需开放配方：${CRAFT_MAP[id]?.name || id}`)
+  if (needs.world) out.push(`需建成${WORLD_MAP[needs.world]?.name || needs.world}首个采集点`)
+  if (needs.worldFacility) out.push(`需建成${WORLD_FACILITY_MAP[needs.worldFacility.id]?.name || needs.worldFacility.id}`)
   return out
 }

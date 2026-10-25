@@ -1,4 +1,5 @@
 <script setup>
+import HoverTip from '@/components/HoverTip.vue'
 /**
  * D7 香火页：香火 → 愿力 → 道心，本世仪轨与永久道心修持。
  * 只做展示与动作入口；报价、门槛与结算都在 systems/faith.js。
@@ -74,7 +75,7 @@ const oneTime = computed(() => {
     })
   }
   return rows
-    .filter(row => row.reveal)
+    .filter(row => row.owned || (row.reveal && row.missing.length === 0))
     .map(row => {
       const row2 = {
         ...row,
@@ -105,7 +106,7 @@ const ritualRows = computed(() => RITUALS.map(meta => {
     ready: missing.length === 0,
     reveal: info.level > 0 || isCostRevealed(state, { vow: info.cost }),
   }
-}).filter(row => row.level > 0 || row.reveal))
+}).filter(row => row.level > 0 || (row.reveal && row.ready)))
 
 const cultivationRows = computed(() => CULTIVATION.map(meta => {
   const info = quote.value.cultivation[meta.id]
@@ -116,30 +117,34 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
     ready: missing.length === 0,
     reveal: info.level > 0 || isCostRevealed(state, { daoHeart: info.cost }),
   }
-}).filter(row => row.level > 0 || row.reveal))
+}).filter(row => row.level > 0 || (row.reveal && row.ready)))
 </script>
 
 <template>
-  <div class="faith-panel">
+  <div class="faith-panel activity-panel">
+    <div v-if="state.samsara.automation" class="box">
+      <div class="box-head"><HoverTip label="仙途开启"><template #tip>以道心发愿，永久开放仙途商店道果区。</template></HoverTip></div>
+      <div class="box-body"><button class="btn" :disabled="state.samsara.shopOpen || !canAfford(state, { daoHeart: 1 })" @click="actions.samsara('openDaoShop')">{{ state.samsara.shopOpen ? '已永久开启' : '开启 · 道心1' }}</button></div>
+    </div>
     <div class="box faith-overview">
-      <div class="box-head">香火修持</div>
+      <div class="box-head"><HoverTip label="香火修持"><template #tip>香火 → 愿力 → 道心。愿力随本世清空；道心与永久修持跨轮回保留。</template></HoverTip></div>
       <div class="box-body">
-        <p class="small dim faith-note">香火 → 愿力 → 道心。愿力随本世清空；道心与永久修持跨轮回保留。</p>
+
         <div class="faith-balances">
           <div class="faith-balance">
-            <span class="k">香火</span>
+            <HoverTip label="香火" description="本世余额，凝愿后减少" />
             <b>{{ fmt(state.resources.faith || ZERO) }}</b>
-            <span class="small dim">本世余额，凝愿后减少</span>
+
           </div>
-          <div class="faith-balance">
-            <span class="k">愿力</span>
+          <div v-if="condenseReady || vowBalance.gt(0)" class="faith-balance">
+            <HoverTip label="愿力" description="本世积累，转世／飞升清空" />
             <b>{{ fmt(vowBalance) }}</b>
-            <span class="small dim">本世积累，转世／飞升清空</span>
+
           </div>
-          <div class="faith-balance">
-            <span class="k">道心</span>
+          <div v-if="attestReady || daoHeartBalance.gt(0) || daoHeartTotal.gt(0) || cultivationRows.some(row => row.level > 0)" class="faith-balance">
+            <HoverTip label="道心" description="跨轮回保留" />
             <b>{{ fmt(daoHeartBalance) }}</b>
-            <span class="small dim">累计 {{ fmt(daoHeartTotal) }} · 跨轮回保留</span>
+            <span class="small dim">累计 {{ fmt(daoHeartTotal) }}</span>
           </div>
         </div>
         <p class="small dim faith-note">
@@ -148,13 +153,11 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
       </div>
     </div>
 
-    <div class="faith-convert">
-      <div class="box faith-card">
-        <div class="box-head">凝愿</div>
+    <div v-if="condenseReady || attestReady" class="faith-convert">
+      <div v-if="condenseReady" class="box faith-card">
+        <div class="box-head"><HoverTip label="凝愿"><template #tip>香火按当前《凝愿真解》等级转换为愿力；当前增益 +{{ fmtPercent(moneyToNumber(vowGainFactor(state))) }}。</template></HoverTip></div>
         <div class="box-body">
-          <p class="small dim faith-note">
-            香火按当前《凝愿真解》等级转换为愿力；当前增益 +{{ fmtPercent(moneyToNumber(vowGainFactor(state))) }}。
-          </p>
+
           <div class="btn-row faith-actions">
             <input v-model="condenseDraft" class="qty" inputmode="decimal" aria-label="凝愿投入香火" placeholder="投入香火">
             <button class="btn" :disabled="!condenseReady" @click="fillCondense(0.25)">25%</button>
@@ -162,14 +165,13 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
             <button class="btn" :disabled="!condenseReady" @click="fillCondense(1)">全部</button>
             <button class="btn primary" :disabled="!condenseReady" @click="doCondense">凝愿</button>
           </div>
-          <div v-if="!condenseReady" class="small dim">需学会《凝愿法》，且当前境界至少金丹。</div>
         </div>
       </div>
 
-      <div class="box faith-card">
-        <div class="box-head">证心</div>
+      <div v-if="attestReady" class="box faith-card">
+        <div class="box-head"><HoverTip label="证心"><template #tip>愿力按 10000 : 1 证为道心；只扣当前余额，不重置宗门与仪轨。</template></HoverTip></div>
         <div class="box-body">
-          <p class="small dim faith-note">愿力按 10000 : 1 证为道心；只扣当前余额，不重置宗门与仪轨。</p>
+
           <div class="btn-row faith-actions">
             <input v-model="attestDraft" class="qty" inputmode="decimal" aria-label="证心投入愿力" placeholder="投入愿力">
             <button class="btn" :disabled="!attestReady" @click="fillAttest(0.25)">25%</button>
@@ -177,17 +179,15 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
             <button class="btn" :disabled="!attestReady" @click="fillAttest(1)">全部</button>
             <button class="btn primary" :disabled="!attestReady" @click="doAttest">证心</button>
           </div>
-          <div v-if="!attestReady" class="small dim">需学会《凝愿法》，且当前境界至少化神。</div>
         </div>
       </div>
     </div>
 
-    <div class="box faith-card">
+    <div v-if="ritualRows.length" class="box faith-card">
       <div class="box-head">本世仪轨</div>
       <div class="box-body">
         <div v-for="row in ritualRows" :key="row.meta.id" class="small faith-entry">
-          <div class="faith-entry-head"><b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.cap }}</div>
-          <div class="dim faith-note">{{ row.meta.desc }}</div>
+          <div class="faith-entry-head"><HoverTip :label="row.meta.name" :description="row.meta.desc || row.meta.effectDesc" /> {{ row.level }}/{{ row.cap }}</div>
           <div class="btn-row faith-actions">
             <span class="small">下一级 {{ fmt(row.cost) }} 愿力</span>
             <button class="btn" :disabled="row.level >= row.cap || !row.affordable || !row.ready" @click="actions.buyRitual(row.meta.id)">升级</button>
@@ -197,12 +197,11 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
       </div>
     </div>
 
-    <div class="box faith-card">
+    <div v-if="cultivationRows.length" class="box faith-card">
       <div class="box-head">道心修持</div>
       <div class="box-body">
         <div v-for="row in cultivationRows" :key="row.meta.id" class="small faith-entry">
-          <div class="faith-entry-head"><b>{{ row.meta.name }}</b> {{ row.level }}/{{ row.meta.max }}</div>
-          <div class="dim faith-note">{{ row.meta.desc }}</div>
+          <div class="faith-entry-head"><HoverTip :label="row.meta.name" :description="row.meta.desc || row.meta.effectDesc" /> {{ row.level }}/{{ row.meta.max }}</div>
           <div class="btn-row faith-actions">
             <span class="small">下一级 {{ fmt(row.cost) }} 道心</span>
             <button class="btn" :disabled="row.level >= row.meta.max || !row.affordable || !row.ready" @click="actions.buyCultivation(row.meta.id)">升级</button>
@@ -212,15 +211,14 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
       </div>
     </div>
 
-    <div class="box faith-card">
+    <div v-if="oneTime.length" class="box faith-card">
       <div class="box-head">护道与法器</div>
       <div class="box-body">
         <div v-for="row in oneTime" :key="row.meta.id" class="small faith-entry">
           <div class="faith-entry-head">
-            <b>{{ row.meta.name }}</b>
+            <HoverTip :label="row.meta.name" :description="row.meta.desc || row.meta.effectDesc" />
             <span v-if="row.owned" class="good">已掌握</span>
           </div>
-          <div v-if="!row.owned" class="dim faith-note">{{ row.meta.desc || row.meta.effectDesc }}</div>
 
           <template v-if="row.owned && row.treasure">
             <div class="small dim faith-note">
@@ -249,37 +247,44 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
 .faith-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   min-width: 0;
 }
 .faith-balances {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin: 6px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 4px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
 }
 .faith-balance {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line, #d8d0bd);
-  border-radius: 6px;
-}
-.faith-balance .k { font-size: 12px; color: var(--dim, #777); }
-.faith-balance b { font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
-.faith-convert {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  flex: 1 1 130px;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 2px 0;
 }
+.faith-balance .k { font-size: 13px; color: var(--dim); }
+.faith-balance b { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.faith-balance > .small { grid-column: 1 / -1; }
+.faith-convert {
+  display: block;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.faith-convert > .faith-card { display: grid; grid-template-columns: 5em minmax(0, 1fr); gap: 4px 12px; }
+.faith-convert .box-head { padding-top: 4px; }
 .faith-card { min-width: 0; }
-.faith-entry { padding: 6px 0; border-top: 1px solid var(--line, #e2dccb); min-width: 0; }
+.faith-entry { display: grid; grid-template-columns: 8em minmax(0, 1fr); align-items: baseline; gap: 2px 14px; padding: 8px 0; border-top: 1px solid var(--line-soft); min-width: 0; }
 .faith-entry:first-of-type { border-top: 0; }
 .faith-entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
-.faith-actions { padding: 4px 0 6px; }
-.faith-note { margin: 4px 0; overflow-wrap: anywhere; }
+.faith-entry > .faith-note, .faith-entry > .faith-actions { grid-column: 2; }
+.faith-actions { padding: 4px 0; }
+.faith-note { margin: 2px 0; line-height: 1.6; overflow-wrap: anywhere; }
 .faith-panel :deep(.btn-row) {
   flex-wrap: wrap;
   white-space: normal;
@@ -289,11 +294,11 @@ const cultivationRows = computed(() => CULTIVATION.map(meta => {
   width: min(9em, 100%);
   min-width: 0;
 }
-.faith-panel :deep(.btn) { min-height: 32px; }
-.faith-panel :deep(.btn.primary) { min-height: 36px; }
-.faith-panel :deep(.btn:focus-visible) { outline: 2px solid #7a5c2e; outline-offset: 2px; }
-.faith-panel :deep(.btn:disabled) { opacity: 0.55; cursor: not-allowed; }
-@media (max-width: 420px) {
-  .faith-convert { grid-template-columns: 1fr; }
+.faith-panel :deep(.btn) { min-height: 28px; }
+.faith-panel :deep(.btn:focus-visible) { outline: 2px solid var(--link); outline-offset: 2px; }
+@container content (max-width: 480px) {
+  .faith-entry, .faith-convert > .faith-card { grid-template-columns: 1fr; }
+  .faith-entry > .faith-note, .faith-entry > .faith-actions { grid-column: 1; }
+  .faith-panel :deep(.btn) { min-height: 32px; }
 }
 </style>

@@ -1,14 +1,14 @@
 # 工程约定与工具
 
-可选模块由 `data/modules.js` 定义开关，`game/moduleRegistry.js` 接入初始化、存档、时间推进与停用清理，`modules/uiRegistry.js` 单独接入界面。目录项默认用 `module: '<id>'` 绑定单一模块；需要多个模块任一启用即生效时改用 `moduleAny: ['a', 'b']`，由 `isEntryEnabled` 统一判定（例如猎杀与外交共用的信符供给：执符使、执符堂与《山野猎法》）。猎杀数据与系统集中在 `modules/hunting/`，引擎不依赖 Vue 界面。停用模块读档时先验证并保留切片，再召回活动任务，保留历史和偏好；转世/飞升才重置本世切片。任务存档过滤异常结构与数值并重挂合法成员占用。
+功能模块由 `data/modules.js` 登记，`game/moduleRegistry.js` 接入初始化、存档与时间推进，`modules/uiRegistry.js` 接入界面。猎杀与外交始终启用，module／moduleAny 仅用于声明代码归属与共享依赖。旧档关闭标记不再生效；历史、名单与合法已付款任务继续保留，转世/飞升才重置本世切片。
 
-更新：2026-10-13。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [RESEARCH.md](RESEARCH.md)，完整数值见 [TABLES.md](TABLES.md)。
+整理：2026-10-22，对照v0.424。游戏规则见 [DESIGN.md](DESIGN.md)，研究结构见 [CRAFT-PROGRESSION.md#研究与解锁](CRAFT-PROGRESSION.md#研究与解锁)，完整数值见 [TABLES.md](TABLES.md)。
 
-个人天赋配置在 `data/talents.js`，32条词条按修炼、岗位、突破类别互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`。完整规则见 [DISCIPLE-TALENTS.md](DISCIPLE-TALENTS.md)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。
+个人天赋配置在 `data/talents.js`，40条词条按修炼、岗位、突破及两类猎杀专长互斥。`members[].talents`保存固定ID与Lv.1–Lv.3，`disciples.talentSeed`使用独立随机序列，`talentVersion:2`标记当前结构。旧档不补发、不自动升级，归一化保留合法身份与等级并清理异常；成功突破后先抽取新天赋、再按40%概率提升等级最低的原天赋。`cultivationRate`统一修炼天赋，`discipleBreakthroughPreview`统一个人百分点与每境10个百分点指导，真实成功后才抽取新天赋。岗位天赋只进入`discipleJobWeights`，口粮`discipleWeight`仍只含个人有效境界。管理页支持天赋与境界、灵根组合筛选，回归见`tools/talent-check.mjs`。完整规则见 [DISCIPLE-PROGRESSION.md#天赋](DISCIPLE-PROGRESSION.md#天赋)。手动培养见 `data/disciples.js` 的 `DISCIPLE_TRAINING`（传功）与 `DISCIPLE_AIDS`（个人护道），由研究节点 `mentorship` 解锁；传功开销按有效境界计入 `recompute` 的灵气出项、供给不足时整批暂停，个人护道在本次突破后清除，回归见 `tools/disciple-check.mjs`，规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.1。
 
 提示组件：所有tooltip统一使用`HoverTip`，不再使用`RuleTip`或原生`title`提示。组件负责正文外壳和标题：简单规则用`label`自动生成可聚焦的点状下划线入口；按钮与表格保留默认触发插槽，用`title`或`#heading`提供标题、`description`提供说明、`#tip`提供明细。所有内容共用`tip-desc`、`tip-section`、`tip-row`（左标签／右数值）及`tip-note`／`tip-flavor`（分隔线后的淡色左对齐备注），不在业务组件重复创建`tip-body`或`tip-title`。默认宽360px，复杂明细可指定宽度，均受视口约束；支持悬停、键盘聚焦、Escape关闭及触发器滚轮阅读，下拉框操作期间暂停提示。重复说明与开发信息从默认界面移除；实时数值、操作条件、缺料原因、身死总风险和读档覆盖提醒保留，重修确认流程不变。
 
-弟子管理的五个原生下拉框通过`StableSelect`隔离父页高频刷新；筛选选项固定，人数在栏外显示。岗位选项仅在解锁集合改变时更新，集合未变则复用数组；子组件不使用原生`v-model`每帧同步值，避免操作期间被页面刷新重写。
+所有原生下拉框统一由`StableSelect`渲染，覆盖弟子筛选／培养预算、炼制优先项／驱动／速限、猎杀间隔、外交和小界。组件比较值、选项和属性快照，相同内容不重写DOM；鼠标、触摸或键盘操作期间固定快照，确认、失焦或取消后同步最新状态。原生选择值按选项原类型回传，支持数字、字符串和空占位；失效选项不提交，动作拒绝后恢复真实值。弟子人数等实时统计留在栏外，炼制优先列表只依赖配方资格，不依赖库存和倒计时。tooltip继续在下拉操作期间暂停；不为修复下拉刷新暂停游戏主循环。
 
 建筑效果的资源条目由`describeEffects`和`describeJobEffects`携带`resource`标识，`BuildingButton`按`view.visibleResources`过滤每座效果；全局效果、职位开放和工位容量保留。过滤只影响展示，不改效果结算；合计仍按相同标签对应原始总效果。新增资源效果时沿用资源标识，避免按中文文案判断解锁。
 
@@ -16,11 +16,11 @@
 
 tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐、自然换行，不放在`tip-row .v`数值列里；建筑与参悟使用相同样式。`describeNeeds`返回的各前置保留为单独条目，其中“建成其一”仍是一组任选条件。效果补充说明和所属阶段使用`tip-note`，避免长说明挤压左侧标签。
 
-弟子`residenceSeconds`记录在线／离线停留，`totalQiConsumed`记录个人口粮与个人突破实际支付的灵气；旧档缺失或非法值补零。`cultivateDisciple`在修满后继续累计时间，`tick`在资源结算前按个人有效境界权重分配口粮，并按灵气可用量与总持续支出的供给比例折算实际消耗。`discipleDismissalCost`以历法全年秒数计算已满年数，逐人向上取整；`discipleDismissalPreview`去重身份并合计，`dismissDisciples`原子支付、移除记录、同步岗位和人口，保留递增身份。store负责精确费用确认与立即存档，执行时重新校验费用、人数和支付能力，预览变化时拒绝执行；管理页限定筛选内选择并清除已逐出身份。
+弟子`residenceSeconds`记录在线／离线停留，`totalQiConsumed`记录个人口粮与个人突破实际支付的灵气；旧档缺失或非法值补零。`cultivateDisciple`在修满后继续累计时间，`tick`在资源结算前按个人有效境界权重分配口粮，并按灵气可用量与总持续支出的供给比例折算实际消耗。`discipleDismissalCost`以历法全年秒数计算已满年数，逐人按精确金额合计；`discipleDismissalPreview`去重身份并合计，`dismissDisciples`原子支付、移除记录、同步岗位和人口，保留递增身份。store负责精确费用确认与立即存档，执行时重新校验费用、人数和支付能力，预览变化时拒绝执行；管理页限定筛选内选择并清除已逐出身份。
 
 灵根与培养审计：`SPIRITUAL_ROOTS`定义权重、修炼速度与个人突破加成（`breakthrough`，三灵根 0），`cultivationRate`是修为增长与界面预计时间的统一入口，`rootBreakthroughBonus`折入`discipleBreakthroughPreview`的统一概率入口。个体保存`spiritualRoot`，缺失或无效值补`triple`；旧人数档补建的个体也用三灵根。`disciples.rootSeed`保存独立LCG序列，避免收徒改变事件及突破的随机序列；归一化不抽取。新增`sortDisciples`按本境比例或实际速度稳定排序，不改存档数组。管理栏组合筛选，筛选变更清选择，排序保留身份选择。`npm run audit:disciples -- 72 12345 protected`运行无事件、0仙缘／道果、5秒经营、60秒培养（每次最多20人）的真实引擎审计；`greedy`不留宗门材料，`off`不培养，末尾`triple`固定三灵根对照；第5参为培养策略`off|mentor|aid|both`（默认`off`），第3参支持逗号种子列表，便于多种子×多策略对照。`tools/disciple-training.mjs`仅供模拟调用，未加入游戏自动化。
 
-弟子状态与成长：`disciples.members`保存独立身份、姓名、岗位、境界、本境修为及调息剩余秒数；`nextId`分配身份。`data/disciples.js`统一配置修炼、个人倍率与宗门基础突破概率。`syncDisciples`兼容人数接口并同步个体，个体调岗动作反向汇总人数；岗位按`discipleJobWeights`汇总个人有效倍率，口粮按`discipleWeight`汇总。`tick`先推进已有弟子修炼，到来时只计入门后时间；事件招入补建个体，流失移除实际人选。旧档归一化补凡体记录，随机状态不参与姓名生成；重修清空个体。首版材料按目标基础费用1%逐项取整，失败只损失本境修为与调息。`tools/disciple-check.mjs`接入smoke验证保存、上限、失败、批量支付及离线。
+弟子状态与成长：`disciples.members`保存独立身份、姓名、岗位、境界、本境修为及调息剩余秒数；`nextId`分配身份。`data/disciples.js`统一配置修炼、个人倍率与宗门基础突破概率。`syncDisciples`兼容人数接口并同步个体，个体调岗动作反向汇总人数；岗位按`discipleJobWeights`汇总个人有效倍率，口粮按`discipleWeight`汇总。`tick`先推进已有弟子修炼，到来时只计入门后时间；事件招入补建个体，流失移除实际人选。旧档归一化补凡体记录，随机状态不参与姓名生成；重修清空个体。首版材料按目标基础费用1%精确计算，失败只损失本境修为与调息。`tools/disciple-check.mjs`接入smoke验证保存、上限、失败、批量支付及离线。
 
 主动招募：`data/disciples.js` 的 `RECRUIT_TIERS` 定义三档礼聘（灵气×宗门境界倍率，高档叠加香火／灵机）与各自的 `realmWeights`／`tierWeights`／`countWeights`；`recruitCost` 折算花费，`recruitRealmRange` 给界面展示起点境界区间，`rollRecruitRealm` 用独立的 `recruitSeed` 序列按偏移权重抽取起点境界（宗门越高、档位越高则起点越高）；`data/talents.js` 的 `birthTalents`／`rollTalent` 增加可选 `{ tierWeights, countWeights }` 覆盖品级与条数分布，`newDisciple` 增加可选 `realm`／`quality`（缺省仍为凡体、基础分布）。系统层 `systems/disciples.js` 提供 `recruitPreview`／`recruitDisciple`，满员、离开风险、未解锁或付不起即拒绝且不扣料；`recruitArrivals` 与 `core.nextArrivalIn` 在 `derived.recruitModeUnlocked && settings.recruitMode === 'manual'` 时停止自动来人（按解锁判定，避免转世清空研究后被动锁死）。解锁标记由 `effects.recruitMode` 折入 `derived.recruitModeUnlocked`；`settings.recruitMode` 归一化只接受 `auto`／`manual`，`recruitSeed` 缺失时从 `rootSeed` 派生。规则见 [DISCIPLE-PROGRESSION.md](DISCIPLE-PROGRESSION.md) §2.5。
 
@@ -71,7 +71,7 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 - **自动加工批量化**：非工业配方复用按节拍算出份数的批量路径；工业配方每段只做 `CONFIG.OFFLINE_INDUSTRY_ROUNDS`（2）轮「冻结工位分配 → 按剩余真实时间算出份数」，不按成品份数循环；多轮只是重分配**同一段**真实时间（每轮从剩余预算里取并扣掉实际用掉的时间），所以任一条线累计加工不超过「工位速度 × 段长」。原料与这一份自己的加工动力算作**同一份完整代价**，按配方固定顺序从同一份库存里贪心分配，并额外为留下的小数进度预留一份动力；动力另受「至少留住一批」的保留量约束。因此不会先发货后截零，自动保留量也不会被后置动力穿透；缺料与满仓时小数进度最多保留一份待完成量，恢复在线后不会倾泻整段欠账。
 - **灵能用闭式解**：段内按 `dE/dt = 产出 − 逸散` 的解析解结算（稳态 ≈ 产出 ÷ 逸散率）并受仓储限制，不先把整段产出入库再整体衰减。
 - **弟子与人口**：修炼、停留、调息按段累计；口粮按段内有效口粮与供给比例折算；断粮与拥挤流失按 `次数 × 概率` 一次估出人数（拥挤用一次抽签的批量期望），既不让长段只走一人，也不逐 25/60 秒抽签。
-- **猎杀走模块离线钩子**（`advanceOffline`）：正式加载／首次推进入口先重算有效仓容，由注册表 `prepareModules` 调用模块 `prepare`，按旧 v1/v2 快照结算一次并恢复岗位，再重算后开始任何生产；关闭模块同样迁移，normalize／rehydrate 不抽随机数、不发奖。周期推进按 `floor((elapsed + dt) / interval)` 计算次数，同时受实际信符与队伍资格封顶；队伍共用 `resolveHuntTeam`，所选加成弟子优先、普通弟子按期望贡献补足。批量奖励用当段成功率期望、保留余量，不逐次循环、不生成尾段任务或积压欠账。
+- **猎杀走模块离线钩子**（`advanceOffline`）：正式加载／首次推进入口先重算有效仓容，由注册表 `prepareModules` 调用模块 `prepare`，按旧 v1/v2 快照结算一次并恢复岗位，再重算后开始任何生产；旧档关闭标记不再生效，normalize／rehydrate 不抽随机数、不发奖。周期推进按 `floor((elapsed + dt) / interval)` 计算次数，同时受实际信符与队伍资格封顶；队伍共用 `resolveHuntTeam`，所选加成弟子优先、普通弟子按期望贡献补足。批量奖励用当段成功率期望，小数直接入库，不逐次循环、不生成尾段任务或积压欠账。
 
 近似带来的**收益差异是设计接受的**：长离线的结果可能与在线挂机、也可能与逐秒参考不同，离线报告因此标注「收益为估算」。不允许的只是负数与 NaN 库存、超仓储增收、加工欠账和与离线时长同阶的计算量。离线中间步骤不生成 tooltip 来源和解锁列表，结束时统一补齐。`tools/offline-check.mjs` 验证同输入可复现、分段数与库存边界；`tools/offline-async-check.mjs` 验证同步/异步一致、批次预算不影响结果与取消原子性；`tools/offline-benchmark.mjs` 可用真实导出存档或 `--fixture` 专项夹具测量耗时、最长连续计算段与分段/轮数，且不修改输入文件。
 
@@ -85,11 +85,11 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 
 | 数据域 | 运行时类型 | 说明 |
 | --- | --- | --- |
-| resources、peak、karma、dao | Decimal | 永久货币顶层字段为权威来源，`resources` 中的镜像同步为同值；dao 仍为整数 |
+| resources、peak、karma、dao | Decimal | 允许小数；永久货币顶层字段为权威来源，resources 镜像同步为同值 |
 | 成本、产量、每秒速率、净额、经济仓容上限、材料保留量、来源与出项明细 | Decimal | 含 `sources`、`expenseSources`、`autoCraftDrain`、离线差额报告 |
 | stats.totalQi/totalInsight/totalFaith/lifeInsight/offlineGains、stats.crafted | Decimal | 产出总额不与事件次数混用 |
 | 弟子 `totalQiConsumed` | Decimal | 初始化、归一化、在线/离线累计与显示统一迁移，**取消** MAX_SAFE_INTEGER 截断 |
-| craftTargets、craftProgress | Decimal | craftProgress 保留原有「小数余量」含义 |
+| craftTargets、craftProgress | Decimal | 目标允许小数；旧 craftProgress 余量迁入库存后清空，新收益直接入库 |
 | 建筑数、等级、人数、realm、订单数量、计时器、ID、随机种子、次数统计 | Number | 循环次数使用有界安全整数 |
 | 时间戳、dt、totalDays、计时器 t、冷却、任务时长与进度 | Number | 保留时间域容差；离线分段算法仍用 Number |
 | 有界概率、折扣、比例、岗位权重与有限倍率 | Number | 在独立有界计算中保留；进入金额运算时构造为 Decimal，不能先用 Number 算出金额 |
@@ -98,7 +98,7 @@ tooltip条件使用独立`tip-section`和逐条`tip-condition`，正文左对齐
 约定与边界：
 
 - **金额一律用 Decimal 方法运算**（`plus/minus/times/div/pow/sqrt/cmp/gte/floor/ceil/negated`）。金额域禁止原生 `+ - * / **`、`Math.*`、`Number.isFinite`、`value || 0`、`!value`、`=== 0`、`=== Infinity`：Decimal 对象恒为真，这类写法会得到错误结果。
-- **够用判断与扣减同源**：`atLeast`/`gte` 是 Decimal 精确比较，扣减用 `moneyAvailable`；移除了 Number.EPSILON × 数值规模的宽松支付逻辑，`nearlyEqual` 不再作为支付授权（时间域容差保留）。整枚资源入库向下取整、费用向上取整（`ceilMoney`/`floorMoney`）；批量建筑仍逐座取整后求和。
+- **够用判断与扣减同源**：`atLeast`/`gte` 精确比较，扣减使用 `moneyAvailable`。资源库存、仓容、费用、退款和奖励均保留小数；建筑批量报价逐座精确求和；只对制作批次数等离散控制量取整。
 - **无仓容上限**用金额域的 `MONEY_INFINITY` 哨兵（只有派生容量允许出现），时间域的等待值继续用 Number `Infinity`，两者不跨域套用。
 - **非有限金额明确报错**（`requireFiniteMoney`）而不是把库存静默归零；读档损坏字段另行清洗。
 - **精度边界**：40 位有效数字下 `1e30 + 1` 可保留并扣回，`1e40 + 1` 会舍回 `1e40`；`1e400` 可存取、比较与参与一次有效比例结算，但不承诺该量级的逐枚增减仍可表示。需要任意规模整数逐枚精确时另行设计，不宣称有限精度无限精确。
@@ -149,6 +149,29 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 
 工业工位与配方映射在data/industry.js维护。processingPlan只读取状态，按可运行配方及分配权重分配设备容量；runIndustrialCraft推进至下一份完成时刻后重分配。craftCost是所有实际制作支付及展示费用的统一入口。craftTimers.t在工业模式记录基础加工秒数；industryVersion=1避免旧高速计时重复迁移。settings.craftWeights随偏好保留，normalizeState过滤未知配方、非整数及范围外权重。
 
+## 后续内容重构的旧档策略
+
+2026-10-25用户确认：后续小界、建筑、工艺及法宝重构采用**资产与库存数字保留，变更内容直接清理，由玩家手动重建**的简化策略。此政策已用于本轮专业应用、灵能阶段、小界与永久商店；不追溯改写前文的历史迁移记录。旧forgeApp／steelBatching／energyDrive经新目录过滤直接清理，新ID不继承旧购买，阶段及新永久等级正常保存。
+
+兼容验收只要求游戏运行正确：旧档能加载、保存并继续操作；删除内容不造成报错、悬空引用、非法数值、重复扣费／发奖或永久卡死；重复读档不清空已经重建的新内容。需要手动补建、产能下降、旧效果消失或回本变化属于接受的改版结果，不再为保持旧体验添加补偿与等价迁移。此标准不取消永久资产和库存数字保留要求，也不把真正的运行缺陷当作玩家应自行解决的问题。
+
+| 对象 | 处理规则 |
+| --- | --- |
+| 永久资产 | 仙缘、道果、道心等余额，以及永久修持等级、永久资格、成就、名录和累计记录直接保留，不重算历史投入、不发补偿 |
+| 已有资源库存 | 本轮保留资源ID及其合法库存数字，含小数，不折算、不按新产能重估、不因删除建筑清空库存；不为本轮兼容另做资源改名／合并 |
+| 仓容降低后的超额库存 | 保留现有数字，允许消费；超额期间不继续增长，不强制裁至新上限 |
+| 未受影响的建筑、研究、技艺、法宝 | 同ID记录直接保留，效果按新规则重算；仅分类移动或普通数值调整不视为新内容，不保证保持旧产能／旧回本 |
+| 删除内容 | 直接删除旧ID的数量、已学状态、祭炼等级及运行设置，不保留隐形效果，不退款、不换算成其他建筑或工艺 |
+| 实质合并／替换 | 旧组成项一律清理，新条目视为未建／未学／未炼成、祭炼0级；优先使用新ID，玩家按新条件和完整现价手动取得，不合并数量／等级、不抵扣旧付款 |
+| 新增内容 | 初始化为未取得、关闭运行／分流，不补建、不补授、不补发材料，由玩家手动建设、参悟或炼成 |
+| 自动计划与悬空引用 | 清理指向已删除／替换ID的重建计划、加工选择与其他引用；不映射到新条目、不自动重新购买。被删除驻守目标占用的弟子释放为闲置，保留人物自身记录，不自动改派 |
+
+清理按本次变更ID清单处理，不把全部建筑／研究重置；若实际合并必须复用旧ID，该ID也应列入本次一次性重置清单。采用一次性规则标记，或删除旧ID并为新内容使用新ID，避免每次读档都再次清空玩家已经手动建设的新条目。
+
+加载先按新目录清理变更内容与悬空引用，再重算效果和容量、处理离线；不先按已删除设施结算离线收益。正常的合法性与金额校验继续复用现有机制。不新增旧权益台账、分部件投资记录、历史价格重算、比例容量补偿或部分完成补购分支。删改若使生产、仓容或前置不足，玩家使用保留库存按新规则补建；新局仍须具有合法的基础启动路径。
+
+这次只简化版本更新的旧档处理，不改变主动转世、飞升、身死的正常重置范围。实施时仅需针对永久资产与库存保留、变更ID清除、新内容需手动取得、超额库存及重复读档做必要局部检查，不扩展历史数值等价测试矩阵。
+
 ## 展示与交互
 
 白底、细灰线、唯一一层主内容边框；左列资源与快捷炼制，中列标签面板，右列天象、历法、累计和纪事。窄屏进入内部滚动。数字使用tabular-nums，不用卡片、渐变、阴影或装饰图标。
@@ -157,7 +180,7 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 - 顶栏显示弟子、宜居度点数、灵气收支和全局倍率；宜居度不是百分比。
 - HoverTip统一悬停展示；内容按标题、描述、价格、效果、维护等分节，一种资源一行。按实际视口限制尺寸和位置，长内容可滚动。
 - 价格由pricing.costLabel统一格式化：足够时只列需求，不足时列现有、需要和等待时间。买不起或条件未达时禁用，购买项悬停高亮左栏材料。
-- 连续资源存量用fmtResource两位小数；整件存量取整。需求用fmtCost向上，持有量用fmtStock向下，累计或事件数值用fmtAmount；每秒速率和每份收益保留必要精度。
+经济显示统一使用 fmtCost／fmtStock／fmtAmount，均保留小数；fmtInt 仅用于人数与次数。小数过小时使用科学计数法，显示精度不改变实际结算。
 - 带维护费建筑才可停用；仓储和人口效果按已建数量保留，运行效果按有效供给计算。
 - 完整炼制和左栏快捷共用CraftPanel，自动选择、库存与制作动作同步；快捷数量不限，偏好随存档及重置保留。
 - 存档通过下载和选择本地文件导入。危险操作按现有交互确认，普通操作写纪事与状态提示。
@@ -167,19 +190,23 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 
 ## 验证命令
 
-下表为工具用途索引，不代表当前任务已获执行授权。运行范围服从项目AGENTS.md、`.ds/RULES.md`及用户最新指令；未明确授权时不主动运行测试，不为文档整理新增测试文件。
+下表为工具用途索引，不代表当前任务已获执行授权。运行范围服从项目AGENTS.md、`.ds/RULES.md`及用户最新指令；局部修改只执行相关单个快速检查，不为文档整理新增测试文件。日常检查以小范围闭环为主，完整回归、DOM、产业和记录恢复用例按需选择，不逐次叠加执行。
 
-`tools/smoke.mjs` 只负责运行测试清单、架构检查和结果汇总。功能用例位于 `tools/smoke/`，由 `checks.mjs` 显式保持执行顺序，`tools/lib/checks.mjs` 统一断言统计，`fixtures.mjs` 提供公共存档夹具；已有专项检查继续复用。新增用例的放置与登记方式见 [smoke 维护说明](../tools/smoke/README.md)。
+`tools/smoke.mjs` 选择日常／完整／单功能范围，并汇总结果与耗时。功能用例位于 `tools/smoke/`，由 `checks.mjs` 显式保持执行顺序，`tools/lib/checks.mjs` 统一断言统计，`fixtures.mjs` 提供公共存档夹具；已有专项检查继续复用。新增用例的放置与登记方式见 [smoke 维护说明](../tools/smoke/README.md)。
 
 | 命令 | 覆盖 |
 | --- | --- |
 | npm run check:encoding | BOM与文本换行 |
-| npm run smoke | 数据、前置、供料、产出、实际操作、存档与离线 |
+| npm run smoke | 8组核心引擎动作，执行进程限时5秒 |
+| npm run smoke -- --group=名称 | 单个功能组；--list 查看名称 |
+| npm run smoke:full | 完整引擎清单与架构检查，含长模拟及专项边界 |
 | npm run check:render | Vue SSR模板与警告 |
 | npm run check:startup | 真实main入口、浏览器定时器接收对象、热更新保存与重启 |
 | npm run check:dom | jsdom真实挂载、主循环、更新日志与存档交互 |
 | npm run check:tools | 审计参数、临时修改还原与多路线统计 |
-| npm run check | 上述检查 |
+| npm run check | 日常：编码、核心引擎、SSR |
+| npm run check:full | 完整：编码、审计、完整引擎、SSR、启动、DOM |
+| npm run check:industry | 一分钟固定供料负荷场景；-- --full 改为十分钟 |
 | npm run build | 生产构建 |
 | npm run docs:tables | 重新生成全量数据表 |
 | npm run clean | 清除构建、测试与审计目录 |
@@ -193,26 +220,22 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 | 命令 | 用途与参数 |
 | --- | --- |
 | npm run balance -- 24 0 | 固定小时数、初始仙缘；无事件、每5秒决策，资源快照 |
-| npm run audit -- stone 8 | 单资源流量、贴顶时间、门槛与去向；关闭随机事件 |
-| npm run audit:economy -- 6400 | 整件资源需求与去向；可选假设通用仓储，默认0；不含专属容量及仙缘倍率 |
+| npm run audit:economy -- 6400 | 资源需求与去向；可选假设通用仓储，默认0；不含专属容量及仙缘倍率 |
 | npm run audit:save -- "存档路径.txt" | 只读存档仓容、自然产出、库房造价和下一境需求 |
 | npm run audit:crafts -- 24 0 | 加工链及指定研究边际提升；小时数、初始仙缘 |
 | npm run audit:buildings | 真实前置、材料来源和仓储自举；不估算耗时 |
 | npm run audit:buildings -- 5 | 在元婴境界上限内完成来源与仓容闭包；未建的后期建筑不视为失败 |
-| npm run audit:power | 元婴／化神／合体固定阶段可达性，以及从零粒子、零灵能起步的完整产线供能对照 |
 | npm run audit:breakthrough -- power 12345 72 | 主动投资各阶段粒子设施、逐秒生产及真实扣料；仅突破结果强制成功，记录首次建造与首次产出，不代表自然平均通关时间 |
-| npm run audit:pacing -- 72 0 0 0 | 小时数、仙缘、祭炼等级、事件种子；0关闭事件，非0可复现 |
-| npm run audit:pacing -- 72 0 0 1 rush 0 labor | 后续参数为优先破境、道果数、主动分工 |
 | npm run balance:events -- 24 0 | 小时数、仙缘；无事件及固定种子对照 |
 | npm run balance:visits -- 24 | 持续操作、15分钟／1小时／每天三次上线 |
 
-资源审计临时参数：--craft=50改点石成灵的灵气用量，--cap=250改目标基础容量，--prod=spiritField:qi:0.1覆盖聚灵阵每座灵气产出，--realm=0.5改目标资源破境成本，--upcost=2改目标资源研究成本，--job=0.6改目标资源岗位基础产出（含矿工附产），--autocraft临时开放自动加工。修改只影响本次模拟，异常时也应还原，不写源码。
+资源审计旧脚本（`resource-audit`／`pacing-audit`／`power-audit`／`balance-review`）已移除；对应结论保留在历史测量文档中，不再作为现行命令。
 
-累计持续产能按速率积分，包含满仓被截断的部分，排除制作、点击和事件入库；制作产量另列实际整件入库。独立加工产能是单条配方供料上界，不能视为共享材料下所有配方的并发收入。参照玩家用于比较与找瓶颈，结果不代表真人最优路线。
+累计持续产能按速率积分，包含满仓被截断的部分，排除制作、点击和事件入库；制作产量另列实际小数入库。独立加工产能是单条配方供料上界，不能视为共享材料下所有配方的并发收入。参照玩家用于比较与找瓶颈，结果不代表真人最优路线。
 
 ## 扩展与维护
 
-1. 新资源加入RESOURCES，设置基础容量、整数规则与storageWeight，并提供来源和去向。
+1. 新资源加入RESOURCES，设置基础容量与storageWeight，金额保留小数，并提供来源和去向。
 2. 新建筑加入BUILDINGS和分组、显示顺序；成本与needs共同生效。需要模拟采购时同步player-bot的优先表。
 3. 原理、配方与专业精研加入CULTIVATION；通用技艺和kind:treasure法宝加入TECHNIQUES。法宝应有明确研究前置与祭炼成本。
 4. 配方加入CRAFTS，声明产物、用料、节拍与完整前置。成就写check纯函数，当前奖励为0。境界费用需能由上游产业与仓容承接。
@@ -225,4 +248,6 @@ GitHub Pages 部署需在仓库 **Settings → Secrets and variables → Actions
 
 clean脚本只处理项目根目录的dist、dist-ssr、.smoke*、.early与.vite，删除前确认实际路径仍在项目内，拒绝目录链接。node_modules、源码、正式文档和用户存档不作为产物清理。日常运行使用npm脚本。
 
-GitHub Pages流程在.github/workflows/deploy-pages.yml：main推送后先检查，再构建发布。vite.config.js使用相对base，新增资源避免绝对路径与location.pathname依赖，支持子目录部署。
+GitHub Pages流程在.github/workflows/deploy-pages.yml：main或dev1推送后分别检查、构建两个分支，合并为一个Pages产物；main位于根目录，dev1位于/dev/。vite.config.js使用相对base，新增资源避免绝对路径与location.pathname依赖，支持子目录部署。
+
+猎杀与外交为始终启用的功能模块。module／moduleAny 是代码归属声明，isModuleEnabled 只核对注册表；旧档 false 标记在结构校验时统一为 true。凝晶秘银已并入 craftCost（每份 0.01），不存在额外的整数催化剂结算器。

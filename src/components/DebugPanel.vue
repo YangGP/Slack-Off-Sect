@@ -52,7 +52,7 @@ function apply(id) {
               <td>{{ resource.name }} <span class="small dim">{{ resource.id }}</span></td>
               <td>{{ fmtStock(quantity(resource.id)) }}</td>
               <td>{{ maxOf(resource.id).isFinite() ? fmtCost(maxOf(resource.id)) : '不限' }}</td>
-              <td><input type="number" min="0" :max="Number.MAX_SAFE_INTEGER" :step="resource.integer ? 1 : 'any'"
+              <td><input type="number" min="0" :max="Number.MAX_SAFE_INTEGER" step="any"
                 :aria-label="`${resource.name}调试数量`" :value="drafts[resource.id] ?? ''" placeholder="输入目标数量"
                 @input="drafts[resource.id] = $event.target.value" @keydown.enter="apply(resource.id)" /></td>
               <td><button class="btn" :disabled="!!ui.saveLoadError" @click="apply(resource.id)">应用</button></td>
@@ -73,6 +73,6 @@ function apply(id) {
 .quantity-col { width: 20%; }
 .input-col { width: 25%; }
 .action-col { width: 10%; }
-th, td { padding: 6px; border-bottom: 1px solid var(--border, #444); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px; border-bottom: 1px solid var(--line-soft); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 input[type="number"] { width: 100%; min-width: 0; box-sizing: border-box; }
 </style>

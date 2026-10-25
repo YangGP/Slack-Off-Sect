@@ -8,7 +8,6 @@
  * 只有金额域的 `MONEY_INFINITY` 哨兵（`isFinite() === false`）显示 `∞`。
  * 时间与百分比仍是 Number 域：百分比入参若来自 Decimal，调用方先转 Number。
  */
-import { RESOURCE_MAP } from '@/data/resources'
 import { MONEY_INFINITY, ZERO, isMoney, money } from './decimal'
 
 const UNITS = [
@@ -44,6 +43,11 @@ function trim(text) {
   return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text
 }
 
+/** 定点显示省略全零小数尾：'12.00' → '12'，'12.50' 保留 —— 舍入后为整数时不写 .00。 */
+function dropWholeZeros(text) {
+  return text.replace(/\.0+$/, '')
+}
+
 /** 正数的大数缩写；四舍五入进位后切换单位，避免出现 1000k。 */
 function compact(n, digits = 2, fixed = false) {
   if (n.gte(1e12)) return n.toExponential(digits)
@@ -55,15 +59,15 @@ function compact(n, digits = 2, fixed = false) {
     if (index === UNITS.length) return n.toExponential(digits)
     scaled = n.div(UNITS[index].v).toDecimalPlaces(digits)
   }
-  return (fixed ? scaled.toFixed(digits) : trim(scaled.toFixed(digits))) + UNITS[index].s
+  return (fixed ? dropWholeZeros(scaled.toFixed(digits)) : trim(scaled.toFixed(digits))) + UNITS[index].s
 }
 
-/** 1 以下的连续量：太小只写 ≈0，其余按原口径保留 4 位 / 3 位小数 */
+/** 通用量值统一固定两位小数（整数省略 .00）；两位内显示为 0 的极小非零量以 ≈0 保留非零提示。 */
 function magnitude(n, digits = 2) {
   if (n.isZero()) return '0'
-  if (n.lt(1)) return n.lt(0.0001) ? '≈0' : n.toFixed(n.lt(0.01) ? 4 : 3)
-  if (n.lt(1000)) return n.lt(10) ? trim(n.toFixed(2)) : n.lt(100) ? trim(n.toFixed(1)) : n.toFixed(0)
-  return compact(n, digits)
+  if (n.lt(1)) return n.lt(0.005) ? '≈0' : dropWholeZeros(n.toFixed(2))
+  if (n.lt(1000)) return dropWholeZeros(n.toFixed(2))
+  return compact(n, digits, true)
 }
 
 /** 通用数量格式化，例如 12345 -> 12.35k */
@@ -78,15 +82,15 @@ export function fmt(value, digits = 2) {
 
 /**
  * 固定两位小数（资源栏的「当前数值」用）。
- * 不省略尾随 0：12.5 → 12.50，1500 → 1.50k，12345 → 12.35k。
+ * 非整数保留两位：12.5 → 12.50；舍入后为整数省略 .00：12 → 12。
  */
 export function fmtFixed(value, digits = 2) {
   const inf = infiniteText(value)
   if (inf) return inf
   const amount = amountOf(value)
-  if (!amount) return (0).toFixed(digits)
+  if (!amount) return dropWholeZeros((0).toFixed(digits))
   const n = amount.abs()
-  const out = n.lt(1e3) ? n.toFixed(digits) : compact(n, digits, true)
+  const out = n.lt(1e3) ? dropWholeZeros(n.toFixed(digits)) : compact(n, digits, true)
   return amount.isNegative() ? '-' + out : out
 }
 
@@ -115,34 +119,40 @@ export function fmtInt(value) {
   return intCore(integerOf(value, amount => amount.round()))
 }
 
-/** 存量先向下取整，再缩写——左栏资源表以外的地方使用它。 */
+/** 经济数值统一固定两位小数（整数省略 .00）；两位内显示为 0 的极小非零量用科学计数法，避免显示为零。 */
+function economicText(value) {
+  const inf = infiniteText(value)
+  if (inf) return inf
+  const amount = amountOf(value)
+  if (!amount || amount.isZero()) return '0'
+  const n = amount.abs()
+  const out = n.lt(0.005) ? n.toExponential(2)
+    : n.lt(1000) ? dropWholeZeros(n.toFixed(2)) : compact(n, 2, true)
+  return (amount.isNegative() ? '-' : '') + out
+}
+
+/** 库存按实际金额显示，不向下取整。 */
 export function fmtStock(value) {
-  return intCore(integerOf(value, amount => amount.floor()))
+  return economicText(value)
 }
 
-/** 花费 / 上限先向上取整，再缩写；是否够用由实际整数判定。 */
+/** 费用与上限按实际金额显示，不向上取整。 */
 export function fmtCost(value) {
-  return intCore(integerOf(value, amount => amount.ceil()))
+  return economicText(value)
 }
 
-/** 累计量 / 事件增减：整数（四舍五入） */
+/** 累计量与事件增减保留小数。 */
 export function fmtAmount(value) {
-  return intCore(integerOf(value, amount => amount.round()))
+  return economicText(value)
 }
 
-/**
- * **左栏资源表**里的存量文案：连续资源固定两位小数（`4.00`），
- * 整枚计数的资源（灵石/丹药/符箓/法器，数据里标 `integer: true`）显示成 `4`。
- *
- * 只有左栏用这个函数 —— 需求、存量、累计、纪事等其它地方一律用 `fmtCost` / `fmtStock` / `fmtAmount`
- * 先取整再缩写。引擎保证整枚资源不会真的出现小数（价格取整 + addResource 截断），
- * 这里再兜一层，免得旧存档或异常数据在界面上露出「4.5 枚灵石」。
- */
+/** 资源栏统一显示小数，极小库存仍显示非零值。 */
 export function fmtResource(resId, value) {
-  return RESOURCE_MAP[resId]?.integer ? fmtStock(value) : fmtFixed(value)
+  const amount = amountOf(value)
+  return amount && !amount.isZero() && amount.abs().lt('0.01') ? economicText(value) : fmtFixed(value)
 }
 
-/** 每秒速率，带正负号（统一用「/秒」，与效果文案、猫国中文版一致） */
+/** 每秒速率，带正负号（统一用「/秒」，与效果文案一致） */
 export function fmtRate(value) {
   const inf = infiniteText(value)
   if (inf) return (inf === '-∞' ? '-' : '+') + '∞/秒'
@@ -169,6 +179,13 @@ export function fmtTime(seconds) {
 /** 有界比例 → 百分比文本（入参是 Number：来自 Decimal 的比值请先 moneyToRatio / moneyToNumber） */
 export function fmtPercent(value, digits = 0) {
   return (value * 100).toFixed(digits) + '%'
+}
+
+/** 效果与供给百分比固定两位小数（整数省略 .00）；两位内显示为 0 的极小非零量用科学计数法。 */
+export function fmtEffectPercent(value) {
+  const percent = money(value).times(100)
+  return (percent.isZero() ? '0' : percent.abs().lt(0.005)
+    ? percent.toExponential(2) : dropWholeZeros(percent.toFixed(2))) + '%'
 }
 
 export function fmtClock(timestamp) {

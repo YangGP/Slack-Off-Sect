@@ -1,9 +1,10 @@
 import { PROCESSING_STATIONS, RECIPE_STATIONS, PROCESSING_POWER_COST, allocateProcessing } from '@/data/industry'
 import { CRAFTS, craftCost, CRAFT_MAP, autoCraftTime, craftTime } from '@/data/crafts'
 import { atLeast } from '../numbers'
-import { MONEY_INFINITY, ONE, ZERO, floorMoney, money, moneyAvailable, moneyMax, moneyMin, moneySum, moneyToCount, moneyToNumber } from '../decimal'
+import { MONEY_INFINITY, ONE, ZERO, money, moneyAvailable, moneyMax, moneyMin, moneySum, moneyToCount, moneyToNumber } from '../decimal'
 import { isCraftUnlocked, canAfford, clamp, countOf } from './core'
 import { resourceName } from '@/data/resources'
+import { BUILDING_MAP } from '@/data/buildings'
 import { CONFIG } from '@/data/config'
 
 export const EPS = 1e-9
@@ -92,13 +93,26 @@ export function isAutoCrafting(state, derived, recipeId) {
 export function processingPlan(state, derived) {
   const plan = {}
   if (!derived.industrial) return plan
+  // 同一计划内库存不变：配方资格与各燃料的单份保留一次算完，供全部设施共享。
+  // 只在本次调用中复用；扣料、完成一份或修改目标后仍会重新规划。
+  const runnable = new Set()
+  const fuelBatches = {}
+  for (const recipe of CRAFTS) {
+    if (!RECIPE_STATIONS[recipe.id] || !isProcessingCraft(state, derived, recipe.id) ||
+      maxCraftable(state, derived, recipe.id) <= 0 || !canProcessCraft(state, derived, recipe)) continue
+    runnable.add(recipe.id)
+    for (const [res, cost] of Object.entries(craftCost(derived, recipe))) {
+      fuelBatches[res] = moneyMax(fuelBatches[res] ?? ZERO, cost)
+    }
+  }
+  const fuelReserves = {}
   const groups = PROCESSING_STATIONS.map(station => {
     const recipes = PROCESSING_RECIPES[station.id]
     const capacity = derived.processingCapacity[station.id] || 0
     const requests = recipes.map(recipe => ({
       id: recipe.id,
       weight: processingWeight(state, recipe.id),
-      demand: isProcessingCraft(state, derived, recipe.id) && maxCraftable(state, derived, recipe.id) > 0 && canProcessCraft(state, derived, recipe)
+      demand: runnable.has(recipe.id)
         ? derived.autoCraftSpeeds[recipe.id] || 1 : 0,
     }))
     const selected = state.settings.processingModes?.[station.id] || 'normal'
@@ -106,8 +120,8 @@ export function processingPlan(state, derived) {
       : selected === 'overload' && derived.autoCraftSpeedUnlocked ? 'overload' : 'normal'
     const cost = PROCESSING_POWER_COST[mode]
     const fuel = cost && Object.keys(cost)[0]
-    const fuelAvailable = fuel && moneyAvailable(state.resources[fuel] ?? ZERO,
-      processingFuelReserve(state, derived, fuel)).gt(EPS)
+    if (fuel && !Object.hasOwn(fuelReserves, fuel)) fuelReserves[fuel] = autoCraftReserve(state, derived, fuel).plus(fuelBatches[fuel] ?? ZERO)
+    const fuelAvailable = fuel && moneyAvailable(state.resources[fuel] ?? ZERO, fuelReserves[fuel]).gt(EPS)
     const demand = Math.max(0, Math.min(capacity, requests.reduce((sum, r) => sum + r.demand, 0) - capacity))
     return { station, recipes, capacity, requests, mode, wanted: demand, fuelAvailable, demand: mode !== 'normal' && fuelAvailable ? demand : 0 }
   })
@@ -230,11 +244,11 @@ export function autoCraftReserve(state, derived, res) {
   return moneyMax(byPercent, state.settings.craftReserves?.[res] ?? ZERO)
 }
 
-/** 库存目标是成品数量（金额，整数）：0 表示不限，消费成品后自动补回。 */
+/** 库存目标是成品数量（金额，允许小数）：0 表示不限，消费成品后自动补回。 */
 export function craftTarget(state, derived, recipeId) {
   if (!derived.craftTargetsUnlocked) return ZERO
   const value = money(state.craftTargets?.[recipeId] ?? ZERO)
-  return moneyMax(ZERO, floorMoney(value))
+  return moneyMax(ZERO, value)
 }
 
 /** 界面统一使用此收支快照；不改变 tick 的实际扣料与口粮判断。 */
@@ -243,8 +257,9 @@ export function resourceFlow(derived, resId) {
     ...(derived.expenseSources[resId] || []),
     ...(derived.autoCraftDrain?.[resId] || []),
   ]
-  const income = derived.rates[resId] ?? ZERO
-  const expense = moneySum(expenseItems.map(item => moneyMax(ZERO, money(item.value).negated())))
+  const income = (derived.rates[resId] ?? ZERO).plus(derived.worldFlow?.rates?.[resId] || ZERO)
+  // 减耗是正向抵扣项，先合并所有出项再取负，不能逐项截掉抵扣。
+  const expense = moneyMax(ZERO, moneySum(expenseItems.map(item => item.value)).negated())
   return { income, expense, net: income.minus(expense), expenseItems }
 }
 
@@ -300,12 +315,12 @@ export function computeAutoCraftDrain(state, derived) {
 
 /**
  * 手动「吸取天地灵气」：开局什么都没有时唯一的灵气来源。
- * 前20座聚灵阵线性增加点击收益，此后按平方根增长；不乘全局倍率。金额为 Decimal。
+ * 基础值之上，每座已建聚灵阵按其每秒基础产出（与建筑数据同源）线性叠加点击收益；
+ * 不乘全局倍率。金额为 Decimal。
  */
 export function clickGain(state, derived) {
   void derived
   const fields = countOf(state, 'spiritField')
-  const full = CONFIG.CLICK_QI_FULL_FIELDS
-  const effective = Math.min(fields, full) + Math.sqrt(Math.max(0, fields - full))
-  return money(CONFIG.CLICK_QI_BASE).plus(money(CONFIG.CLICK_QI_PER_FIELD).times(effective))
+  const perField = BUILDING_MAP.spiritField.effects.prod.qi
+  return money(CONFIG.CLICK_QI_BASE).plus(money(perField).times(fields))
 }

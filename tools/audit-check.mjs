@@ -100,7 +100,7 @@ createBot(observedClock.state, observedDerived, {
 createBot(silentClock.state, silentDerived).act()
 assert.deepEqual(observedClock.state, silentClock.state)
 assert.ok(buildObservation && reserveObservation)
-// 只差灵气时，显式修正策略必须停止普通支出；旧策略保留为对照，开局仍能自举。
+// 只差灵气时保护尾款，仅允许在剩余等待内回本的供气投资；开局仍能自举。
 const savingClock = createAuditContext(), savingDerived = E.createDerived()
 const saving = savingClock.state
 saving.realm = 2
@@ -111,10 +111,20 @@ E.recompute(saving, savingDerived)
 for (const id of Object.keys(saving.resources)) saving.resources[id] = E.money(100000)
 saving.resources.qi = E.money(500)
 let qiReserve = null
+let qiInvestment = E.ZERO, selectedInvestment = null
 createBot(saving, savingDerived, { protectBreakthrough: true, realmCost: () => ({ qi: 1700 }),
-  breakthrough: () => false, onDecision: row => { qiReserve = row.reserveSource } }).act()
+  breakthrough: () => false, onDecision: row => { qiReserve = row.reserveSource },
+  onBuildDecision: row => { selectedInvestment = row.candidates.find(candidate => candidate.id === row.selected) },
+  onBuildResult: row => {
+    if (!row.bought) return
+    assert.equal(row.id, 'spiritField', '攒灵气期间只允许供气设施使用尾款')
+    assert.ok(selectedInvestment?.qiSupport, '供气投资必须能在剩余等待内回本')
+    qiInvestment = qiInvestment.plus(E.money(row.cost.qi).times(row.bought))
+  },
+}).act()
 assert.equal(qiReserve?.kind, 'breakthrough')
-assert.ok(saving.resources.qi.eq(500), '齐备其余材料时，不得继续将灵气花到普通制作和可选建设')
+assert.ok(qiInvestment.gt(0), '正供气且可回本的夹具应实际进行供气投资')
+assert.ok(saving.resources.qi.eq(E.money(500).minus(qiInvestment)), '除已核对的供气投资外，不得将灵气花到普通制作和可选建设')
 const bootClock = createAuditContext(), bootDerived = E.createDerived()
 E.recompute(bootClock.state, bootDerived)
 createBot(bootClock.state, bootDerived, { protectBreakthrough: true }).act()
@@ -136,10 +146,10 @@ for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
 }
 
 // 复现合体材料容量不足：必须追踪尚未解锁的扩仓链。
-// v0.38 起中后期主扩仓由《广储库》(grandStore, realm 7) 承接，洞天退配合体档，故这里追踪广储库链。
+// 合并后由炼虚档洞天承接中后期扩仓，追踪空间建设链。
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
 blockedState.realm = 8
-blockedState.buildings.depot = { count: 2, on: true }
+blockedState.buildings.warehouse = { count: 10, on: true }
 // 此夹具隔离灵气分子仓容；灵机必须足以覆盖扩仓造价，由典籍库提供。
 blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MAP.scriptureArchive.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
@@ -147,18 +157,20 @@ blockedState.resources.qiParticle = E.money(100)
 const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
 assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need > blocked.have)
 assert.equal(blocked.need, E.moneyToNumber(E.realmCost(blockedState, blockedDerived, 9).qiParticle))
-assert.ok(blocked.expansions.some(b => b.id === 'grandStore' && !b.unlocked))
+assert.ok(blocked.expansions.some(b => b.id === 'grotto' && !b.unlocked))
 assert.equal(blocked.producer.id, 'splitArray')
 const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
 assert.ok(prerequisites.upgrades.has('earthEssence'))
-assert.ok(prerequisites.buildings.has('arcaneVault')) // 法藏现在提供有限粒子仓容，早于广储库解决此缺口
+assert.ok(prerequisites.buildings.has('arcaneVault')) // 法藏提供有限粒子仓容，早于洞天解决此缺口。
 
-// 满员、等待昂贵新住房时，凝晶研究的符箓和上游木料不能被常规建设抢走。
+// 满员、等待昂贵新住房时，凝晶研究的道札与上游纸料不能被常规建设抢走。
+// 凝晶工艺按知识费用重构只耗道札后，改以记录道札的投入验证同一留存逻辑。
 const studying = createInitialState(), studyDerived = E.createDerived()
 studying.realm = 5
 for (const id of ['qiOrigin', 'woodworking', 'talismanArt', 'shapeRune', 'crystalTheory', 'qiPurify', 'liquidArt', 'qiLiquid',
   'preachArt', 'arrayAssembly', 'homePlanning', 'herbStudy', 'prospectStudy', 'earthArt', 'forgeArt', 'forestryArt',
-  'qiArt', 'qiGazing', 'fieldTillage', 'earthEssence', 'flowField', 'oralTeaching']) studying.upgrades[id] = true
+  'qiArt', 'qiGazing', 'fieldTillage', 'earthEssence', 'flowField', 'oralTeaching', 'paperArt',
+  'qiRune', 'conductionRune', 'capacityRune', 'steelWorking', 'quarryArt', 'mithrilArt']) studying.upgrades[id] = true
 for (const [id, count] of [['hut', 80], ['logHouse', 20], ['library', 150], ['scriptureArchive', 150], ['granary', 20], ['talismanHall', 1], ['forge', 1], ['quarry', 1], ['workshop', 1]]) studying.buildings[id] = { count, on: true }
 E.recompute(studying, studyDerived)
 studying.disciples.total = studyDerived.maxDisciples
@@ -166,19 +178,22 @@ studying.disciples.jobs.farmer = studying.disciples.total
 E.recompute(studying, studyDerived)
 studying.resources.qi = E.money(1000000)
 studying.resources.insight = E.money(10000)
-studying.resources.ore = E.money(80)
-const talismanRecipe = CRAFT_MAP.drawTalisman
-const copies = Math.ceil(6 / E.moneyToNumber(E.craftYield(studyDerived, talismanRecipe)))
-for (const [id, amount] of Object.entries(talismanRecipe.cost)) studying.resources[id] = E.moneyMax(studying.resources[id], E.money(amount).times(copies))
-const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false })
+const daoNoteRecipe = CRAFT_MAP.recordDaoNote
+const copies = Math.ceil(10 / E.moneyToNumber(E.craftYield(studyDerived, daoNoteRecipe)))
+for (const [id, amount] of Object.entries(daoNoteRecipe.cost)) studying.resources[id] = E.moneyMax(studying.resources[id], E.money(amount).times(copies))
+// 此用例隔离凝晶知识备料；新增的互市前置由 botDiplomacy 单独覆盖。
+const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false,
+  allowUpgrade: upgrade => upgrade.id === 'crystalCraft' })
 studyBot.act()
-assert.ok(E.moneyGte(studying.resources.talisman, 6), '研究所需符箓应先于住房与其他加工留存')
+assert.ok(E.moneyGte(studying.resources.daoNote, 10), '研究所需道札应先于住房与其他加工留存')
 studyBot.act()
-assert.ok(studying.upgrades.crystalCraft, '留存符箓后应能真实扣费掌握凝晶工艺')
+assert.ok(studying.upgrades.crystalCraft, '留存道札后应能真实扣费掌握凝晶工艺')
 const spiritPrereqs = createBot(studying, studyDerived, { realmCost: () => ({ spiritTalisman: 6 }) }).prerequisites()
 assert.ok(spiritPrereqs.upgrades.has('incenseVow'), '灵符投入需要追踪香火岗位的研究来源')
 assert.ok(spiritPrereqs.buildings.has('gate'), '灵符投入需要建立香火岗位的建筑来源')
-studying.buildings.scriptureArchive.count = 80
+// 口传心授在列（每座典籍库 80 → 112）：60 座时灵机上限 200 + 60×112 = 6920，
+// 低于凝晶工艺的 8000 灵机费用，才能真实触发「研究费超仓容」的扩仓追踪。
+studying.buildings.scriptureArchive.count = 60
 E.recompute(studying, studyDerived)
 delete studying.upgrades.crystalCraft
 const researchExpansion = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }) }).prerequisites()

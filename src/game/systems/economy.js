@@ -1,8 +1,10 @@
 import { RESOURCES } from '@/data/resources'
 import { CONFIG } from '@/data/config'
-import { BUILDINGS, BUILDING_MAP, LEGACY_WAREHOUSE_IDS, LEGACY_STORAGE_DELTA } from '@/data/buildings'
+import { BUILDINGS, BUILDING_MAP } from '@/data/buildings'
+import { buildingMeta } from '@/data/productionStages'
+import { WORLD_LIVING_TARGETS } from '@/data/worldFacilities'
 import { ALL_UPGRADES, UPGRADE_MAP } from '@/data/upgrades'
-import { treasureMult, habitabilityEffects, jobOutputs, karmaMultipliers, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked } from './core'
+import { treasureMult, habitabilityEffects, jobOutputs, karmaMultipliers, calendarAt, isBuildingUnlocked, isJobUnlocked, isUpgradeUnlocked, isCraftUnlocked, buildingBoostAvailable } from './core'
 import { ACHIEVEMENT_REWARD } from '@/data/achievements'
 import { JOBS } from '@/data/jobs'
 import { gameNow, economyDetailsEnabled, seasonRatioOverride } from '../context'
@@ -12,22 +14,29 @@ import { PROCESSING_STATIONS } from '@/data/industry'
 import { CRAFTS } from '@/data/crafts'
 import { computeAutoCraftDrain } from './craftingRules'
 import { discipleFactor, discipleTrainingCost } from '@/data/disciples'
+import { loyaltyEfficiency, daoLevel } from '@/data/samsara'
+import { planWorlds, finishWorldPlan, attachWorldPlan, worldSegment } from './worldRules'
 import { talentBonus } from '@/data/talents'
 import { isEntryEnabled } from '@/data/modules'
 import { faithRatioBonus, faithStorageRatio, realmProductionMultiplier, ritualLevel } from './faith'
+import { karmaShopBonuses } from './karmaShop'
 import { registerStaticMoneyCache } from '../staticMoneyCache'
 
-/** 两类仓库的有效定额：新容量×N + 旧制差额×min(N,旧数量)。 */
-export function effectiveBuildingStorage(state, id) {
+const BUILDING_BOOST_MAP = Object.fromEntries(BUILDINGS.filter(b => b.boost).map(b => [b.boost.id, b.boost]))
+
+/** 工艺强化当前定额；旧容量只作仍保留旧建筑的下限，不再乘工艺。新建部分只用现行定额。 */
+export function effectiveBuildingStorage(state, id, ratio = 1) {
   const meta = BUILDING_MAP[id]
   if (!meta?.effects?.storage) return {}
   const count = Math.max(0, Math.floor(state.buildings?.[id]?.count || 0))
-  const legacy = LEGACY_WAREHOUSE_IDS.includes(id)
-    ? Math.min(count, Math.max(0, Math.floor(state.legacyWarehouseCounts?.[id] || 0)))
-    : 0
-  const delta = LEGACY_STORAGE_DELTA[id] || {}
-  return Object.fromEntries(Object.entries(meta.effects.storage).map(([res, amount]) => [res,
-    money(amount).times(count).plus(delta[res] ? money(delta[res]).times(legacy) : ZERO)]))
+  const legacy = state.legacyStorage?.[id]
+  const oldCount = Math.min(count, Math.max(0, Math.floor(legacy?.count || 0)))
+  const resources = new Set([...Object.keys(meta.effects.storage), ...Object.keys(legacy?.storage || {})])
+  return Object.fromEntries([...resources].map(res => {
+    const base = money(meta.effects.storage[res] || 0).times(ratio)
+    const extra = moneyMax(ZERO, money(legacy?.storage?.[res] || 0).minus(base))
+    return [res, base.times(count).plus(extra.times(oldCount))]
+  }))
 }
 
 /**
@@ -215,20 +224,24 @@ export function applyEffects(ef, mult, targets, src) {
  * 建筑的持续供能档（变更 4）：返回 { res, amount, mult }，无动力字段则 null。
  * 默认走灵气基础；仅当建筑选「灵能高阶」且已掌握《灵能输配》(energyApplication) 时改用灵能，效果 ×mult。
  */
-function buildingPowerDraw(state, meta) {
+function buildingPowerDraw(state, meta, support = {}, perks = karmaShopBonuses(state)) {
   if (meta.upkeepQi == null && meta.upkeepEnergy == null) return null
   const entry = state.buildings[meta.id]
+  const discount = meta.stage === 1 ? perks.productionEnergyDiscount : support.livingEnergyDiscount && WORLD_LIVING_TARGETS.includes(meta.id) ? support.livingEnergyDiscount : 0
+  const energy = money(meta.upkeepEnergy || 0).times(ONE.minus(discount))
+  if (meta.id === 'spiritQuarry' && meta.stage === 1 && !(state.disciples.jobs.miner > 0)) return null
   const energyMode = meta.upkeepEnergy != null && entry?.power === 'energy' && !!state.upgrades.energyApplication
-  if (energyMode) return { res: 'qiEnergy', amount: meta.upkeepEnergy, mult: meta.powerMult ?? 1 }
+  if (energyMode) return { res: 'qiEnergy', amount: energy, mult: meta.powerMult ?? 1 }
   if (meta.upkeepQi != null) return { res: 'qi', amount: meta.upkeepQi, mult: 1 }
-  return { res: 'qiEnergy', amount: meta.upkeepEnergy, mult: meta.powerMult ?? 1 }
+  return { res: 'qiEnergy', amount: energy, mult: meta.powerMult ?? 1 }
 }
 
 /**
  * 重算所有派生数据：仓储上限、每秒产出、宜居度、解锁列表、价格折扣等。
  * 任何会改变数值的操作之后都应该调用一次。
  */
-export function recomputeRaw(state, derived, supply, seconds = 1) {
+export function recomputeRaw(state, derived, supply, seconds = 1, support = {}) {
+  const perks = karmaShopBonuses(state)
   const details = economyDetailsEnabled(state)
   const max = {}
   // 无仓容上限（仙缘 / 道果）用金额域的正无穷哨兵，时间域的 Number Infinity 不跨域套用。
@@ -282,7 +295,8 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const targets = { max, prod, ratio, jobRatio, acc, bonus }
 
   // 建筑：仓储类按“已建成数量”，产出类按“启用中的数量”
-  for (const meta of BUILDINGS) {
+  for (const baseMeta of BUILDINGS) {
+    const meta = buildingMeta(state, baseMeta.id)
     // 关闭的可选模块：其建筑的效果与维护费一并失效（已建成的也停用）
     if (!isEntryEnabled(state, meta)) continue
     const e = state.buildings[meta.id]
@@ -293,12 +307,12 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     // 与数量无关的效果（缩放用 count），先把 storage 类用 count 单独处理。
     // 例外：**带维护费或持续供能的建筑，主动效果按「启用数」算** —— 停用 / 断供即停，
     // 效果跟着停，否则「停用」会变成纯赚（保住效果还省下费用）。实体容量（仓储 / 住房）仍按已建数保留。
-    const power = buildingPowerDraw(state, meta)
+    const power = buildingPowerDraw(state, meta, support, perks)
     const counted = !!(meta.upkeep || power)
     const powMult = power ? power.mult : 1
     const countOnly = {}
     if (ef.storage) {
-      if (LEGACY_WAREHOUSE_IDS.includes(meta.id)) applyEffects({ storage: effectiveBuildingStorage(state, meta.id) }, 1, targets)
+      if (state.legacyStorage?.[meta.id]) applyEffects({ storage: effectiveBuildingStorage(state, meta.id) }, 1, targets)
       else countOnly.storage = ef.storage
     }
     if (ef.storageRatio) countOnly.storageRatio = ef.storageRatio
@@ -364,6 +378,20 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     }
   }
 
+  // 可选注灵只消耗额外增产所需的物料，基础采矿不参与降载；无人采矿不耗灵液。
+  for (const baseMeta of BUILDINGS) {
+    const meta = buildingMeta(state, baseMeta.id)
+    const boost = meta.boost
+    if (!boost || supply[boost.id] == null) continue
+    const active = state.buildings[meta.id].count * supply[boost.id]
+    for (const [res, unit] of Object.entries(boost.upkeep)) {
+      const amount = money(unit).times(active)
+      maint[res] = (maint[res] ?? ZERO).plus(amount)
+      if (!expenseRaw[res]) expenseRaw[res] = []
+      expenseRaw[res].push({ kind: 'upkeep', id: boost.id, label: boost.name, count: active, value: amount.negated() })
+    }
+  }
+
   // 修真 / 技艺 / 法宝（法宝按祭炼等级放大效果）
   for (const up of ALL_UPGRADES) {
     if (!isEntryEnabled(state, up)) continue
@@ -411,13 +439,16 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const habitabilityBonus = acc.habitabilityBonus + housingHabitability
   const habitability = CONFIG.HABITABILITY_BASE + habitabilityBonus + (state.habitabilityPenalty || 0)
   const { globalMult: habitabilityMult, discipleMult, leaveChance } = habitabilityEffects(habitability, state.disciples.total)
+  // 4.8：宜居度只减不加，且独立于锁灵阵等阵法减耗；低于基准不额外加耗。
+  const habitabilityUpkeepReduction = Math.min(CONFIG.HABITABILITY_UPKEEP_CAP,
+    Math.max(0, habitability - CONFIG.HABITABILITY_BASE) * CONFIG.HABITABILITY_UPKEEP_PER_POINT)
 
   // 宜居度拥挤惩罚只作用于弟子岗位，建筑和法宝的基础产出不受此项影响。
   for (const job of JOBS) {
     if (!isEntryEnabled(state, job)) continue
     const n = state.disciples.jobs[job.id] || 0
     if (n > 0) {
-      for (const output of jobOutputs(state, job)) {
+      for (const output of jobOutputs(state, job, supply)) {
         const raw = money(output.base).times(derived.discipleJobWeights[job.id])
           .times(ONE.plus(jobRatio[job.id] || 0)).times(discipleMult)
         prod[output.resource] = (prod[output.resource] ?? ZERO).plus(raw)
@@ -449,16 +480,23 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const realmProductionMult = realmProductionMultiplier(state, realmMult)
   derived.craftSpeed = Math.max(1, Math.sqrt(realmMult / CONFIG.CRAFT_SPEED_REALM_BASE))
   /**
-   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +400%）。
+   * 仙缘加成：先线性给到软上限的 75%，之后渐近到上限（最多 +KARMA_BONUS_CAP，即 +200%）。
    * 这是通用 idler 的 soft cap 形状：early 不打折、late 不膨胀。
    * 仙缘本身是随进度无界的金额，全程在 Decimal 域计算，不先转 Number。
+   * 仙缘修持在此接入：宿慧/梦息/轮回契并入 acc 累加器（与因果通感同路，L708/L714 的派生
+   * 消费点在后面，天然吃到）；因果田乘在仙缘仓储乘区之上。修持效果只看等级——
+   * 已修持花掉的仙缘不计入余额乘区（karmaMultipliers 只吃余额）。
    */
   const karma = moneyMax(ZERO, state.karma ?? ZERO)
   const permanentKarma = karmaMultipliers(karma)
+  const karmaPerks = karmaShopBonuses(state)
+  acc.karmaRatio += karmaPerks.karmaRatio
+  acc.offlineHours += karmaPerks.offlineHours
+  acc.ascendBonus += karmaPerks.ascendBonus
   const karmaMult = permanentKarma.karmaMult.plus(acc.karmaRatio)
-  const karmaStorageMult = permanentKarma.karmaStorageMult
+  const karmaStorageMult = permanentKarma.karmaStorageMult.times(ONE.plus(karmaPerks.storageRatio))
   /** 道果（飞升层）：每颗提供配置中的永久产出加成；首飞耗时随策略及版本变化。道果无上界，倍率走 Decimal。 */
-  const daoMult = ONE.plus(moneyMax(ZERO, state.dao ?? ZERO).times(CONFIG.DAO_PRODUCTION_BONUS))
+  const daoMult = ONE
   // DEBUG 专属独立乘区；运行时字段不进存档，离线快照仍保留本次会话的开关。
   const debugProductionMult = state.__debugProductionBoost === true ? 10 : 1
   const globalMult = money(realmProductionMult).times(karmaMult).times(habitabilityMult).times(daoMult)
@@ -525,7 +563,11 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   const baseRawUpkeep = baseDiscipleUpkeep.times(derived.discipleWeight)
   const rawUpkeep = baseRawUpkeep.times(populationUpkeepMult)
   const reduction = rawUpkeep.times(Math.min(CONFIG.UPKEEP_REDUCTION_CAP, acc.consumeReduction))
-  const upkeep = rawUpkeep.minus(reduction)
+  const afterConsume = rawUpkeep.minus(reduction)
+  // 宜居度减耗单独记账：必须进入 expenseList，否则界面/净流量与实际库存不一致。
+  const habitabilityReduction = afterConsume.times(habitabilityUpkeepReduction)
+  const nurtureReduction = afterConsume.minus(habitabilityReduction).times(0.02 * daoLevel(state, 'measuredNurture'))
+  const upkeep = afterConsume.minus(habitabilityReduction).minus(nurtureReduction)
 
   // 把来源折算成最终数值（所有来源共享同一组乘区，所以按比例缩放即可对上总额）
   const sourceFactor = {}
@@ -563,6 +605,16 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
         value: reduction,
       })
     }
+    if (habitabilityReduction.gt(0)) {
+      items.push({
+        kind: 'reduce',
+        id: 'habitabilityUpkeep',
+        label: '减耗（宜居度）',
+        count: 0,
+        value: habitabilityReduction,
+      })
+    }
+    if (nurtureReduction.gt(0)) items.push({ kind: 'reduce', id: 'measuredNurture', label: '减耗（育养有度）', count: 0, value: nurtureReduction })
     expenseList.qi = items
   }
   // 逐资源的每秒出项总额（灵气 = 弟子口粮 + 维护费）
@@ -577,7 +629,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
     let raw = ZERO
     let count = 0
     for (const member of state.disciples.members) {
-      const cost = discipleTrainingCost(member, state.realm)
+      const cost = discipleTrainingCost(member, state.realm, state)
       if (money(cost).gt(0)) { raw = raw.plus(cost); count++ }
     }
     // 可用灵气按本段时长折算；金额精确比较，不再用相对容差放行「差一点点」的支付。
@@ -605,9 +657,10 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   for (const [id, value] of Object.entries(acc.buildingStorageRatio || {})) {
     const meta = BUILDING_MAP[id]
     if (!meta || !isEntryEnabled(state, meta)) continue
-    const storage = effectiveBuildingStorage(state, id)
+    const base = effectiveBuildingStorage(state, id)
+    const storage = effectiveBuildingStorage(state, id, 1 + value)
     for (const [res, amount] of Object.entries(storage)) {
-      max[res] = (max[res] ?? ZERO).plus(amount.times(value))
+      max[res] = (max[res] ?? ZERO).plus(amount.minus(base[res] || ZERO))
     }
   }
   for (const r of RESOURCES) {
@@ -621,14 +674,16 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
       if (acc.storageRatio[k] > 0) max[k] = (max[k] ?? ZERO).times(ONE.plus(acc.storageRatio[k]))
     }
   }
+  // 4.3：持有的道论按卷提供临时灵机仓容，只作尾款缓冲；加成不超过基础上限的 100%。
+  const treatiseHeld = state.resources?.daoTreatise ?? ZERO
+  if (treatiseHeld.gt(0)) {
+    const baseInsightCap = max.insight ?? ZERO
+    const treatiseBonus = moneyMin(treatiseHeld.times(CONFIG.DAOTREATISE_INSIGHT_CAP), baseInsightCap)
+    max.insight = baseInsightCap.plus(treatiseBonus)
+  }
   // D7 收愿仪：只放大香火仓容，放在定额与比例加仓之后，不重复计入 storageRatio。
   const holdVowRatio = faithStorageRatio(state)
   if (holdVowRatio > 0) max.faith = (max.faith ?? ZERO).times(ONE.plus(holdVowRatio))
-  // 整枚计数资源的仓容在**所有加仓之后**统一取整：比例加仓也参与，
-  // 避免出现「4.5 枚灵石」这种取整后仍然带小数的上限。
-  for (const r of RESOURCES) {
-    if (r.integer) max[r.id] = max[r.id].floor()
-  }
   derived.max = max
   derived.rates = rates
   derived.calendar = calendar
@@ -660,7 +715,9 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.prodRaw = prod
   derived.upkeep = upkeep
   derived.rawUpkeep = rawUpkeep
+  derived.habitabilityUpkeepAmount = habitabilityReduction
   derived.discipleUpkeep = discipleUpkeep
+  derived.habitabilityUpkeepReduction = habitabilityUpkeepReduction
   derived.populationUpkeepMult = populationUpkeepMult
   derived.netQi = net.qi
   derived.habitability = habitability
@@ -683,14 +740,18 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.craftBonus = acc.craftBonus
   derived.craftBonusByResource = acc.craftBonusByResource
   derived.industrial = state.realm >= 4
-  derived.processingCapacityRatio = acc.processingCapacityRatio || {}
-  derived.craftSpeedByRecipe = acc.craftSpeedByRecipe || {}
+  derived.processingCapacityRatio = { ...(acc.processingCapacityRatio || {}) }
+  for (const station of PROCESSING_STATIONS) derived.processingCapacityRatio[station.id] = (derived.processingCapacityRatio[station.id] || 0) + perks.stationCapacityRatio
+  derived.processingCapacityRatio.condensation = (derived.processingCapacityRatio.condensation || 0) + (support.condensationCapacity || 0)
+  derived.craftSpeedByRecipe = { ...(acc.craftSpeedByRecipe || {}) }
+  for (const id of ['recordDaoNote', 'compileDaoTreatise', 'drawArrayDiagram']) derived.craftSpeedByRecipe[id] = (derived.craftSpeedByRecipe[id] || 0) + perks.knowledgeCraftSpeed
+  if (support.alchemyRecipe) derived.craftSpeedByRecipe[support.alchemyRecipe] = (derived.craftSpeedByRecipe[support.alchemyRecipe] || 0) + (support.alchemySpeed || 0)
   derived.craftCostReduction = acc.craftCostReduction || {}
   derived.processingCapacity = Object.fromEntries(PROCESSING_STATIONS.map(station => {
     let capacity = station.baseUpgrade && state.upgrades[station.baseUpgrade] ? 1 : 0
     for (const [id, perBuilding] of Object.entries(station.buildings)) {
       const entry = state.buildings[id]
-      if (entry?.on) capacity += entry.count * (supply[id] ?? 1) * perBuilding
+      if (entry?.on) capacity += entry.count * (supply[id] ?? 1) * (id === 'herbGarden' ? buildingMeta(state, id).nurseryCapacity ?? perBuilding : perBuilding)
     }
     return [station.id, capacity * (1 + (derived.processingCapacityRatio[station.id] || 0))]
   }))
@@ -698,6 +759,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   derived.processingPowerCapacity = acc.processingPowerCapacity || 0
   const crystalArray = state.buildings.crystalArray
   const coolingArrays = crystalArray?.on ? crystalArray.count * (supply.crystalArray ?? 1) : 0
+  derived.processingCoolingRatio = acc.processingCoolingRatio || 0
   derived.processingCoolingCapacity = Object.values(derived.processingCapacity).reduce((sum, n) => sum + n, 0) * CONFIG.PROCESSING_COOLING_CAPACITY_RATIO
     + coolingArrays * 2 * (1 + (acc.processingCoolingRatio || 0))
   derived.huntSuccessBonus = acc.huntSuccessBonus
@@ -712,7 +774,7 @@ export function recomputeRaw(state, derived, supply, seconds = 1) {
   // 暴露给 progression：突破失败后身死减免（预览 / 结算同源）。
   derived.tribulationSafety = acc.tribulationSafety
   derived.offlineHours = acc.offlineHours
-  derived.daoAutomation = money(state.dao ?? ZERO).gte(1)
+  derived.daoAutomation = state.samsara?.automation === true || money(state.dao ?? ZERO).gte(1)
   derived.autoCraftUnlocked = acc.autoCraftUnlocked || derived.daoAutomation
   derived.autoCraftSpeedUnlocked = acc.autoCraftSpeedUnlocked
   derived.autoCraftSpeeds = Object.fromEntries(CRAFTS.map(recipe => {
@@ -754,11 +816,13 @@ export function finishDerived(state, derived) {
  * 只供同一次逐秒推演的相邻步骤使用（默认离线，审计可显式启用在线复用），不能跳过玩家操作后的重算。
  */
 export function canReuseEconomy(state, derived, seconds) {
+  if (Object.values(state.worlds || {}).some(w => w.level > 0 && w.memberId != null)) return false
+  if (state.disciples.members.some(m => (m.loyalty ?? 1) < 1)) return false
   if (state.buffs.some(buff => (buff.until || 0) <= gameNow(state))) return false
   const missingMaterial = meta => Object.keys(meta?.upkeep || {}).some(res =>
     !CONTINUOUS_OUTPUTS.has(res) && !(state.resources[res] ?? ZERO).gt(0))
   for (const [id, value] of Object.entries(derived.buildingSupply)) {
-    if (value !== 1 && !(value === 0 && missingMaterial(BUILDING_MAP[id]))) return false
+    if (value !== 1 && !(value === 0 && missingMaterial(buildingMeta(state, id) || BUILDING_BOOST_MAP[id]))) return false
   }
   for (const [id, value] of Object.entries(derived.upgradeSupply)) {
     if (state.upgradeEnabled?.[id] !== false && value !== 1 &&
@@ -783,7 +847,7 @@ export function canReuseEconomy(state, derived, seconds) {
   }
   if (derived.discipleTrainingUnlocked) {
     let training = ZERO
-    for (const member of state.disciples.members) training = training.plus(discipleTrainingCost(member, state.realm))
+    for (const member of state.disciples.members) training = training.plus(discipleTrainingCost(member, state.realm, state))
     // expense 已含上一轮的传功费，先加回，再按当前库存判断能否继续传功；底线口径与重算门控保持一致。
     const available = moneyMax(ZERO, (state.resources.qi ?? ZERO).div(dt)
       .plus(derived.rates.qi ?? ZERO).plus(derived.expense.qi ?? ZERO).plus(derived.trainingCost))
@@ -798,7 +862,8 @@ export function canReuseEconomy(state, derived, seconds) {
  * Start at full capacity and only reduce it, so a missing input cannot fund its own output.
  * Storage and housing remain available even when production is starved.
  */
-export function recompute(state, derived, seconds = 1) {
+function computeEconomy(state, derived, seconds = 1, support = {}) {
+  const perks = karmaShopBonuses(state)
   const output = derived
   derived = { ...derived } // 供给迭代使用普通对象，只向 Vue 提交最终结果
   derived.discipleJobWeights = Object.fromEntries(JOBS.map(job => [job.id, 0]))
@@ -806,16 +871,18 @@ export function recompute(state, derived, seconds = 1) {
   for (const member of state.disciples.members) {
     const factor = discipleFactor(member, state.realm)
     derived.discipleWeight += factor
-    if (member.roleId) derived.discipleJobWeights[member.roleId] += factor * (1 + talentBonus(member, 'job'))
+    if (member.roleId && !member.onMission) derived.discipleJobWeights[member.roleId] += factor * (1 + talentBonus(member, 'job')) * loyaltyEfficiency(member)
   }
   const dt = Math.max(0.001, seconds)
   const supply = {}
-  const buildingConsumers = BUILDINGS.filter((b) => (b.upkeep || b.upkeepQi != null || b.upkeepEnergy != null)
+  const buildingConsumers = BUILDINGS.map(b => buildingMeta(state, b.id)).filter((b) => (b.upkeep || b.upkeepQi != null || b.upkeepEnergy != null)
     && state.buildings[b.id]?.on && state.buildings[b.id]?.count > 0)
   const upgradeConsumers = ALL_UPGRADES.filter((u) => u.upkeep && state.upgrades[u.id] && state.upgradeEnabled?.[u.id] !== false)
-  const consumers = [...buildingConsumers, ...upgradeConsumers]
+  const boostConsumers = BUILDINGS.filter(b => b.boost && buildingBoostAvailable(state, b.id) && state.buildings[b.id].boost === true
+    && derived.discipleJobWeights[b.boost.job] > 0).map(b => b.boost)
+  const consumers = [...buildingConsumers, ...upgradeConsumers, ...boostConsumers]
   for (const b of consumers) supply[b.id] = 1
-  recomputeRaw(state, derived, supply, dt)
+  recomputeRaw(state, derived, supply, dt, support)
   for (let pass = 0; pass < CONFIG.SUPPLY_ITERATION_MAX; pass++) {
     let changed = false
     // 双极分流同时产生两种灵子；任一侧满仓时，只为下游实际消耗补料。
@@ -834,7 +901,7 @@ export function recompute(state, derived, seconds = 1) {
       if (ratio < 1 - 1e-10) {
         supply.polarizeArray *= ratio
         if (supply.polarizeArray < 1e-10) supply.polarizeArray = 0
-        recomputeRaw(state, derived, supply, dt)
+        recomputeRaw(state, derived, supply, dt, support)
         changed = true
       }
     }
@@ -848,7 +915,7 @@ export function recompute(state, derived, seconds = 1) {
     }
     for (const b of consumers) {
       const drawRes = Object.keys(b.upkeep || {})
-      const p = buildingPowerDraw(state, b)
+      const p = buildingPowerDraw(state, b, support, perks)
       if (p) drawRes.push(p.res)
       const factor = Math.min(...drawRes.map((res) => shares[res] ?? 1))
       if (factor < 1 - 1e-10 && supply[b.id] > 0) {
@@ -858,12 +925,26 @@ export function recompute(state, derived, seconds = 1) {
       }
     }
     if (!changed) break
-    recomputeRaw(state, derived, supply, dt)
+    recomputeRaw(state, derived, supply, dt, support)
   }
-  derived.buildingSupply = Object.fromEntries(buildingConsumers.map(b => [b.id, supply[b.id]]))
+  derived.buildingSupply = Object.fromEntries([...buildingConsumers, ...boostConsumers].map(b => [b.id, supply[b.id]]))
   derived.upgradeSupply = Object.fromEntries(ALL_UPGRADES.filter(u => u.upkeep && state.upgrades[u.id])
     .map(u => [u.id, state.upgradeEnabled?.[u.id] === false ? 0 : supply[u.id]]))
   if (economyDetailsEnabled(state)) finishDerived(state, derived)
   Object.assign(output, derived)
   return output
+}
+
+export function recompute(state, derived, seconds = 1) {
+  const frame = worldSegment(state)
+  if (frame) {
+    computeEconomy(state, derived, seconds, frame.support)
+    attachWorldPlan(derived, frame.plan)
+    return derived
+  }
+  computeEconomy(state, derived, seconds)
+  const preview = planWorlds(state, derived, seconds)
+  if (Object.values(preview.support).some(v => typeof v === 'number' && v > 0)) computeEconomy(state, derived, seconds, preview.support)
+  attachWorldPlan(derived, finishWorldPlan(state, derived, preview))
+  return derived
 }

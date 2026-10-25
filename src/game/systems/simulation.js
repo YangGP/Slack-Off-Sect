@@ -1,10 +1,11 @@
+import { setResourceValue, observeResourceModel } from '../resourceObservation'
 import { ACHIEVEMENTS } from '@/data/achievements'
 import { pushLog, trackPeak, clamp, idleDisciples, calendarAt } from './core'
 import { recompute, canReuseEconomy } from './economy'
 import { gameNow, withGameContext, gameRandom, runtimeCounters } from '../context'
 import { settleExpiredThreat, fireEvent } from './events'
 import { prepareModules, runModuleTicks, nextModuleDeadline, runModuleOfflineTicks } from '@/game/moduleRegistry'
-import { cultivateDisciple, discipleFactor, recountDisciples } from '@/data/disciples'
+import { discipleFactor, recountDisciples } from '@/data/disciples'
 import { RESOURCES, resourceName } from '@/data/resources'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
@@ -12,9 +13,15 @@ import { BUILDINGS } from '@/data/buildings'
 import { ALL_UPGRADES } from '@/data/upgrades'
 import { runAutoCraft, runAutoCondense, runAutoCraftTimers, runIndustrialCraftBatch, runAutoCondenseBatch } from './crafting'
 import { CALENDAR } from '@/data/calendar'
-import { recruitArrivals, autoAssignTalentJobs, autoBreakthroughStep, discipleBreakthroughPreview } from './disciples'
+import { recruitArrivals, autoAssignTalentJobs, discipleBreakthroughPreview } from './disciples'
 import { isLongOffline, offlineSegments, offlineSegmentCount, averageSeasonRatio, BUFF_BOUNDARY_EPS_MS } from './offlinePlan'
 import { MONEY_INFINITY, ZERO, moneyMax, moneyToRatio, requireFiniteMoney } from '../decimal'
+import { advanceDiscipleGrowth } from './disciples'
+import { SAMSARA, daoLevel, rememberDisciple } from '@/data/samsara'
+import { advanceWorlds, replenishChallenge, advanceRebuild } from './samsara'
+import { beginWorldSegment, endWorldSegment } from './worldRules'
+
+const energyDecay = state => Math.max(SAMSARA.qiDecayFloor, CONFIG.QI_ENERGY_DECAY * Math.pow(0.85, daoLevel(state, 'energyRetention')))
 
 export function checkAchievements(state, derived) {
   const newly = []
@@ -60,11 +67,12 @@ function createTickRunner(state, derived, seconds, opts) {
   const end = now + seconds * 1000
   // 大步长只用于没有人口、维护、加工与灵能逸散的稳定生产。
   // 其余场景逐秒结算，避免步内供给、修炼和加工状态变化被提前或延后。
-  // 审计等待期可省略提示明细；调用方在玩家行动前恢复完整派生，默认运行路径不变。
-  if (opts.finalEconomyDetails === false) {
-    withGameContext(state, { economyDetails: false }, () => recompute(state, derived))
-  } else recompute(state, derived)
-  if (prepareModules(state, derived)) recompute(state, derived)
+  // 推进中的供给仍照常求解；来源、解锁与加工收支只在收尾生成一次。
+  // 显式请求中间明细的审计调用仍可保留旧口径。
+  withGameContext(state, { economyDetails: opts.economyDetails === true && opts.finalEconomyDetails !== false }, () => {
+    recompute(state, derived)
+    if (prepareModules(state, derived)) recompute(state, derived)
+  })
   const stableProduction = state.disciples.members.length === 0 && derived.maxDisciples === 0 &&
     !(state.resources.qiEnergy ?? ZERO).gt(0) && !(derived.rates.qiEnergy ?? ZERO).gt(0) &&
     !Object.values(state.autoCraft).some(Boolean) && Object.keys(state.craftOrders).length === 0 &&
@@ -81,7 +89,7 @@ function createTickRunner(state, derived, seconds, opts) {
     get completedSeconds() { return end - now <= 1e-6 ? seconds : Math.min(seconds, (now - start) / 1000) },
     runBatch(shouldYield = () => false) {
       return withGameContext(state, { now: () => now,
-        economyDetails: opts.economyDetails === false ? false : !opts.offline || opts.economyDetails === true }, () => {
+        economyDetails: opts.economyDetails === true }, () => {
         while (end - now > 1e-6) {
           let next = Math.min(end, now + maxSliceMs)
           // 与逐秒参考结算相同：下一次逐秒采样进入新节气时切步。
@@ -121,10 +129,10 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   const cap = dt > CONFIG.MAX_STEP_SECONDS ? CONFIG.MAX_STEP_SECONDS : dt
   const assignmentsChanged = autoAssignTalentJobs(state)
   if (!reuseEconomy || assignmentsChanged || !canReuseEconomy(state, derived, cap)) recompute(state, derived, cap)
-  for (const member of state.disciples.members) cultivateDisciple(member, cap, derived.trainingActive)
-  // 自动突破（§2.2.3）：仅在线结算——在线追赶与 ≤60 秒后台窗口走逐秒路径、照常触发；离线结算（opts.offline）不触发。
-  if (!offline && derived.autoDiscipleBreakthroughUnlocked) autoBreakthroughStep(state, derived)
+  advanceDiscipleGrowth(state, derived, cap)
   if (settleExpiredThreat(state, derived)) recompute(state, derived, cap)
+  if (derived.worldPlan?.rows.length && derived.worldPlan.seconds !== cap) recompute(state, derived, cap)
+  beginWorldSegment(state, derived, cap)
 
   // 个人口粮按实际有效境界与减耗累计；断供时按口粮、维护共有的供给比例记账。
   const qiDemand = moneyMax(ZERO, (derived.expense?.qi ?? ZERO).negated().times(cap))
@@ -133,26 +141,37 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   if (derived.discipleWeight > 0 && derived.upkeep.gt(0)) {
     // 段内口粮系数与个体无关：先算一次，再乘各人的境界/减耗系数，省掉每人四步 Decimal 运算。
     const unitUpkeep = derived.upkeep.div(derived.discipleWeight).times(cap).times(qiSupply)
+    const consumedByFactor = new Map()
     for (const member of state.disciples.members) {
-      const consumed = unitUpkeep.times(discipleFactor(member, state.realm))
+      const factor = discipleFactor(member, state.realm)
+      if (!consumedByFactor.has(factor)) consumedByFactor.set(factor, unitUpkeep.times(factor))
+      const consumed = consumedByFactor.get(factor)
       member.totalQiConsumed = (member.totalQiConsumed ?? ZERO).plus(consumed)
     }
   }
 
   // 1) 资源结算（灵气先算净产出）
   for (const r of RESOURCES) {
-    if (r.noProduction) continue
+    if (r.noProduction && !derived.expense?.[r.id]?.lt(0)) continue
     let rate = derived.rates[r.id] ?? ZERO
     // 出项：弟子的灵气口粮 + 带维护费建筑的持续消耗（停用即停费）
     if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id]) // expense 里是负数
-    if (rate.isZero()) continue
+    if (rate.isZero()) {
+      observeResourceModel(state, r.id, () => ({ source: 'systems/simulation.js:tickStep', duration: cap,
+        precision: 'exact', modelGross: (derived.rates[r.id] ?? ZERO).times(cap).toString(),
+        modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(cap).toString() }))
+      continue
+    }
     const before = state.resources[r.id] ?? ZERO
     let next = before.plus(rate.times(cap))
     const max = derived.max[r.id] ?? MONEY_INFINITY
     // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
     if (next.gt(max) && rate.gt(0)) next = moneyMax(before, max)
     if (next.isNegative()) next = ZERO
-    state.resources[r.id] = requireFiniteMoney(next, `${r.id} 库存`)
+    setResourceValue(state, r.id, requireFiniteMoney(next, `${r.id} 库存`), () => ({ source: 'systems/simulation.js:tickStep',
+      duration: cap, precision: 'exact', modelGross: (derived.rates[r.id] ?? ZERO).times(cap).toString(),
+      modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(cap).toString(),
+      netClipped: rate.gt(0) ? before.plus(rate.times(cap)).minus(next).toString() : '0' }))
     if (next.gt(0)) state.seen[r.id] = true
     const gained = next.minus(before)
     if (r.id === 'qi' && gained.gt(0)) state.stats.totalQi = state.stats.totalQi.plus(gained)
@@ -164,6 +183,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   }
 
   trackPeak(state)
+  if (advanceWorlds(state, derived, cap)) recompute(state, derived, cap)
 
   // 1.2) 可选模块推进（猎杀任务归队会给资源并释放成员，立即重算派生数据）。
   //      离线同样推进；生态关联首轮关闭，不在此抽来袭。
@@ -173,8 +193,10 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   // 于是存量有稳态 —— 稳态 ≈ 产出 ÷ 逸散率（一台湮灭炉 0.06/秒 → 12 灵能）。
   // 衰减系数只与时间有关，保留 Number，随后参与 Decimal 金额乘法。
   if ((state.resources.qiEnergy ?? ZERO).gt(0)) {
-    const left = state.resources.qiEnergy.times(Math.pow(1 - CONFIG.QI_ENERGY_DECAY, cap))
-    state.resources.qiEnergy = left.lt(1e-9) ? ZERO : left
+    const beforeDecay = state.resources.qiEnergy
+    const left = state.resources.qiEnergy.times(Math.pow(1 - energyDecay(state), cap))
+    setResourceValue(state, "qiEnergy", left.lt(1e-9) ? ZERO : left, () => ({ source: 'systems/simulation.js:energy-decay',
+      duration: cap, precision: 'exact', decayLoss: beforeDecay.minus(left.lt(1e-9) ? ZERO : left).toString() }))
   }
 
   // 2) 宜居度：灵气断供则下滑，供应正常则回升
@@ -212,10 +234,13 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
       [...JOBS].sort((a, b) => Number(a.id === 'farmer') - Number(b.id === 'farmer') || (jobs[b.id] || 0) - (jobs[a.id] || 0))
         .find((job) => (jobs[job.id] || 0) > 0)?.id
     const index = state.disciples.members.findIndex(member => member.roleId === jobId && !member.onMission)
-    if (index >= 0) state.disciples.members.splice(index, 1)
-    recountDisciples(state.disciples)
-    pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')
-    recompute(state, derived)
+    if (index >= 0) {
+      rememberDisciple(state, state.disciples.members[index], '离山而去')
+      state.disciples.members.splice(index, 1)
+      recountDisciples(state.disciples)
+      pushLog(state, `${hungerLeave ? '灵气长期断供' : '宜居度不足、居所拥挤'}，一名弟子收拾行囊下山了。`, 'bad')
+      recompute(state, derived)
+    }
   }
 
   // 4) 增益到期
@@ -230,6 +255,8 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   if (runAutoCraft(state, derived, cap) && (!reuseEconomy || !canReuseEconomy(state, derived, cap))) {
     recompute(state, derived, cap)
   }
+
+  if (endWorldSegment(state, derived)) recompute(state, derived, cap)
 
   // 6) 历法推进：天数累加
   //    一天 3 秒（见 CALENDAR.DAY_SECONDS），所以 1 节气只有 45 秒 —— 节气变化**不写纪事**
@@ -253,6 +280,7 @@ export function tickStep(state, derived, dt, opts, reuseEconomy = false) {
   // 7) 弟子自动前来（有空房就来人，不用手动招募）
   if (!starving && derived.leaveChance === 0) recruitArrivals(state, derived, cap, { silent: offline })
   else state.arrivalTimer = 0
+  if (replenishChallenge(state, derived) || advanceRebuild(state, derived)) recompute(state, derived)
 
   // 8) 成就
   const counters = runtimeCounters(state)
@@ -310,7 +338,7 @@ function offlineSummary(state, before, disciplesBefore, cap, stats = null) {
     if (diff.gt(0.01)) gains[r.id] = diff
   }
   const summary = { seconds: cap, gains, disciples: state.disciples.total - disciplesBefore }
-  // 离线不自动突破：修满待突破的人选汇总进摘要与纪事（§2.2.3），不依赖自动突破开关。
+  // 自动化关闭、缺料或受上限限制时，汇总仍修满待突破的人选。
   const readyToBreak = state.disciples.members.filter(member => discipleBreakthroughPreview(state, member).ready).length
   if (readyToBreak > 0) summary.readyToBreak = readyToBreak
   // 有界近似额外报告实际工作量，便于基准与回归断言「计算量没有换到内部循环」。
@@ -444,9 +472,11 @@ function approximateSegment(state, derived, segment, opts) {
     autoAssignTalentJobs(state)
     recompute(state, derived, dt)
 
-    // 3) 已有弟子按段批量累计修炼、停留与调息；修满停止，离线仍不自动突破。
-    for (const member of state.disciples.members) cultivateDisciple(member, dt, derived.trainingActive)
+    // 3) 按修满和调息边界推进培养；已开启自动突破遵守同一支付限制。
+    advanceDiscipleGrowth(state, derived, dt)
     if (settleExpiredThreat(state, derived)) recompute(state, derived, dt)
+    if (derived.worldPlan?.rows.length && derived.worldPlan.seconds !== dt) recompute(state, derived, dt)
+    beginWorldSegment(state, derived, dt)
 
     // 4) 个人口粮按实际有效境界与减耗累计；断供时按口粮与维护共有的供给比例记账。
     const qiDemand = moneyMax(ZERO, (derived.expense?.qi ?? ZERO).negated().times(dt))
@@ -463,17 +493,25 @@ function approximateSegment(state, derived, segment, opts) {
     // 5) 资源结算：段首速率乘 dt 一次计入，受实际可用量与仓储限制，不出现负数。
     //    维护与加工共用同一份材料预算：两者都在这里按同一批库存封顶。
     for (const r of RESOURCES) {
-      if (r.noProduction || r.id === 'qiEnergy') continue
+      if (r.id === 'qiEnergy' || r.noProduction && !derived.expense?.[r.id]?.lt(0)) continue
       let rate = derived.rates[r.id] ?? ZERO
       if (derived.expense?.[r.id]) rate = rate.plus(derived.expense[r.id])
-      if (rate.isZero()) continue
+      if (rate.isZero()) {
+        observeResourceModel(state, r.id, () => ({ source: 'systems/simulation.js:approximateSegment', duration: dt,
+          precision: 'approximate', modelGross: (derived.rates[r.id] ?? ZERO).times(dt).toString(),
+          modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(dt).toString() }))
+        continue
+      }
       const before = state.resources[r.id] ?? ZERO
       let next = before.plus(rate.times(dt))
       const max = derived.max[r.id] ?? MONEY_INFINITY
       // 扩仓规则调整或拆除建筑后，超额旧库存可消费，但不能继续增加。
       if (next.gt(max) && rate.gt(0)) next = moneyMax(before, max)
       if (next.isNegative()) next = ZERO
-      state.resources[r.id] = requireFiniteMoney(next, `${r.id} 库存`)
+      setResourceValue(state, r.id, requireFiniteMoney(next, `${r.id} 库存`), () => ({ source: 'systems/simulation.js:approximateSegment',
+        duration: dt, precision: 'approximate', modelGross: (derived.rates[r.id] ?? ZERO).times(dt).toString(),
+        modelExpense: (derived.expense?.[r.id] ?? ZERO).neg().times(dt).toString(),
+        netClipped: rate.gt(0) ? before.plus(rate.times(dt)).minus(next).toString() : '0' }))
       if (next.gt(0)) state.seen[r.id] = true
       const gained = next.minus(before)
       if (gained.gt(0)) {
@@ -491,7 +529,7 @@ function approximateSegment(state, derived, segment, opts) {
     {
       const before = state.resources.qiEnergy ?? ZERO
       const net = (derived.rates.qiEnergy ?? ZERO).plus(derived.expense?.qiEnergy ?? ZERO)
-      const decay = clamp(CONFIG.QI_ENERGY_DECAY, 0, 1)
+      const decay = clamp(energyDecay(state), 0, 1)
       const remain = Math.pow(1 - decay, dt)
       const lambda = decay > 0 && decay < 1 ? -Math.log(1 - decay) : 0
       let next = before.times(remain).plus(lambda > 0
@@ -500,10 +538,14 @@ function approximateSegment(state, derived, segment, opts) {
       const max = derived.max.qiEnergy ?? MONEY_INFINITY
       if (next.gt(max) && net.gt(0)) next = moneyMax(before, max)
       if (next.isNegative()) next = ZERO
-      state.resources.qiEnergy = requireFiniteMoney(next, '灵能库存')
+      setResourceValue(state, "qiEnergy", requireFiniteMoney(next, '灵能库存'), () => ({ source: 'systems/simulation.js:energy-combined',
+        duration: dt, precision: 'approximate', modelGross: (derived.rates.qiEnergy ?? ZERO).times(dt).toString(),
+        modelExpense: (derived.expense?.qiEnergy ?? ZERO).neg().times(dt).toString(),
+        decayAndClippingLoss: before.plus(net.times(dt)).minus(next).toString() }))
       if (next.gt(0)) state.seen.qiEnergy = true
     }
     trackPeak(state)
+    if (advanceWorlds(state, derived, dt)) recompute(state, derived, dt)
 
     // 7) 可选模块的离线快进（猎杀按可完成趟数批量估算；无该钩子的模块不推进）。
     if (runModuleOfflineTicks(state, derived, dt, { startAt: startMs, endAt: opts.endAt, stats })) {
@@ -554,6 +596,7 @@ function approximateSegment(state, derived, segment, opts) {
     const crafted = runAutoCraftTimers(state, derived, dt)
     const processed = derived.industrial ? runIndustrialCraftBatch(state, derived, dt, stats) : false
     if (crafted || processed) recompute(state, derived, dt)
+    if (endWorldSegment(state, derived)) recompute(state, derived, dt)
 
     // 11) 历法直接推进完整 dt（不穷举节气），凝灵诀按跨过的节气数批量估算。
     state.totalDays = dayTo
@@ -562,6 +605,7 @@ function approximateSegment(state, derived, segment, opts) {
     // 12) 弟子自动前来：沿用批量数量计算，新弟子只累计入门后的时间。
     if (!starving && derived.leaveChance === 0) recruitArrivals(state, derived, dt, { silent: true })
     else state.arrivalTimer = 0
+    if (replenishChallenge(state, derived) || advanceRebuild(state, derived)) recompute(state, derived, dt)
 
     // 13) 成就按段检查一次；离线不新增随机事件。
     const counters = runtimeCounters(state)
@@ -584,6 +628,7 @@ function batchRemoveDisciples(state, count) {
   const rank = member => !member.roleId || !jobs[member.roleId] ? 0 : member.roleId === 'farmer' ? 2 : 1
   pool.sort((a, b) => rank(a) - rank(b) || (jobs[b.roleId] || 0) - (jobs[a.roleId] || 0) || a.id - b.id)
   const removed = new Set(pool.slice(0, Math.min(count, pool.length)).map(member => member.id))
+  for (const member of state.disciples.members) if (removed.has(member.id)) rememberDisciple(state, member, '离山而去')
   state.disciples.members = state.disciples.members.filter(member => !removed.has(member.id))
   recountDisciples(state.disciples)
   return removed.size

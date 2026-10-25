@@ -2,6 +2,13 @@
 const contexts = new WeakMap()
 const counters = new WeakMap()
 
+/** Runtime-only access for deterministic measurement; never serialized as player data. */
+export function getGameContext(state) { return contexts.get(state) }
+
+export function restoreRuntimeCounters(state, value) {
+  counters.set(state, { ...value })
+}
+
 export function gameNow(state) {
   // 独立引擎调用也延续已推进的时间；注入时钟的运行实例自行控制现实时间。
   return contexts.get(state)?.now?.() ?? Math.max(Date.now(), state.lastTickAt || 0)

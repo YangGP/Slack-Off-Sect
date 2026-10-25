@@ -7,17 +7,26 @@
 import { computed } from 'vue'
 import { state, derived, actions } from '@/game/store'
 import { DIPLOMACY, DIPLOMACY_SECTS } from './data.js'
-import { RESOURCE_MAP, resourceName } from '@/data/resources'
+import { resourceName } from '@/data/resources'
 import { REALMS } from '@/data/realms'
 import { isDiplomacyUnlocked, tradePreview } from '@/game/engine'
-import { ZERO, ceilMoney } from '@/game/decimal'
-import { fmtAmount, fmtInt, fmtPercent } from '@/game/format'
+import { ZERO } from '@/game/decimal'
+import { fmtAmount, fmtPercent } from '@/game/format'
 import HoverTip from '@/components/HoverTip.vue'
+import StableSelect from '@/components/StableSelect.vue'
 
 const unlocked = computed(() => isDiplomacyUnlocked(state))
 const fortunePct = computed(() => fmtPercent(tradePreview(state, derived, DIPLOMACY_SECTS[0].id)?.fortuneChance || 0))
 const warrant = computed(() => state.resources.warrant ?? ZERO)
 const warrantMax = computed(() => derived.max.warrant ?? ZERO)
+const visibleSects = computed(() => DIPLOMACY_SECTS.filter(sect => previewOf(sect.id)?.unlocked))
+const selectedSect = computed(() => visibleSects.value.some(sect => sect.id === state.diplomacy.settings.sectId)
+  ? state.diplomacy.settings.sectId : '')
+const sectOptions = computed(() => {
+  const options = visibleSects.value.map(sect => ({ value: sect.id, label: sect.name }))
+  return selectedSect.value ? options : [{ value: '', label: '请选择已解锁宗门', disabled: true }, ...options]
+})
+const batchOptions = [1, 10, 100].map(value => ({ value, label: `每回${value}次` }))
 
 function previewOf(sectId) {
   return tradePreview(state, derived, sectId)
@@ -30,9 +39,7 @@ function costText(cost) {
 function fortuneText(options) {
   const parts = []
   for (const [res, amount] of Object.entries(options || {})) {
-    // 机缘掉落是金额：整枚计数的资源向上取整展示（与入库口径一致），其余交给格式化助手。
-    const shown = RESOURCE_MAP[res]?.integer ? ceilMoney(amount) : amount
-    parts.push(`${resourceName(res)} ≈${fmtAmount(shown)}`)
+    parts.push(`${resourceName(res)} ≈${fmtAmount(amount)}`)
   }
   return parts.join(' 或 ')
 }
@@ -43,25 +50,29 @@ function trade(sectId) {
 </script>
 
 <template>
-  <div class="box">
+  <div class="box activity-panel diplomacy-panel">
     <div class="box-head">
       <HoverTip label="宗门外交"><template #tip>
           <p>与邻宗互市：付出富余资源与信符，换回紧缺物资。每回互市消耗 {{ DIPLOMACY.WARRANT_COST }} 枚信符——与猎杀出征共用同一池子。</p>
           <p>每次交易另有{{ fortunePct }}概率触发机缘，额外获得一份掉落；山门越多，机缘越易（每座 +1%，封顶 35%）。</p>
           <p>机缘掉落按当前产能定价：按产能折算的奖励不超过该资源仓储的 {{ Math.round(DIPLOMACY.FORTUNE_STORAGE_SHARE * 100) }}%，但保底数量不受此限；实际入库仍受仓容限制。</p>
         </template></HoverTip>
-      <span class="hint">信符 {{ fmtInt(warrant) }} / {{ fmtInt(warrantMax) }} · 每回互市 {{ DIPLOMACY.WARRANT_COST }} 枚</span>
+      <span class="hint">信符 {{ fmtAmount(warrant) }} / {{ fmtAmount(warrantMax) }} · 每回互市 {{ DIPLOMACY.WARRANT_COST }} 枚</span>
     </div>
     <div class="box-body">
       <div v-if="!unlocked" class="empty">
         尚未与邻宗建立往来：需参悟《邻宗往来》，且宗门达到{{ REALMS[DIPLOMACY.MIN_REALM].name }}。
       </div>
       <template v-else>
-        <div v-for="sect in DIPLOMACY_SECTS" :key="sect.id" class="diplomacy-sect">
+        <div v-if="state.upgrades.tradeRoutes" class="small diplomacy-auto">
+          <label><input type="checkbox" :checked="state.diplomacy.settings.auto" @change="actions.diplomacyAuto('auto', $event.target.checked)" /> <HoverTip label="自动互市（每60秒）" description="自动交易遵守炼制页逐项材料保留与信符保留，缺料跳过；长离线合并支付，机缘按期望估算，不积压欠账。" /></label>
+          <StableSelect label="自动互市宗门" :model-value="selectedSect" :options="sectOptions" @update:model-value="actions.diplomacyAuto('sectId', $event)" />
+          <StableSelect label="自动互市批量" :model-value="state.diplomacy.settings.batch" :options="batchOptions" @update:model-value="actions.diplomacyAuto('batch', $event)" />
+          <label>信符保留 <input class="qty" type="number" min="0" max="100000" :value="state.diplomacy.settings.warrantReserve" @change="actions.diplomacyAuto('warrantReserve', $event.target.value)" /></label>
+        </div>
+        <div v-for="sect in visibleSects" :key="sect.id" class="diplomacy-sect">
           <div class="diplomacy-head">
-            <span class="diplomacy-glyph">{{ sect.glyph }}</span>
-            <span><b>{{ sect.name }}</b></span>
-            <span class="dim small" style="margin-left: 8px">{{ sect.desc }}</span>
+            <HoverTip :label="sect.name" :description="sect.desc" />
           </div>
           <table class="grid">
             <tbody>
@@ -83,11 +94,14 @@ function trade(sectId) {
           <div class="diplomacy-actions">
             <button
               class="btn primary"
-              :disabled="!previewOf(sect.id)?.warrantEnough || !previewOf(sect.id)?.affordable || !previewOf(sect.id)?.hasRoom"
+              :disabled="!previewOf(sect.id)?.unlocked || !previewOf(sect.id)?.warrantEnough || !previewOf(sect.id)?.affordable || !previewOf(sect.id)?.hasRoom"
               @click="trade(sect.id)"
             >
               互市
             </button>
+            <button class="btn" :disabled="!previewOf(sect.id)?.unlocked" @click="actions.diplomacyBatch(sect.id, 10)">互市×10</button>
+            <button class="btn" :disabled="!previewOf(sect.id)?.unlocked" @click="actions.diplomacyBatch(sect.id, 'max')">尽量互市（最多100）</button>
+            <span v-if="!previewOf(sect.id)?.unlocked" class="dim small">需{{ REALMS[sect.realm || 3].name }}</span>
             <span v-if="!previewOf(sect.id)?.warrantEnough" class="bad small">信符不足</span>
             <span v-else-if="!previewOf(sect.id)?.affordable" class="bad small">材料不足</span>
             <span v-else-if="!previewOf(sect.id)?.hasRoom" class="bad small">仓储已满</span>
@@ -101,26 +115,33 @@ function trade(sectId) {
 
 <style scoped>
 .diplomacy-sect {
-  padding: 6px 0;
-  border-top: 1px solid var(--border, #3a3a3a);
+  padding: 12px 0;
+  border-top: 1px solid var(--line-soft);
 }
-.diplomacy-sect:first-child {
+.diplomacy-sect:first-of-type {
   border-top: none;
 }
 .diplomacy-head {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  margin-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 6px;
 }
-.diplomacy-glyph {
-  font-size: 0.9em;
-  color: var(--dim, #999);
-}
+.diplomacy-description { min-width: 0; line-height: 1.6; }
+.diplomacy-auto { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding-bottom: 10px; }
+.diplomacy-auto label { display: inline-flex; align-items: center; gap: 6px; }
+.diplomacy-auto input.qty { width: 7em; }
+.diplomacy-auto p { flex-basis: 100%; margin: 0; line-height: 1.6; }
 .diplomacy-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   margin-top: 6px;
+}
+@container content (max-width: 480px) {
+  .diplomacy-sect tr { display: grid; grid-template-columns: 4em minmax(0, 1fr); }
+  .diplomacy-description { flex-basis: 100%; }
 }
 </style>

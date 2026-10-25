@@ -245,7 +245,7 @@ export function runOfflineChecks(ok) {
     const spent = available.minus(state.resources.qi)
     const minimumFuel = line.powerDrain.qi.times(step).div(line.speed).times(made)
     assert.ok(!state.resources.qi.isNegative(), '灵气不为负')
-    assert.ok(made > 0 && state.resources.spiritLiquid.eq(made), '产出与份数一致')
+    assert.ok(made > 0 && E.moneyEq(state.resources.spiritLiquid, E.craftYield(derived, recipe).times(made)), '产出与份数一致')
     assert.ok(cost.qi.times(made).plus(minimumFuel).lte(available.plus('1e-9')),
       `已完成份数的原料与最低动力都付得起（需 ${cost.qi.times(made).plus(minimumFuel)}，有 900）`)
     assert.ok(spent.lte(available.plus('1e-9')), '原料与动力合计不超过可用量')

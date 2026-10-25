@@ -1,20 +1,20 @@
 <script setup>
 /**
  * 参悟表：修真（解锁层）与技艺·法宝（数值层）共用一张表。
- * 三层信息与猫国一致：可参悟的列表 / 条件未达成的折叠 / 已参悟的折叠。
- * 价格沿用猫国的紧凑写法：够就写需求，不够写「现有/需求」并标红。
+ * 三层信息：可参悟的列表 / 条件未达成的折叠 / 已参悟的折叠。
+ * 价格使用紧凑写法：够就写需求，不够写「现有/需求」并标红。
  * 修真条目写「参悟」，法宝写「炼成」—— 一个是研究，一个是器物。
  */
 import { computed } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible, isCostRevealed } from '@/game/engine'
+import { canAfford, refineCost, treasureLevel, treasureMult, isProgressionVisible, isCostRevealed, researchCost } from '@/game/engine'
 import { describeEffects, describeNeeds, scaleEffectsBy } from '@/game/effectsText'
 import { effectRows, effectLine } from '@/game/unlockText'
 import { fmt, fmtCost } from '@/game/format'
 import { ZERO, money, moneyGte, moneyMax } from '@/game/decimal'
-import { enough as enoughOf } from '@/game/pricing'
+import { enough as enoughOf, costBlocked } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
-import { CULTIVATION, CULTIVATION_STAGE_OF } from '@/data/upgrades'
+import { CULTIVATION } from '@/data/upgrades'
 import { CONFIG } from '@/data/config'
 import HoverTip from './HoverTip.vue'
 import CostRows from './CostRows.vue'
@@ -43,12 +43,12 @@ const researchedIds = computed(() =>
 // 仓容只影响列表分组；已有库存能支付时仍允许参悟。仓容与存量都是金额，比较留在 Decimal 域。
 const capacityReady = (u) => {
   if (props.kind !== 'cultivation') return true
-  const cost = money(u.cost?.insight ?? ZERO)
+  const cost = money(researchCost(state, u)?.insight ?? ZERO)
   return moneyGte(moneyMax(derived.max.insight ?? ZERO, state.resources.insight ?? ZERO), cost)
 }
 const capacityLocked = computed(() => props.list
-  .filter((u) => availableIds.value.includes(u.id) && isCostRevealed(state, u.cost) && !capacityReady(u))
-  .sort((a, b) => money(a.cost.insight).cmp(money(b.cost.insight))))
+  .filter((u) => availableIds.value.includes(u.id) && isCostRevealed(state, researchCost(state, u)) && !capacityReady(u))
+  .sort((a, b) => money(a.cost.insight).cmp(money(b.cost.insight))).map(u => ({ ...u, cost: researchCost(state, u) })))
 
 /**
  * 「效果」列的文本。
@@ -62,10 +62,11 @@ const capacityLocked = computed(() => props.list
  *
  * 为什么不直接把 HoverTip 包住整行：HoverTip 渲染的是一个 `<span>` 外壳，
  * 而 `<tr>` 里只能放 `<td>` —— 包起来会破坏表格结构。转发事件既保住结构，
- * 又让玩家在行内任意位置（名称、等级、花费）悬停都能看到同一条提示。
+ * 又让玩家在行内任意位置（名称、等级、效果或花费）悬停都能看到同一条提示。
  */
-function rowEnter(ev, meta) {
-  if (meta?.cost) highlightCost(meta.cost)
+function rowEnter(ev, item) {
+  const cost = item?.cost || item?.meta?.cost
+  if (cost) highlightCost(cost)
   ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseenter'))
 }
 function rowLeave(ev) {
@@ -73,34 +74,23 @@ function rowLeave(ev) {
   ev?.currentTarget?.querySelector?.('.tip-trigger')?.dispatchEvent(new MouseEvent('mouseleave'))
 }
 
-/** 修真节点所属的研究分组（技艺 / 法宝没有分组，返回 null） */
-const stageOf = (id) => CULTIVATION_STAGE_OF[id] || null
-
-/** 这一段的第一行（用来插段标题行） */
-function isStageStart(list, i) {
-  if (!list[i]?.stage) return false
-  return i === 0 || list[i - 1]?.stage?.key !== list[i].stage.key
-}
-
+/** 各列表都按数据文件的书写顺序展示：想调整顺序直接重排数据即可。 */
 const available = computed(() =>
   availableIds.value
     .map((id) => props.list.find((u) => u.id === id))
     .filter(Boolean)
-    .filter((u) => isCostRevealed(state, u.cost))
+    .filter((u) => isCostRevealed(state, researchCost(state, u)))
     .filter(capacityReady)
-    // 修真页按研究分组排序，同组保持数据顺序。
-    .sort((a, b) => (stageOf(a.id)?.index ?? 99) - (stageOf(b.id)?.index ?? 99))
     .map((u) => ({
-      meta: u,
-      stage: stageOf(u.id),
-      affordable: canAfford(state, u.cost),
+      meta: { ...u, cost: researchCost(state, u) },
+      affordable: canAfford(state, researchCost(state, u)),
     })),
 )
 
 const locked = computed(() =>
   props.list
     .filter((u) => !state.upgrades[u.id] && !availableIds.value.includes(u.id))
-    .filter((u) => isProgressionVisible(state, u.needs, u.cost))
+    .filter((u) => isProgressionVisible(state, u.needs, researchCost(state, u)))
     .map((u) => ({
       meta: u,
       needs: describeNeeds(u.needs).join('，') || '条件未知',
@@ -161,12 +151,14 @@ function kindName(meta) {
       </div>
 
       <!-- 已炼成的法宝：可以反复祭炼，每级效果 +30%、花费 ×1.7 递增 -->
-      <table v-if="forged.length" class="grid upgrade-table">
+      <details v-if="forged.length" class="fold">
+        <summary>已炼成的法宝（{{ forged.length }} 件）</summary>
+      <table class="grid upgrade-table">
         <colgroup><col class="upgrade-name" /><col /><col class="upgrade-action" /></colgroup>
         <thead>
           <tr>
             <th>已炼成的法宝</th>
-            <th>花费</th>
+            <th>{{ kind === 'technique' ? '效果' : '花费' }}</th>
             <th class="right">操作</th>
           </tr>
         </thead>
@@ -178,12 +170,14 @@ function kindName(meta) {
             @mouseleave="rowLeave($event)"
           >
             <td class="nowrap">
-              {{ item.meta.name }} <span class="small dim">法宝 · Lv.{{ item.level }} ×{{ item.mult.toFixed(2) }}</span>
+              <span :class="{ bad: costBlocked(state, derived, item.cost) }">{{ item.meta.name }}</span><span v-if="costBlocked(state, derived, item.cost)" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span> <span class="small dim">法宝 · Lv.{{ item.level }} ×{{ item.mult.toFixed(2) }}</span>
               <span v-if="item.upkeep.length" class="small dim"> · {{ state.upgradeEnabled[item.meta.id] === false ? '已停用' : item.supply > 0 ? `供能 ${Math.round(item.supply * 100)}%` : '缺灵能停效' }}</span>
             </td>
             <td class="cost nowrap">
               <HoverTip :width="380" anchor="tr">
                 <span class="cost-line" tabindex="0" :aria-label="`${item.meta.name}祭炼详情`">
+                  <span v-if="kind === 'technique'">{{ item.effects.map(row => row.text).join('；') || '暂无生效效果' }}</span>
+                  <template v-else>
                   <span
                     v-for="(amount, res) in item.cost"
                     :key="res"
@@ -191,6 +185,7 @@ function kindName(meta) {
                   >
                     {{ resourceName(res) }} {{ costText(res, amount) }}
                   </span>
+                  </template>
                 </span>
                 <template #heading>
                   {{ item.meta.name }}
@@ -237,32 +232,29 @@ function kindName(meta) {
           </tr>
         </tbody>
       </table>
+      </details>
 
       <table class="grid upgrade-table" v-if="available.length">
         <colgroup><col class="upgrade-name" /><col /><col class="upgrade-action" /></colgroup>
         <thead>
           <tr>
             <th>名称</th>
-            <th>花费</th>
+            <th>{{ kind === 'technique' ? '效果' : '花费' }}</th>
             <th class="right">操作</th>
           </tr>
         </thead>
         <tbody>
-          <template v-for="(item, i) in available" :key="item.meta.id">
-            <tr v-if="isStageStart(available, i)" class="stage-row">
-              <td colspan="3">
-                <HoverTip :label="item.stage.label"><template #tip><p>{{ item.stage.hint }}</p></template></HoverTip>
-              </td>
-            </tr>
-            <tr @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
+          <tr v-for="item in available" :key="item.meta.id" @mouseenter="rowEnter($event, item.meta)" @mouseleave="rowLeave($event)">
             <td class="nowrap">
-              {{ item.meta.name }}
+              <span :class="{ bad: costBlocked(state, derived, item.meta.cost) }">{{ item.meta.name }}</span><span v-if="costBlocked(state, derived, item.meta.cost)" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span>
               <span v-if="item.meta.kind === 'treasure'" class="small dim">法宝</span>
             </td>
-            <!-- 花费列只写「需要多少」；明细按建筑（宗门）的排版放进悬停提示 -->
+            <!-- 技艺页展示效果，修真页展示花费；完整费用保留在悬停提示中。 -->
             <td class="cost nowrap">
               <HoverTip :width="380" anchor="tr">
                 <span class="cost-line">
+                  <span v-if="kind === 'technique'">{{ effectLine(item.meta, describeEffects) || '—' }}</span>
+                  <template v-else>
                   <span
                     v-for="(amount, res) in item.meta.cost"
                     :key="res"
@@ -270,6 +262,7 @@ function kindName(meta) {
                   >
                     {{ resourceName(res) }} {{ costText(res, amount) }}
                   </span>
+                  </template>
                 </span>
                 <template #heading>
                   {{ item.meta.name }}
@@ -280,18 +273,13 @@ function kindName(meta) {
 
                   <CostRows :cost="item.meta.cost" />
 
-                  <div class="tip-section">效果</div>
-                  <!-- 数值、规则和解锁清单均按单个效果成行。 -->
-                  <div v-for="(row, ri) in effectRows(item.meta, describeEffects)" :key="ri" class="tip-row">
+                  <div v-if="effectRows(item.meta, describeEffects, false).length" class="tip-section">效果</div>
+                  <!-- 悬停提示只显示实际效果，不展示解锁清单。 -->
+                  <div v-for="(row, ri) in effectRows(item.meta, describeEffects, false)" :key="ri" class="tip-row">
                     <span class="k">{{ row.label }}</span>
                     <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
                   </div>
-                  <div v-if="item.meta.effectDesc" class="tip-note">{{ item.meta.effectDesc }}</div>
-                  <div v-if="item.stage" class="tip-note">所属：{{ item.stage.label }} · {{ item.stage.hint }}</div>
-                  <template v-if="describeNeeds(item.meta.needs).length">
-                    <div class="tip-section">条件</div>
-                    <div v-for="(condition, ci) in describeNeeds(item.meta.needs)" :key="ci" class="tip-condition">{{ condition }}</div>
-                  </template>
+                  <div v-if="item.meta.effectDesc && !/解锁|开放|开启|需.*《/.test(item.meta.effectDesc)" class="tip-note">{{ item.meta.effectDesc }}</div>
                 </template>
               </HoverTip>
             </td>
@@ -301,7 +289,6 @@ function kindName(meta) {
               </button>
             </td>
           </tr>
-          </template>
         </tbody>
       </table>
       <div v-else class="empty">暂时没有可参悟的条目，建设对应产业、推进研究或扩充灵机上限后会逐步开放。</div>
@@ -347,12 +334,12 @@ function kindName(meta) {
                   <template #tip>
                     <div class="tip-desc">{{ item.desc }}</div>
 
-                    <div class="tip-section">效果</div>
-                    <div v-for="(row, ri) in effectRows(item, describeEffects)" :key="ri" class="tip-row">
+                    <div v-if="effectRows(item, describeEffects, false).length" class="tip-section">效果</div>
+                    <div v-for="(row, ri) in effectRows(item, describeEffects, false)" :key="ri" class="tip-row">
                       <span class="k">{{ row.label }}</span>
                       <span class="v" :class="row.tone || 'good'">{{ row.value }}</span>
                     </div>
-                    <div v-if="item.effectDesc" class="tip-note">{{ item.effectDesc }}</div>
+                    <div v-if="item.effectDesc && !/解锁|开放|开启|需.*《/.test(item.effectDesc)" class="tip-note">{{ item.effectDesc }}</div>
                   </template>
                 </HoverTip>
               </td>
@@ -381,5 +368,13 @@ function kindName(meta) {
 }
 .upgrade-table td.right {
   white-space: nowrap;
+}
+.upgrade-table + .upgrade-table { margin-top: 18px; }
+.upgrade-table tbody td { border-bottom: 1px solid var(--line-soft); }
+@container content (max-width: 540px) {
+  .upgrade-name { width: 32%; }
+  .upgrade-action { width: 72px; }
+  .upgrade-table td.right { white-space: normal; }
+  .upgrade-table td.right .btn { margin: 2px 0; padding: 4px 7px; }
 }
 </style>

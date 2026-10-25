@@ -69,30 +69,26 @@ export function moneyDomain({ ok, section }) {
     ok('超出 40 位有效数字时单位增量会舍入（已知精度边界）', money('1e40').plus(1).eq(money('1e40')))
   }
 
-  section('经济数值：取整、仓容与运行时快照')
+  section('经济数值：小数、仓容与运行时快照')
   {
     const { state: s, derived: d } = newGame()
     const cost = E.scaleCost({ stone: 3 }, money('1.1'))
-    ok('整枚资源费用向上取整', cost.stone.eq(money(4)))
+    ok('资源费用保留小数', cost.stone.eq(money('3.3')))
     const added = E.addResource(s, 'stone', money('2.9'), money('1e9'))
-    ok('整枚资源入库向下取整', s.resources.stone.eq(money(2)) && added.eq(money(2)))
+    ok('资源入库保留小数', s.resources.stone.eq(money('2.9')) && added.eq(money('2.9')))
     ok('连续资源保留小数', E.addResource(s, 'wood', money('0.25'), money('1e9')).eq(money('0.25')))
     ok('未指定上限时按无金额上限处理', E.addResource(s, 'rock', money('1e5')).eq(money('1e5')))
 
-    // 逐座报价：整枚资源的每座单价先向上取整，再逐座求和（不是几何总和）。
+    // 逐座按精确金额求和，保留指数价格中的小数。
     const meta = BUILDING_MAP.warehouse
-    const units = Array.from({ length: 6 }, (_, index) => E.buildingPriceAt(meta, index, false))
-    ok('每座报价里的整枚资源已取整', units.every(price => Object.entries(price).every(([res, amount]) =>
-      !RESOURCE_MAP[res]?.integer || amount.isInteger())))
-    const total = E.buildingCostFrom(meta, 0, 6, false)
+    const units = Array.from({ length: 6 }, (_, index) => E.buildingPriceAt(meta, index))
+    ok('逐座报价保留小数', units.some(price => Object.values(price).some(amount => !amount.isInteger())))
+    const total = E.buildingCostFrom(meta, 0, 6)
     ok('总价等于逐座报价之和', Object.keys(total).every(res =>
       total[res].eq(E.moneySum(units.map(price => price[res] ?? ZERO)))))
-    ok('整枚资源仓容是整数（比例加仓后仍取整）', (() => {
-      s.upgrades.storeFrameArt = true
-      s.upgrades.storeFrameRefine = true
-      E.recompute(s, d)
-      return RESOURCES.filter(r => r.integer && d.max[r.id].isFinite()).every(r => d.max[r.id].isInteger())
-    })())
+    s.karma = money(1)
+    E.recompute(s, d)
+    ok('有限仓容保留比例扩仓小数', !d.max.stone.isInteger())
 
     // 运行时快照必须保留 Decimal 才能继续运算。
     const snapshot = cloneRuntime(s)
@@ -118,7 +114,7 @@ export function moneyDomain({ ok, section }) {
     ok('写档返回独立副本，不暴露状态引用', payload.resources !== s.resources && payload.craftTimers !== s.craftTimers)
     const back = restoreSave(JSON.parse(JSON.stringify(payload)), { now })
     ok('读档还原超大金额与小数', back.resources.qi.eq(money('1e400')) && back.resources.wood.eq(money('0.3')))
-    ok('读档还原制作进度、目标与经济累计', back.craftProgress.sawPlank.eq(money('0.25')) &&
+    ok('旧制作余量入库、目标与经济累计保留', back.resources.plank.eq(money('0.25')) && Object.keys(back.craftProgress).length === 0 &&
       back.craftTargets.sawPlank.eq(money(7)) && back.stats.totalQi.eq(money('9e30')))
     ok('永久货币镜像一致', back.resources.karma.eq(back.karma))
     ok('base64 往返不丢数', parseImport(exportSave(s)).resources.qi.eq(money('1e400')))
@@ -152,7 +148,7 @@ export function moneyDomain({ ok, section }) {
     for (const m of v2.disciples.members) m.totalQiConsumed = Number(m.totalQiConsumed)
     const upgraded = restoreSave(v2, { now })
     ok('v2 → v3：金额升级为 Decimal', upgraded.resources.qi.eq(money('1234.5')) && upgraded.karma.eq(money(321)))
-    ok('v2 → v3：整枚资源抹平小数、道果取整', upgraded.resources.stone.eq(money(17)) && upgraded.dao.isInteger())
+    ok('v2 → v3：资源小数原样保留', upgraded.resources.stone.eq(money('17.9')) && upgraded.dao.eq(money(2)))
     ok('v2 → v3：不重建弟子个体、保留培养状态', upgraded.disciples.members.length === 2 &&
       upgraded.disciples.members[0].name === '林清禾' && upgraded.disciples.members[1].mentored === true)
     ok('v2 → v3：口粮累计迁入 Decimal 且不截断', upgraded.disciples.members[0].totalQiConsumed.eq(money('4.5')))
@@ -183,7 +179,7 @@ export function moneyDomain({ ok, section }) {
     s.resources.dao = s.dao
     resetForAscension(s, money('12.5'))
     ok('飞升后仙缘是金额且累加正确', money(s.karma).eq(money('112.5')))
-    ok('飞升后道果是整数金额', money(s.dao).eq(money(2)) && s.dao.isInteger())
+    ok('飞升后道果作为金额加一', money(s.dao).eq(money(2)) && s.dao.isInteger())
     ok('飞升后永久货币镜像同步', s.resources.karma.eq(s.karma) && s.resources.dao.eq(s.dao))
     ok('飞升后控制字段仍是 Number', typeof s.realm === 'number' && typeof s.stats.ascensions === 'number')
   }

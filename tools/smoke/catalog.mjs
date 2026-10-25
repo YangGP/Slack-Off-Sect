@@ -4,12 +4,13 @@ import { RESOURCES } from '../../src/data/resources.js'
 import { BUILDINGS, BUILDING_MAP } from '../../src/data/buildings.js'
 import { JOBS } from '../../src/data/jobs.js'
 import { HUNT_FIELDS } from '../../src/modules/hunting/data.js'
-import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP, CULTIVATION_STAGE_OF } from '../../src/data/upgrades.js'
+import { CULTIVATION, ALL_UPGRADES, UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { TECHNIQUES } from '../../src/data/techniques.js'
 import { CRAFTS } from '../../src/data/crafts.js'
 import { ACHIEVEMENTS } from '../../src/data/achievements.js'
 import { EVENTS } from '../../src/data/events.js'
 import { REALMS } from '../../src/data/realms.js'
+import { WORLD_DEFS } from '../../src/data/samsara.js'
 import { newGame } from './fixtures.mjs'
 
 export function dataIntegrity({ ok, section }) {
@@ -61,7 +62,7 @@ export function dataIntegrity({ ok, section }) {
     ok('两层 id 不重复', new Set(ALL_UPGRADES.map((u) => u.id)).size === ALL_UPGRADES.length)
     const unlockApps = ['unlockBuildings', 'autoCraft', 'autoCraftSpeedControl', 'autoCondenseLiquid', 'offlineHours', 'arrivalBonus', 'ascendBonus', 'karmaRatio']
     const pureNumeric = ['storageRatio', 'buildingStorageRatio', 'ratio', 'ratioAll', 'jobRatio', 'storage', 'storageAll', 'habitability', 'habitabilityPerHousing', 'consumeRatio', 'craftBonus', 'craftBonusByResource', 'disasterGuard', 'disasterGuardByResource', 'craftSpeedByRecipe', 'craftCostReduction', 'processingCapacityRatio', 'processingPowerCapacity', 'processingCoolingRatio', 'huntSuccessBonus', 'huntYieldBonus', 'huntCostReduction', 'tribulationSafety']
-    // 两线重组（RESEARCH.md）：解锁/系统效果仍全部由修真页的主线与经营节点承担
+    // 两线重组（CRAFT-PROGRESSION.md#研究与解锁）：解锁/系统效果仍全部由修真页的主线与经营节点承担
     const artUnlocks = CULTIVATION.filter((u) => Object.keys(u.effects || {}).some((k) => unlockApps.includes(k)))
     ok(
       '修真页承担全部解锁/系统效果',
@@ -85,7 +86,7 @@ export function dataIntegrity({ ok, section }) {
     )
     ok(
       '但灵机被压到修真层的一半以下（主要成本让给材料）',
-      // 修真树按 RESEARCH.md 铺满时间线之后，它的灵机总量自然会远超技艺层，
+      // 修真树按 CRAFT-PROGRESSION.md#研究与解锁 铺满时间线之后，它的灵机总量自然会远超技艺层，
       // 所以这里只守「技艺层的灵机不许超过修真层的一半」这条设计规则，不再守下限。
       skillInsight / cultInsight <= 0.5 && skillInsight / cultInsight > 0,
       `技艺 ${skillInsight} vs 修真 ${cultInsight}（${((skillInsight / cultInsight) * 100).toFixed(0)}%）`,
@@ -153,15 +154,16 @@ export function dataIntegrity({ ok, section }) {
     // 数值型研究来自材料工艺、主线成果、金丹增产及聚气纹。
     // 清单用于避免无意把通用技艺迁入修真页，符文原理见 docs/CRAFT-PROGRESSION.md。
     const MIGRATED_NUMERIC_IDS = [
-      'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft', 'crystalPolishing',
-      'mahayanaArt', 'qiRune', 'craftTempo',
+      'woodworking', 'steelWorking', 'arrayAssembly', 'crystalCraft',
+      'mahayanaArt', 'qiRune', 'craftTempo', 'paperArt', 'paperWorks',
       // 主线数值节点：灵气纯化的纯度增益
       'qiPurify',
       // 修真应用：灵流采集 / 仓储 / 灵能高阶的数值节点
       // 修真应用 · 营造（自技艺页迁入）
       'fieldTillage', 'quarryArt', 'homePlanning', 'waterSanitation', 'gardenDesign',
-      // 土木工艺：《营造技艺》暂时只保留专业制作增益（见 MATERIAL-RESEARCH.md §3.1）
-      'masonryArt',
+      // 土木工艺：专业制作增益（营造 / 石作成规，见 CRAFT-PROGRESSION.md#材料研究与兼容）
+      'stoneWorks', 'earthArt', 'earthEssence', 'grottoArt',
+
     ]
     const numericCult = CULTIVATION.filter((c) => Object.keys(c.effects || {}).some((k) => pureNumeric.includes(k)))
     ok(
@@ -173,9 +175,9 @@ export function dataIntegrity({ ok, section }) {
     ok('技艺页不再包含迁移节点', TECHNIQUES.every((t) => !MIGRATED_NUMERIC_IDS.includes(t.id)))
     const applications = ['breakthroughArt', 'waterworkshop', 'spiritSaw', 'spiritCultivation', 'swordFlight', 'spiritSmelting',
       'alchemyFire', 'flowField', 'spiritCanal', 'liquidIrrigation', 'veinInfuse', 'liquidVault', 'runeVault',
-      'treasureVault', 'particleRecover', 'energyDrive']
-    ok('16项应用增益在技艺页且不占修真分组', applications.every(id =>
-      TECHNIQUES.some(u => u.id === id) && !CULTIVATION.some(u => u.id === id) && !CULTIVATION_STAGE_OF[id]))
+      'treasureVault', 'particleRecover', 'poweredProduction', 'crystalPolishing', 'masonryArt', 'tradeRoutes']
+    ok('应用节点在技艺页且不占修真页', applications.every(id =>
+      TECHNIQUES.some(u => u.id === id) && !CULTIVATION.some(u => u.id === id)))
     for (const id of applications) {
       const legacy = normalizeState({ upgrades: { [id]: true } })
       ok(`迁移后的${UPGRADE_MAP[id].name}保留旧档资格与同一数据条目`,
@@ -185,10 +187,10 @@ export function dataIntegrity({ ok, section }) {
     ok(
       '修真页节点不再引用技艺版探矿术（矿脉经），消除反向跨层依赖',
       CULTIVATION.every((c) => !(c.needs?.upgrades || []).includes('prospectArt')) &&
-        (CULTIVATION.find((c) => c.id === 'earthArt').needs?.upgrades || []).includes('prospectStudy'),
+        (CULTIVATION.find((c) => c.id === 'woodworking').needs?.upgrades || []).includes('prospectStudy'),
     )
-    ok('候时法由灵机费用推进研究', E.UPGRADE_MAP.hourArt.needs.realm == null && E.UPGRADE_MAP.hourArt.cost.insight === 24000, `realm ${E.UPGRADE_MAP.hourArt.needs.realm}`)
-    ok('大乘心经由灵机费用推进研究', E.UPGRADE_MAP.mahayanaArt.needs.realm == null && E.UPGRADE_MAP.mahayanaArt.cost.insight === 160000, `realm ${E.UPGRADE_MAP.mahayanaArt.needs.realm}`)
+    ok('候时法由灵机费用推进研究', E.UPGRADE_MAP.hourArt.needs.realm == null && E.UPGRADE_MAP.hourArt.cost.insight === 19200, `realm ${E.UPGRADE_MAP.hourArt.needs.realm}`)
+    ok('大乘心经由灵机费用推进研究', E.UPGRADE_MAP.mahayanaArt.needs.realm == null && E.UPGRADE_MAP.mahayanaArt.cost.insight === 128000, `realm ${E.UPGRADE_MAP.mahayanaArt.needs.realm}`)
 
     let badJobRes = null
     for (const j of JOBS) if (!resIds.has(j.resource)) badJobRes = j.id
@@ -259,6 +261,12 @@ export function resourceSourcesAndSinks({ ok, section }) {
       for (const k of Object.keys(f.advancedYield || {})) sourced.add(k)
     }
     sunk.add('warrant')
+    // 世界驻守与个人消费通过系统动作结算，不是岗位或普通配方。
+    for (const world of WORLD_DEFS) {
+      sourced.add(world.out)
+      for (const res of Object.keys(world.cost)) sunk.add(res)
+    }
+    for (const res of ['innerCore', 'spiritCore', 'huntSupply', 'clearMarrow', 'worldSand', 'heavenBrick']) sunk.add(res)
 
     const noSource = RESOURCES.filter((r) => !prestige.has(r.id) && !exchange.has(r.id) && !sourced.has(r.id)).map((r) => r.name)
     const noSink = RESOURCES.filter(

@@ -19,7 +19,7 @@ export function eventPreview(state, derived, effect) {
     if (moneyIsPositive(row.gained)) parts.push(name + ' +' + fmtAmount(row.gained))
     if (moneyIsPositive(row.overflow)) parts.push(name + ' ' + fmtAmount(row.overflow) + ' 装不下')
   }
-  if (effect?.recruit) parts.push(recruits ? '弟子 +' + recruits : '居所已满，无法收徒')
+  if (effect?.recruit) parts.push(recruits ? '弟子 +' + recruits : state.challenge?.active ? '全员挑战期间不接收普通来客' : '居所已满，无法收徒')
   const resolved = eventEffect(state, derived, effect || {})
   if (resolved.buff) parts.push(resolved.buff.name + '：灵草产出 −25%，' + fmtTime(resolved.buff.duration))
   if (resolved.peaceSeconds) parts.push('安宁 ' + fmtTime(resolved.peaceSeconds))

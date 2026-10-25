@@ -12,13 +12,12 @@ import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX } from '@/data/real
 import { createInitialState, resetForAscension, resetForReincarnation } from './state'
 import * as E from './engine'
 import { atLeast } from './numbers'
-import { ZERO, floorMoney, money, moneyFinite, moneyIsPositive, moneyNonNegative, moneySum } from './decimal'
-import { fmtAmount, fmtCost, fmtInt } from './format'
+import { ZERO, money, moneyFinite, moneyIsPositive, moneyNonNegative, moneySum } from './decimal'
+import { fmtAmount, fmtCost } from './format'
 import { cloneRuntime } from './clone'
 import { createSaveRepository, exportSave, parseImport } from './save'
 import { createGame, createRuntime } from './runtime'
 import * as analytics from '@/analytics/collector'
-import { deactivateModule } from './moduleRegistry'
 import { IS_DEV_PREVIEW, STORAGE_PREFIX } from './deployment'
 
 // ============================================================
@@ -386,7 +385,6 @@ export const actions = {
       toast('数量必须是非负有限数字，且不超过安全整数上限', 'bad')
       return false
     }
-    if (meta.integer) value = floorMoney(value)
     state.resources[id] = value
     if (id === 'karma' || id === 'dao') state[id] = value
     if (moneyIsPositive(value)) state.seen[id] = true
@@ -413,7 +411,7 @@ export const actions = {
     ui.debugPage = false
   },
   buy(id, count = 1) {
-    const meta = E.BUILDING_MAP[id]
+    const meta = E.buildingMeta(state, id)
     const n = E.buyBuilding(state, derived, id, count)
     if (n > 0) {
       afterAction(`建成 ${meta?.name} ×${n}`, 'good')
@@ -432,7 +430,7 @@ export const actions = {
   },
   sell(id, count = 1) {
     const n = E.sellBuilding(state, derived, id, count)
-    if (n > 0) afterAction(`拆除 ${E.BUILDING_MAP[id]?.name} ×${n}`, 'info')
+    if (n > 0) afterAction(`拆除 ${E.buildingMeta(state, id)?.name} ×${n}`, 'info')
     return n
   },
   toggle(id) {
@@ -441,15 +439,28 @@ export const actions = {
       toast('这座建筑没有维护费，停用只会白亏产出', 'bad')
       return null
     }
-    afterAction(`${E.BUILDING_MAP[id]?.name} ${on ? '启用' : '停用'}`, 'info')
+    afterAction(`${E.buildingMeta(state, id)?.name} ${on ? '启用' : '停用'}`, 'info')
     return on
+  },
+  setBuildingBoost(id, enabled) {
+    const result = E.setBuildingBoost(state, derived, id, enabled)
+    if (result === null) return false
+    afterAction(`${E.buildingMeta(state, id)?.name} ${enabled ? '开启' : '关闭'}灵液注灵`, 'info')
+    saveNow()
+    return true
   },
   setBuildingPower(id, mode) {
     if (!E.setBuildingPower(state, derived, id, mode)) {
       toast('尚不能接入灵能：需先参悟《灵能输配》', 'bad')
       return false
     }
-    afterAction(`${E.BUILDING_MAP[id]?.name} 供能改为${mode === 'energy' ? '灵能高阶' : '灵气基础'}`, 'info')
+    afterAction(`${E.buildingMeta(state, id)?.name} 供能改为${mode === 'energy' ? '灵能高阶' : '灵气基础'}`, 'info')
+    return true
+  },
+  setBuildingStage(id, stage) {
+    if (!E.setBuildingStage(state, derived, id, stage)) return false
+    afterAction('建筑阶段已切换，请按新造价手动重建。', 'info')
+    saveNow()
     return true
   },
   shiftJob(jobId, delta) {
@@ -562,7 +573,7 @@ export const actions = {
     return true
   },
 
-  /** 手动吸取天地灵气（开局唯一的灵气来源，对标猫国的采集猫薄荷）；返回本次吸到的总额（金额）。 */
+  /** 手动吸取天地灵气（开局唯一的灵气来源）；返回本次吸到的总额（金额）。 */
   drawQi(times = 1) {
     let total = ZERO
     for (let i = 0; i < times; i++) total = total.plus(E.drawQi(state, derived))
@@ -651,9 +662,9 @@ export const actions = {
     E.recompute(state, derived)
     analytics.endRun(snapshot, { reason: 'reincarnation', karmaGain: gain, daoGain: 0 })
     analytics.beginRun('reincarnation', { debug: ui.debug === true })
-    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${fmtInt(gain)} 点再入红尘`, 'realm')
+    E.pushLog(state, `自【${name}】转世重修，携仙缘 ${fmtAmount(gain)} 点再入红尘`, 'realm')
     saveNow()
-    toast(`转世成功，获得仙缘 ${fmtInt(gain)}`, 'good')
+    toast(`转世成功，获得仙缘 ${fmtAmount(gain)}`, 'good')
     return true
   },
   ascend() {
@@ -664,17 +675,18 @@ export const actions = {
     }
     // 结算的仙缘是金额（Decimal）：跨世累加在 resetForAscension 里走 Decimal 加法。
     const gain = E.ascensionGain(state, derived)
+    const daoGain = E.daoReward(state)
     const name = REALMS[state.realm].name
     const snapshot = analytics.captureRun()
     analytics.beforeStateReplace()
     resetForAscension(state, gain)
     E.recompute(state, derived)
-    // 飞升实际额外结一颗道果，与 resetForAscension 的结算一致。
-    analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain: 1 })
+    // 采集实际贡献道果，与 resetForAscension 的结算一致。
+    analytics.endRun(snapshot, { reason: 'ascension', karmaGain: gain, daoGain })
     analytics.beginRun('ascension', { debug: ui.debug === true })
-    E.pushLog(state, `自【${name}】飞升，携仙缘 ${fmtInt(gain)} 点转世重修`, 'realm')
+    E.pushLog(state, `自【${name}】叩开天门，却未独去。携仙缘 ${fmtAmount(gain)} 点、道果 ${fmtAmount(daoGain)} 颗重返人间，再为同道开山门`, 'realm')
     saveNow()
-    toast(`飞升成功，获得仙缘 ${fmtInt(gain)} 与 1 颗道果，道果统筹已开启`, 'good')
+    toast(`飞升归来，携仙缘 ${fmtAmount(gain)} 与 ${fmtAmount(daoGain)} 颗道果`, 'good')
     return true
   },
   /** 事件弹窗：打开/关闭只影响会话 UI，不改变待决事件。 */
@@ -815,6 +827,56 @@ export const actions = {
     saveNow()
     return true
   },
+  buyKarmaPerk(id) {
+    if (!E.buyKarmaPerk(state, id)) return false
+    E.recompute(state, derived)
+    saveNow()
+    return true
+  },
+  samsara(name, ...args) {
+    const allowed = { buyDaoPerk: E.buyDaoPerk, openDaoShop: E.openDaoShop, cultivateLoyalty: E.cultivateLoyalty,
+      useCultivationItem: E.useCultivationItem, buildWorld: E.buildWorld, stationDisciple: E.stationDisciple,
+      buildWorldFacility: E.buildWorldFacility, configureWorldFacility: E.configureWorldFacility,
+      finalPreparation: E.finalPreparation, beginChallenge: E.beginChallenge, prepareChallenge: E.prepareChallenge, resolveChallenge: E.resolveChallenge }
+    if (!Object.hasOwn(allowed, name)) return false
+    const snapshot = name === 'resolveChallenge' ? analytics.captureRun() : null
+    const result = allowed[name](state, derived, ...args)
+    if (!result) { toast('条件未满足，请检查材料与当前状态', 'bad'); return false }
+    if (name === 'resolveChallenge' && result.success === false) {
+      resetEventPrompt()
+      analytics.endRun(snapshot, { reason: 'reincarnation', karmaGain: result.karma, daoGain: result.dao })
+      analytics.beginRun('reincarnation', { debug: ui.debug === true })
+    }
+    E.recompute(state, derived)
+    saveNow()
+    return result
+  },
+  setRebuild(value) {
+    state.rebuild.active = value === true
+    saveNow()
+  },
+  huntSetSupply(value) {
+    state.hunting.settings.useSupply = value === true
+    saveNow()
+  },
+  diplomacyBatch(sectId, count = 1) {
+    const result = E.tradeBatch(state, derived, sectId, count)
+    E.recompute(state, derived)
+    saveNow()
+    return result
+  },
+  diplomacyAuto(key, value) {
+    if (!state.upgrades.tradeRoutes) return false
+    const settings = state.diplomacy.settings
+    if (key === 'auto' && typeof value === 'boolean') settings.auto = value
+    else if (key === 'sectId' && typeof value === 'string') settings.sectId = value
+    else if (key === 'batch' && [1, 10, 100].includes(Number(value))) settings.batch = Number(value)
+    else if (key === 'warrantReserve' && Number.isFinite(Number(value))) settings.warrantReserve = Math.max(0, Math.min(100000, Number(value)))
+    else return false
+    settings.elapsed = 0
+    saveNow()
+    return true
+  },
   setSetting(key, value) {
     if (key === 'autoTalentJobs') {
       if (!derived.autoTalentJobsUnlocked || typeof value !== 'boolean') return false
@@ -893,15 +955,11 @@ export const actions = {
   dismissAnalyticsFailure() {
     ui.analyticsFailureOpen = false
   },
-  /** 开关可选模块：关闭时立即清理该模块状态（如召回出征弟子），并回退页面 */
+  /** 兼容旧调用：功能模块始终启用，拒绝关闭请求。 */
   setModuleEnabled(id, enabled) {
     const meta = MODULE_MAP[id]
-    if (!meta) return false
-    state.settings.modules = { ...(state.settings.modules || {}), [id]: enabled === true }
-    if (enabled !== true) {
-      deactivateModule(state, id)
-      if (meta.tabId && state.ui.tab === meta.tabId) state.ui.tab = 'sect'
-    }
+    if (!meta || enabled !== true) return false
+    state.settings.modules = { ...(state.settings.modules || {}), [id]: true }
     E.recompute(state, derived)
     saveNow()
     return true
@@ -994,6 +1052,7 @@ export const actions = {
     return true
   },
   setTab(tab) {
+    if (tab === 'memorial' && !(state.samsara.completions > 0)) return
     if (tab === 'debug') {
       if (ui.debug) ui.debugPage = true
       return

@@ -13,6 +13,7 @@ import { join } from 'node:path'
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
+  '.ds', // 本地协作配置可能包含密钥，不参与源码编码扫描。
   'dist',
   'dist-ssr',
   '.vite',

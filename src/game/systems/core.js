@@ -1,8 +1,13 @@
+import { setResourceValue } from '../resourceObservation'
 import { CONFIG } from '@/data/config'
 import { JOBS } from '@/data/jobs'
 import { BUILDING_MAP } from '@/data/buildings'
+import { buildingMeta } from '@/data/productionStages'
+import { CRAFT_MAP } from '@/data/crafts'
+import { worldNeedsMet } from '@/data/samsara'
+import { FAITH_UPGRADE_MAP } from '@/data/faith'
 import { atLeast } from '../numbers'
-import { Dec, MONEY_INFINITY, ONE, ZERO, ceilMoney, money, moneyAvailable, moneyMax } from '../decimal'
+import { Dec, MONEY_INFINITY, ONE, ZERO, money, moneyAvailable, moneyMax } from '../decimal'
 import { RESOURCE_MAP } from '@/data/resources'
 import { DAYS_PER_YEAR, CALENDAR, TERMS, DAYS_PER_SEASON, SEASONS } from '@/data/calendar'
 import { REALMS } from '@/data/realms'
@@ -10,6 +15,7 @@ import { gameNow } from '../context'
 import { getEventLevel } from '@/data/events'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { isEntryEnabled } from '@/data/modules'
+import { karmaShopBonuses } from './karmaShop'
 
 export function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v
@@ -52,7 +58,7 @@ export function karmaMultipliers(amount) {
   const karma = moneyMax(ZERO, amount ?? ZERO)
   return {
     karmaMult: ONE.plus(softCap(karma.times(CONFIG.KARMA_BONUS_PER_POINT), CONFIG.KARMA_BONUS_CAP)),
-    karmaStorageMult: ONE.plus(karma.times(CONFIG.KARMA_STORAGE_PER_POINT)),
+    karmaStorageMult: ONE.plus(softCap(karma.times(CONFIG.KARMA_STORAGE_PER_POINT), CONFIG.KARMA_STORAGE_CAP)),
   }
 }
 
@@ -158,7 +164,7 @@ export function activeOf(state, id) {
 }
 
 /** 职位基础产出；副产出依赖启用中的专业设施。 */
-export function jobOutputs(state, job) {
+export function jobOutputs(state, job, buildingSupply = {}) {
   const outputs = !job.building || activeOf(state, job.building) > 0 ? [{ resource: job.resource, base: job.base }] : []
   for (const output of job.additionalOutputs || []) {
     // 副产出可以由建筑开启，也可以由研究节点开启（例如矿工的玄铁挂在「探矿术」上）
@@ -166,13 +172,22 @@ export function jobOutputs(state, job) {
     if (!output.building || activeOf(state, output.building) > 0) outputs.push(output)
   }
   if (job.secondary) {
-    const active = activeOf(state, job.secondary.building)
+    const meta = buildingMeta(state, job.secondary.building)
+    const active = activeOf(state, job.secondary.building) * (meta?.stage === 1 ? buildingSupply[job.secondary.building] ?? 0 : 1)
+    const boost = meta?.boost
+    const boostMult = boost && buildingBoostAvailable(state, job.secondary.building) && state.buildings[job.secondary.building].boost === true
+      ? 1 + (boost.multiplier - 1) * (buildingSupply[boost.id] ?? 0) : 1
     if (active > 0) outputs.push({
       ...job.secondary,
-      base: job.secondary.base * (job.secondary.perBuilding ? active : 1),
+      base: money(meta?.secondaryBase ?? job.secondary.base).times(job.secondary.perBuilding ? active : 1).times(boostMult),
     })
   }
   return outputs
+}
+
+export function buildingBoostAvailable(state, id) {
+  const boost = buildingMeta(state, id)?.boost, entry = state.buildings[id]
+  return !!boost && entry?.count > 0 && entry.on !== false && state.upgrades[boost.upgrade] === true
 }
 
 export function idleDisciples(state) {
@@ -200,18 +215,21 @@ export function checkNeeds(state, needs) {
     }
   }
   if (needs.realm != null && state.realm < needs.realm) return false
+  if (needs.recipes?.some(id => !CRAFT_MAP[id] || !isCraftUnlocked(state, CRAFT_MAP[id]))) return false
+  if (needs.world && ((state.worlds?.[needs.world]?.level || 0) < 1 || !worldNeedsMet(state, needs.world))) return false
+  if (needs.worldFacility && !state.worlds?.[needs.worldFacility.world]?.facilities?.[needs.worldFacility.id]?.built) return false
   return true
 }
 
 /**
- * 建筑是否露面（对标猫国的 `unlockRatio: 0.3`）：
+ * 建筑是否露面（资源水位阈值 `unlockRatio: 0.3`）：
  *   1. 已经建过 → 一直显示；
  *   2. `needs` 条件满足；
  *   3. 每种花费资源的历史最高水位都达到基础成本的30%。
  * 用历史峰值而不是当前值，是为了避免「把资源花光后建筑又消失」导致列表跳动（§14.4）。
  */
 export function isBuildingUnlocked(state, id) {
-  const meta = BUILDING_MAP[id]
+  const meta = buildingMeta(state, id)
   if (!meta) return false
   // 关闭的可选模块：其建筑视同未解锁（含已建成的），不展示、不可购买
   if (!isEntryEnabled(state, meta)) return false
@@ -285,46 +303,40 @@ export function canAfford(state, cost, times = 1) {
 export function payCost(state, cost, times = 1) {
   trackPeak(state)
   for (const k in cost) {
-    state.resources[k] = moneyAvailable(state.resources[k] ?? ZERO, money(cost[k]).times(times))
+    setResourceValue(state, k, moneyAvailable(state.resources[k] ?? ZERO, money(cost[k]).times(times)),
+      () => ({ source: 'systems/core.js:payCost', requested: money(cost[k]).times(times).toString() }))
   }
 }
 
 /**
  * 入库：返回实际增加量（Decimal）。容量为 `MONEY_INFINITY` 时不设上限。
- * 降低仓储后保留旧库存（超过新上限时停止收入，消费仍正常）；整枚资源不留小数。
+ * 降低仓储后保留旧库存（超过新上限时停止收入，消费仍正常）；小数完整保留。
  */
 export function addResource(state, id, amount, capacity = MONEY_INFINITY) {
   const gain = money(amount)
   if (gain.isZero()) return ZERO
   const cap = money(capacity)
-  const meta = RESOURCE_MAP[id]
   const before = state.resources[id] ?? ZERO
   let next = before.plus(gain)
   if (id !== 'karma' && cap.isFinite()) {
     next = Dec.min(next, Dec.max(before, cap))
   }
   if (next.isNegative()) next = ZERO
-  // 整枚计数的资源（灵石/丹药/符箓/法器）不留小数：事件按百分比增减、旧存档都可能带小数
-  if (meta?.integer) next = next.floor()
-  state.resources[id] = next
+  setResourceValue(state, id, next, () => ({ source: 'systems/core.js:addResource', requested: gain.toString(),
+    capacity: cap.isFinite() ? cap.toString() : 'unlimited',
+    netClipped: gain.gt(0) ? gain.minus(next.minus(before)).toString() : '0',
+    roundingLoss: '0' }))
   if (next.gt(0)) state.seen[id] = true
   trackPeak(state)
   return next.minus(before)
 }
 
-/**
- * 花费取整：**整枚计数的资源**（灵石 / 丹药 / 符箓 / 法器）向上取整。
- *
- * 涨价（×1.55^n）、破境折扣（×0.85）、法宝祭炼（×1.7^n）都会算出小数，
- * 而「半枚灵石」既没法付、也会让界面出现「现有 4 / 需要 4.0000001」这种
- * 看着够其实不够的死角。所以这类资源的价格一律向上取整：
- * 玩家看到的需求就是真正要凑齐的数目（§5.2）。金额一律返回 Decimal。
- */
+/** 兼容旧接口名称：费用转换为 Decimal，小数原样保留。 */
 export function roundCost(cost) {
   const out = {}
   for (const k in cost) {
     const value = money(cost[k])
-    out[k] = RESOURCE_MAP[k]?.integer ? ceilMoney(value) : value
+    out[k] = value
   }
   return out
 }
@@ -335,38 +347,58 @@ export function scaleCost(cost, factor) {
   return roundCost(out)
 }
 
-/** 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。 */
-export function buildingPriceAt(meta, index) {
-  const factor = money(meta.priceRatio || 1.15).pow(index)
+/**
+ * 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。
+ * discount 是仙缘修持「道基共鸣」的造价折扣（0~1，取自 karmaShopBonuses），乘 (1−discount)；
+ * 拆除退款等名义价场景不传折扣，保持原价（买入打折、退款不打折，往返净亏损，无套利）。
+ */
+export function buildingPriceAt(meta, index, discount = 0) {
+  const factor = money(meta.priceRatio || 1.15).pow(index).times(ONE.minus(money(discount)))
   const cost = scaleCost(meta.cost, factor)
   return cost
 }
 
-/** 购买 count 座建筑从 from 开始的总价：逐座取整后再求和，不用几何总和代替。 */
-export function buildingCostFrom(meta, from, count) {
+/** 购买 count 座建筑从 from 开始的总价：逐座按精确报价求和。 */
+export function buildingCostFrom(meta, from, count, discount = 0) {
   const total = {}
   for (let i = 0; i < count; i++) {
-    const price = buildingPriceAt(meta, from + i)
+    const price = buildingPriceAt(meta, from + i, discount)
     for (const k in price) total[k] = (total[k] ?? ZERO).plus(price[k])
   }
   return total
 }
 
 export function buildingCost(state, id, count = 1) {
-  const meta = BUILDING_MAP[id]
+  const meta = pricedBuildingMeta(state, id)
   if (!meta) return {}
-  return buildingCostFrom(meta, countOf(state, id), count)
+  return buildingCostFrom(meta, countOf(state, id), count, karmaShopBonuses(state).buildingDiscount)
+}
+
+export function pricedBuildingMeta(state, id) {
+  const meta = buildingMeta(state, id)
+  if (!meta) return null
+  const reduction = karmaShopBonuses(state).buildingPriceReduction
+  return reduction ? { ...meta, priceRatio: moneyMax('1.05', money(meta.priceRatio || 1.15).minus(reduction)).toNumber() } : meta
+}
+
+/** 所有研究显示和支付共用；法宝及香火不吃宿慧。 */
+export function researchCost(state, up) {
+  if (!up) return {}
+  const discount = up.kind === 'treasure' || Object.hasOwn(FAITH_UPGRADE_MAP, up.id) ? 0 : karmaShopBonuses(state).researchInsightDiscount
+  return Object.fromEntries(Object.entries(up.cost || {}).map(([res, n]) =>
+    [res, money(n).times(res === 'insight' ? 1 - discount : 1)]))
 }
 
 /** 在现有资源下最多能买几座（上限 cap 防止死循环） */
 export function maxAffordable(state, id, cap = 500) {
-  const meta = BUILDING_MAP[id]
+  const meta = pricedBuildingMeta(state, id)
   if (!meta) return 0
   const from = countOf(state, id)
+  const discount = karmaShopBonuses(state).buildingDiscount
   const running = {}
   let n = 0
   for (; n < cap; n++) {
-    const price = buildingPriceAt(meta, from + n)
+    const price = buildingPriceAt(meta, from + n, discount)
     let ok = true
     for (const k in price) {
       const have = state.resources[k] ?? ZERO
@@ -432,6 +464,7 @@ export function isManualRecruit(state, derived) {
 
 /** 距离下一名弟子的到来还有多少秒（没有空房、离开风险或已切到主动招募时返回 null） */
 export function nextArrivalIn(state, derived) {
+  if (state.challenge?.active) return null
   if (isManualRecruit(state, derived)) return null
   if (derived.leaveChance > 0 || state.disciples.total >= derived.maxDisciples) return null
   return Math.max(0, arrivalInterval(derived) - (state.arrivalTimer || 0))
@@ -496,6 +529,7 @@ export function refineCost(state, id) {
       out[res] = (out[res] ?? ZERO).plus(money(amount).times(materialRatio))
     }
   }
+  if (out.insight) out.insight = out.insight.times(ONE.minus(karmaShopBonuses(state).refineInsightDiscount))
   return roundCost(out)
 }
 

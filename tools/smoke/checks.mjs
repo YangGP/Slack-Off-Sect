@@ -18,21 +18,32 @@ import * as power from './power.mjs'
 import * as materials from './materials.mjs'
 import * as money from './money.mjs'
 import * as extensions from './extensions.mjs'
+import * as karmashop from './karmashop.mjs'
+import * as samsara from './samsara.mjs'
 
 export const smokeChecks = [
   catalog.dataIntegrity,
+  samsara.samsaraLifecycle,
   startup.initialState,
   storage.uncappedCrafting,
+  storage.warehouseConsolidation,
   buildings.buildingActions,
+  buildings.buildingMaintenanceCompatibility,
+  buildings.spiritQuarryInfusion,
   economy.incomeBreakdown,
   disciples.discipleArrivals,
   storage.purchaseReachability,
   automation.automaticCrafting,
+  automation.processingFuelReserveRegression,
   research.researchVisibility,
+  research.researchCostProgression,
   crafting.manualCrafting,
   progression.researchAndAscension,
+  progression.focusedRealmBills,
   events.randomEvents,
   saves.saveSerialization,
+  simulation.botDiplomacy,
+  simulation.botEarlyStorage,
   simulation.playerBot,
   simulation.longRunningStability,
   progression.reincarnation,
@@ -46,6 +57,9 @@ export const smokeChecks = [
   extensions.discipleFocusRegression,
   diplomacy.diplomacyTrade,
   power.particleChain,
+  power.midgameReinvestment,
+  power.immortalInvestmentFlow,
+  progression.pacingSettlementAndBudget,
   events.eventCategories,
   storage.storageAndRefinement,
   materials.goldenCoreProduction,
@@ -55,4 +69,16 @@ export const smokeChecks = [
   extensions.industryScenarios,
   extensions.discipleScenarios,
   extensions.offlineScenarios,
+]
+
+// 日常只检查核心动作；长模拟、全表遍历和专项边界由 --full 或 --group 显式选择。
+export const quickSmokeChecks = [
+  startup.initialState,
+  buildings.buildingActions,
+  economy.incomeBreakdown,
+  automation.automaticCrafting,
+  crafting.manualCrafting,
+  progression.researchAndAscension,
+  saves.saveSerialization,
+  money.moneyDomain,
 ]

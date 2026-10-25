@@ -22,81 +22,71 @@ export const REALMS = [
     name: '炼气期',
     mult: 1.35,
     desc: '灵气在丹田聚成一小团，勉强算入了门 —— 此时仍把灵气当作一团连续的「气」。',
-    cost: { insight: 80, qi: 700, herb: 140 },
+    // 灵草留在丹药制作与可选护道中，不再直接重复收费。
+    cost: { qi: 900, insight: 80 },
   },
   {
     name: '筑基期',
     mult: 1.6,
     desc: '道基既立，内视经脉：灵压、灵流、灵阻皆可感。已有人猜想「气」里有更细之物，却拿不出凭据。',
-    // 炼气已可炼丹；筑基、金丹、元婴沿用丹药，只递增需求。
-    cost: { insight: 160, qi: 2000, pill: 26, herb: 300, stone: 130 },
+    // 灵气、悟性与固基丹药；原草药投入并入丹药。
+    cost: { qi: 2600, insight: 160, pill: 30 },
   },
   {
     name: '金丹期',
     mult: 2.0,
     desc: '一颗金丹吞入腹，始知我命不由天 —— 结丹高压之下，内观到正负灵荷一闪而逝，第一次「看见」灵气别有构造。',
-    // 丹药仍是主材料，灵石与符箓作为稳定气机的辅助材料。
-    cost: { insight: 350, qi: 5500, pill: 90, stone: 500, talisman: 30 },
+    // 丹药养丹、符箓定气，不再直接收营造用灵石。
+    cost: { qi: 7000, insight: 350, pill: 100, talisman: 40 },
   },
   {
     name: '元婴期',
     mult: 2.6,
     desc: '元婴出窍，神游百里而肉身不动 —— 神识所及，已能分辨并驱使正负灵子。',
-    // 金丹后新记录道札、凝聚灵液，避免只靠筑基时的丹药库存连续跨境。
-    cost: { insight: 12000, qi: 12000, pill: 360, stone: 2400, talisman: 160, daoNote: 120, spiritLiquid: 180 },
+    // 金丹可自产的灵液、道札、丹药与阵基；不要求元婴才开放的凝元丹。
+    cost: { spiritLiquid: 1000, daoNote: 240, pill: 400, arrayBase: 80 },
   },
   {
     name: '化神期',
     mult: 3.4,
     desc: '神识与灵能合一：灵子之云、之波、之势尽收眼底，山门内外如观掌纹。',
-    // 灵晶在元婴开放，先掌握凝聚产业再化神；三境使用同一组材料。
-    cost: { insight: 300000, qi: 18000, spiritLiquid: 5400, crystal: 2100, artifact: 4800, arrayBase: 600 },
+    // 以灵液承接原凝聚与分子动力预算，道论承接灵机和道札；凝元丹、灵符均在元婴可产。
+    cost: { spiritLiquid: 64000, daoTreatise: 96, condensePill: 600, spiritTalisman: 300 },
   },
   {
     name: '炼虚期',
     mult: 4.4,
     desc: '炼化虚空，能提取自由灵子、结成灵子束与灵子对 —— 举手投足皆是天地之力。',
-    cost: { insight: 360000, qi: 20000, spiritLiquid: 10800, crystal: 4200, artifact: 9600, arrayBase: 1200 },
+    // 化神可准备阵图、九转丹与灵器；不再同时收道论、法器等下级材料。
+    cost: { spiritLiquid: 96000, arrayDiagram: 18, nineTurnPill: 60, spiritArtifact: 120 },
   },
   {
     name: '合体期',
     mult: 5.8,
     desc: '与道合真：肉身与天地灵能共振，人与宗门同呼吸。',
-    cost: { insight: 1500000, qi: 30000, spiritLiquid: 21600, crystal: 8400, artifact: 19200, arrayBase: 2400 },
+    // 沿用炼虚的四类准备并增加数量，不叠加新矿物和下级材料。
+    cost: { spiritLiquid: 144000, arrayDiagram: 36, nineTurnPill: 120, spiritArtifact: 240 },
   },
   {
     name: '大乘期',
     mult: 7.5,
     desc: '灵子与灵能的运化之则已尽在掌中 —— 此界修行之极，再往前便是天。',
-    cost: {
-      insight: 3000000,
-      qi: 38000,
-      // 元婴已能参悟灵子论并布分灵阵；化神布偏极阵；湮灭炉随化神研究开放；合体固结飞升阵印。先掌握离析，再进大乘。
-      qiParticle: 2400,
-      // 化神已能铸灵器，合体已能炼玄金；同时验证器物与储灵合金的准备。
-      spiritArtifact: 480,
-      arcaneGold: 400,
-    },
+    // 合体可采聚仙灵力、固结阵印；由灵器与阵印承接器物和储灵合金准备。
+    cost: { immortalForce: 6000, arrayDiagram: 52, spiritArtifact: 480, ascensionSeal: 600 },
   },
   {
     name: '渡劫期',
     mult: 10,
     desc: '体内正负失衡在即，天雷 —— 天地之力贯穿失衡之躯 —— 在头顶盘旋，只等一个正负归一、飞升而去的时机。',
-    cost: {
-      insight: 6000000,
-      qi: 45000,
-      // 稳定阵印为主，灵宝与晶银辅助；不额外要求囤积会逸散的灵能。
-      ascensionSeal: 9000,
-      spiritTreasure: 360,
-      crystalSilver: 1200,
-    },
+    // 终局保留仙灵力、灵宝和阵印主账单，道论与灵机并入阵图；晶银回归合成和设施用途。
+    cost: { immortalForce: 30000, arrayDiagram: 70, spiritTreasure: 360, ascensionSeal: 9000 },
   },
 ]
 
 /**
  * 可「转世」的最低境界下标（化神期）。
  *
- * 参考猫国的分层：重置（领导力）是早期就能做、可反复做的一层，
+ * 轮回分层：转世（仙缘）是较早就能做、可反复做的一层，
  * 更高的飞升（道果）才是终极目标。所以门槛放在化神期 ——
  * 阶段耗时需随当前产业和机器人策略重新测量。
  */
@@ -128,16 +118,16 @@ export const BREAKTHROUGH = {
 
 const aid = (name, cost, bonus, extra) => ({ name, cost, bonus, ...(extra || {}) })
 
-/** 按目标境界配置。复合方案必须整组支付；ID带境界，旧勾选不会用于新境界。 */
+/** 按目标境界配置，每组只收一种资源；ID带境界，旧勾选不会用于新境界。 */
 export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
   1: [
     aid('温养经脉', { qi: 80 }, 0.02),
-    aid('灵木引气', { wood: 20 }, 0.02),
+    aid('凝神悟道', { insight: 20 }, 0.02),
     aid('香火祈愿', { faith: 20 }, 0.01),
   ],
   2: [
     aid('灵草洗髓', { herb: 60 }, 0.02),
-    aid('灵石稳气', { stone: 20 }, 0.02),
+    aid('灵气稳脉', { qi: 160 }, 0.02),
     aid('香火祈愿', { faith: 40 }, 0.02),
   ],
   3: [
@@ -152,33 +142,33 @@ export const BREAKTHROUGH_AIDS = Object.fromEntries(Object.entries({
   ],
   5: [
     aid('仙草护婴', { immortalHerb: 8 }, 0.08),
-    aid('符阵镇劫', { arrayBase: 4, talisman: 20 }, 0.10),
+    aid('阵基镇劫', { arrayBase: 8 }, 0.10),
     aid('香火祈愿', { faith: 250 }, 0.07),
   ],
   6: [
-    // 元婴～化神档由三品丹迁到二级丹「凝元丹」（见 docs/MATERIAL-RESEARCH.md §1.2，最小自洽迁移）。
+    // 元婴～化神档由三品丹迁到二级丹「凝元丹」（见 docs/CRAFT-PROGRESSION.md#材料研究与兼容，最小自洽迁移）。
     aid('凝元养神', { condensePill: 10 }, 0.08),
-    aid('晶符凝神', { crystal: 12, spiritTalisman: 4 }, 0.10),
+    aid('灵符凝神', { spiritTalisman: 6 }, 0.10),
     aid('香火祈愿', { faith: 600 }, 0.07),
   ],
   7: [
-    aid('丹草护虚', { nineTurnPill: 2, immortalHerb: 12 }, 0.08),
-    aid('灵器锚空', { spiritArtifact: 2, spiritTalisman: 8 }, 0.11),
+    aid('九转护虚', { nineTurnPill: 3 }, 0.08),
+    aid('灵器锚空', { spiritArtifact: 3 }, 0.11),
     aid('香火祈愿', { faith: 1200 }, 0.06),
   ],
   8: [
     aid('九转合真', { nineTurnPill: 4 }, 0.10),
-    aid('银器共鸣', { mithril: 12, spiritArtifact: 3 }, 0.15),
+    aid('灵器共鸣', { spiritArtifact: 4 }, 0.15),
     aid('香火祈愿', { faith: 2400 }, 0.10),
   ],
   9: [
-    aid('灵子归一', { qiParticle: 40, crystal: 20 }, 0.10),
-    aid('玄金护道', { arcaneGold: 8, spiritArtifact: 4 }, 0.12),
+    aid('九转归一', { nineTurnPill: 6 }, 0.10),
+    aid('灵器护道', { spiritArtifact: 6 }, 0.12),
     aid('香火祈愿', { faith: 5000 }, 0.08),
   ],
   10: [
-    aid('灵宝挡劫', { spiritTreasure: 2, nineTurnPill: 8 }, 0.08),
-    aid('阵印封雷', { ascensionSeal: 60, crystalSilver: 12 }, 0.11),
+    aid('灵宝挡劫', { spiritTreasure: 3 }, 0.08),
+    aid('阵印封雷', { ascensionSeal: 100 }, 0.11),
     // 「香火祈愿」升级为「立愿应劫」：渡劫唯一的香火护道，既提高成功率、又降低失败后身死概率（见 §2.3）。
     // id 仍为 10:2（数组下标不变），旧档勾选不失效。数额与 deathReduce 待校准。
     aid('立愿应劫', { faith: 20000 }, 0.06, { deathReduce: 0.10 }),

@@ -33,7 +33,7 @@ const factor = computed(() => derived.sourceFactor?.[props.resId] ?? ONE)
 
 // 来源明细是金额：过滤微小项用 Decimal 绝对值比较，不先转 Number。
 const sources = computed(() =>
-  (derived.sources[props.resId] || []).filter((s) => money(s.value).abs().gte(0.0005)),
+  [...(derived.sources[props.resId] || []), ...(derived.worldFlow?.sources?.[props.resId] || [])].filter((s) => money(s.value).abs().gte(0.0005)),
 )
 
 /** 出项条目的正负（减耗条目是正数，其余为负） */

@@ -1,38 +1,54 @@
 /** P1成对测量：同一产业策略，只按显式参数改变护道、随机、香火或上线频率。 */
 import { createInitialState, resetForAscension, resetForReincarnation } from '../../src/game/state.js'
-import { setGameContext } from '../../src/game/context.js'
+import { setGameContext, runtimeCounters, restoreRuntimeCounters } from '../../src/game/context.js'
 import { CRAFTS, craftCost } from '../../src/data/crafts.js'
 import { CULTIVATION_MAP, FAITH_UPGRADE_MAP } from '../../src/data/faith.js'
 import { EVENT_MAP } from '../../src/data/events.js'
+import { daoReward } from '../../src/data/samsara.js'
 import * as E from '../../src/game/engine.js'
 import { createBot } from '../player-bot.mjs'
 import { economyAssessment } from './pacing-economy.mjs'
+import { createResourceRecorder } from './resource-recorder.mjs'
+import { createSeededRandom } from './measurement-state.mjs'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { progressionDiagnostics } from '../progression-diagnostics.mjs'
 
-export const PACING_STRATEGY = 'p1-reincarnation-v9'
+export const PACING_STRATEGY = 'p1-reincarnation-v13'
 const epoch = Date.UTC(2026, 9, 18)
 const num = E.moneyToNumber
 const numbers = map => Object.fromEntries(Object.entries(map || {}).map(([id, value]) => [id, num(value)]))
-const rng = seed => () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 0x100000000)
 const facilities = ['splitArray', 'polarizeArray', 'annihilationFurnace']
 const visitIntervals = { active: 120, quarter: 900, hourly: 3600, three: 28800, waking: 86400 }
+const argumentNames = {
+  wallSeconds: 'wall-seconds', totalWallSeconds: 'total-wall-seconds', traceLimit: 'trace-limit', decisionSeconds: 'decision-seconds',
+  batchActions: 'batch-actions', reincarnateRealm: 'reincarnate-realm',
+  reincarnatePreparation: 'reincarnate-preparation', stopRealm: 'stop-realm',
+  sampleSeconds: 'sample-seconds', stopAfterReincarnation: 'stop-after-reincarnation',
+}
+const argumentKeys = Object.fromEntries(Object.entries(argumentNames).map(([key, name]) => [name, key]))
 
 export function pacingOptions(args = []) {
   const result = { hours: 168, seed: 1, outcomes: 'natural', aids: 'full', faith: 'off', visits: 'active',
-    events: 0, lives: 1, wallSeconds: 600, traceLimit: 1000, projects: 'stage', labor: 'reference', specialization: 'on', reserve: 'legacy', decisionSeconds: 5, batchActions: 1,
-    reincarnations: 0, reincarnateRealm: 6, reincarnatePreparation: 'none', stopRealm: 0, details: 'full' }
+    events: 0, lives: 1, wallSeconds: 600, totalWallSeconds: 0, traceLimit: 1000, projects: 'stage', labor: 'reference', specialization: 'on', reserve: 'legacy', decisionSeconds: 5, batchActions: 1,
+    reincarnations: 0, reincarnateRealm: 6, reincarnatePreparation: 'none', stopRealm: 0, details: 'full', record: false,
+    sampleSeconds: 1800, stopAfterReincarnation: false }
   for (const arg of args) {
     const match = /^--([a-z-]+)=(.+)$/.exec(arg)
     if (!match) throw Error(`无效测量参数：${arg}`)
-    const key = { 'wall-seconds': 'wallSeconds', 'trace-limit': 'traceLimit', 'decision-seconds': 'decisionSeconds', 'batch-actions': 'batchActions', 'reincarnate-realm': 'reincarnateRealm', 'reincarnate-preparation': 'reincarnatePreparation', 'stop-realm': 'stopRealm' }[match[1]] || match[1]
+    const key = argumentKeys[match[1]] || match[1]
     if (!Object.hasOwn(result, key)) throw Error(`未知测量参数：${match[1]}`)
-    result[key] = typeof result[key] === 'number' ? Number(match[2]) : match[2]
+    if (typeof result[key] === 'boolean' && !['true', 'false', '1', '0'].includes(match[2])) throw Error(`无效布尔参数：${key}`)
+    result[key] = typeof result[key] === 'boolean' ? (match[2] === '1' || match[2] === 'true') : typeof result[key] === 'number' ? Number(match[2]) : match[2]
   }
-  if (!Number.isFinite(result.hours) || result.hours <= 0 || result.hours > 3024 ||
+  if (!args.some(arg => arg.startsWith('--total-wall-seconds='))) result.totalWallSeconds = result.wallSeconds
+  if (!Number.isFinite(result.hours) || result.hours <= 0 || result.hours > 8760 ||
     !Number.isInteger(result.seed) || result.seed < 1 || result.seed > 0xffffffff ||
     !['natural', 'guaranteed'].includes(result.outcomes) || !['none', 'full'].includes(result.aids) ||
     !['off', 'growth'].includes(result.faith) || !Object.hasOwn(visitIntervals, result.visits) ||
     ![0, 1].includes(result.events) || !Number.isInteger(result.lives) || result.lives < 1 || result.lives > 5 ||
     !Number.isFinite(result.wallSeconds) || result.wallSeconds <= 0 || result.wallSeconds > 7200 ||
+    !Number.isFinite(result.totalWallSeconds) || result.totalWallSeconds <= 0 || result.totalWallSeconds > 604800 ||
     !Number.isInteger(result.traceLimit) || result.traceLimit < 0 || result.traceLimit > 10000 ||
     !['stage', 'none'].includes(result.projects) || !['reference', 'active'].includes(result.labor) ||
     !['on', 'off'].includes(result.specialization) || !['legacy', 'ready'].includes(result.reserve) ||
@@ -43,8 +59,34 @@ export function pacingOptions(args = []) {
     !['none', 'faith'].includes(result.reincarnatePreparation) ||
     !Number.isInteger(result.stopRealm) || result.stopRealm < 0 || result.stopRealm > 10 ||
     result.stopRealm > 0 && (result.reincarnations > 0 || result.lives > 1) ||
-    !['full', 'decisions'].includes(result.details)) throw Error('测量参数超出允许范围')
+    !['full', 'decisions'].includes(result.details) || typeof result.record !== 'boolean' ||
+    !Number.isInteger(result.sampleSeconds) || result.sampleSeconds < 60 || result.sampleSeconds > 1800 ||
+    result.stopAfterReincarnation && (result.reincarnations < 1 || result.stopRealm > 0)) throw Error('测量参数超出允许范围')
   return result
+}
+
+/** 恢复只调整显式计算预算，不修改模拟状态、时钟、随机流或观察期限。 */
+export function configurePacingResume(checkpoint, args = []) {
+  const overrides = {}, allowed = new Set(['wall-seconds', 'total-wall-seconds'])
+  for (const arg of args) {
+    const match = /^--([a-z-]+)=(.+)$/.exec(arg)
+    if (!match || !allowed.has(match[1]) || Object.hasOwn(overrides, match[1])) throw Error('恢复仅允许唯一的单次／累计计算预算参数')
+    overrides[match[1]] = match[2]
+  }
+  const previousTotal = checkpoint.options.totalWallSeconds ?? checkpoint.options.wallSeconds
+  const options = pacingOptions(Object.entries({ ...checkpoint.options, totalWallSeconds: previousTotal,
+    ...Object.fromEntries(Object.entries(overrides).map(([key, value]) => [argumentKeys[key], Number(value)])) })
+    .map(([key, value]) => `--${argumentNames[key] || key}=${value}`))
+  if (options.totalWallSeconds < previousTotal) throw Error('恢复不能减少累计预算')
+  return { ...checkpoint, options, budgetChange: options.totalWallSeconds === previousTotal ? null : {
+    previousTotalWallSeconds: previousTotal, totalWallSeconds: options.totalWallSeconds,
+    atGameSeconds: checkpoint.simulator.elapsed, wallSpent: checkpoint.simulator.wallSpent } }
+}
+
+export function pacingBudgetReason(options, previousSpent, callSpent) {
+  if (previousSpent + callSpent >= options.totalWallSeconds) return 'total-wall-budget'
+  if (callSpent >= options.wallSeconds) return 'wall-budget'
+  return null
 }
 
 /** 阶段项目不依赖突破结果，成对样本共用；这里只表达玩家投资，不改游戏数据。 */
@@ -65,25 +107,61 @@ export function reincarnatePacingState(state, derived) {
   return gain
 }
 
-export function measurePacing(input = {}, progress = () => {}) {
+/** 与界面相同的真实飞升结算；贡献道果必须在清空弟子前读取。 */
+export function ascendPacingState(state, derived) {
+  if (!E.canAscend(state)) return null
+  const gain = E.ascensionGain(state, derived), daoGain = daoReward(state)
+  const expectedKarma = state.karma.plus(gain), expectedDao = state.dao.plus(daoGain)
+  const expectedCount = state.stats.ascensions + 1
+  resetForAscension(state, gain)
+  E.recompute(state, derived)
+  const verified = state.karma.eq(expectedKarma) && state.dao.eq(expectedDao) &&
+    state.resources.karma.eq(state.karma) && state.resources.dao.eq(state.dao) &&
+    state.stats.ascensions === expectedCount && state.realm === 0 && E.lifeInsightOf(state).isZero()
+  if (!verified) throw Error('飞升结算状态不一致，不能标记完成')
+  return { gain, daoGain, verified }
+}
+
+export function measurePacing(input = {}, progress = () => {}, control = {}) {
+  const saved = control.resume?.simulator
+  input = control.resume?.options || input
   const options = pacingOptions(Object.entries(input).map(([key, value]) =>
-    `--${({ wallSeconds: 'wall-seconds', traceLimit: 'trace-limit', decisionSeconds: 'decision-seconds', batchActions: 'batch-actions', reincarnateRealm: 'reincarnate-realm', reincarnatePreparation: 'reincarnate-preparation', stopRealm: 'stop-realm' })[key] || key}=${value}`))
+    `--${argumentNames[key] || key}=${value}`))
   const started = performance.now()
+  const wallBudgetChanges = [...(saved?.wallBudgetChanges || [])]
+  if (control.resume?.budgetChange) wallBudgetChanges.push(control.resume.budgetChange)
   let elapsed = 0, now = epoch, lastAttempt = -1, activeSeconds = 0, cappedSeconds = 0
   let life = 1, lifeStart = 0, stopReason = 'horizon'
   let previousObservation = null, previousTraceKey = null, nextDecisionAt = 0, interactionCount = 0
-  const state = createInitialState(now), derived = E.createDerived()
+  const state = saved?.state || createInitialState(now), derived = saved?.derived || E.createDerived()
+  const recorder = options.record ? createResourceRecorder({ options, root: control.recordRoot, resume: control.resume, ...control.recorderOptions }) : null
   // 事件和突破使用独立随机流，不让事件抽签改变成对样本的突破随机序列。
-  const eventRandom = rng((options.seed ^ 0x9e3779b9) >>> 0), breakthroughRandom = rng(options.seed)
-  setGameContext(state, { now: () => now, random: eventRandom })
-  E.recompute(state, derived)
+  const eventRandom = createSeededRandom((options.seed ^ 0x9e3779b9) >>> 0, saved?.eventRng), breakthroughRandom = createSeededRandom(options.seed, saved?.breakthroughRng)
+  let mode = 'online'
+  setGameContext(state, { now: () => now, random: eventRandom, resourceObserver: recorder?.observer })
+  if (!saved) E.recompute(state, derived)
   const firstReach = {}, firstReadiness = {}, attempts = [], ascensions = [], reincarnations = [], deaths = [], checkpoints = [], trace = []
   const exposure = {}, firstFacilities = {}, firstOutput = {}, faithActions = []
-  const decisionSummary = { reserveCounts: {}, researchSpending: {}, buildingSpending: {}, buildingsBought: {} }
+  const lastResourceReady = {}
+  const continuousReady = {}
+  const decisionSummary = { reserveCounts: {}, researchSpending: {}, buildingSpending: {}, breakthroughSpending: {}, buildingsBought: {}, particleInvestments: [], immortalInvestments: [] }
+  const recordInvestment = (quote, flow) => {
+    if (!quote) return
+    const immortal = quote.resource === 'immortalForce'
+    decisionSummary[immortal ? 'immortalInvestments' : 'particleInvestments'].push({ seconds: elapsed, realm: state.realm, life,
+      kind: quote.kind, id: quote.id, count: E.countOf(state, immortal ? quote.id : 'splitArray'), cost: numbers(quote.cost),
+      ...(immortal ? { immortalRateBefore: num(flow.immortalRateBefore), immortalRateAfter: num(flow.immortalRateAfter) }
+        : { particleRateBefore: num(flow.particleRateBefore), particleRateAfter: num(flow.particleRateAfter) }),
+      directSeconds: quote.directSeconds, estimatedSeconds: quote.estimatedSeconds,
+      estimatedSavedSeconds: quote.savedSeconds })
+  }
   const addSpending = (target, cost) => {
     for (const [id, amount] of Object.entries(cost || {})) target[id] = E.money(target[id]).plus(amount)
   }
   let traceDropped = 0, decisionCount = 0, buildDecision = null, decision = null
+  let lastProgressAt = 0, maxActionGapSeconds = 0, pendingStorageMilestone = null
+  const firstAcquired = { upgrades: {}, buildings: {} }
+  const storageMilestones = {}
   let firstDaoHeart = null, spentFaith = E.ZERO, spentVow = E.ZERO, spentDaoHeart = E.ZERO
   const nextOptions = () => options.aids === 'full' && state.realm >= 3
     ? Object.fromEntries(E.breakthroughPreview(state, derived).availableAids.map(aid => [aid.id, true])) : {}
@@ -103,7 +181,7 @@ export function measurePacing(input = {}, progress = () => {}) {
     rebirthStats: { reincarnations: state.stats.reincarnations, ascensions: state.stats.ascensions, deaths: state.stats.breakthroughDeaths },
     faith: { rituals: { ...state.faithProgression.rituals }, cultivation: { ...state.faithProgression.cultivation },
       totalDaoHeart: num(E.totalDaoHeart(state)) }, next: numbers(need()),
-    processing: E.processingPlan(state, derived) })
+    processing: E.processingPlan(state, derived), diagnostics: progressionDiagnostics(state, derived, { cost: need() }) })
   const appendTrace = entry => {
     if (trace.length < options.traceLimit) trace.push(entry)
     else {
@@ -115,7 +193,23 @@ export function measurePacing(input = {}, progress = () => {}) {
       }
     }
   }
+  const recordReadiness = () => {
+    const ready = need()
+    const readyKey = `${life}:${state.realm}`
+    lastResourceReady[readyKey] ||= {}
+    continuousReady[readyKey] ||= {}
+    for (const [id, amount] of Object.entries(ready)) {
+      const ok = E.moneyGte(state.resources[id] ?? E.ZERO, amount)
+      if (ok && !continuousReady[readyKey][id]) lastResourceReady[readyKey][id] = elapsed
+      if (!ok) delete lastResourceReady[readyKey][id]
+      continuousReady[readyKey][id] = ok
+    }
+  }
   const observe = (kind, span = 0) => {
+    if (recorder) {
+      recorder.observe(state, derived, now, progressionDiagnostics(state, derived, { cost: need(), moneyAsStrings: true }), { precision: kind === 'offline' ? 'approximate-boundaries' : 'sampled-5s', projectsReady: projectReady() })
+    }
+    recordReadiness()
     const cost = need()
     const missing = Object.keys(cost).filter(id => E.moneyLt(state.resources[id], cost[id]))
     const capacity = Object.keys(cost).filter(id => E.moneyLt(derived.max[id], cost[id]))
@@ -125,9 +219,13 @@ export function measurePacing(input = {}, progress = () => {}) {
       bucket.seconds += span
       for (const id of previousObservation.missing) bucket.shortagesSeconds[id] = (bucket.shortagesSeconds[id] || 0) + span
       for (const id of previousObservation.capacity) bucket.capacitySeconds[id] = (bucket.capacitySeconds[id] || 0) + span
+      if (previousObservation.insightOnly) bucket.insightOnlySeconds = (bucket.insightOnlySeconds || 0) + span
       if (!previousObservation.projectsReady) bucket.projectSeconds += span
     }
-    previousObservation = { life, realm: state.realm, missing, capacity, projectsReady: projectReady() }
+    for (const id of Object.keys(state.upgrades || {})) if (state.upgrades[id] && firstAcquired.upgrades[id] == null) firstAcquired.upgrades[id] = elapsed
+    for (const [id, entry] of Object.entries(state.buildings || {})) if (entry?.count > 0 && firstAcquired.buildings[id] == null) firstAcquired.buildings[id] = elapsed
+    maxActionGapSeconds = Math.max(maxActionGapSeconds, elapsed - lastProgressAt)
+    previousObservation = { life, realm: state.realm, missing, capacity, projectsReady: projectReady(), insightOnly: missing.includes('insight') && missing.every(id => id === 'insight'), at: elapsed }
     const key = `${life}:${state.realm}`
     firstReach[key] ??= { seconds: elapsed, population: state.disciples.total }
     for (const id of facilities) if (E.countOf(state, id)) firstFacilities[`${life}:${id}`] ??= elapsed
@@ -145,34 +243,59 @@ export function measurePacing(input = {}, progress = () => {}) {
     lastAttempt = elapsed
     const beforeRealm = state.realm, beforeDeaths = state.stats.breakthroughDeaths
     const preview = E.breakthroughPreview(state, derived, nextOptions())
+    recordReadiness()
+    if (recorder) recorder.observe(state, derived, now, progressionDiagnostics(state, derived, { cost: need(), moneyAsStrings: true }))
     const before = { seconds: elapsed, life, realm: beforeRealm, target: beforeRealm + 1, cost: numbers(preview.cost),
-      chance: preview.chance, deathRisk: preview.deathRisk, population: state.disciples.total, upkeep: num(derived.upkeep) }
+      chance: preview.chance, deathRisk: preview.deathRisk, population: state.disciples.total, upkeep: num(derived.upkeep),
+      resourceReadiness: recorder?.readiness || null }
     const success = E.breakthrough(state, derived, nextOptions(), options.outcomes === 'guaranteed' ? () => 0 : breakthroughRandom)
     const death = state.stats.breakthroughDeaths > beforeDeaths
+    addSpending(decisionSummary.breakthroughSpending, preview.cost)
+    lastProgressAt = elapsed
     attempts.push({ ...before, success, result: death ? 'death' : success ? 'success' : state.realm < beforeRealm ? 'regression' : 'preserved' })
     if (death) { deaths.push({ ...before, karmaAfter: num(state.karma) }); life++; lifeStart = elapsed }
     if (success || death) checkpoints.push(snapshot())
     return success
   }
   const bot = createBot(state, derived, { realmCost: need, breakthrough: attempt,
+    particleInvestments: options.projects === 'stage',
+    immortalInvestments: options.projects === 'stage',
     protectBreakthrough: options.reserve === 'ready',
     projects, resourceGoals, focusProjects: () => projects().some(p => E.countOf(state, p.id) < p.count),
     upgrades: () => options.faith === 'growth' && state.realm >= 4 ? ['vowPower'] : [],
     allowUpgrade: u => (options.faith === 'growth' || !FAITH_UPGRADE_MAP[u.id]) &&
-      (options.specialization === 'on' || !['steelBatching', 'artifactBatching', 'spiritArtifactBatching',
+      (options.specialization === 'on' || !['forgeBatchStandards', 'artifactBatching', 'spiritArtifactBatching',
         'pillBatching', 'condensePillBatching', 'nineTurnBatching'].includes(u.id)),
     onDecision: value => {
       decision = value
       const source = value.reserveSource
       const key = source ? `${source.kind}:${source.id || source.target}` : 'none'
       decisionSummary.reserveCounts[key] = (decisionSummary.reserveCounts[key] || 0) + 1
-      if (value.research?.purchased) addSpending(decisionSummary.researchSpending, value.research.cost)
+      if (value.research?.purchased) {
+        addSpending(decisionSummary.researchSpending, value.research.cost); lastProgressAt = elapsed
+        if (value.investment?.id === value.research.id) recordInvestment(value.investment, value.research)
+      }
     },
-    onBuildDecision: value => { buildDecision = value },
-    onBuildResult: ({ id, cost, bought }) => {
+    onBuildDecision: value => {
+      buildDecision = value
+      pendingStorageMilestone = ['warehouse', 'grotto'].includes(value.selected) && !storageMilestones[value.selected]
+        ? { id: value.selected, seconds: elapsed, before: snapshot() }
+        : null
+    },
+    onBuildResult: ({ id, cost, bought, particleRateBefore, particleRateAfter, immortalRateBefore, immortalRateAfter }) => {
       if (bought) {
+        if (decision?.investment?.kind === 'building' && decision.investment.id === id) {
+          recordInvestment(decision.investment, { particleRateBefore, particleRateAfter, immortalRateBefore, immortalRateAfter })
+        }
         decisionSummary.buildingsBought[id] = (decisionSummary.buildingsBought[id] || 0) + 1
         addSpending(decisionSummary.buildingSpending, cost)
+        lastProgressAt = elapsed
+        if (pendingStorageMilestone?.id === id) {
+          storageMilestones[id] = { seconds: pendingStorageMilestone.seconds, before: pendingStorageMilestone.before, after: snapshot() }
+          pendingStorageMilestone = null
+        }
+      } else if (pendingStorageMilestone?.id === id) {
+        pendingStorageMilestone = null
       }
     } })
 
@@ -285,7 +408,8 @@ export function measurePacing(input = {}, progress = () => {}) {
   }
   const allocateLabor = () => {
     const weights = { woodcutter: 4, miner: 3, herbalist: 2, scholar: 2, incenseKeeper: 1 }
-    for (const job of E.JOBS) E.setJob(state, derived, job.id, 0)
+    // 保留机器人为进口渠道安排的执符使，避免活跃分工每分钟切断信符供给。
+    for (const job of E.JOBS) if (job.id !== 'huntPlanner') E.setJob(state, derived, job.id, 0)
     const farmer = E.JOBS.find(job => job.id === 'farmer')
     const perFarmer = farmer.base * (1 + (derived.jobRatio.farmer || 0)) * derived.discipleMult * num(derived.sourceFactor.qi)
     const deficit = E.moneyMax(0, derived.upkeep.times(0.1).minus(derived.netQi))
@@ -302,30 +426,90 @@ export function measurePacing(input = {}, progress = () => {}) {
   }
   const ascend = () => {
     if (!E.canAscend(state)) return false
-    const gain = E.ascensionGain(state, derived)
-    ascensions.push({ seconds: elapsed, lifeSeconds: elapsed - lifeStart, life, gain: num(gain), before: snapshot(),
-      economy: economyAssessment(state, derived) })
-    resetForAscension(state, gain)
-    E.recompute(state, derived)
+    const settlement = { seconds: elapsed, lifeSeconds: elapsed - lifeStart, life, before: snapshot(),
+      economy: economyAssessment(state, derived) }
+    const outcome = ascendPacingState(state, derived)
+    Object.assign(settlement, { gain: num(outcome.gain), daoGain: num(outcome.daoGain), verified: outcome.verified })
     life++; lifeStart = elapsed; previousObservation = null
+    settlement.after = snapshot()
+    ascensions.push(settlement)
     observe('online')
     if (ascensions.length >= options.lives) { stopReason = 'ascensions'; return true }
     return false
   }
   const interact = () => {
+    recorder?.choices(state, derived, now)
     interactionCount++
     for (let i = 0; i < options.batchActions; i++) {
       const beforeReincarnations = reincarnations.length
       act()
       if (E.canAscend(state) || reincarnations.length > beforeReincarnations) break
     }
+    recorder?.choices(state, derived, now)
     nextDecisionAt = elapsed + options.decisionSeconds
   }
-  observe('online')
-  interact()
+  let checkpointPath = null, nextCheckpoint = 21600, checkpointRealm = state.realm
+  let stopRequested = false
+  const requestStop = () => { stopRequested = true }
+  const complete = () => stopReason === 'ascensions' || stopReason === 'reincarnations'
+  const capture = () => ({ state, derived, terminal: complete() || elapsed >= Math.floor(options.hours * 3600) || options.stopRealm > 0 && state.realm >= options.stopRealm, counters: { ...runtimeCounters(state) },
+    wallSpent: (saved?.wallSpent || 0) + (performance.now() - started) / 1000, wallBudgetChanges,
+    eventRng: eventRandom.snapshot(), breakthroughRng: breakthroughRandom.snapshot(),
+    nextCheckpoint, checkpointRealm,
+    firstReach, firstReadiness, attempts, ascensions, reincarnations, deaths, checkpoints, trace, exposure, firstFacilities, firstOutput, faithActions, lastResourceReady, continuousReady, decisionSummary, firstAcquired, storageMilestones, elapsed, now, lastAttempt, activeSeconds, cappedSeconds, life, lifeStart, previousObservation, previousTraceKey, nextDecisionAt, interactionCount, traceDropped, decisionCount, buildDecision, decision, lastProgressAt, maxActionGapSeconds, pendingStorageMilestone, firstDaoHeart, spentFaith, spentVow, spentDaoHeart })
+  if (saved) {
+    ;({ elapsed, now, lastAttempt, activeSeconds, cappedSeconds, life, lifeStart, previousObservation, previousTraceKey, nextDecisionAt, interactionCount, traceDropped, decisionCount, buildDecision, decision, lastProgressAt, maxActionGapSeconds, pendingStorageMilestone, firstDaoHeart, spentFaith, spentVow, spentDaoHeart } = saved)
+    Object.assign(firstReach, saved.firstReach)
+    Object.assign(firstReadiness, saved.firstReadiness)
+    Object.assign(attempts, saved.attempts)
+    Object.assign(ascensions, saved.ascensions)
+    Object.assign(reincarnations, saved.reincarnations)
+    Object.assign(deaths, saved.deaths)
+    Object.assign(checkpoints, saved.checkpoints)
+    Object.assign(trace, saved.trace)
+    Object.assign(exposure, saved.exposure)
+    Object.assign(firstFacilities, saved.firstFacilities)
+    Object.assign(firstOutput, saved.firstOutput)
+    Object.assign(faithActions, saved.faithActions)
+    Object.assign(lastResourceReady, saved.lastResourceReady)
+    Object.assign(continuousReady, saved.continuousReady)
+    Object.assign(decisionSummary, saved.decisionSummary)
+    Object.assign(firstAcquired, saved.firstAcquired)
+    Object.assign(storageMilestones, saved.storageMilestones)
+    nextCheckpoint = saved.nextCheckpoint; checkpointRealm = saved.checkpointRealm
+    restoreRuntimeCounters(state, saved.counters)
+  }
+  recorder?.setEnvironment(() => ({ lifeId: 1 + state.stats.breakthroughDeaths + state.stats.reincarnations + state.stats.ascensions,
+    currentRealm: state.realm, targetRealm: state.realm + 1,
+    online: mode === 'online', simulatedMs: elapsed * 1000 }))
+  recorder?.open(state, now, derived)
+  const saveCheckpoint = () => recorder?.checkpoint(capture(), state, derived, now) || null
+  const saveCheckpointIfNeeded = () => {
+    if (recorder && (elapsed >= nextCheckpoint || checkpointRealm !== state.realm)) {
+      nextCheckpoint = Math.floor(elapsed / 21600 + 1) * 21600; checkpointRealm = state.realm
+      checkpointPath = saveCheckpoint()
+    }
+  }
+  const shouldStop = () => {
+    if (options.stopAfterReincarnation && reincarnations.length >= options.reincarnations) {
+      stopReason = 'reincarnations'; return true
+    }
+    if (stopRequested || recorder && existsSync(join(recorder.dir, 'STOP')) || control.stopAtSeconds != null && elapsed >= control.stopAtSeconds) {
+      stopReason = 'interrupted'; return true
+    }
+    if (recorder?.recordBudget) { stopReason = 'record-budget'; return true }
+    recorder?.check()
+    return false
+  }
+  if (!saved) { observe('online'); interact(); checkpointPath = saveCheckpoint() }
+  process.on('SIGINT', requestStop); process.on('SIGTERM', requestStop)
+
   const total = Math.floor(options.hours * 3600), interval = visitIntervals[options.visits]
+  try {
   while (elapsed < total) {
-    if ((performance.now() - started) / 1000 >= options.wallSeconds) { stopReason = 'wall-budget'; break }
+    if (shouldStop()) break
+    const budgetReason = pacingBudgetReason(options, saved?.wallSpent || 0, (performance.now() - started) / 1000)
+    if (budgetReason) { stopReason = budgetReason; break }
     // 共同开局15分钟；后续每次上线2分钟，间隔从该共同开局结束起计算。
     const waking = options.visits === 'waking'
     const phase = waking ? elapsed % 86400 : elapsed < 900 ? 0 : (elapsed - 900 + 120) % interval
@@ -334,6 +518,8 @@ export function measurePacing(input = {}, progress = () => {}) {
       const away = Math.min(interval - phase, total - elapsed)
       const simulated = Math.min(away, Math.floor(derived.offlineHours * 3600))
       const startAt = now
+      mode = 'offline'
+      if (recorder) recorder.observe(state, derived, now, progressionDiagnostics(state, derived, { cost: need(), moneyAsStrings: true }))
       E.simulateOffline(state, derived, simulated, { startAt })
       cappedSeconds += away - simulated
       elapsed += away; now = epoch + elapsed * 1000
@@ -344,11 +530,15 @@ export function measurePacing(input = {}, progress = () => {}) {
       E.recompute(state, derived)
       observe('offline', away)
       nextDecisionAt = elapsed
+      mode = 'online'
+      if (recorder) recorder.observe(state, derived, now, progressionDiagnostics(state, derived, { cost: need(), moneyAsStrings: true }))
+      saveCheckpointIfNeeded()
       continue
     }
     // 醒来立即操作；其余时间仅到指定决策时点才集中处理，不在等待期偷跑决策。
     if (elapsed >= nextDecisionAt) {
       interact()
+      if (shouldStop()) break
       if (options.stopRealm && state.realm >= options.stopRealm) { stopReason = 'realm-target'; break }
       if (ascend()) break
     }
@@ -361,22 +551,36 @@ export function measurePacing(input = {}, progress = () => {}) {
       finalEconomyDetails: options.details === 'full' || elapsed >= nextDecisionAt })
     if (elapsed >= nextDecisionAt && (!waking || elapsed % 86400 < 57600)) interact()
     observe('online', seconds)
+    if (options.stopAfterReincarnation && reincarnations.length >= options.reincarnations) { stopReason = 'reincarnations'; break }
     if (options.stopRealm && state.realm >= options.stopRealm) { stopReason = 'realm-target'; break }
     if (ascend()) break
+    saveCheckpointIfNeeded()
     if (elapsed % 21600 === 0) {
       const checkpoint = snapshot()
       checkpoints.push(checkpoint)
       progress({ elapsed, realm: state.realm, life, ascensions: ascensions.length, snapshot: checkpoint })
     }
   }
+  } catch (error) {
+    recorder?.abort(error)
+    throw error
+  } finally {
+    process.removeListener('SIGINT', requestStop); process.removeListener('SIGTERM', requestStop)
+  }
   if (options.details === 'decisions') E.recompute(state, derived)
-  return { strategy: PACING_STRATEGY, options, completed: stopReason === 'ascensions', stopReason,
+  if (recorder) checkpointPath = saveCheckpoint()
+  const recording = recorder ? recorder.finish(state, { completed: complete(), stopReason, elapsed: now, derived }) : null
+  return { strategy: PACING_STRATEGY, options, completed: complete(), stopReason,
     simulatedSeconds: elapsed, wallSeconds: (performance.now() - started) / 1000,
+    cumulativeWallSeconds: (saved?.wallSpent || 0) + (performance.now() - started) / 1000,
+    wallBudgetChanges,
     activeSeconds, cappedSeconds, firstReach, firstReadiness, attempts, ascensions, reincarnations, deaths, checkpoints,
-    firstFacilities, firstOutput, exposure, firstDaoHeartSeconds: firstDaoHeart,
+    firstFacilities, firstOutput, firstAcquired, storageMilestones, exposure, lastResourceReady, maxActionGapSeconds, firstDaoHeartSeconds: firstDaoHeart,
     faith: { spentFaith: num(spentFaith), spentVow: num(spentVow), spentDaoHeart: num(spentDaoHeart), actions: faithActions },
-    interactionCount, decisionCount, decisionSummary, trace, traceDropped, final: snapshot(), economy: economyAssessment(state, derived),
+    interactionCount, decisionCount, decisionSummary, trace, traceDropped, final: snapshot(), economy: economyAssessment(state, derived), recording, checkpointPath,
+    runtimeState: control.includeRuntime ? capture() : undefined,
     boundaries: [`每${options.decisionSeconds}秒集中执行至多${options.batchActions}步；玩家即时制作；阶段项目按真实动作建设`,
+      '互市按本境可行来源补料；需要信符时暂停天赋自动分工，手动维持执符使；活跃分工保留该岗位',
       options.visits === 'waking' ? '每日前16小时在线、后8小时离线；不模拟工作等额外离开' : '共同开局15分钟，后续按指定上线窗口',
       'offline为有界近似；缺料／仓容时长按区间左端采样，不作精确因果分解',
       '只在真实飞升动作结算后记录ascensions；死亡与截止样本保留',

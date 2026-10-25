@@ -1,9 +1,9 @@
 <script setup>
+import { SECT_STORY } from '@/data/narrative'
 import { ref } from 'vue'
 import { state, derived, actions, ui, saveNow } from '@/game/store'
 import { fmtClock, fmtTime, fmt } from '@/game/format'
 import { CONFIG } from '@/data/config'
-import { MODULES, isModuleEnabled } from '@/data/modules'
 import { IS_DEV_PREVIEW } from '@/game/deployment'
 import HoverTip from './HoverTip.vue'
 
@@ -124,17 +124,6 @@ function doReset() {
       <div class="small dim" style="padding-top: 4px">
         离线收益上限 {{ fmt(derived.offlineHours) }} 小时
       </div>
-      <div class="small dim" style="padding-top: 10px">
-        <HoverTip label="玩法模块"><template #tip><p>可选内容模块，默认开启。关闭后隐藏该模块的页面与相关建筑、岗位、研究，并召回出征中的弟子；主线照常运行，进度保留在存档里，随时可以重新开启。</p></template></HoverTip>
-      </div>
-      <label v-for="m in MODULES" :key="m.id" class="sw">
-        <input
-          type="checkbox"
-          :checked="isModuleEnabled(state, m.id)"
-          @change="actions.setModuleEnabled(m.id, $event.target.checked)"
-        />
-        {{ m.name }}
-      </label>
     </div>
   </div>
 
@@ -142,12 +131,15 @@ function doReset() {
     <div class="box-head">关于</div>
     <div class="box-body">
       <div class="kv"><span class="k">游戏</span><span class="v">摸鱼宗门 · Slack Off Sect</span></div>
-      <div class="kv">
-        <span class="k">参考</span><span class="v">猫国建设者（Kittens Game）的放置玩法与数据结构</span>
-      </div>
+      <div class="kv"><HoverTip label="介绍" :description="SECT_STORY.vow" /></div>
       <div class="kv">
         <span class="k">本次挂机</span><span class="v">{{ fmtTime(state.stats.playTime) }}</span>
       </div>
     </div>
   </div>
 </template>
+<style scoped>
+.box-body > label.sw { margin: 0 16px 10px 0; }
+.kv { padding: 6px 0; }
+.kv + .kv { border-top: 1px solid var(--line-soft); }
+</style>

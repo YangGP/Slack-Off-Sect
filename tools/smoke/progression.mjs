@@ -4,9 +4,78 @@ import { RESOURCES } from '../../src/data/resources.js'
 import { UPGRADE_MAP } from '../../src/data/upgrades.js'
 import { CRAFTS } from '../../src/data/crafts.js'
 import { REALMS, ASCEND_REALM_INDEX, REINCARNATE_REALM_INDEX, BREAKTHROUGH_AIDS } from '../../src/data/realms.js'
+
+export function focusedRealmBills({ ok, section }) {
+  section('破境配方精简与实际支付')
+  const energy = ['qi', 'spiritLiquid', 'immortalForce']
+  const knowledge = ['insight', 'daoNote', 'daoTreatise', 'arrayDiagram']
+  for (let target = 1; target < REALMS.length; target++) {
+    const keys = Object.keys(REALMS[target].cost)
+    ok(`${REALMS[target].name}只有一种修为、知识及至多两种合成材料`,
+      keys.length <= 4 && keys.filter(id => energy.includes(id)).length === 1 && keys.filter(id => knowledge.includes(id)).length === 1)
+    const aids = BREAKTHROUGH_AIDS[target]
+    ok(`${REALMS[target].name}护道单项支付且编号不变`,
+      aids.every((aid, i) => Object.keys(aid.cost).length === 1 && aid.id === `${target}:${i}`))
+    for (const id of new Set([...keys, ...aids.flatMap(aid => Object.keys(aid.cost))])) {
+      const recipe = E.CRAFTS.find(c => c.out === id)
+      if (recipe) ok(`${id}在冲关前可生产`, (recipe.needs?.realm || 0) < target)
+    }
+    const s = createInitialState(), d = E.createDerived()
+    s.realm = target - 1
+    s.upgrades.breakthroughArt = true
+    E.recompute(s, d)
+    const options = Object.fromEntries(aids.map(aid => [aid.id, true]))
+    const quote = E.breakthroughPreview(s, d, options)
+    for (const [id, amount] of Object.entries(quote.cost)) s.resources[id] = E.money(amount)
+    const shortage = Object.keys(aids[0].cost)[0]
+    s.resources[shortage] = s.resources[shortage].minus(1)
+    const before = JSON.stringify(s.resources)
+    ok('缺一份护道材料时不扣款、不掷骰', !E.breakthrough(s, d, options, () => { throw Error('不应掷骰') }) && JSON.stringify(s.resources) === before)
+    s.resources[shortage] = s.resources[shortage].plus(1)
+    ok('基础折扣与护道合并报价按实扣款', E.breakthrough(s, d, options, () => 0) && s.realm === target && Object.keys(quote.cost).every(id => s.resources[id].eq(0)))
+  }
+}
 import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, successfulBreakthrough } from './fixtures.mjs'
+import { daoReward } from '../../src/data/samsara.js'
+import { ascendPacingState, pacingOptions, configurePacingResume, pacingBudgetReason } from '../lib/pacing-scenario.mjs'
+
+export function pacingSettlementAndBudget({ ok, section }) {
+  section('长测真实飞升结算与累计预算恢复')
+  const { state: s, derived: d } = newGame()
+  ok('未到渡劫不能由测定器提前飞升', ascendPacingState(s, d) === null)
+  s.realm = ASCEND_REALM_INDEX
+  s.disciples.total = 1
+  s.stats.lifeInsight = E.money(200000)
+  s.dao = E.money('2.5')
+  E.recompute(s, d)
+  s.disciples.members[0].lifetimeCultivation = 360000
+  s.disciples.members[0].loyalty = 0.8
+  const reward = daoReward(s), karma = E.money(s.karma), gain = E.ascensionGain(s, d)
+  const settled = ascendPacingState(s, d)
+  ok('真实贡献奖励超过1时仍验证通过，包含既有小数余额', reward.gt(1) && settled.verified &&
+    settled.daoGain.eq(reward) && s.dao.eq(reward.plus('2.5')) && s.resources.dao.eq(s.dao))
+  ok('仙缘、计数与重置同时正确，不用虚构结算', s.karma.eq(karma.plus(gain)) && s.resources.karma.eq(s.karma) &&
+    s.stats.ascensions === 1 && s.realm === 0 && s.disciples.total === 0 && E.lifeInsightOf(s).isZero())
+  const options = pacingOptions(['--hours=8760', '--wall-seconds=10', '--total-wall-seconds=30'])
+  const cp = { options, simulator: { elapsed: 12345, wallSpent: 10 } }
+  const resumed = configurePacingResume(cp, ['--wall-seconds=5', '--total-wall-seconds=40'])
+  ok('半年以上观察期限可用，单次与累计预算分开', options.hours === 8760 &&
+    pacingBudgetReason(options, 0, 10) === 'wall-budget' && pacingBudgetReason(options, 20, 10) === 'total-wall-budget')
+  ok('续跑不清零历史用时或改变游戏状态，并记录显式扩容', resumed.simulator === cp.simulator && cp.simulator.wallSpent === 10 &&
+    cp.options.totalWallSeconds === 30 && resumed.options.totalWallSeconds === 40 && resumed.budgetChange.wallSpent === 10)
+  ok('新一轮运行时仍累计旧计算时长', pacingBudgetReason(resumed.options, 38, 2) === 'total-wall-budget' &&
+    pacingBudgetReason(resumed.options, 10, 5) === 'wall-budget')
+  const rejects = args => { try { configurePacingResume(cp, args); return false } catch { return true } }
+  ok('禁止通过续跑更改种子／期限、缩减累计预算或重复参数', rejects(['--seed=1']) &&
+    rejects(['--hours=9000']) && rejects(['--total-wall-seconds=20']) && rejects(['--wall-seconds=5', '--wall-seconds=6']))
+  let invalid = 0
+  for (const args of [['--wall-seconds=7201'], ['--total-wall-seconds=604801'], ['--hours=8761']]) {
+    try { pacingOptions(args) } catch { invalid++ }
+  }
+  ok('单次／累计预算和观察期限仍有上限', invalid === 3 && pacingOptions(['--wall-seconds=10']).totalWallSeconds === 10)
+}
 
 export function faithProgression({ ok, close, section }) {
   section('D7 香火兑换、加成与抗劫')
@@ -83,6 +152,7 @@ export function researchAndAscension({ ok, close, section }) {
     state.resources.stone = E.money(500)
     state.resources.herb = E.money(500)
     state.buildings.spiritField = { count: 3, on: true } // 夹具保留三座聚灵阵供产出；藏经阁前置仅需一座
+    state.buildings.lumberYard = { count: 1, on: true } // 生产夹具预建伐木场。
     E.buyBuilding(state, derived, 'hut', 1)
     E.buyBuilding(state, derived, 'library', 1)
     ok('建成藏经阁仍需研究灵源考才出现引气诀', !derived.availableUpgrades.includes('qiArt'))
@@ -172,15 +242,20 @@ export function reincarnation({ ok, close, section }) {
       REALMS[state.realm].name + ' / 飞升需 ' + REALMS[ASCEND_REALM_INDEX].name,
     )
 
-    // 同一条公式：越晚结算越值钱
+    // 同一条公式：越晚结算越值钱（首转另有 ×2 结算倍率，公式对照用非首转）
     state.stats.lifeInsight = E.money(40000)
+    state.stats.reincarnations = 1
     E.recompute(state, derived)
     const atShen = E.reincarnationGain(state, derived)
+    state.stats.reincarnations = 0
+    E.recompute(state, derived)
+    const atShenFirst = E.reincarnationGain(state, derived)
     state.realm = ASCEND_REALM_INDEX
     E.recompute(state, derived)
     const atDujie = E.ascensionGain(state, derived)
     const gainRatio = E.moneyToNumber(atDujie.div(atShen))
     ok('化神期转世能结算仙缘', E.moneyIsPositive(atShen), String(atShen))
+    ok('首转仙缘结算 ×2（只此一次）', E.moneyEq(atShenFirst, atShen.times(2)), atShen + ' → ' + atShenFirst)
     ok('渡劫期飞升拿得更多（同一公式，门槛更高）', E.moneyGt(atDujie, atShen), atShen + ' → ' + atDujie)
     ok('两者用同一条公式（境界因子 1+境界×0.3）', close(gainRatio, (1 + ASCEND_REALM_INDEX * 0.3) / (1 + REINCARNATE_REALM_INDEX * 0.3), 0.02), gainRatio.toFixed(3))
 
@@ -204,7 +279,7 @@ export function reincarnation({ ok, close, section }) {
     const effectPreview = E.karmaMultipliers(E.money(10).plus(gain))
     ok('仙缘预览与重修后真实生产／仓储乘区一致', dv.karmaMult.eq(effectPreview.karmaMult) && dv.karmaStorageMult.eq(effectPreview.karmaStorageMult))
     const hugePreview = E.karmaMultipliers('1e1000')
-    ok('仙缘生产保持软上限且仓储线性无上限', hugePreview.karmaMult.isFinite() && hugePreview.karmaMult.lte(1 + CONFIG.KARMA_BONUS_CAP) && hugePreview.karmaStorageMult.isFinite() && hugePreview.karmaStorageMult.eq(E.money('1e1000').times(CONFIG.KARMA_STORAGE_PER_POINT).plus(1)))
+    ok('仙缘生产与仓储均保持软上限', hugePreview.karmaMult.isFinite() && hugePreview.karmaMult.lte(1 + CONFIG.KARMA_BONUS_CAP) && hugePreview.karmaStorageMult.isFinite() && hugePreview.karmaStorageMult.lte(1 + CONFIG.KARMA_STORAGE_CAP))
     ok('转世后修真 / 技艺·法宝清空（与飞升一致）', Object.keys(st.upgrades).length === 0, Object.keys(st.upgrades).join(','))
     ok('转世后法宝等级清空', Object.keys(st.treasureLevels).length === 0)
     ok('转世后建筑 / 弟子 / 资源清空', Object.keys(st.buildings).length === 0 && st.disciples.total === 0 && E.moneyIsZero(st.resources.qi))
@@ -229,7 +304,7 @@ export function karmaSoftCap({ ok, close, section }) {
     resetForAscension(state, 0)
     E.recompute(state, derived)
     ok('飞升结一颗道果', E.moneyEq(state.dao, 1), String(state.dao))
-    ok('道果提升全局产出（+5%/颗）', close(derived.daoMult, 1.05, 1e-9), '×' + E.moneyToNumber(derived.daoMult).toFixed(3))
+    ok('道果余额不再提升全局产出，首颗永久开启自动化', E.moneyEq(derived.daoMult, 1) && derived.daoAutomation)
 
     // 道果反哺下层：同一份「本世灵机」，有 1 颗道果时仙缘多 10%
     const probe = (dao) => {
@@ -243,7 +318,7 @@ export function karmaSoftCap({ ok, close, section }) {
     }
     const g0 = probe(0)
     const g1 = probe(1)
-    ok('道果让转世拿到的仙缘更多（+10%/颗）', E.moneyGt(g1, g0), g0 + ' → ' + g1)
+    ok('道果余额不再改变仙缘结算', E.moneyEq(g1, g0), g0 + ' → ' + g1)
 
     // 仙缘软上限：前 75% 不打折，之后渐近到 +200%
     ok('软上限：小数值不打折', close(E.softCap(1, 2), 1, 1e-9), String(E.softCap(1, 2)))
@@ -324,7 +399,7 @@ export function breakthroughRisk({ ok, close, section }) {
     const [s, d] = setup(4)
     const all = Object.fromEntries(BREAKTHROUGH_AIDS[5].map(aid => [aid.id, true]))
     const p = E.breakthroughPreview(s, d, all)
-    ok('元婴护道叠加25个百分点且计入报价', close(p.chance, 0.85) && E.moneyEq(p.cost.faith, 250) && E.moneyEq(p.cost.immortalHerb, 8) && E.moneyEq(p.cost.arrayBase, 4) && E.moneyEq(p.cost.talisman, REALMS[5].cost.talisman + 20))
+    ok('元婴护道叠加25个百分点且计入报价', close(p.chance, 0.85) && E.moneyEq(p.cost.faith, 250) && E.moneyEq(p.cost.immortalHerb, 8) && E.moneyEq(p.cost.arrayBase, REALMS[5].cost.arrayBase + 8) && !p.cost.talisman)
     const [capped, cd] = setup(0)
     const earlyOptions = Object.fromEntries(BREAKTHROUGH_AIDS[1].map(aid => [aid.id, true]))
     ok('成功率最高99%', E.breakthroughPreview(capped, cd, earlyOptions).chance === 0.99)
@@ -333,22 +408,22 @@ export function breakthroughRisk({ ok, close, section }) {
     ok('辅助材料不足不支付、不掷骰', !E.breakthrough(poor, pd, all, () => { throw Error('不应掷骰') }) && E.moneyEq(poor.resources.qi, 100000))
     ok('渡劫失败境界不变', !E.breakthrough(s, d, all, () => 0.99) && s.realm === 4)
     {
-      // 渡劫失败：先扣基础与辅助材料，再按剩余库存的 2% 额外没收（逐项向下取整）。
+      // 渡劫失败：先扣基础与辅助材料，再按剩余库存的 2% 额外没收（保留小数）。
       const pillLeft = E.money(100000).minus(p.cost.pill)
       const talismanLeft = E.money(100000).minus(p.cost.talisman)
       ok('失败扣基础与辅助材料及2%相关库存',
-        E.moneyEq(s.resources.pill, pillLeft.minus(pillLeft.times(0.02).floor())) &&
+        E.moneyEq(s.resources.pill, pillLeft.minus(pillLeft.times(0.02))) &&
         E.moneyEq(s.resources.faith, 99750) &&
         E.moneyEq(s.resources.immortalHerb, 99992) &&
         E.moneyEq(s.resources.arrayBase, 99996) &&
-        E.moneyEq(s.resources.talisman, talismanLeft.minus(talismanLeft.times(0.02).floor())))
+        E.moneyEq(s.resources.talisman, talismanLeft.minus(talismanLeft.times(0.02))))
     }
     ok('失败减产5%且有恢复期限', s.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05 && b.until > Date.now()))
     E.breakthrough(s, d, {}, () => 0.99)
     ok('连续失败减产不叠加', s.buffs.filter(b => b.id === 'breakthroughInjury').length === 1)
     for (let realm = 4; realm <= 9; realm++) {
       const fatal = { 4: 0.01, 5: 0.02, 6: 0.03, 7: 0.10, 8: 0.15, 9: 0.20 }[realm]
-      // 护道可带 deathReduce（渡劫「立愿应劫」），满配身死概率相应下调（见 MATERIAL-RESEARCH.md §2.3）。
+      // 护道可带 deathReduce（渡劫「立愿应劫」），满配身死概率相应下调（见 CRAFT-PROGRESSION.md#材料研究与兼容）。
       const deathReduce = BREAKTHROUGH_AIDS[realm + 1].reduce((sum, aid) => sum + (aid.deathReduce || 0), 0)
       const expectedDeath = Math.max(0, fatal - deathReduce)
       const [below, bd] = setup(realm)
@@ -371,13 +446,13 @@ export function breakthroughRisk({ ok, close, section }) {
       const material = Object.keys(cost).find(id => id !== 'qi' && id !== 'insight')
       const remaining = E.moneySubtract(alive.resources[material], cost[material])
       ok(`境界${realm}失败存活必退一境`, !E.breakthrough(alive, ad, {}, () => 0.99) && alive.realm === realm - 1)
-      ok(`境界${realm}退境仍减产扣料并保留本世`, E.moneyEq(alive.resources[material], remaining.minus(remaining.times(0.02).floor())) && alive.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && alive.stats.bestRealm === realm && E.moneyEq(alive.stats.lifeInsight, 200000) && E.moneyEq(alive.karma, 50) && E.moneyEq(alive.dao, 2))
+      ok(`境界${realm}退境仍减产扣料并保留本世`, E.moneyEq(alive.resources[material], remaining.minus(remaining.times(0.02))) && alive.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05) && alive.stats.bestRealm === realm && E.moneyEq(alive.stats.lifeInsight, 200000) && E.moneyEq(alive.karma, 50) && E.moneyEq(alive.dao, 2))
       ok(`境界${realm}退境后产出倍率立即更新`, ad.realmMult === REALMS[realm - 1].mult)
     }
     const [dead, dd] = setup(7)
     dead.achievements.firstQi = true
     dead.stats.bestRealm = 7
-    const gain = E.floorMoney(E.reincarnationGain(dead, dd).div(2))
+    const gain = E.reincarnationGain(dead, dd).div(2)
     let roll = 0
     ok('炼虚失败可身死重开', !E.breakthrough(dead, dd, {}, () => roll++ === 0 ? 0.99 : 0) && dead.realm === 0)
     ok('只减半本次仙缘且不误计转世飞升', E.moneyEq(dead.karma, E.money(50).plus(gain)) && E.moneyEq(dead.dao, 2) && dead.stats.breakthroughDeaths === 1 && dead.stats.reincarnations === 0 && dead.stats.ascensions === 0)

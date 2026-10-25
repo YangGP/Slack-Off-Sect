@@ -3,6 +3,7 @@ import * as E from '../engine-fixture.mjs'
 import { RESOURCE_GROUPS, VISIBLE_RESOURCES } from '../../src/data/resources.js'
 import { exportSave, parseImport, serialize, createSaveRepository, SAVE_KEY, LEGACY_SAVE_KEY } from '../../src/game/save.js'
 import { newGame } from './fixtures.mjs'
+import { CONFIG } from '../../src/data/config.js'
 
 export function saveSerialization({ ok, close, section }) {
   section('存档序列化')
@@ -17,7 +18,7 @@ export function saveSerialization({ ok, close, section }) {
     state.realm = 3
     state.karma = E.money(12)
     state.ui.collapsedResourceGroups = { basic: true, materials: true }
-    state.log = Array.from({ length: 100 }, (_, i) => ({ id: i, at: Date.now(), text: 'x', kind: 'info' }))
+    state.log = Array.from({ length: 130 }, (_, i) => ({ id: i, at: Date.now(), text: `log-${i}`, kind: 'info' }))
 
     const text = exportSave(state)
     ok('导出得到可复制文本', typeof text === 'string' && text.length > 20)
@@ -27,7 +28,8 @@ export function saveSerialization({ ok, close, section }) {
     ok('导入后境界一致', parsed.realm === 3)
     ok('导入后仙缘一致', E.moneyEq(parsed.karma, 12))
     ok('资源折叠偏好随导出导入保留', parsed.ui.collapsedResourceGroups.basic && parsed.ui.collapsedResourceGroups.materials)
-    ok('导入后日志被截断到 60 条', parsed.log.length === 60, `实际 ${parsed.log.length}`)
+    ok('存档仅保留最近100条纪事且顺序不变', CONFIG.LOG_DISPLAY_LIMIT === 100 &&
+      parsed.log.length === 100 && parsed.log[0].text === 'log-0' && parsed.log.at(-1).text === 'log-99', `实际 ${parsed.log.length}`)
     ok('导入后不含内存字段 __max', parsed.__max === undefined)
 
     const json = JSON.stringify(parsed)

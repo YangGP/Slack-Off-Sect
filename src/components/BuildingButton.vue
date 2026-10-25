@@ -1,15 +1,16 @@
 <script setup>
 /**
- * 建筑按钮（猫国式的方格按钮）。
- * 悬停提示照猫国的排版：标题 + 描述 → 价格逐行（不足的显示「现有 / 需要（还差多久）」并标红）
+ * 建筑按钮（方格按钮）。
+ * 悬停提示排版：标题 + 描述 → 价格逐行（不足的显示「现有 / 需要（还差多久）」并标红）
  * → 「效果」分节 → 底部一行风味小字。
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { buildingCost, canAfford } from '@/game/engine'
-import { describeEffects, scaleEffectsForTotal, describeNeeds, describeJobEffects, describeProcessingEffects } from '@/game/effectsText'
-import { fmt, fmtRate, fmtTime } from '@/game/format'
+import { buildingCost, canAfford, buildingBoostAvailable, buildingMeta, productionStageReady } from '@/game/engine'
+import { describeBuildingEffects } from '@/game/effectsText'
+import { fmt, fmtRate, fmtAmount, fmtEffectPercent } from '@/game/format'
 import { money } from '@/game/decimal'
+import { costBlocked } from '@/game/pricing'
 import { resourceName } from '@/data/resources'
 import { BUILDING_FLAVOR } from '@/data/flavor'
 import HoverTip from './HoverTip.vue'
@@ -19,57 +20,57 @@ const props = defineProps({
   meta: { type: Object, required: true },
 })
 
-const entry = computed(() => state.buildings[props.meta.id] || { count: 0, on: true })
+const meta = computed(() => buildingMeta(state, props.meta.id))
+const stageReady = computed(() => productionStageReady(state, props.meta.id))
+function changeStage() {
+  const next = entry.value.stage === 1 ? 0 : 1
+  const name = next ? '灵能' : '基础'
+  const first = buildingCost({ ...state, buildings: { ...state.buildings, [meta.value.id]: { count: 0, stage: next } } }, meta.value.id)
+  const label = Object.entries(first).map(([id, n]) => resourceName(id) + ' ' + fmtAmount(n)).join('、')
+  if (window.confirm('改为' + name + '阶段将清空本类现有' + count.value + '座，不返材料。需手动重建，首座价：' + label + '。继续？')) actions.setBuildingStage(meta.value.id, next)
+}
+const entry = computed(() => state.buildings[meta.value.id] || { count: 0, on: true })
 const count = computed(() => entry.value.count || 0)
 const enabled = computed(() => (entry.value.on === false ? 0 : count.value))
-const supply = computed(() => derived.buildingSupply?.[props.meta.id] ?? 1)
+const supply = computed(() => derived.buildingSupply?.[meta.value.id] ?? 1)
 const active = computed(() => enabled.value * supply.value)
-const hasPower = computed(() => props.meta.upkeepQi != null || props.meta.upkeepEnergy != null)
+const boostAvailable = computed(() => buildingBoostAvailable(state, meta.value.id))
+const boostOn = computed(() => entry.value.boost === true)
+const boostSupply = computed(() => derived.buildingSupply?.[meta.value.boost?.id] ?? 0)
+const boostCost = computed(() => Object.entries(meta.value.boost?.upkeep || {}).map(([res, n]) => `${resourceName(res)} ${fmtAmount(money(n).times(3600))}/小时·座`).join('、'))
+const hasPower = computed(() => meta.value.upkeepQi != null || meta.value.upkeepEnergy != null)
 // 只有「灵气基础 / 灵能高阶」两档都有的建筑才显示档位切换；只吃灵能（如聚仙阵）或只吃灵气的没有可切档。
-const hasPowerToggle = computed(() => props.meta.upkeepQi != null && props.meta.upkeepEnergy != null)
+const hasPowerToggle = computed(() => meta.value.upkeepQi != null && meta.value.upkeepEnergy != null)
 const energyReady = computed(() => !!state.upgrades.energyApplication)
 const powerMode = computed(() => (
-  props.meta.upkeepEnergy != null && entry.value.power === 'energy' && energyReady.value
+  meta.value.upkeepEnergy != null && entry.value.power === 'energy' && energyReady.value
     ? 'energy'
-    : props.meta.upkeepQi == null && props.meta.upkeepEnergy != null ? 'energy' : 'qi'
+    : meta.value.upkeepQi == null && meta.value.upkeepEnergy != null ? 'energy' : 'qi'
 ))
-const powerMult = computed(() => hasPower.value && powerMode.value === 'energy' ? props.meta.powerMult ?? 1 : 1)
-const runningCost = computed(() => !!props.meta.upkeep || hasPower.value)
-/** 运行比例是有界 Number，取整显示只在脚本里做 */
-const supplyPercent = computed(() => Math.round(supply.value * 100))
-const throughputMult = computed(() => props.meta.throughput ? derived.globalMult : 1)
+const supplyPercent = computed(() => fmtEffectPercent(supply.value))
+const throughputMult = computed(() => meta.value.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
-const price = computed(() => buildingCost(state, props.meta.id, 1))
+const price = computed(() => buildingCost(state, meta.value.id, 1))
 const affordable = computed(() => canAfford(state, price.value))
+/** 库存不足且费用超过仓容时，需要先扩仓。 */
+const overCap = computed(() => costBlocked(state, derived, price.value))
 
 /**
  * 效果逐条成行：**每种资源（每项效果）自己一行** ——
  * 库房这种多资源建筑以前会挤成「灵木上限 +360，灵石上限 +240…」一长串，根本读不了。
- * 两列分别是「每座的值」和「合计值」（合计由 `scaleEffectsForTotal` 按已建 / 启用数算出）。
+ * 每座基础值与当前合计分开显示；当前产出使用经济结算的倍率。
  */
 const effectRows = computed(() => {
-  // 建筑自身效果 + 职位效果：像采矿场 / 灵石矿这种「产出挂在职位上」的建筑，
-  // effects 是空的，靠 describeJobEffects 从 jobs 数据补出「开放职位 / 职位副产」。
-  const unit = [...describeEffects(props.meta.effects), ...describeJobEffects(props.meta.id, 1), ...describeProcessingEffects(props.meta.id)]
-  const total =
-    count.value > 0
-      ? [
-          ...describeEffects(scaleEffectsForTotal(props.meta.effects, count.value, active.value * powerMult.value, runningCost.value)),
-          ...describeJobEffects(props.meta.id, active.value),
-          ...describeProcessingEffects(props.meta.id, active.value),
-        ]
-      : []
   const visible = new Set(view.visibleResources.value.map(resource => resource.id))
-  return unit.filter(row => !row.resource || visible.has(row.resource)).map((u, i) => ({
+  return describeBuildingEffects(meta.value, state, derived).filter(row => row.tone !== 'unlock' && (!row.resource || visible.has(row.resource))).map((u, i) => ({
     key: `${u.label}-${i}`,
     label: u.label,
     value: u.value,
-    total: total.find((row) => row.label === u.label)?.value || (count.value > 0 ? '0' : ''),
+    total: u.total,
     tone: u.tone,
   }))
 })
-const conditions = computed(() => describeNeeds(props.meta.needs))
-const flavor = computed(() => BUILDING_FLAVOR[props.meta.id] || '')
+const flavor = computed(() => BUILDING_FLAVOR[meta.value.id] || '')
 
 /**
  * 维护费逐条成行：这些建筑才有「停用」按钮，停用即停费。
@@ -79,7 +80,7 @@ function upkeepRate(unit, activeCount = 1, mult = 1) {
   return fmtRate(money(unit).times(activeCount).times(mult).negated())
 }
 const upkeepRows = computed(() =>
-  Object.entries(props.meta.upkeep || {}).map(([res, v]) => ({
+  Object.entries(meta.value.upkeep || {}).map(([res, v]) => ({
     key: res,
     label: resourceName(res),
     unit: upkeepRate(v),
@@ -92,7 +93,10 @@ const powerRow = computed(() => {
   if (!hasPower.value) return null
   const energy = powerMode.value === 'energy'
   const res = energy ? 'qiEnergy' : 'qi'
-  const unit = energy ? (props.meta.upkeepEnergy ?? 0) : (props.meta.upkeepQi ?? 0)
+  const nominal = energy ? (meta.value.upkeepEnergy ?? 0) : (meta.value.upkeepQi ?? 0)
+  const entries = derived.expenseSources?.[res] || []
+  const paid = entries.filter(e => e.id === meta.value.id).reduce((total, e) => total.plus(e.value.negated()), money(0))
+  const unit = active.value > 0 ? paid.div(active.value) : money(nominal)
   return {
     res,
     label: resourceName(res),
@@ -102,8 +106,8 @@ const powerRow = computed(() => {
 })
 
 function sell() {
-  if (window.confirm(`确定拆除一座${props.meta.name}吗？只返还一半材料。`)) {
-    actions.sell(props.meta.id, 1)
+  if (window.confirm(`确定拆除一座${meta.value.name}吗？只返还一半材料。`)) {
+    actions.sell(meta.value.id, 1)
   }
 }
 
@@ -117,14 +121,16 @@ onBeforeUnmount(clearHighlight)
 
 <template>
   <div class="build-item">
+    <button v-if="stageReady || entry.stage === 1" class="side-btn" @click="changeStage">{{ entry.stage === 1 ? '退回基础' : '灵能改造' }}</button>
     <HoverTip :width="380" @show="onTipShow" @hide="clearHighlight">
       <button
         class="build-btn"
-        :class="{ poor: !affordable, off: entry.on === false && count > 0 }"
+        :class="{ poor: !affordable, 'over-cap': overCap, off: entry.on === false && count > 0 }"
         @click="actions.buy(meta.id, 1)"
       >
-        {{ meta.name }}<template v-if="count"> ({{ count }})</template>
+        {{ meta.name }}<span v-if="overCap" class="cap-star" title="费用超过仓容上限，需先扩仓">*</span><template v-if="count"> ({{ count }})</template>
         <span v-if="enabled > 0 && supply < 0.999" class="small warn"> · 缺料</span>
+        <span v-if="boostAvailable && boostOn && boostSupply < 0.999 && state.disciples.jobs[meta.boost.job] > 0" class="small warn"> · 注灵缺料</span>
       </button>
       <template #heading>
         {{ meta.name }}
@@ -135,8 +141,12 @@ onBeforeUnmount(clearHighlight)
         <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
 
         <CostRows :cost="price" />
+        <div v-if="entry.stage === 1" class="small dim">灵能阶段 · 改造清零重建；关闭仅停止运行。</div>
+        <div v-if="meta.secondaryBase" class="tip-row"><span>每矿工每座天然灵石</span><span>{{ fmtAmount(meta.secondaryBase * 3600) }}/小时；有效矿工 {{ fmt(derived.discipleJobWeights?.miner || 0) }}</span></div>
+        <div v-if="meta.nurseryCapacity" class="tip-row"><span>育草工位实际容量</span><span>{{ fmt(derived.processingCapacity?.nursery || 0) }}</span></div>
 
-        <div class="tip-section">效果<template v-if="!count">（建成后）</template></div>
+        <div class="tip-section">效果（{{ meta.effects?.storage ? '新建每座定额' : '每座基础值' }}<template v-if="count">；括号为当前合计</template><template v-else>；建成后生效</template>）</div>
+        <div v-if="meta.effects?.storage" class="small dim">仓储已含针对本建筑的工艺强化与旧档保留容量；资源总仓容比例另计。</div>
         <!-- 一条效果一行：多资源的建筑（库房、谷仓…）不再挤成一长串 -->
         <div v-for="row in effectRows" :key="row.key" class="tip-row">
           <span class="k">{{ row.label }}</span>
@@ -146,15 +156,16 @@ onBeforeUnmount(clearHighlight)
             >
           </span>
         </div>
-        <template v-if="conditions.length && !count">
-          <div class="tip-section">条件</div>
-          <div v-for="(condition, ci) in conditions" :key="ci" class="tip-condition">{{ condition }}</div>
+        <template v-if="meta.boost && count && boostAvailable">
+          <div class="tip-section">灵液注灵（独立增产开关）</div>
+          <div class="tip-desc">每座消耗{{ boostCost }}，满供时矿工灵石采出 ×{{ meta.boost.multiplier }}；仅影响灵石采矿，基础采矿不依赖灵液。</div>
+          <div class="tip-row"><span class="k">当前状态</span><span class="v">{{ !boostOn ? '已关闭，不消耗灵液' : !state.disciples.jobs[meta.boost.job] ? '无人采矿，暂不耗液' : `已开启，供给${fmtEffectPercent(boostSupply)} · 灵石采出 ×${fmt(1 + (meta.boost.multiplier - 1) * boostSupply)}` }}</span></div>
         </template>
         <template v-if="meta.upkeep || hasPower">
           <div class="tip-section">维护<template v-if="enabled > 0">（{{ enabled }} 座启用）</template></div>
           <div v-if="enabled > 0" class="tip-row">
             <span class="k">供应</span>
-            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ supplyPercent }}% · 按供应比例发挥效果</span>
+            <span class="v" :class="supply < 0.999 ? 'warn' : 'good'">{{ supplyPercent }} · 按供应比例发挥效果</span>
           </div>
           <!-- 动力与物料维护分开记账，一种资源一行 -->
           <div v-if="powerRow" class="tip-row">
@@ -176,12 +187,12 @@ onBeforeUnmount(clearHighlight)
           <div v-if="hasPower && enabled > 0" class="tip-row">
             <span class="k">供能档</span>
             <span class="v" :class="powerMode === 'energy' ? 'good' : 'muted'">
-              {{ powerMode === 'energy' ? '灵能高阶（效果 ×' + fmt(meta.powerMult || 1) + '）' : '灵气基础' }}
+              {{ entry.stage === 1 ? '灵能阶段（按实际供给运行）' : powerMode === 'energy' ? '灵能高阶（主动效果 ×' + fmt(meta.powerMult || 1) + '，仓储、住额与工位容量不变）' : '灵气基础' }}
             </span>
           </div>
           <div v-if="enabled === 0" class="tip-row">
             <span class="k">当前</span>
-            <span class="v warn">已停用，暂不计维护费</span>
+            <span class="v warn">{{ count ? '已停用，暂不计维护费' : '尚未建造，暂不计维护费' }}</span>
           </div>
           <div class="tip-row">
             <span class="k">说明</span>
@@ -196,6 +207,10 @@ onBeforeUnmount(clearHighlight)
 
         <div v-if="flavor" class="tip-flavor">{{ flavor }}</div>
       </template>
+    </HoverTip>
+
+    <HoverTip v-if="boostAvailable" class="side-tip" :title="boostOn ? '关闭灵液注灵' : '开启灵液注灵'" :description="`${boostCost}；满供时灵石采出翻倍，缺液只减少额外增产；关闭不停止普通采矿。`">
+      <button class="side-btn" :class="{ on: boostOn }" :aria-pressed="boostOn" :aria-label="boostOn ? '关闭灵液注灵' : '开启灵液注灵'" @click="actions.setBuildingBoost(meta.id, !boostOn)">{{ boostOn ? '停注' : '注灵' }}</button>
     </HoverTip>
 
     <!-- 灵能高阶：接入后以灵能驱动、效果 ×倍率；需先参悟《灵能输配》 -->
