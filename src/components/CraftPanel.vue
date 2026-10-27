@@ -1,12 +1,12 @@
 <script setup>
 /** 完整炼制页与左栏快捷炼制共用同一套操作、状态和悬停明细。 */
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { state, derived, actions, highlightCost, clearHighlight } from '@/game/store'
 import { CRAFTS, craftCost } from '@/data/crafts'
 import { CRAFT_GROUPS, craftGroup, craftDisplayOrder } from '@/data/craftPresentation'
 import { BUILDING_MAP } from '@/data/buildings'
 import { PROCESSING_STATIONS } from '@/data/industry'
-import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, craftTarget, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck } from '@/game/engine'
+import { isCraftUnlocked, autoCraftStatus, maxCraftableMoney, craftYield, craftTarget, isProgressionVisible, isCostRevealed, processingPlan, processingBottleneck, craftAdvice } from '@/game/engine'
 import { describeNeeds } from '@/game/effectsText'
 import { fmt, fmtPercent, fmtStock, fmtCost } from '@/game/format'
 import { ZERO, MONEY_INFINITY, money, moneyGte, moneyGt, moneyLt, moneySum, moneyToCount, moneyToRatio } from '@/game/decimal'
@@ -33,6 +33,43 @@ const reserveOptions = [0, 10, 20, 30, 50].map(value => ({ value, label: `${valu
 const targetDrafts = reactive({})
 const reserveDrafts = reactive({})
 const weightDrafts = reactive({})
+const advice = ref(null)
+const adviceReserves = ref([])
+const adviceTargets = ref([])
+const adviceNotice = ref('')
+function refreshAdvice() {
+  advice.value = craftAdvice(state, derived)
+  adviceReserves.value = advice.value.reserves.filter(row => row.selected).map(row => row.id)
+  adviceTargets.value = advice.value.targets.filter(row => row.selected).map(row => row.id)
+}
+function toggleAdvice() {
+  adviceNotice.value = ''
+  if (advice.value) advice.value = null
+  else refreshAdvice()
+}
+function selectAdviceReserve(id, checked) {
+  if (craftAdvice(state, derived).signature !== advice.value.signature) {
+    refreshAdvice()
+    adviceNotice.value = '配方或设置已变化，建议已刷新，请重新选择。'
+    return
+  }
+  adviceReserves.value = checked ? [...adviceReserves.value, id] : adviceReserves.value.filter(value => value !== id)
+  advice.value = craftAdvice(state, derived, adviceReserves.value)
+}
+function selectAdviceTarget(id, checked) {
+  adviceTargets.value = checked ? [...adviceTargets.value, id] : adviceTargets.value.filter(value => value !== id)
+}
+function applyAdvice() {
+  if (!actions.applyCraftAdvice({ signature: advice.value.signature, reserveIds: adviceReserves.value, targetIds: adviceTargets.value })) {
+    refreshAdvice()
+    adviceNotice.value = '配方或设置已变化，建议已刷新，请核对后再应用。'
+    return
+  }
+  for (const id of adviceReserves.value) delete reserveDrafts[id]
+  for (const id of adviceTargets.value) delete targetDrafts[id]
+  advice.value = null
+  adviceNotice.value = ''
+}
 const plan = computed(() => processingPlan(state, derived))
 const stationRows = computed(() => PROCESSING_STATIONS.map(station => {
   const lines = Object.values(plan.value).filter(line => line.station === station.id)
@@ -217,6 +254,7 @@ const condenseStatus = computed(() => {
           <span :class="state.settings.autoCraftOn ? 'dim' : 'warn'">{{ state.settings.autoCraftOn ? `已选 ${allRows.filter(row => row.auto).length} 个自动配方` : '总开关已暂停' }}</span>
         </div>
         <div v-if="derived.craftTargetsUnlocked" class="craft-settings small">
+        <button class="btn" :aria-expanded="!!advice" @click="toggleAdvice">{{ advice ? '收起建议' : '挂机建议' }}</button>
         <label v-if="derived.daoAutomation">材料保留
           <StableSelect label="自动炼制材料保留" :model-value="state.settings.craftReservePercent" :options="reserveOptions" @update:model-value="actions.setSetting('craftReservePercent', $event)" />
         </label>
@@ -229,6 +267,26 @@ const condenseStatus = computed(() => {
           </label>
         </details>
         </div>
+        <section v-if="advice && derived.craftTargetsUnlocked" class="craft-advice small" aria-label="挂机建议预览">
+          <p>只配置已勾选的自动配方，不会开启产线。已有设置默认保留，勾选后才覆盖；应用后可继续手动修改。</p>
+          <p v-if="!advice.targets.length">先选择需要自动炼制的配方。</p>
+          <template v-else>
+            <p>材料保留：按最大单次下游耗料的5倍建议；库存目标：按10份产出建议，中层至少覆盖有效保留量和一份补货。</p>
+            <div v-if="advice.reserves.length" class="box-sub">材料保留</div>
+            <label v-for="row in advice.reserves" :key="`reserve-${row.id}`" class="craft-advice-row">
+              <input type="checkbox" :checked="adviceReserves.includes(row.id)" :aria-label="`应用${resourceName(row.id)}保留建议`" @change="selectAdviceReserve(row.id, $event.target.checked)" />
+              <span>{{ resourceName(row.id) }}：当前 {{ fmtStock(row.current) }} → 建议 {{ fmtStock(row.amount) }}<small class="dim">供{{ row.recipes.join('、') }}使用</small></span>
+            </label>
+            <div class="box-sub">成品库存目标</div>
+            <label v-for="row in advice.targets" :key="`target-${row.id}`" class="craft-advice-row">
+              <input type="checkbox" :checked="adviceTargets.includes(row.id)" :aria-label="`应用${row.name}库存目标建议`" @change="selectAdviceTarget(row.id, $event.target.checked)" />
+              <span>{{ row.name }}：当前 {{ row.current.isZero() ? '不限' : fmtStock(row.current) }} → 建议 {{ fmtStock(row.amount) }}</span>
+            </label>
+          </template>
+          <p v-if="adviceNotice" role="status" class="warn">{{ adviceNotice }}</p>
+          <button class="btn" :disabled="!advice.targets.length || !(adviceReserves.length || adviceTargets.length)" @click="applyAdvice">应用所选建议</button>
+          <button class="btn" @click="refreshAdvice(); adviceNotice = ''">刷新建议</button>
+        </section>
         <details class="craft-advanced">
           <summary>高级设置</summary>
           <div class="small dim">当前境界加工速度 ×{{ fmt(derived.craftSpeed) }}</div>
@@ -303,6 +361,9 @@ const condenseStatus = computed(() => {
           <span>当前节拍产出 {{ fmt(row.autoStatus.outputPerMinute) }} {{ resourceName(row.meta.out) }}/分</span>
           <span class="dim">投入：<template v-for="(amount, res, index) in row.cost" :key="res"><template v-if="index">、</template>{{ resourceName(res) }} {{ perMinuteCost(amount, row.autoStatus.perMinute) }}/分</template></span>
           <span class="dim">瓶颈：{{ bottlenecks[row.meta.id].reason }}</span>
+          <span v-for="input in (row.autoStatus.reason.startsWith('保留') ? row.autoStatus.protectedInputs : [])" :key="`protected-${input.res}`" class="dim">
+            {{ resourceName(input.res) }}现有{{ fmtStock(input.have) }}，保留{{ fmtStock(input.reserve) }}，本次需{{ fmtStock(input.cost) }}，可用{{ fmtStock(input.available) }}，尚缺{{ fmtStock(input.deficit) }}
+          </span>
           <span v-if="row.autoStatus.on && row.autoStatus.ready && bottlenecks[row.meta.id].inputs.length" class="dim">供料缺口：<template v-for="(input, index) in bottlenecks[row.meta.id].inputs" :key="input.res"><template v-if="index">；</template>{{ resourceName(input.res) }} {{ perMinute(input.deficit) }}/分，库存约 {{ fmt(input.seconds / 60) }} 分</template></span>
           </div>
         </details>
@@ -312,6 +373,9 @@ const condenseStatus = computed(() => {
             {{ row.autoStatus.orderRemaining && !row.autoStatus.orderPaused ? '订单加工中' : '自动中' }} · 下一份 {{ row.autoStatus.wait.toFixed(1) }}秒
           </span>
           <span v-else-if="row.autoStatus.on" class="small warn">{{ row.autoStatus.reason }}</span>
+          <span v-if="row.autoStatus.on && row.autoStatus.reason.startsWith('保留')" class="dim">
+            <template v-for="input in row.autoStatus.protectedInputs" :key="input.res">{{ resourceName(input.res) }}保留{{ fmtStock(input.reserve) }}，本次需{{ fmtStock(input.cost) }}，可用{{ fmtStock(input.available) }}，尚缺{{ fmtStock(input.deficit) }}；</template>
+          </span>
           <span
             v-else-if="row.meta.id === 'condenseLiquid' && derived.autoCondenseLiquidUnlocked"
             class="small dim"
@@ -422,6 +486,9 @@ const condenseStatus = computed(() => {
             <div v-if="derived.craftTargetsUnlocked" class="tip-row">
               <span class="k">库存目标</span><span class="v">{{ targetLabel(row.meta.id) }}</span>
             </div>
+            <template v-if="row.autoStatus.reason.startsWith('保留')">
+              <div v-for="input in row.autoStatus.protectedInputs" :key="input.res" class="craft-auto-note">{{ resourceName(input.res) }}现有{{ fmtStock(input.have) }}，保留{{ fmtStock(input.reserve) }}，本次需{{ fmtStock(input.cost) }}，可用{{ fmtStock(input.available) }}，尚缺{{ fmtStock(input.deficit) }}。</div>
+            </template>
             <div v-if="derived.craftTargetsUnlocked" class="craft-auto-note">达到目标后暂停，用掉后补回；0 表示不限。手动制作不受限制，一份制作的加成可能超过目标。</div>
             <div class="tip-row">
               <span class="k">节奏</span>
@@ -492,4 +559,20 @@ const condenseStatus = computed(() => {
   line-height: 1.6;
   text-align: left;
 }
+.craft-advice {
+  padding: 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.craft-advice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0;
+}
+.craft-advice-row span { min-width: 0; }
+.craft-advice-row small { display: block; }
+.craft-advice .btn { margin: 4px 6px 0 0; }
 </style>

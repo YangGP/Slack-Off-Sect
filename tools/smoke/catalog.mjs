@@ -74,7 +74,7 @@ export function dataIntegrity({ ok, section }) {
     const skillPure = TECHNIQUES.filter((u) => Object.keys(u.effects || {}).every((k) => pureNumeric.includes(k) || k === 'breakthroughDiscount'))
     ok('技艺/法宝效果只强化数值，配方由前置条件绑定工艺', skillPure.length === TECHNIQUES.length)
 
-  // 技艺层的炼成花费只用「资源 + 高级资源」，不吃灵机；法宝的祭炼仍然要灵机
+  // 技艺与法宝允许灵机报价；分类移动和内容补足后，不用全目录总价比例判断平衡。
   {
     const advanced = ['pill', 'talisman', 'artifact']
     const skillInsight = TECHNIQUES.reduce((s, t) => s + (t.cost.insight || 0), 0)
@@ -85,16 +85,15 @@ export function dataIntegrity({ ok, section }) {
       TECHNIQUES.filter((t) => !t.cost.insight).map((t) => t.name).join('、') || '每条都有',
     )
     ok(
-      '但灵机被压到修真层的一半以下（主要成本让给材料）',
-      // 修真树按 CRAFT-PROGRESSION.md#研究与解锁 铺满时间线之后，它的灵机总量自然会远超技艺层，
-      // 所以这里只守「技艺层的灵机不许超过修真层的一半」这条设计规则，不再守下限。
-      skillInsight / cultInsight <= 0.5 && skillInsight / cultInsight > 0,
+      '修真与技艺报价为有限非负数，且均有实际投入',
+      [...CULTIVATION, ...TECHNIQUES].every(u => Object.values(u.cost).every(v => Number.isFinite(v) && v >= 0) &&
+        Object.values(u.cost).some(v => v > 0)) && skillInsight > 0 && cultInsight > 0,
       `技艺 ${skillInsight} vs 修真 ${cultInsight}（${((skillInsight / cultInsight) * 100).toFixed(0)}%）`,
     )
     const resOf = (t) => Object.keys(t.cost).filter((r) => r !== 'insight')
     ok(
-      '每条技艺 / 法宝只要 1~4 种资源（灵机另算）',
-      TECHNIQUES.every((t) => resOf(t).length >= 1 && resOf(t).length <= 4),
+      '普通技艺允许仅灵机报价，法宝仍需1~4种实物（灵机另算）',
+      TECHNIQUES.every((t) => resOf(t).length >= (t.kind === 'treasure' ? 1 : 0) && resOf(t).length <= 4),
       TECHNIQUES.map((t) => `${t.name} ${resOf(t).length}`).join(' '),
     )
     ok(

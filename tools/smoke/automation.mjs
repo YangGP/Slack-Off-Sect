@@ -11,6 +11,53 @@ const grew = (after, before) => E.moneySubtract(after, before)
 /** 金额差值转 Number：只用于「约等于几份」这类带 ±1 容差的比较。 */
 const grewNumber = (after, before) => E.moneyToNumber(grew(after, before))
 
+export function idleCraftAdvice({ ok, section }) {
+  section('挂机建议与原子应用')
+  const { state: s, derived: d } = newGame()
+  s.realm = 6
+  for (const u of E.ALL_UPGRADES) s.upgrades[u.id] = true
+  d.autoCraftUnlocked = d.craftTargetsUnlocked = true
+  s.autoCraft = { compileDaoTreatise: true, drawArrayDiagram: true }
+  s.settings.craftReserves = { daoNote: E.ZERO, daoTreatise: E.money(200), paper: E.money(7) }
+  const a = E.craftAdvice(s, d)
+  ok('建议为下游五份用量，已有0与高定额均默认保留', a.reserves.find(r => r.id === 'daoNote').amount.eq(100) && a.reserves.every(r => !r.selected))
+  ok('中层目标覆盖已有更高保护量', a.targets.find(r => r.id === 'compileDaoTreatise').amount.eq(201))
+  ok('预览不更改设置或开启新产线', s.settings.craftReserves.daoTreatise.eq(200) && Object.keys(s.autoCraft).length === 2)
+  const selected = E.craftAdvice(s, d, ['daoTreatise'])
+  ok('选中保护值后联动中层目标', selected.targets.find(r => r.id === 'compileDaoTreatise').amount.eq(51))
+  const selection = { signature: a.signature, reserveIds: ['daoTreatise'], targetIds: ['compileDaoTreatise'] }
+  ok('主动选中后原子合并，未选0和定额保留', E.applyCraftAdvice(s, d, selection) && s.craftTargets.compileDaoTreatise.eq(51) && s.settings.craftReserves.daoNote.eq(0) && s.settings.craftReserves.paper.eq(7))
+  const saved = normalizeState(parseImport(exportSave(s)))
+  ok('重载保留显式0与建议快照', saved.settings.craftReserves.daoNote.eq(0) && saved.craftTargets.compileDaoTreatise.eq(51))
+  ok('陈旧预览与重复应用拒绝', !E.applyCraftAdvice(s, d, selection))
+  const current = E.craftAdvice(s, d)
+  s.autoCraft.drawArrayDiagram = false
+  ok('配方变化后不应用旧预览', !E.applyCraftAdvice(s, d, { ...selection, signature: current.signature }))
+}
+
+export function idleProtectionDetails({ ok, section }) {
+  section('材料保护原因与恢复')
+  const { state: s, derived: d } = newGame()
+  s.realm = 5
+  for (const u of E.ALL_UPGRADES) s.upgrades[u.id] = true
+  d.autoCraftUnlocked = d.craftTargetsUnlocked = true
+  s.autoCraft.compileDaoTreatise = true
+  s.settings.craftReserves = { daoNote: E.money(100) }
+  s.resources.daoNote = E.money(110)
+  s.resources.insight = s.resources.paper = E.money(10000)
+  const status = E.autoCraftStatus(s, d, 'compileDaoTreatise')
+  ok('110库存扣20会穿透100保护，明细缺口为10', !status.ready && status.reason.includes('道札') && status.protectedInputs[0].deficit.eq(10))
+  s.resources.daoNote = E.money(120)
+  ok('补足一份后允许自动加工', E.canAutoCraft(s, d, CRAFT_MAP.compileDaoTreatise))
+  s.craftTargets.compileDaoTreatise = E.money(1)
+  s.resources.daoTreatise = E.money(1)
+  ok('目标达成暂停', E.autoCraftStatus(s, d, 'compileDaoTreatise').reason.startsWith('目标已达'))
+  s.resources.daoTreatise = E.ZERO
+  ok('消费成品后恢复补货', E.canAutoCraft(s, d, CRAFT_MAP.compileDaoTreatise))
+  s.resources.daoNote = E.money(110)
+  ok('手动制作仍能使用受保护库存', E.craft(s, d, 'compileDaoTreatise') && s.resources.daoNote.eq(90))
+}
+
 /** 同一时刻跨工位保留材料；下一次规划必须反映库存目标变化。 */
 export function processingFuelReserveRegression({ ok, section }) {
   section('加工计划的跨工位燃料保留与失效')

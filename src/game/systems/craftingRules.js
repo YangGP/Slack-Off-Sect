@@ -209,11 +209,18 @@ export function autoCraftStatus(state, derived, recipeId, plan = processingPlan(
   out.outputPerMinute = money(out.perMinute).times(craftYield(derived, recipe))
   const missing = Object.entries(costs).filter(([res, cost]) => !atLeast(state.resources[res] ?? ZERO, cost))
     .map(([res]) => resourceName(res))
+  out.protectedInputs = Object.entries(costs).map(([res, amount]) => {
+    const have = state.resources[res] ?? ZERO, cost = money(amount)
+    const reserve = autoCraftReserve(state, derived, res)
+    return { res, have, cost, reserve, available: moneyMax(ZERO, have.minus(reserve)),
+      deficit: moneyMax(ZERO, cost.plus(reserve).minus(have)) }
+  }).filter(row => atLeast(row.have, row.cost) && !atLeast(row.have.minus(row.cost), row.reserve))
   out.reason = !hasCraftOrder(state, derived, recipeId) && out.target.gt(0) &&
       (state.resources[recipe.out] ?? ZERO).gte(out.target)
     ? '目标已达 · 暂停'
     : atLeast(state.resources[recipe.out] ?? ZERO, derived.max[recipe.out] ?? MONEY_INFINITY) ? '成品满仓 · 暂停'
     : missing.length ? `缺${missing.join('、')} · 等待供料`
+    : out.protectedInputs.length ? `保留${out.protectedInputs.map(row => resourceName(row.res)).join('、')} · 暂停`
     : !canProcessCraft(state, derived, recipe) ? '保留材料 · 暂停'
     : line && line.capacity <= 0 ? '工位停用或维护断供'
     : line && line.speed <= 0 ? '等待加工容量'

@@ -115,6 +115,19 @@ export function botDiplomacy({ ok, section }) {
   E.recompute(s, d)
   bot.act()
   ok('炼虚已有本地提炼路线时不再依赖互市', s.diplomacy.statistics.trades === 3)
+  s.realm = 5
+  s.resources.warrant = E.money(50)
+  E.recompute(s, d)
+  const projectBot = createBot(s, d, { onlyBreakthrough: true, realmCost: () => ({}),
+    projects: () => [{ id: 'splitArray', count: 1 }], breakthrough: () => false, allowUpgrade: () => false })
+  projectBot.act()
+  ok('破境不需凝晶时仍为未建分灵阵进口秘银', s.diplomacy.statistics.trades === 4 && E.moneyGte(s.resources.mithril, 3))
+  s.buildings.splitArray = { count: 1, on: true }
+  s.resources.mithril = E.ZERO
+  s.resources.warrant = E.money(50)
+  E.recompute(s, d)
+  projectBot.act()
+  ok('阶段项目建成后不再为其进口催化剂', s.diplomacy.statistics.trades === 4 && E.moneyEq(s.resources.warrant, 50))
 }
 
 export function playerBot({ ok, section }) {

@@ -59,7 +59,9 @@ export function runIndustryChecks(E = Engine,
     ok('缺料产线释放容量并标明缺少的材料', E.processingPlan(s, d).refineSteel.work === 0 && E.autoCraftStatus(s, d, 'refineSteel').reason.includes('玄铁'))
     s.resources.ore = E.money(1000)
     s.settings.craftReserves.ore = E.money(1000)
-    ok('材料保留会暂停工业产线', E.autoCraftStatus(s, d, 'refineSteel').reason.includes('保留材料'))
+    const protectedSteel = E.autoCraftStatus(s, d, 'refineSteel')
+    ok('材料保留会暂停工业产线并指出具体材料', !protectedSteel.ready && protectedSteel.reason.includes('玄铁') &&
+      protectedSteel.protectedInputs.some(row => row.res === 'ore' && row.reserve.eq(1000) && row.deficit.gt(0)))
     s.settings.craftReserves.ore = E.money(0)
     s.buildings.forge.on = false
     E.recompute(s, d)

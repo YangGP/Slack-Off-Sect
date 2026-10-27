@@ -599,6 +599,13 @@ export const actions = {
       saveNow()
     }
   },
+  applyCraftAdvice(selection) {
+    if (!E.applyCraftAdvice(state, derived, selection)) return false
+    E.recompute(state, derived)
+    saveNow()
+    toast('已应用所选挂机建议，可继续手动调整', 'good')
+    return true
+  },
   setAllAutoCraft(enabled) {
     if (!E.setAllAutoCraft(state, derived, enabled)) {
       toast('需参悟《心有灵犀》或取得首颗道果', 'bad')

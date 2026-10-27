@@ -60,7 +60,7 @@ const CORE_CULTIVATION = [
     cost: { insight: 150 },
     desc: '静坐三日，看清明堂之上那一缕白气的来路与去向。已有弟子嘀咕：这气莫不是一粒一粒凑成的？——只是谁也拿不出凭据。聚灵之理自此可画。',
     effects: { unlockBuildings: [] },
-    note: '开启参悟：灵气测定；承接阵法精要',
+    note: '开启参悟：灵气测定、居所营造；承接阵法精要',
     effectDesc: '因此看得懂气脉走向：可继续测定灵气，结合引气诀研习阵法精要。',
     needs: { upgrades: ['qiOrigin'] },
   },
@@ -72,7 +72,7 @@ const CORE_CULTIVATION = [
     desc: '立「一息」之度，把氤氲灵气按单位量出。聚气、凝液自此有据可依，不再全凭手感。',
     effectDesc: '因此量得出灵气的分量，为凝聚与后续计量立下基准。',
     effects: { unlockBuildings: [] },
-    note: '开启参悟：居所营造',
+    note: '开启参悟：凝气化液',
     needs: { upgrades: ['qiGazing'] },
   },
 
@@ -86,7 +86,8 @@ const CORE_CULTIVATION = [
     effectDesc: '因此化得出合格灵液：灵气可按标准凝成灵液。',
     effects: { unlockBuildings: [] },
     note: '开启配方：凝气成液',
-    needs: { upgrades: ['preachArt'] },
+    // 「一息」之度由《灵气测定》承接：凝聚前先立计量；讲经法仍是知识来源的前置。
+    needs: { upgrades: ['preachArt', 'qiMeasure'] },
   },
   {
     id: 'liquidArt',
@@ -855,15 +856,15 @@ const CORE_CULTIVATION = [
     needs: { upgrades: ['quarryArt', 'masonryArt', 'preachArt'] },
   },
   {
-    // 满基础仓（200）一档：木屋与清风小院成对随本条显形；研究变贵后由「攒满一仓一条」节流，
-    // 典籍库在本条之后的凿石段才立得起来（其石材造价需先会压制）。
+    // 观气之后即可参悟（150 灵机，与观气法同档）：木屋与清风小院成对随本条显形，住房扩编让悟道者早上岗；
+    // 凿石要诀保留为基础仓容内唯一 200 满仓研究，典籍库仍压在其后的凿石段（石材造价需先会压制）。
     id: 'homePlanning',
     name: '居所营造',
     glyph: '居',
-    cost: { insight: 200 },
+    cost: { insight: 150 },
     desc: '按入住人数布置通风、采光与排水，掌握后可营造木屋与清风小院。居所每个已入住名额提供1点宜居度，空房不计；超出居所容量的弟子不受益。',
     effects: { habitabilityPerHousing: 1 },
-    needs: { upgrades: ['qiMeasure'], buildings: [{ id: 'hut', count: 1 }, { id: 'library', count: 1 }, { id: 'quarry', count: 1 }] },
+    needs: { upgrades: ['qiGazing'], buildings: [{ id: 'hut', count: 1 }, { id: 'library', count: 1 }, { id: 'quarry', count: 1 }] },
   },
   {
     id: 'waterSanitation',

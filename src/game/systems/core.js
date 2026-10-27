@@ -16,6 +16,7 @@ import { getEventLevel } from '@/data/events'
 import { UPGRADE_MAP } from '@/data/upgrades'
 import { isEntryEnabled } from '@/data/modules'
 import { karmaShopBonuses } from './karmaShop'
+import { knowledgeFeedback } from './knowledge'
 
 export function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v
@@ -349,8 +350,8 @@ export function scaleCost(cost, factor) {
 
 /**
  * 购买第 n 座（从 0 开始计数）建筑的价格；指数涨价用 Decimal.pow，不先丢精度。
- * discount 是仙缘修持「道基共鸣」的造价折扣（0~1，取自 karmaShopBonuses），乘 (1−discount)；
- * 拆除退款等名义价场景不传折扣，保持原价（买入打折、退款不打折，往返净亏损，无套利）。
+ * discount 为调用者传入的合成固定折扣，乘 (1−discount)；
+ * 建造与拆除共用动作开始时的折扣，退款另取50%，不追溯历史购买价。
  */
 export function buildingPriceAt(meta, index, discount = 0) {
   const factor = money(meta.priceRatio || 1.15).pow(index).times(ONE.minus(money(discount)))
@@ -371,7 +372,15 @@ export function buildingCostFrom(meta, from, count, discount = 0) {
 export function buildingCost(state, id, count = 1) {
   const meta = pricedBuildingMeta(state, id)
   if (!meta) return {}
-  return buildingCostFrom(meta, countOf(state, id), count, karmaShopBonuses(state).buildingDiscount)
+  return buildingCostFrom(meta, countOf(state, id), count, buildingDiscounts(state, id).total)
+}
+
+/** 涨价率由 pricedBuildingMeta 处理，固定折扣分别乘算。 */
+export function buildingDiscounts(state, id) {
+  const permanent = karmaShopBonuses(state).buildingDiscount
+  const knowledge = money(buildingMeta(state, id)?.cost?.arrayDiagram || 0).gt(0)
+    ? knowledgeFeedback(state).buildingDiscount : 0
+  return { permanent, knowledge, total: ONE.minus(ONE.minus(permanent).times(ONE.minus(knowledge))) }
 }
 
 export function pricedBuildingMeta(state, id) {
@@ -394,7 +403,7 @@ export function maxAffordable(state, id, cap = 500) {
   const meta = pricedBuildingMeta(state, id)
   if (!meta) return 0
   const from = countOf(state, id)
-  const discount = karmaShopBonuses(state).buildingDiscount
+  const discount = buildingDiscounts(state, id).total
   const running = {}
   let n = 0
   for (; n < cap; n++) {

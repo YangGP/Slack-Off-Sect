@@ -406,17 +406,17 @@ export function breakthroughRisk({ ok, close, section }) {
     const [poor, pd] = setup(4)
     poor.resources.faith = E.money(249)
     ok('辅助材料不足不支付、不掷骰', !E.breakthrough(poor, pd, all, () => { throw Error('不应掷骰') }) && E.moneyEq(poor.resources.qi, 100000))
-    ok('渡劫失败境界不变', !E.breakthrough(s, d, all, () => 0.99) && s.realm === 4)
+    const beforeFailure = { ...s.resources }
+    ok('元婴冲关失败境界不变', !E.breakthrough(s, d, all, () => 0.99) && s.realm === 4)
     {
-      // 渡劫失败：先扣基础与辅助材料，再按剩余库存的 2% 额外没收（保留小数）。
-      const pillLeft = E.money(100000).minus(p.cost.pill)
-      const talismanLeft = E.money(100000).minus(p.cost.talisman)
+      // 先扣当前基础与辅助费，仅对基础账单内的非灵气／灵机库存再没收2%。
+      // 同时检查旧灵符等非本境基础材料不被误收，不能沿用旧账单字段。
       ok('失败扣基础与辅助材料及2%相关库存',
-        E.moneyEq(s.resources.pill, pillLeft.minus(pillLeft.times(0.02))) &&
-        E.moneyEq(s.resources.faith, 99750) &&
-        E.moneyEq(s.resources.immortalHerb, 99992) &&
-        E.moneyEq(s.resources.arrayBase, 99996) &&
-        E.moneyEq(s.resources.talisman, talismanLeft.minus(talismanLeft.times(0.02))))
+        ['spiritLiquid', 'daoNote', 'pill', 'arrayBase', 'faith', 'immortalHerb', 'talisman'].every(id => {
+          const left = beforeFailure[id].minus(p.cost[id] || E.ZERO)
+          const confiscated = Object.hasOwn(REALMS[5].cost, id) && !['qi', 'insight'].includes(id)
+          return E.moneyEq(s.resources[id], confiscated ? left.times('0.98') : left)
+        }))
     }
     ok('失败减产5%且有恢复期限', s.buffs.some(b => b.id === 'breakthroughInjury' && b.mult === -0.05 && b.until > Date.now()))
     E.breakthrough(s, d, {}, () => 0.99)

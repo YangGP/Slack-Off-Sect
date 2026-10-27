@@ -1,4 +1,7 @@
 /** 游戏引擎公共入口；业务模块只依赖具体系统，避免经此入口形成循环。 */
+export { knowledgeFeedback } from './systems/knowledge'
+export { craftAdvice, applyCraftAdvice } from './systems/craftAdvice'
+export { buildingDiscounts } from './systems/core'
 export { craftYield, maxCraftable, maxCraftableMoney, isAutoCrafting, processingPlan, autoCraftStatus, canAutoCraft, craftTarget, resourceFlow, processingBottleneck, clickGain } from './systems/craftingRules'
 export { clamp, habitabilityEffects, softCap, createDerived, entryOf, countOf, activeOf, jobOutputs, idleDisciples, checkNeeds, isBuildingUnlocked, trackPeak, isJobUnlocked, isUpgradeUnlocked, isCostRevealed, isProgressionVisible, isCraftUnlocked, canAfford, payCost, addResource, roundCost, scaleCost, buildingPriceAt, buildingCostFrom, buildingCost, maxAffordable, calendarAt, arrivalInterval, nextArrivalIn, isManualRecruit, realmCost, pushLog, treasureLevel, treasureMult, refineCost, isTreasureForged } from './systems/core'
 export { timeToAfford } from './systems/queries'

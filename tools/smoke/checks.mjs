@@ -22,6 +22,10 @@ import * as karmashop from './karmashop.mjs'
 import * as samsara from './samsara.mjs'
 
 export const smokeChecks = [
+  automation.idleCraftAdvice,
+  automation.idleProtectionDetails,
+  economy.knowledgeIncomeFeedback,
+  buildings.knowledgeBuildingDiscount,
   catalog.dataIntegrity,
   samsara.samsaraLifecycle,
   startup.initialState,

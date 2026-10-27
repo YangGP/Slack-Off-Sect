@@ -32,6 +32,9 @@ export function researchVisibility({ ok, section }) {
   {
     const edges = [
       ['qiPurify', 'condenseArt'], ['qiPurify', 'liquidVault'],
+      ['qiGazing', 'homePlanning'],
+      // 灵气测定→凝气化液与 v2 迁移的旧链回填一致：旧档学过凝气化液会被补发灵气测定（migrations.js）。
+      ['qiMeasure', 'qiLiquid', 'backfill'],
       ['steelWorking', 'artifactLore'], ['conductionRune', 'guardRune'],
       ['conductionRune', 'capacityRune'], ['crystalCraft', 'precipitateTheory'],
       ['spiritCanal', 'liquidIrrigation'], ['spiritCanal', 'veinInfuse'],
@@ -40,7 +43,7 @@ export function researchVisibility({ ok, section }) {
       ['arrayAssembly', 'waterworkshop'], ['steelWorking', 'beastMaterialArt'],
       ['paperArt', 'preachArt'], ['preachArt', 'incenseStudy'],
     ]
-    for (const [previous, next] of edges) {
+    for (const [previous, next, backfill] of edges) {
       const { state: s } = newGame()
       s.realm = ASCEND_REALM_INDEX
       for (const u of ALL_UPGRADES) s.upgrades[u.id] = true
@@ -56,7 +59,8 @@ export function researchVisibility({ ok, section }) {
         E.isProgressionVisible(s, meta.needs) && E.isUpgradeUnlocked(s, meta))
       const legacy = normalizeState({ upgrades: { [next]: true } })
       ok(`旧档已学${meta.name}无需补学新前置即可保留资格`,
-        legacy.upgrades[next] && E.isUpgradeUnlocked(legacy, meta) && !legacy.upgrades[previous])
+        legacy.upgrades[next] && E.isUpgradeUnlocked(legacy, meta) &&
+          (backfill ? legacy.upgrades[previous] : !legacy.upgrades[previous]))
     }
     const visited = new Set(), active = new Set()
     const visit = id => {

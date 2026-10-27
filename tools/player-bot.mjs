@@ -238,8 +238,15 @@ export function createBot(state, derived, policy = {}) {
   const importNeeds = () => {
     const need = realmNeed() || {}
     const demand = { crystal: need.crystal || ZERO, mithril: need.mithril || ZERO }
+    // 阶段建筑也需要凝晶；破境费用不含凝晶时仍须为项目补齐催化剂。
+    for (const project of policy.projects?.(state, derived) || []) {
+      const remaining = (project.count || 1) - E.countOf(state, project.id)
+      if (remaining <= 0) continue
+      const cost = E.buildingCost(state, project.id, remaining)
+      if (cost?.crystal) demand.crystal = moneyMax(demand.crystal, cost.crystal)
+    }
     // 元婴起可凝晶、但秘银提炼仍未开放；少量滚动补料，不把全程催化剂提前买满。
-    if (state.realm >= 5 && moneyGt(need.crystal || ZERO, state.resources.crystal || ZERO)) demand.mithril = moneyMax(demand.mithril, 2)
+    if (state.realm >= 5 && moneyGt(demand.crystal || ZERO, state.resources.crystal || ZERO)) demand.mithril = moneyMax(demand.mithril, 2)
     return Object.entries(demand).filter(([resource, target]) => moneyLt(state.resources[resource] || ZERO, target))
       .map(([resource, target]) => ({ resource, target, sect: importRoute(resource) })).filter(row => row.sect)
   }

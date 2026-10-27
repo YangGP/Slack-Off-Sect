@@ -6,7 +6,7 @@
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { state, derived, view, actions, highlightCost, clearHighlight } from '@/game/store'
-import { buildingCost, canAfford, buildingBoostAvailable, buildingMeta, productionStageReady } from '@/game/engine'
+import { buildingCost, buildingDiscounts, canAfford, buildingBoostAvailable, buildingMeta, productionStageReady } from '@/game/engine'
 import { describeBuildingEffects } from '@/game/effectsText'
 import { fmt, fmtRate, fmtAmount, fmtEffectPercent } from '@/game/format'
 import { money } from '@/game/decimal'
@@ -51,6 +51,7 @@ const supplyPercent = computed(() => fmtEffectPercent(supply.value))
 const throughputMult = computed(() => meta.value.throughput ? derived.globalMult : 1)
 // 建筑始终一次一座（批量选择只留给炼制页）
 const price = computed(() => buildingCost(state, meta.value.id, 1))
+const discounts = computed(() => buildingDiscounts(state, meta.value.id))
 const affordable = computed(() => canAfford(state, price.value))
 /** 库存不足且费用超过仓容时，需要先扩仓。 */
 const overCap = computed(() => costBlocked(state, derived, price.value))
@@ -101,7 +102,8 @@ const powerRow = computed(() => {
     res,
     label: resourceName(res),
     unit: upkeepRate(unit),
-    total: enabled.value > 0 ? upkeepRate(unit, active.value, throughputMult.value) : '',
+    // paid 已包含实际吞吐、供给与数量，不能再次乘吞吐倍率。
+    total: enabled.value > 0 ? upkeepRate(paid) : '',
   }
 })
 
@@ -141,6 +143,11 @@ onBeforeUnmount(clearHighlight)
         <div v-if="meta.throughput" class="small dim">当前吞吐 ×{{ fmt(derived.globalMult) }}，进料与出料同步提速；缺料时按供给运行。</div>
 
         <CostRows :cost="price" />
+        <template v-if="meta.cost.arrayDiagram">
+          <div class="tip-row"><span>道基共鸣</span><span>造价 −{{ fmtEffectPercent(discounts.permanent) }}</span></div>
+          <div class="tip-row"><span>依图施工</span><span>造价 −{{ fmtEffectPercent(discounts.knowledge) }}</span></div>
+          <div class="small dim">两项分别乘算，当前合计优惠{{ fmtEffectPercent(discounts.total) }}；消耗阵图后按新库存重新报价。</div>
+        </template>
         <div v-if="entry.stage === 1" class="small dim">灵能阶段 · 改造清零重建；关闭仅停止运行。</div>
         <div v-if="meta.secondaryBase" class="tip-row"><span>每矿工每座天然灵石</span><span>{{ fmtAmount(meta.secondaryBase * 3600) }}/小时；有效矿工 {{ fmt(derived.discipleJobWeights?.miner || 0) }}</span></div>
         <div v-if="meta.nurseryCapacity" class="tip-row"><span>育草工位实际容量</span><span>{{ fmt(derived.processingCapacity?.nursery || 0) }}</span></div>

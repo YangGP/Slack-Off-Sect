@@ -132,7 +132,11 @@ assert.ok(bootClock.state.stats.buildingsBuilt > 0, '突破预留不能阻止首
 const specializationProbe = measureSpecialization(60)
 assert.equal(specializationProbe.rows.length, 6)
 for (const row of specializationProbe.rows) {
-  assert.deepEqual(row.before.manual, row.after.manual, `${row.id}: 不增加瞬发手动收益或减少费用`)
+  const recipe = CRAFT_MAP[row.recipeId]
+  const yieldBonus = E.UPGRADE_MAP[row.id].effects.craftBonusByResource?.[recipe.out] || 0
+  assert.deepEqual(row.before.manual.inputs, row.after.manual.inputs, `${row.id}: 效率不改变单份原料费用`)
+  assert.ok(E.money(row.after.manual.output).minus(row.before.manual.output)
+    .minus(E.money(recipe.amount).times(yieldBonus)).abs().lt('1e-9'), `${row.id}: 手动增量仅来自明示的制作增产，纯效率不增加瞬发收益`)
   assert.ok(row.before.manual.output > 0, `${row.id}: 手动对照必须实际出货，不能比较两次拒绝`)
   assert.ok(row.after.output > row.before.output, `${row.id}: 富料自动加工必须有真实增量`)
   assert.equal(row.before.work, row.after.work, `${row.id}: 效率不能伪造工位扩容`)
@@ -145,7 +149,7 @@ for (const [id, policy] of Object.entries(ADVANCED_CRAFTS)) {
   for (const resource of Object.keys(floors)) assert.ok(CRAFT_MAP[id].cost[resource] > 0, `${id} 的模拟保留料 ${resource} 已不在实际配方中`)
 }
 
-// 复现合体材料容量不足：必须追踪尚未解锁的扩仓链。
+// 显式分子备料预算超仓时仍须追踪扩仓链；分子已不属于基础破境费用。
 // 合并后由炼虚档洞天承接中后期扩仓，追踪空间建设链。
 const blockedState = createInitialState(), blockedDerived = E.createDerived()
 blockedState.realm = 8
@@ -154,12 +158,13 @@ blockedState.buildings.warehouse = { count: 10, on: true }
 blockedState.buildings.scriptureArchive = { count: Math.ceil(20000 / BUILDING_MAP.scriptureArchive.effects.storage.insight), on: true }
 E.recompute(blockedState, blockedDerived)
 blockedState.resources.qiParticle = E.money(100)
-const blocked = progressionDiagnostics(blockedState, blockedDerived).missing.find(r => r.resource === 'qiParticle')
+const particleBudget = { qiParticle: E.money(60000) }
+const blocked = progressionDiagnostics(blockedState, blockedDerived, { cost: particleBudget }).missing.find(r => r.resource === 'qiParticle')
 assert.ok(blocked.capacityBlocked && blocked.have === 100 && blocked.need > blocked.have)
-assert.equal(blocked.need, E.moneyToNumber(E.realmCost(blockedState, blockedDerived, 9).qiParticle))
+assert.equal(blocked.need, E.moneyToNumber(particleBudget.qiParticle))
 assert.ok(blocked.expansions.some(b => b.id === 'grotto' && !b.unlocked))
 assert.equal(blocked.producer.id, 'splitArray')
-const prerequisites = createBot(blockedState, blockedDerived).prerequisites()
+const prerequisites = createBot(blockedState, blockedDerived, { realmCost: () => particleBudget }).prerequisites()
 assert.ok(prerequisites.upgrades.has('earthEssence'))
 assert.ok(prerequisites.buildings.has('arcaneVault')) // 法藏提供有限粒子仓容，早于洞天解决此缺口。
 
@@ -180,6 +185,9 @@ studying.resources.qi = E.money(1000000)
 studying.resources.insight = E.money(10000)
 const daoNoteRecipe = CRAFT_MAP.recordDaoNote
 const copies = Math.ceil(10 / E.moneyToNumber(E.craftYield(studyDerived, daoNoteRecipe)))
+// 同时准备真实研究费和记录道札的灵机，避免沿用旧8000研究价造成假失败。
+studying.resources.insight = E.researchCost(studying, E.UPGRADE_MAP.crystalCraft).insight
+  .plus(E.money(daoNoteRecipe.cost.insight).times(copies))
 for (const [id, amount] of Object.entries(daoNoteRecipe.cost)) studying.resources[id] = E.moneyMax(studying.resources[id], E.money(amount).times(copies))
 // 此用例隔离凝晶知识备料；新增的互市前置由 botDiplomacy 单独覆盖。
 const studyBot = createBot(studying, studyDerived, { realmCost: () => ({ crystal: 35 }), breakthrough: () => false,
@@ -192,7 +200,7 @@ const spiritPrereqs = createBot(studying, studyDerived, { realmCost: () => ({ sp
 assert.ok(spiritPrereqs.upgrades.has('incenseVow'), '灵符投入需要追踪香火岗位的研究来源')
 assert.ok(spiritPrereqs.buildings.has('gate'), '灵符投入需要建立香火岗位的建筑来源')
 // 口传心授在列（每座典籍库 80 → 112）：60 座时灵机上限 200 + 60×112 = 6920，
-// 低于凝晶工艺的 8000 灵机费用，才能真实触发「研究费超仓容」的扩仓追踪。
+// 低于凝晶工艺现行灵机费用，才能真实触发「研究费超仓容」的扩仓追踪。
 studying.buildings.scriptureArchive.count = 60
 E.recompute(studying, studyDerived)
 delete studying.upgrades.crystalCraft

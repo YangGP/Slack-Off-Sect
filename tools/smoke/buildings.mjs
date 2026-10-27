@@ -7,6 +7,35 @@ import { recountDisciples } from '../../src/data/disciples.js'
 import { CRAFT_MAP } from '../../src/data/crafts.js'
 import { newGame, newGameRunning } from './fixtures.mjs'
 
+export function knowledgeBuildingDiscount({ ok, section }) {
+  section('依图施工的报价、批量支付和退款')
+  const { state: s, derived: d } = newGame()
+  s.realm = 9
+  for (const u of E.ALL_UPGRADES) s.upgrades[u.id] = true
+  s.resources.arrayDiagram = E.money(10)
+  const id = 'annihilationFurnace'
+  const base = E.buildingCostFrom(E.pricedBuildingMeta(s, id), 0, 2)
+  const quote = E.buildingCost(s, id, 2)
+  ok('两座统一按支付前10图封顶折扣报价', quote.arrayDiagram.eq(base.arrayDiagram.times('0.8')))
+  const plain = E.buildingCost(s, 'hut')
+  s.resources.arrayDiagram = E.ZERO
+  ok('无阵图造价的建筑不变', E.buildingCost(s, 'hut').wood.eq(plain.wood))
+  s.resources.arrayDiagram = E.money(10)
+  for (const [res, cost] of Object.entries(quote)) s.resources[res] = cost
+  // 同次批量从10图扣到阈值以下，仍统一按动作开始时的满折扣。
+  s.resources.arrayDiagram = E.money(10)
+  const before = s.resources.arrayDiagram
+  ok('可买数量与批量实扣一致', E.maxAffordable(s, id) === 2 && E.buyBuilding(s, d, id, 2) === 2 && s.resources.arrayDiagram.eq(before.minus(quote.arrayDiagram)))
+  const refund = E.buildingCostFrom(E.pricedBuildingMeta(s, id), 0, 2, E.buildingDiscounts(s, id).total).arrayDiagram.times('0.5')
+  const paid = s.resources.arrayDiagram
+  ok('拆除按当前统一折扣返还50%', E.sellBuilding(s, d, id, 2) === 2 && s.resources.arrayDiagram.eq(paid.plus(refund)))
+  s.karmaProgression.levels.foundationEcho = 1
+  s.karmaProgression.levels.constructionLineage = 1
+  s.resources.arrayDiagram = E.money(10)
+  const parts = E.buildingDiscounts(s, id)
+  ok('永久固定折扣与知识分别乘算，涨价率另计', parts.permanent === 0.03 && parts.total.eq('0.224') && E.money(E.pricedBuildingMeta(s, id).priceRatio).eq('1.598'))
+}
+
 export function buildingMaintenanceCompatibility({ ok, section }) {
   section('取消维护费后的旧档建筑恢复')
   const free = ['crystalArray', 'alchemyRoom', 'pillFurnace', 'forge', 'talismanHall',

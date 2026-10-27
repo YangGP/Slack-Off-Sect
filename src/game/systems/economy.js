@@ -21,6 +21,7 @@ import { isEntryEnabled } from '@/data/modules'
 import { faithRatioBonus, faithStorageRatio, realmProductionMultiplier, ritualLevel } from './faith'
 import { karmaShopBonuses } from './karmaShop'
 import { registerStaticMoneyCache } from '../staticMoneyCache'
+import { knowledgeFeedback } from './knowledge'
 
 const BUILDING_BOOST_MAP = Object.fromEntries(BUILDINGS.filter(b => b.boost).map(b => [b.boost.id, b.boost]))
 
@@ -531,6 +532,14 @@ export function recomputeRaw(state, derived, supply, seconds = 1, support = {}) 
     })
   }
 
+  const knowledge = knowledgeFeedback(state)
+  derived.knowledgeInsightRatio = knowledge.insightRatio
+  if (knowledge.insightRatio > 0) {
+    ratio.insight = (ratio.insight || 0) + knowledge.insightRatio
+    bonus.ratio.insight ||= []
+    bonus.ratio.insight.push({ kind: 'knowledge', id: 'daoNote', label: '研读氛围',
+      count: knowledge.insightRatio / CONFIG.DAONOTE_INSIGHT_RATIO, value: knowledge.insightRatio })
+  }
   const rates = {}
   for (const r of RESOURCES) {
     if (r.noProduction) {
@@ -816,6 +825,7 @@ export function finishDerived(state, derived) {
  * 只供同一次逐秒推演的相邻步骤使用（默认离线，审计可显式启用在线复用），不能跳过玩家操作后的重算。
  */
 export function canReuseEconomy(state, derived, seconds) {
+  if (knowledgeFeedback(state).insightRatio !== derived.knowledgeInsightRatio) return false
   if (Object.values(state.worlds || {}).some(w => w.level > 0 && w.memberId != null)) return false
   if (state.disciples.members.some(m => (m.loyalty ?? 1) < 1)) return false
   if (state.buffs.some(buff => (buff.until || 0) <= gameNow(state))) return false

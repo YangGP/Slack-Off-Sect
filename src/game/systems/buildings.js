@@ -1,8 +1,7 @@
 import { withResourceAction, setResourceValue } from '../resourceObservation'
 import { BUILDING_MAP } from '@/data/buildings'
 import { buildingMeta, PRODUCTION_STAGES, productionStageReady } from '@/data/productionStages'
-import { checkNeeds, buildingCost, canAfford, payCost, entryOf, pushLog, buildingCostFrom, buildingBoostAvailable, pricedBuildingMeta, buildingPriceAt } from './core'
-import { karmaShopBonuses } from './karmaShop'
+import { checkNeeds, buildingCost, canAfford, payCost, entryOf, pushLog, buildingCostFrom, buildingBoostAvailable, pricedBuildingMeta, buildingPriceAt, buildingDiscounts } from './core'
 import { recompute } from './economy'
 import { MONEY_INFINITY, ZERO, money, moneyMin } from '../decimal'
 
@@ -34,14 +33,15 @@ export function sellBuilding(state, derived, id, count = 1) {
     const e = state.buildings[id]
     if (!meta || !e || !Number.isSafeInteger(count) || count <= 0 || e.count <= 0) return 0
     const n = Math.min(count, e.count)
-    const refund = buildingCostFrom(meta, e.count - n, n, karmaShopBonuses(state).buildingDiscount)
+    const discount = buildingDiscounts(state, id).total
+    const refund = buildingCostFrom(meta, e.count - n, n, discount)
     if (id === 'hut' && e.count === n) {
       // 旧档免木料首屋拆除时不返还未支付的木料；新建茅屋不再享受优惠。
-      if (state.starterHutStanding) refund.wood = refund.wood.minus(buildingPriceAt(meta, 0, karmaShopBonuses(state).buildingDiscount).wood)
+      if (state.starterHutStanding) refund.wood = refund.wood.minus(buildingPriceAt(meta, 0, discount).wood)
       state.starterHutStanding = false
     }
     for (const k in refund) {
-      // 按原价返还一半，小数完整保留。
+      // 按当前折扣报价返还一半，小数完整保留。
       const half = refund[k].times('0.5')
       refund[k] = half
     }

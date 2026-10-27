@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { state, derived } from '@/game/store'
 import { CRAFTS } from '@/data/crafts'
-import { isCraftUnlocked, resourceFlow, reactorAppliesTo } from '@/game/engine'
+import { isCraftUnlocked, resourceFlow, reactorAppliesTo, knowledgeFeedback } from '@/game/engine'
 import { RESOURCE_MAP } from '@/data/resources'
 import { fmt, fmtRate, fmtTime } from '@/game/format'
 import { MONEY_INFINITY, ONE, ZERO, money, moneyToNumber, moneyToRatio } from '@/game/decimal'
@@ -14,6 +14,7 @@ import { MONEY_INFINITY, ONE, ZERO, money, moneyToNumber, moneyToRatio } from '@
 const props = defineProps({
   resId: { type: String, required: true },
 })
+const knowledge = computed(() => knowledgeFeedback(state))
 
 const meta = computed(() => RESOURCE_MAP[props.resId] || { name: props.resId })
 const flow = computed(() => resourceFlow(derived, props.resId))
@@ -154,6 +155,8 @@ const bonusRows = computed(() => {
 </script>
 
 <template>
+    <div v-if="resId === 'daoNote'" class="tip-row"><span class="k">研读氛围</span><span class="v">灵机产出相加层 +{{ fmt(knowledge.insightRatio * 100) }}%（50道札封顶10%，消耗后回落）</span></div>
+    <div v-if="resId === 'arrayDiagram'" class="tip-row"><span class="k">依图施工</span><span class="v">含阵图造价的地面建筑 −{{ fmt(knowledge.buildingDiscount * 100) }}%（10阵图封顶20%，消耗后回落）</span></div>
     <div v-if="!max.isFinite()" class="tip-row"><span class="k">库存</span><span class="v">无仓容上限</span></div>
     <div v-if="max.isFinite() && meta.storageWeight != null" class="tip-row">
       <span class="k">通用扩仓</span>

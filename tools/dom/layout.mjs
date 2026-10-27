@@ -136,7 +136,7 @@ export async function checkLayout(context) {
       hutItem?.querySelector('.tip-trigger')?.dispatchEvent(new window.MouseEvent('mouseenter'))
       await new Promise((r) => setTimeout(r, 320))
       const priceTip = doc.querySelector('.tip')?.textContent.replace(/\s+/g, ' ').trim() || ''
-      const priceSection = priceTip.slice(priceTip.indexOf('价格'), priceTip.indexOf('效果'))
+      const priceSection = doc.querySelector('.tip .tip-price')?.textContent.replace(/\s+/g, ' ').trim() || ''
       ok(
         '建筑提示保留实际小数价格',
         priceSection.length > 0 && /灵气\s*558\.58/.test(priceSection) && /灵木\s*223\.43/.test(priceSection),
@@ -309,7 +309,7 @@ export async function checkLayout(context) {
     const btip = doc.querySelector('.tip')
     const btxt = btip?.textContent || ''
     ok('建筑悬停弹出提示', !!btip)
-    ok('提示里有「价格」与「效果」分节', btxt.includes('价格') && btxt.includes('效果'))
+    ok('提示里有「所需费用」与「效果」分节', !!btip?.querySelector('.tip-price[aria-label="所需费用"]') && btxt.includes('效果'))
     ok('建筑提示移除最多可建', !btxt.includes('最多可建'))
     ok('提示里有风味小字', !!btip?.querySelector('.tip-flavor'), btip?.querySelector('.tip-flavor')?.textContent || '')
     ok(
@@ -369,8 +369,9 @@ export async function checkLayout(context) {
     await new Promise((r) => setTimeout(r, 50))
     ok('移开后 tooltip 消失', !doc.querySelector('.tip'))
   }
-  ok('标签页包含独立炼制页且保持纯文字形式', doc.querySelectorAll('.tabs .tab').length === 10 && [...doc.querySelectorAll('.tabs .tab')].some(el => el.textContent.trim() === '炼制'))
-  ok('外交模块贡献独立标签', [...doc.querySelectorAll('.tabs .tab')].some(el => el.textContent.trim() === '外交'))
+  const tabs = [...doc.querySelectorAll('.tabs .tab')]
+  ok('标签页包含独立炼制页且保持纯文字形式', tabs.some(el => el.textContent.trim() === '炼制') && tabs.every(el => !el.querySelector('svg, img')))
+  ok('外交标签按实际往来资格显示', tabs.some(el => el.textContent.trim() === '外交') === engine.isDiplomacyUnlocked(state))
   ok(
     '没有旧的卡片 / 斑马纹 / 进度条 / 气泡元素',
     doc.querySelectorAll('.card, .bcard, .progress, .toast, .box-head .hint.badge').length === 0,

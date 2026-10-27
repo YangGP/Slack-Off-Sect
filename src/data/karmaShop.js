@@ -17,7 +17,7 @@ export const KARMA_PROGRESSION_VERSION = 1
 
 /**
  * 永久修持条目。effect 为每级数值，规则层按等级线性求和：
- *   buildingDiscount 建筑造价折扣（乘算 (1-discount)，全游戏唯一建筑价格折扣层）
+ *   buildingDiscount 建筑固定造价折扣（与知识持有折扣分别乘算；涨价率另计）
  *   researchInsightDiscount 普通研究直接灵机费用折扣
  *   offlineHours     离线收益上限（小时，与龟息功/定息法同层相加）
  *   storageRatio     有限容量加成（乘在仙缘仓储乘区之上）

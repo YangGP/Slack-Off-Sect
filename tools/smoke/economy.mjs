@@ -10,6 +10,41 @@ import { CONFIG } from '../../src/data/config.js'
 import { exportSave, parseImport } from '../../src/game/save.js'
 import { newGame, newGameRunning } from './fixtures.mjs'
 import { discipleDismissalCost } from '../../src/data/disciples.js'
+import { canReuseEconomy } from '../../src/game/systems/economy.js'
+
+export function knowledgeIncomeFeedback({ ok, close, section }) {
+  section('知识持有灵机反馈与缓存')
+  const { state: s, derived: d } = newGameRunning()
+  s.buildings.library = { count: 1, on: true }
+  E.recompute(s, d)
+  E.setJob(s, d, 'scholar', 1)
+  E.recompute(s, d)
+  const base = d.rates.insight, ratio = d.ratio.insight || 0
+  s.resources.daoNote = E.money(25)
+  E.recompute(s, d)
+  ok('25道札在灵机相加层贡献5个百分点', base.gt(0) && close(d.rates.insight.div(base), (1 + ratio + 0.05) / (1 + ratio)))
+  ok('来源中包含研读氛围', d.bonus.ratio.insight.some(row => row.label === '研读氛围' && row.value === 0.05))
+  s.resources.daoNote = E.money(500)
+  E.recompute(s, d)
+  ok('超过50道札封顶，不改变不限仓规则', d.knowledgeInsightRatio === 0.1 && !d.max.daoNote.isFinite())
+  s.resources.daoNote = E.money(10)
+  ok('消费跨出封顶后经济缓存失效', !canReuseEconomy(s, d, 1))
+  E.recompute(s, d)
+  ok('消费后回落为2个百分点', d.knowledgeInsightRatio === 0.02)
+  s.realm = 4
+  for (const id of ['intuition', 'paperArt', 'preachArt']) s.upgrades[id] = true
+  s.buildings.talismanHall = { count: 1, on: true }
+  s.autoCraft = { recordDaoNote: true }
+  s.settings.craftReserves = {}
+  s.resources.daoNote = E.money('49.5')
+  s.resources.insight = E.money(10000)
+  s.resources.paper = E.money(100)
+  const online = E.cloneRuntime(s), cached = E.cloneRuntime(s)
+  const onlineDerived = E.createDerived(), cachedDerived = E.createDerived()
+  E.tick(online, onlineDerived, 12, { events: false, cacheEconomy: false })
+  E.tick(cached, cachedDerived, 12, { events: false, cacheEconomy: true })
+  ok('自动制作跨越50阈值，短推进缓存开关结果一致', cached.resources.daoNote.gt(50) && close(online.resources.insight, cached.resources.insight) && online.resources.daoNote.eq(cached.resources.daoNote))
+}
 
 export function incomeBreakdown({ ok, close, section }) {
   section('进项来源明细')
